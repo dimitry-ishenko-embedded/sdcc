@@ -136,7 +136,9 @@ PORT i186_port = {
     TARGET_ID_I186,
     "i186",
     "Intel 80186",      /* Target name */
+    NULL,
     {
+        glue,
         FALSE,          /* Emit glue around main */
         MODEL_SMALL,
         MODEL_SMALL
@@ -145,11 +147,14 @@ PORT i186_port = {
         _asmCmd,
         NULL,
         NULL,
+        NULL,
         0,
-        ".s"
+        ".s",
+	NULL			/* no do_assemble function */
     },
     {
         _linkCmd,
+        NULL,
         NULL,
         ".o"
     },
@@ -173,6 +178,8 @@ PORT i186_port = {
         ".DATA",
         ".TEXT",
         ".TEXT",
+	NULL, // xidata
+	NULL, // xinit
         NULL,
         NULL,
         1
@@ -193,12 +200,16 @@ PORT i186_port = {
     _i186_getRegName ,
     _i186_keywords,
     _i186_genAssemblerPreamble,
+    NULL,				/* no genAssemblerEnd */
     _i186_genIVT ,
+    NULL, // _i186_genXINIT
     _i186_reset_regparm,
     _i186_regparm,
     NULL,
     NULL,
+    NULL,
     FALSE,
+    TRUE,				/* little endian */
     0,  /* leave lt */
     0,  /* leave gt */
     1,  /* transform <= to ! > */
@@ -206,5 +217,10 @@ PORT i186_port = {
     1,  /* transform != to !(a == b) */
     0,  /* leave == */
     FALSE,                        /* No array initializer support. */
+    0,                            /* no CSE cost estimation yet */
+    NULL, 			/* no builtin functions */
+    GPOINTER,			/* treat unqualified pointers as "generic" pointers */
+    1,				/* reset labelKey to 1 */
+    1,				/* globals & local static allowed */
     PORT_MAGIC
 };

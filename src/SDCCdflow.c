@@ -68,11 +68,11 @@ DEFSETFUNC (ifKilledInBlock)
 		   cdp->diCode->key);
   if (bitVectBitsInCommon (outs, OP_DEFS (cdp->sym)))
     {
-      setToNull ((void **) &outs);
+      setToNull ((void *) &outs);
       return 1;
     }
 
-  setToNull ((void **) &outs);
+  setToNull ((void *) &outs);
 
   /* if the operands of this one was changed in the block */
   /* then delete it */
@@ -81,6 +81,10 @@ DEFSETFUNC (ifKilledInBlock)
       bitVectBitsInCommon (src->defSet, OP_DEFS (IC_LEFT (cdp->diCode)))) ||
        (IS_SYMOP (IC_RIGHT (cdp->diCode)) &&
       bitVectBitsInCommon (src->defSet, OP_DEFS (IC_RIGHT (cdp->diCode))))))
+    return 1;
+      
+  /* kill if cseBBlock() found a case we missed here */
+  if (isinSetWith(src->killedExprs, cdp, isCseDefEqual))
     return 1;
 
   return 0;
@@ -95,6 +99,8 @@ DEFSETFUNC (mergeInExprs)
   V_ARG (eBBlock *, dest);
   V_ARG (int *, firstTime);
 
+  dest->killedExprs = unionSets (dest->killedExprs, ebp->killedExprs, THROW_DEST);
+  
   /* if in the dominator list then */
   if (bitVectBitValue (dest->domVect, ebp->bbnum) && dest != ebp)
     {
@@ -117,16 +123,16 @@ DEFSETFUNC (mergeInExprs)
     }
   else
     {
-      /* delete only if killed in this block */
+      /* delete only if killed in this block*/
       deleteItemIf (&dest->inExprs, ifKilledInBlock, ebp);
       /* union the ndompset with pointers set in this block */
       dest->ndompset = bitVectUnion (dest->ndompset, ebp->ptrsSet);
     }
-
   *firstTime = 0;
 
   return 0;
 }
+
 
 /*-----------------------------------------------------------------*/
 /* mergeInDefs - merge in incoming definitions                     */
@@ -151,6 +157,7 @@ DEFSETFUNC (mergeInDefs)
 
 }
 
+
 /*-----------------------------------------------------------------*/
 /* computeDataFlow - does computations for data flow accross blocks */
 /*-----------------------------------------------------------------*/
@@ -159,10 +166,12 @@ computeDataFlow (eBBlock ** ebbs, int count)
 {
   int i;
   int change = 1;
-
+  
+  for (i = 0; i < count; i++)
+    ebbs[i]->killedExprs = NULL;
+      
   while (change)
     {
-
       change = 0;
 
       /* for all blocks */
@@ -170,7 +179,9 @@ computeDataFlow (eBBlock ** ebbs, int count)
 	{
 
 	  set *pred;
-	  set *oldOut;
+	  set *oldOutExprs = NULL;
+	  set *oldKilledExprs = NULL;
+          bitVect *oldOutDefs = NULL;
 	  int firstTime;
 	  eBBlock *pBlock;
 
@@ -182,10 +193,15 @@ computeDataFlow (eBBlock ** ebbs, int count)
 	  /* get blocks that can come to this block */
 	  pred = edgesTo (ebbs[i]);
 
-	  /* make a copy of the outExpressions : to be */
+	  /* make a copy of the outExpressions and outDefs : to be */
 	  /* used for iteration   */
-	  oldOut = setFromSet (ebbs[i]->outExprs);
-	  setToNull ((void **) &ebbs[i]->inDefs);
+	  if (optimize.global_cse)
+            {
+	      oldOutExprs = setFromSet (ebbs[i]->outExprs);
+	      oldKilledExprs = setFromSet (ebbs[i]->killedExprs);
+            }
+	  oldOutDefs = bitVectCopy (ebbs[i]->outDefs);
+	  setToNull ((void *) &ebbs[i]->inDefs);
 
 	  /* indefitions are easy just merge them by union */
 	  /* these are the definitions that can possibly   */
@@ -210,27 +226,32 @@ computeDataFlow (eBBlock ** ebbs, int count)
 	      if (idom)
 		addSetHead (&pred, idom);
 	    }
-
+          
 	  /* figure out the incoming expressions */
 	  /* this is a little more complex       */
-	  setToNull ((void **) &ebbs[i]->inExprs);
+	  setToNull ((void *) &ebbs[i]->inExprs);
 	  if (optimize.global_cse)
 	    {
 	      firstTime = 1;
 	      applyToSet (pred, mergeInExprs, ebbs[i], &firstTime);
 	    }
-	  setToNull ((void **) &pred);
+	  setToNull ((void *) &pred);
 
 	  /* do cse with computeOnly flag set to TRUE */
 	  /* this by far the quickest way of computing */
 	  cseBBlock (ebbs[i], TRUE, ebbs, count);
 
 	  /* if it change we will need to iterate */
-	  change += !isSetsEqualWith (ebbs[i]->outExprs, oldOut, isCseDefEqual);
+	  if (optimize.global_cse)
+            {
+	      change += !isSetsEqualWith (ebbs[i]->outExprs, oldOutExprs, isCseDefEqual);
+              change += !isSetsEqualWith (ebbs[i]->killedExprs, oldKilledExprs, isCseDefEqual);
+            }
+	  change += !bitVectEqual (ebbs[i]->outDefs, oldOutDefs);
 	}
 
-      if (!change)		/* iterate till no change */
-	break;
+      if (!change)	/* iterate till no change */
+        break;
     }
 
   return;
@@ -252,9 +273,16 @@ usedBetweenPoints (operand * op, iCode * start, iCode * end)
       /* true if there is a call       */
       if (IS_PARM (op) &&
 	  (lic->op == CALL ||
-	   lic->op == PCALL))
-	if (isParameterToCall (IC_ARGS (lic), op))
+	   lic->op == PCALL)) {
+	value *args;
+	if (lic->op == CALL) {
+	  args=FUNC_ARGS(OP_SYMBOL(IC_LEFT(lic))->type);
+	} else {
+	  args=FUNC_ARGS(OP_SYMBOL(IC_LEFT(lic))->type->next);
+	}
+	if (isParameterToCall (args, op))
 	  return 1;
+      }
 
       if (SKIP_IC2 (lic))
 	continue;
@@ -310,9 +338,14 @@ usedInRemaining (operand * op, iCode * ic)
          return true */
       if (lic->op == CALL || lic->op == PCALL)
 	{
-
+	  value *args;
+	  if (lic->op == CALL) {
+	    args=FUNC_ARGS(OP_SYMBOL(IC_LEFT(lic))->type);
+	  } else {
+	    args=FUNC_ARGS(operandType(IC_LEFT(lic))->next);
+	  }
 	  if ((IS_PARM (op) &&
-	       isParameterToCall (IC_ARGS (lic), op)) ||
+	       isParameterToCall (args, op)) ||
 	      isOperandGlobal (op))
 	    return lic;
 	}

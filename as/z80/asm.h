@@ -72,7 +72,7 @@
 /* #define	NCPS	32 */	/* Chars. per symbol */
 #define	HUGE	1000		/* A huge number */
 #define NERR	3		/* Errors per line */
-#define NINPUT	128		/* Input buffer size */
+#define NINPUT	1024		/* Input buffer size */
 #define NCODE	128		/* Listing code buffer size */
 #define NTITL	64		/* Title buffer size */
 #define	NSBTL	64		/* SubTitle buffer size */
@@ -272,6 +272,7 @@ struct	sym
 #ifdef SDK
 # define S_FLOAT        27      /* .df */
 #endif
+#define	S_OPTSDCC	28  /* .optsdcc */
 
 /*
  *	The tsym structure is a linked list of temporary
@@ -413,6 +414,8 @@ extern	char	tb[NTITL];	/*	Title string buffer
 				 */
 extern	char	stb[NSBTL];	/*	Subtitle string buffer
 				 */
+extern  char	optsdcc[NINPUT];    /*	sdcc compile options 
+			     */
 extern	char	symtbl[];	/*	string "Symbol Table"
 				 */
 extern	char	aretbl[];	/*	string "Area Table"
@@ -429,7 +432,7 @@ extern	FILE	*sfp[MAXFIL];	/*	array of assembler-source file handles
 				 */
 extern	FILE	*ifp[MAXINC];	/*	array of include-file file handles
 				 */
-extern	char	ctype[128];	/*	array of character types, one per
+extern	unsigned char	ctype[128];	/*	array of character types, one per
 				 *	ASCII character
 				 */
 

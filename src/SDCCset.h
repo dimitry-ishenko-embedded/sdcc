@@ -26,12 +26,6 @@
 #define SDCCSET_H
 #include <stdarg.h>
 
-#if defined(_MSC_VER)
-#include "sdcc_vc.h"
-#else
-#include "sdccconf.h"
-#endif // _MSC_VER
-
 
 #ifndef THROWS
 #define THROWS
@@ -54,6 +48,7 @@ set;
 #define V_ARG(type,var) type var = va_arg(ap,type)
 
 /* set related functions */
+set *newSet (void);
 void *addSet (set **, void *);
 void *addSetHead (set **, void *);
 void *getSet (set **);
@@ -64,20 +59,24 @@ typedef int (* insetwithFunc) (void *, void *);
 int isinSetWith (set *, void *, insetwithFunc cfunc);
 int applyToSet (set * list, int (*somefunc) (void *, va_list),...);
 int applyToSetFTrue (set * list, int (*somefunc) (void *, va_list),...);
+void mergeSets (set **sset, set *list);
 set *unionSets (set *, set *, int);
 set *unionSetsWith (set *, set *, int (*cFunc) (), int);
 set *intersectSets (set *, set *, int);
 void *addSetIfnotP (set **, void *);
 set *setFromSet (set *);
+set *setFromSetNonRev (set *);
 int isSetsEqual (set *, set *);
 set *subtractFromSet (set *, set *, int);
 int elementsInSet (set *);
+void *indexSet(set *, int);
 set *intersectSetsWith (set *, set *, int (*cFunc) (void *, void *), int);
 int isSetsEqualWith (set *, set *, int (*cFunc) (void *, void *));
 void *peekSet (set *);
 void *setFirstItem (set *);
 void *setNextItem (set *);
 void setToNull (void **);
-
+set *reverseSet (set *);
+void deleteSet (set **s);
 
 #endif

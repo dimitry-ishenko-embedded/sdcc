@@ -3,6 +3,78 @@ Microsoft Developer Studio Workspace File, Format Version 6.00
 
 ###############################################################################
 
+Project: "all"=.\all.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name as_z80
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name aslink
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name asx8051
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name packihx
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name sdcpp
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name src
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name linkz80
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name linkgbz80
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name as_gbz80
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name librarian
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name as_hc08
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name link_hc08
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "as_gbz80"=.\as\as_gbz80.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "as_hc08"=.\as\hc08\as_hc08.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
 Project: "as_z80"=.\as\as_z80.dsp - Package Owner=<4>
 
 Package=<5>
@@ -50,11 +122,29 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name avra
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
 }}}
 
 ###############################################################################
 
 Project: "avra"=.\src\avr\avra.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "config"=.\config.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -77,11 +167,92 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ds390a
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
 }}}
 
 ###############################################################################
 
 Project: "ds390a"=.\src\ds390\ds390a.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "hc08"=.\src\hc08\hc08.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name hc08a
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "hc08a"=.\src\hc08\hc08a.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "librarian"=.\support\librarian\librarian.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "link_hc08"=.\as\hc08\link_hc08.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "linkgbz80"=.\link\z80\linkgbz80.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "linkz80"=.\LINK\Z80\linkz80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -104,11 +275,20 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name msc51a
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name mcs51a
+    End Project Dependency
 }}}
 
 ###############################################################################
 
-Project: "msc51a"=.\src\mcs51\mcs51a.dsp - Package Owner=<4>
+Project: "mcs51a"=.\src\mcs51\mcs51a.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -143,6 +323,39 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name pica
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "pic16"=.\src\pic16\pic16.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name pic16a
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "pic16a"=.\src\pic16\pic16a.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
 }}}
 
 ###############################################################################
@@ -159,7 +372,22 @@ Package=<4>
 
 ###############################################################################
 
-Project: "sdcpp"=.\support\cpp\sdcpp.dsp - Package Owner=<4>
+Project: "sdcpp"=.\support\cpp2\sdcpp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name sdcppa
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "sdcppa"=.\support\cpp2\sdcppa.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -194,6 +422,63 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name mcs51
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name xa51
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name pic16
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name hc08
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "xa51"=.\src\xa51\xa51.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name xa51a
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "xa51a"=.\src\xa51\xa51a.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "yacc"=.\src\yacc.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
 }}}
 
 ###############################################################################
@@ -208,6 +493,12 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name z80a
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name yacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
     End Project Dependency
 }}}
 

@@ -1,4 +1,4 @@
-#include <limits.h>
+#include <float.h>
 
 /* convert float to unsigned char */
 unsigned char __fs2uchar (float f) {

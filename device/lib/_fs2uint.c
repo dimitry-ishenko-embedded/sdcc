@@ -1,4 +1,6 @@
-#include <limits.h>
+#include <float.h>
+
+unsigned long __fs2ulong (float a1);
 
 /* convert float to unsigned int */
 unsigned int __fs2uint (float f) {

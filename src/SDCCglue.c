@@ -26,12 +26,16 @@
 #include "asm.h"
 #include <time.h>
 #include "newalloc.h"
+#include <fcntl.h>
+#include <sys/stat.h>
 
-#if !defined(__BORLANDC__) && !defined(_MSC_VER)
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
 #endif
 
-symbol *interrupts[256];
+symbol *interrupts[INTNO_MAX+1];
 
 void printIval (symbol *, sym_link *, initList *, FILE *);
 set *publics = NULL;		/* public variables */
@@ -41,9 +45,25 @@ set *externs = NULL;		/* Varibles that are declared as extern */
 unsigned maxInterrupts = 6;
 int allocInfo = 1;
 symbol *mainf;
-extern char *VersionString;
+set *pipeSet = NULL;            /* set of pipes */
 set *tmpfileSet = NULL;		/* set of tmp file created by the compiler */
 set *tmpfileNameSet = NULL;	/* All are unlinked at close. */
+
+/*-----------------------------------------------------------------*/
+/* closePipes - closes all pipes created by the compiler           */
+/*-----------------------------------------------------------------*/
+DEFSETFUNC (closePipes)
+{
+  FILE *pfile = item;
+  int ret;
+
+  if (pfile) {
+    ret = pclose (pfile);
+    assert(ret != -1);
+  }
+
+  return 0;
+}
 
 /*-----------------------------------------------------------------*/
 /* closeTmpFiles - closes all tmp files created by the compiler    */
@@ -52,27 +72,51 @@ set *tmpfileNameSet = NULL;	/* All are unlinked at close. */
 DEFSETFUNC (closeTmpFiles)
 {
   FILE *tfile = item;
+  int ret;
 
-  if (tfile)
-    fclose (tfile);
+  if (tfile) {
+    ret = fclose (tfile);
+    assert(ret == 0);
+  }
 
   return 0;
 }
 
 /*-----------------------------------------------------------------*/
-/* rmTmpFiles - closes all tmp files created by the compiler    */
+/* rmTmpFiles - unlinks all tmp files created by the compiler      */
 /*                 because of BRAIN DEAD MS/DOS & CYGNUS Libraries */
 /*-----------------------------------------------------------------*/
 DEFSETFUNC (rmTmpFiles)
 {
   char *name = item;
+  int ret;
 
-  if (name)
-    {
-      unlink (name);
-      free (name);
-    }
+  if (name) {
+      ret = unlink (name);
+      assert(ret == 0);
+      Safe_free (name);
+  }
+
   return 0;
+}
+
+/*-----------------------------------------------------------------*/
+/* rm_tmpfiles - close and remove temporary files and delete sets  */
+/*-----------------------------------------------------------------*/
+void
+rm_tmpfiles (void)
+{
+  /* close temporary files */
+  applyToSet (pipeSet, closePipes);
+  /* close temporary files */
+  deleteSet (&pipeSet);
+
+  applyToSet (tmpfileSet, closeTmpFiles);
+  /* remove temporary files */
+  applyToSet (tmpfileNameSet, rmTmpFiles);
+  /* delete temorary file sets */
+  deleteSet (&tmpfileSet);
+  deleteSet (&tmpfileNameSet);
 }
 
 /*-----------------------------------------------------------------*/
@@ -92,7 +136,6 @@ copyFile (FILE * dest, FILE * src)
 char *
 aopLiteralLong (value * val, int offset, int size)
 {
-	char *rs;
 	union {
 		float f;
 		unsigned char c[4];
@@ -112,17 +155,18 @@ aopLiteralLong (value * val, int offset, int size)
 		v >>= (offset * 8);
 		switch (size) {
 		case 1:
-			tsprintf (buffer, "!immedbyte", (unsigned int) v & 0xff);
+			tsprintf (buffer, sizeof(buffer), 
+				  "!immedbyte", (unsigned int) v & 0xff);
 			break;
 		case 2:
-			tsprintf (buffer, "!immedword", (unsigned int) v & 0xffff);
+			tsprintf (buffer, sizeof(buffer), 
+				  "!immedword", (unsigned int) v & 0xffff);
 			break;
 		default:
 			/* Hmm.  Too big for now. */
 			assert (0);
 		}
-		rs = Safe_calloc (1, strlen (buffer) + 1);
-		return strcpy (rs, buffer);
+		return Safe_strdup (buffer);
 	}
 
 	/* PENDING: For now size must be 1 */
@@ -130,13 +174,14 @@ aopLiteralLong (value * val, int offset, int size)
 
 	/* it is type float */
 	fl.f = (float) floatFromVal (val);
-#ifdef _BIG_ENDIAN
-	tsprintf (buffer, "!immedbyte", fl.c[3 - offset]);
+#ifdef WORDS_BIGENDIAN
+	tsprintf (buffer, sizeof(buffer), 
+		  "!immedbyte", fl.c[3 - offset]);
 #else
-	tsprintf (buffer, "!immedbyte", fl.c[offset]);
+	tsprintf (buffer, sizeof(buffer), 
+		  "!immedbyte", fl.c[offset]);
 #endif
-	rs = Safe_calloc (1, strlen (buffer) + 1);
-	return strcpy (rs, buffer);
+	return Safe_strdup (buffer);
 }
 
 /*-----------------------------------------------------------------*/
@@ -154,9 +199,11 @@ aopLiteral (value * val, int offset)
 static void 
 emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 {
-  symbol *sym, *symIval;
+  symbol *sym;
   ast *ival = NULL;
-  memmap *segment;
+
+  if (!map)
+    return;
 
   if (addPublics)
     {
@@ -170,26 +217,33 @@ emitRegularMap (memmap * map, bool addPublics, bool arFlag)
       else
 	tfprintf (map->oFile, "\t!area\n", map->sname);
     }
-
-  /* print the area name */
+ 
   for (sym = setFirstItem (map->syms); sym;
        sym = setNextItem (map->syms))
     {
+      symbol *newSym=NULL;
 
       /* if extern then add it into the extern list */
       if (IS_EXTERN (sym->etype))
 	{
-	  addSetHead (&externs, sym);
+          addSetHead (&externs, sym);
 	  continue;
 	}
 
       /* if allocation required check is needed
          then check if the symbol really requires
          allocation only for local variables */
+
       if (arFlag && !IS_AGGREGATE (sym->type) &&
 	  !(sym->_isparm && !IS_REGPARM (sym->etype)) &&
 	  !sym->allocreq && sym->level)
 	continue;
+
+      /* for bitvar locals and parameters */
+      if (!arFlag && !sym->allocreq && sym->level 
+	  && !SPEC_ABSA (sym->etype)) {
+	continue;
+      }
 
       /* if global variable & not static or extern
          and addPublics allowed then add it to the public set */
@@ -197,85 +251,119 @@ emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 	   (sym->_isparm && !IS_REGPARM (sym->etype))) &&
 	  addPublics &&
 	  !IS_STATIC (sym->etype) &&
-          (IS_FUNC(sym->type) ? (sym->used || sym->fbody) : 1))
+          (IS_FUNC(sym->type) ? (sym->used || IFFUNC_HASBODY(sym->type)) : 1))
 	{
 	  addSetHead (&publics, sym);
 	}
 
       /* if extern then do nothing or is a function
          then do nothing */
-      if (IS_FUNC (sym->type))
+      if (IS_FUNC (sym->type) && !(sym->isitmp))
 	continue;
 
       /* print extra debug info if required */
-      if (options.debug) {
-	cdbSymbol (sym, cdbFile, FALSE, FALSE);
-	if (!sym->level) /* global */
-	  if (IS_STATIC (sym->etype))
-	    fprintf (map->oFile, "F%s$", moduleName); /* scope is file */
+      if (options.debug)
+	{
+	  if (!sym->level) /* global */
+	    {
+	      if (IS_STATIC (sym->etype))
+	        fprintf (map->oFile, "F%s$", moduleName); /* scope is file */
+	      else
+	        fprintf (map->oFile, "G$");	/* scope is global */
+	    }
 	  else
-	    fprintf (map->oFile, "G$");	/* scope is global */
-	else
-	  /* symbol is local */
-	  fprintf (map->oFile, "L%s$", (sym->localof ? sym->localof->name : "-null-"));
-	fprintf (map->oFile, "%s$%d$%d", sym->name, sym->level, sym->block);
-      }
+	    {
+	      /* symbol is local */
+	      fprintf (map->oFile, "L%s$", (sym->localof ? sym->localof->name : "-null-"));
+	    }
+	  fprintf (map->oFile, "%s$%d$%d", sym->name, sym->level, sym->block);
+	}
       
+      /* if it has an initial value then do it only if
+         it is a global variable */
+      if (sym->ival && sym->level == 0) {
+	if (SPEC_OCLS(sym->etype)==xidata) {
+	  /* create a new "XINIT (CODE)" symbol, that will be emitted later
+	     in the static seg */
+	  newSym=copySymbol (sym);
+	  SPEC_OCLS(newSym->etype)=xinit;
+	  SNPRINTF (newSym->name, sizeof(newSym->name), "__xinit_%s", sym->name);
+	  SNPRINTF (newSym->rname, sizeof(newSym->rname), "__xinit_%s", sym->rname);
+	  if (IS_SPEC (newSym->type))
+            SPEC_CONST (newSym->type) = 1;
+          else
+            DCL_PTR_CONST (newSym->type) = 1;
+	  SPEC_STAT(newSym->etype)=1;
+	  resolveIvalSym(newSym->ival, newSym->type);
+
+	  // add it to the "XINIT (CODE)" segment
+	  addSet(&xinit->syms, newSym);
+	  sym->ival=NULL;
+	} else {
+	  if (IS_AGGREGATE (sym->type)) {
+	    ival = initAggregates (sym, sym->ival, NULL);
+	  } else {
+	    if (getNelements(sym->type, sym->ival)>1) {
+	      werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "scalar", 
+		      sym->name);
+	    }
+	    ival = newNode ('=', newAst_VALUE (symbolVal (sym)),
+			    decorateType (resolveSymbols (list2expr (sym->ival)), RESULT_CHECK));
+	  }
+	  codeOutFile = statsg->oFile;
+
+	  if (ival) {
+	    // set ival's lineno to where the symbol was defined
+	    setAstLineno (ival, lineno=sym->lineDef);
+	    // check if this is not a constant expression
+	    if (!constExprTree(ival)) {
+	      werror (E_CONST_EXPECTED, "found expression");
+	      // but try to do it anyway
+	    }
+	    allocInfo = 0;
+            if (!astErrors(ival))
+	      eBBlockFromiCode (iCodeFromAst (ival));
+	    allocInfo = 1;
+	  }
+	}	  
+	sym->ival = NULL;
+      }
+
       /* if is has an absolute address then generate
          an equate for this no need to allocate space */
       if (SPEC_ABSA (sym->etype))
 	{
+	  char *equ="=";
 	  if (options.debug) {
 	    fprintf (map->oFile, " == 0x%04x\n", SPEC_ADDR (sym->etype));
 	  }
-	  fprintf (map->oFile, "%s\t=\t0x%04x\n",
-		   sym->rname,
+	  if (TARGET_IS_XA51) {
+	    if (map==sfr) {
+	      equ="sfr";
+	    } else if (map==bit || map==sfrbit) {
+	      equ="bit";
+	    }
+	  }
+	  fprintf (map->oFile, "%s\t%s\t0x%04x\n",
+		   sym->rname, equ,
 		   SPEC_ADDR (sym->etype));
 	}
-      else
-	{
-	  /* allocate space */
-	  if (options.debug) {
-	    fprintf (map->oFile, "==.\n");
-	  }
-	  if (IS_STATIC (sym->etype))
-	    tfprintf (map->oFile, "!slabeldef\n", sym->rname);
-	  else
-	    tfprintf (map->oFile, "!labeldef\n", sym->rname);
-	  tfprintf (map->oFile, "\t!ds\n", 
-		    (unsigned int) getSize (sym->type) & 0xffff);
+      else {
+	int size = getSize (sym->type);
+	if (size==0) {
+	  werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE, sym->name);
 	}
-
-      /* if it has an initial value then do it only if
-         it is a global variable */
-      if (sym->ival && sym->level == 0)
-	{
-	  if (IS_AGGREGATE (sym->type)) {
-	    ival = initAggregates (sym, sym->ival, NULL);
-	  } else {
-	    ival = newNode ('=', newAst_VALUE (symbolVal (sym)),
-		     decorateType (resolveSymbols (list2expr (sym->ival))));
-	  }
-	  codeOutFile = statsg->oFile;
-	  allocInfo = 0;
-
-	  // set ival's lineno to where the symbol was defined
-	  if (ival) ival->lineno=sym->lineDef;
-	  eBBlockFromiCode (iCodeFromAst (ival));
-	  allocInfo = 1;
-
-	  /* if the ival is a symbol assigned to an aggregate,
-	     (bug #458099 -> #462479)
-	     we don't need it anymore, so delete it from its segment */
-	  if (IS_AST_SYM_VALUE(sym->ival->init.node) &&
-	      IS_AGGREGATE (sym->type) ) {
-	    symIval=AST_SYMBOL(sym->ival->init.node);
-	    segment = SPEC_OCLS (symIval->etype);
-	    deleteSetItem (&segment->syms, symIval);
-	  }
-
-	  sym->ival = NULL;
+	/* allocate space */
+	if (options.debug) {
+	  fprintf (map->oFile, "==.\n");
 	}
+	if (IS_STATIC (sym->etype))
+	  tfprintf (map->oFile, "!slabeldef\n", sym->rname);
+	else
+	  tfprintf (map->oFile, "!labeldef\n", sym->rname);	      
+	tfprintf (map->oFile, "\t!ds\n", 
+		  (unsigned int)  size & 0xffff);
+      }
     }
 }
 
@@ -283,7 +371,7 @@ emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 /* initPointer - pointer initialization code massaging             */
 /*-----------------------------------------------------------------*/
 value *
-initPointer (initList * ilist)
+initPointer (initList * ilist, sym_link *toType)
 {
 	value *val;
 	ast *expr = list2expr (ilist);
@@ -295,6 +383,29 @@ initPointer (initList * ilist)
 	if ((val = constExprValue (expr, FALSE)))
 		return val;
 	
+	/* ( ptr + constant ) */
+	if (IS_AST_OP (expr) &&
+	    (expr->opval.op == '+' || expr->opval.op == '-') &&
+	    IS_AST_SYM_VALUE (expr->left) &&
+	    (IS_ARRAY(expr->left->ftype) || IS_PTR(expr->left->ftype)) &&
+	    compareType(toType, expr->left->ftype) &&
+	    IS_AST_LIT_VALUE (expr->right)) {
+	  return valForCastAggr (expr->left, expr->left->ftype,
+				      expr->right,
+				      expr->opval.op);
+	}
+	
+	/* (char *)&a */
+	if (IS_AST_OP(expr) && expr->opval.op==CAST &&
+	    IS_AST_OP(expr->right) && expr->right->opval.op=='&') {
+	  if (compareType(toType, expr->left->ftype)!=1) {
+	    werror (W_INIT_WRONG);
+	    printFromToType(expr->left->ftype, toType);
+	  }
+	  // skip the cast ???
+	  expr=expr->right;
+	}
+
 	/* no then we have to do these cludgy checks */
 	/* pointers can be initialized with address of
 	   a variable or address of an array element */
@@ -302,7 +413,7 @@ initPointer (initList * ilist)
 		/* address of symbol */
 		if (IS_AST_SYM_VALUE (expr->left)) {
 			val = copyValue (AST_VALUE (expr->left));
-			val->type = newLink ();
+			val->type = newLink (DECLARATOR);
 			if (SPEC_SCLS (expr->left->etype) == S_CODE) {
 				DCL_TYPE (val->type) = CPOINTER;
 				DCL_PTR_CONST (val->type) = port->mem.code_ro;
@@ -338,10 +449,10 @@ initPointer (initList * ilist)
 		   (&some_struct)->element */
 		if (IS_AST_OP (expr->left) &&
 		    expr->left->opval.op == PTR_OP &&
-		    IS_ADDRESS_OF_OP (expr->left->left))
-			return valForStructElem (expr->left->left->left,
-						 expr->left->right);
-
+		    IS_ADDRESS_OF_OP (expr->left->left)) {
+		  return valForStructElem (expr->left->left->left,
+					   expr->left->right);
+		}
 	}
 	/* case 3. (((char *) &a) +/- constant) */
 	if (IS_AST_OP (expr) &&
@@ -356,13 +467,12 @@ initPointer (initList * ilist)
 				       expr->right, expr->opval.op);
 
 	}
-	
 	/* case 4. (char *)(array type) */
 	if (IS_CAST_OP(expr) && IS_AST_SYM_VALUE (expr->right) &&
 	    IS_ARRAY(expr->right->ftype)) {
 
 		val = copyValue (AST_VALUE (expr->right));
-		val->type = newLink ();
+		val->type = newLink (DECLARATOR);
 		if (SPEC_SCLS (expr->right->etype) == S_CODE) {
 			DCL_TYPE (val->type) = CPOINTER;
 			DCL_PTR_CONST (val->type) = port->mem.code_ro;
@@ -382,7 +492,10 @@ initPointer (initList * ilist)
 		return val;
 	}
  wrong:
-	werror (W_INIT_WRONG);
+	if (expr)
+	  werrorfl (expr->filename, expr->lineno, E_INCOMPAT_PTYPES);
+	else
+	  werror (E_INCOMPAT_PTYPES);
 	return NULL;
 
 }
@@ -402,7 +515,7 @@ printChar (FILE * ofile, char *s, int plen)
   while (len && pplen < plen)
     {
       i = 60;
-      while (i && *s && pplen < plen)
+      while (i && pplen < plen)
 	{
 	  if (*s < ' ' || *s == '\"' || *s=='\\')
 	    {
@@ -433,7 +546,11 @@ printChar (FILE * ofile, char *s, int plen)
       else
 	len = 0;
     }
-  tfprintf (ofile, "\t!db !constbyte\n", 0);
+  while (pplen < plen)
+    {
+      tfprintf (ofile, "\t!db !constbyte\n", 0);
+      pplen++;
+    }
 }
 
 /*-----------------------------------------------------------------*/
@@ -446,20 +563,18 @@ pointerTypeToGPByte (const int p_type, const char *iname, const char *oname)
     {
     case IPOINTER:
     case POINTER:
-      return 0;
+      return GPTYPE_NEAR;
     case GPOINTER:
-      /* hack - if we get a generic pointer, we just assume
-       * it's an FPOINTER (i.e. in XDATA space).
-       */
-      werror (E_CANNOT_USE_GENERIC_POINTER, iname, oname);
+	werror (E_CANNOT_USE_GENERIC_POINTER, 
+		iname ? iname : "<null>", 
+		oname ? oname : "<null>");
       exit (1);
-      // fall through
     case FPOINTER:
-      return 1;
+      return GPTYPE_FAR;
     case CPOINTER:
-      return 2;
+      return GPTYPE_CODE;
     case PPOINTER:
-      return 3;
+      return GPTYPE_XSTACK;
     default:
       fprintf (stderr, "*** internal error: unknown pointer type %d in GPByte.\n",
 	       p_type);
@@ -475,14 +590,19 @@ pointerTypeToGPByte (const int p_type, const char *iname, const char *oname)
 void 
 _printPointerType (FILE * oFile, const char *name)
 {
-  /* if (TARGET_IS_DS390) */
   if (options.model == MODEL_FLAT24)
     {
-      fprintf (oFile, "\t.byte %s,(%s >> 8),(%s >> 16)", name, name, name);
+      if (port->little_endian)
+        fprintf (oFile, "\t.byte %s,(%s >> 8),(%s >> 16)", name, name, name);
+      else
+        fprintf (oFile, "\t.byte (%s >> 16),(%s >> 8),%s", name, name, name);
     }
   else
     {
-      fprintf (oFile, "\t.byte %s,(%s >> 8)", name, name);
+      if (port->little_endian)
+        fprintf (oFile, "\t.byte %s,(%s >> 8)", name, name);
+      else
+        fprintf (oFile, "\t.byte (%s >> 8),%s", name, name);
     }
 }
 
@@ -511,7 +631,7 @@ printGPointerType (FILE * oFile, const char *iname, const char *oname,
 /* printIvalType - generates ival for int/char                     */
 /*-----------------------------------------------------------------*/
 void 
-printIvalType (sym_link * type, initList * ilist, FILE * oFile)
+printIvalType (symbol *sym, sym_link * type, initList * ilist, FILE * oFile)
 {
 	value *val;
 
@@ -519,7 +639,15 @@ printIvalType (sym_link * type, initList * ilist, FILE * oFile)
 	if (ilist->type == INIT_DEEP)
 		ilist = ilist->init.deep;
 
-	val = list2val (ilist);
+	if (!(val = list2val (ilist))) {
+	  // assuming a warning has been thrown
+	  val=constVal("0");
+	}
+
+	if (val->type != type) {
+	  val = valCastLiteral(type, floatFromVal(val));
+	}
+	
 	switch (getSize (type)) {
 	case 1:
 		if (!val)
@@ -532,18 +660,25 @@ printIvalType (sym_link * type, initList * ilist, FILE * oFile)
 	case 2:
 		if (port->use_dw_for_init)
 			tfprintf (oFile, "\t!dws\n", aopLiteralLong (val, 0, 2));
-		else
+		else if (port->little_endian)
 			fprintf (oFile, "\t.byte %s,%s\n", aopLiteral (val, 0), aopLiteral (val, 1));
+		else
+			fprintf (oFile, "\t.byte %s,%s\n", aopLiteral (val, 1), aopLiteral (val, 0));
 		break;
 	case 4:
 		if (!val) {
 			tfprintf (oFile, "\t!dw !constword\n", 0);
 			tfprintf (oFile, "\t!dw !constword\n", 0);
 		}
-		else {
+		else if (port->little_endian) {
 			fprintf (oFile, "\t.byte %s,%s,%s,%s\n",
 				 aopLiteral (val, 0), aopLiteral (val, 1),
 				 aopLiteral (val, 2), aopLiteral (val, 3));
+		}
+		else {
+			fprintf (oFile, "\t.byte %s,%s,%s,%s\n",
+				 aopLiteral (val, 3), aopLiteral (val, 2),
+				 aopLiteral (val, 1), aopLiteral (val, 0));
 		}
 		break;
 	}
@@ -590,7 +725,7 @@ void printIvalBitFields(symbol **sym, initList **ilist, FILE * oFile)
 	case 2:
 		tfprintf (oFile, "\t!dw !constword\n",ival);
 		break;
-	case 4:
+	case 4: /* EEP: why is this db and not dw? */
 		tfprintf (oFile, "\t!db  !constword,!constword\n",
 			 (ival >> 8) & 0xffff, (ival & 0xffff));
 		break;
@@ -611,7 +746,7 @@ printIvalStruct (symbol * sym, sym_link * type,
 
 	sflds = SPEC_STRUCT (type)->fields;
 	if (ilist->type != INIT_DEEP) {
-		werror (E_INIT_STRUCT, sym->name);
+		werrorfl (sym->fileDef, sym->lineDef, E_INIT_STRUCT, sym->name);
 		return;
 	}
 
@@ -621,8 +756,11 @@ printIvalStruct (symbol * sym, sym_link * type,
 		if (IS_BITFIELD(sflds->type)) {
 			printIvalBitFields(&sflds,&iloop,oFile);
 		} else {
-			printIval (sflds, sflds->type, iloop, oFile);
+			printIval (sym, sflds->type, iloop, oFile);
 		}
+	}
+	if (iloop) {
+	  werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "struct", sym->name);
 	}
 	return;
 }
@@ -634,7 +772,6 @@ int
 printIvalChar (sym_link * type, initList * ilist, FILE * oFile, char *s)
 {
   value *val;
-  int remain;
 
   if (!s)
     {
@@ -647,10 +784,6 @@ printIvalChar (sym_link * type, initList * ilist, FILE * oFile, char *s)
 	    DCL_ELEM (type) = strlen (SPEC_CVAL (val->etype).v_char) + 1;
 
 	  printChar (oFile, SPEC_CVAL (val->etype).v_char, DCL_ELEM (type));
-
-	  if ((remain = (DCL_ELEM (type) - strlen (SPEC_CVAL (val->etype).v_char) - 1)) > 0)
-	    while (remain--)
-	      tfprintf (oFile, "\t!db !constbyte\n", 0);
 
 	  return 1;
 	}
@@ -665,58 +798,55 @@ printIvalChar (sym_link * type, initList * ilist, FILE * oFile, char *s)
 /*-----------------------------------------------------------------*/
 /* printIvalArray - generates code for array initialization        */
 /*-----------------------------------------------------------------*/
-void 
+void
 printIvalArray (symbol * sym, sym_link * type, initList * ilist,
 		FILE * oFile)
 {
   initList *iloop;
-  int lcnt = 0, size = 0;
+  int size = 0;
 
   /* take care of the special   case  */
   /* array of characters can be init  */
   /* by a string                      */
-  if (IS_CHAR (type->next))
+  if (IS_CHAR (type->next)) {
+    if (!IS_LITERAL(list2val(ilist)->etype)) {
+      werrorfl (ilist->filename, ilist->lineno, E_CONST_EXPECTED);
+      return;
+    }
     if (printIvalChar (type,
 		       (ilist->type == INIT_DEEP ? ilist->init.deep : ilist),
 		       oFile, SPEC_CVAL (sym->etype).v_char))
       return;
-
+  }
   /* not the special case             */
   if (ilist->type != INIT_DEEP)
     {
-      werror (E_INIT_STRUCT, sym->name);
+      werrorfl (ilist->filename, ilist->lineno, E_INIT_STRUCT, sym->name);
       return;
     }
 
-  iloop = ilist->init.deep;
-  lcnt = DCL_ELEM (type);
-
-  for (;;)
+  for (iloop=ilist->init.deep; iloop; iloop=iloop->next)
     {
-      size++;
       printIval (sym, type->next, iloop, oFile);
-      iloop = (iloop ? iloop->next : NULL);
-
-
-      /* if not array limits given & we */
-      /* are out of initialisers then   */
-      if (!DCL_ELEM (type) && !iloop)
-	break;
-
-      /* no of elements given and we    */
-      /* have generated for all of them */
-      if (!--lcnt) {
-	/* if initializers left */
-	if (iloop) {
-	  werror (W_EXESS_ARRAY_INITIALIZERS, sym->name, sym->lineDef);
-	}
+      
+      if (++size > DCL_ELEM(type)) {
+	werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "array", sym->name);
 	break;
       }
     }
-
-  /* if we have not been given a size  */
-  if (!DCL_ELEM (type))
+  
+  if (DCL_ELEM(type)) {
+    // pad with zeros if needed
+    if (size<DCL_ELEM(type)) {
+      size = (DCL_ELEM(type) - size) * getSize(type->next);
+      while (size--) {
+	tfprintf (oFile, "\t!db !constbyte\n", 0);
+      }
+    }
+  } else {
+    // we have not been given a size, but we now know it
     DCL_ELEM (type) = size;
+  }
 
   return;
 }
@@ -731,6 +861,21 @@ printIvalFuncPtr (sym_link * type, initList * ilist, FILE * oFile)
   int dLvl = 0;
 
   val = list2val (ilist);
+
+  if (!val) {
+    // an error has been thrown allready
+    val=constVal("0");
+  }
+
+  if (IS_LITERAL(val->etype)) {
+    if (compareType(type,val->etype)==0) {
+      werrorfl (ilist->filename, ilist->lineno, E_INCOMPAT_TYPES);
+      printFromToType (val->type, type);
+    }
+    printIvalCharPtr (NULL, type, val, oFile);
+    return;
+  }
+
   /* check the types   */
   if ((dLvl = compareType (val->type, type->next)) <= 0)
     {
@@ -816,7 +961,7 @@ printIvalCharPtr (symbol * sym, sym_link * type, value * val, FILE * oFile)
     }
   else
     {
-      /* What is this case? Are these pointers? */
+      // these are literals assigned to pointers
       switch (size)
 	{
 	case 1:
@@ -825,14 +970,48 @@ printIvalCharPtr (symbol * sym, sym_link * type, value * val, FILE * oFile)
 	case 2:
 	  if (port->use_dw_for_init)
 	    tfprintf (oFile, "\t!dws\n", aopLiteralLong (val, 0, size));
-	  else
+	  else if (port->little_endian)
 	    tfprintf (oFile, "\t.byte %s,%s\n",
 		      aopLiteral (val, 0), aopLiteral (val, 1));
+	  else
+	    tfprintf (oFile, "\t.byte %s,%s\n",
+		      aopLiteral (val, 1), aopLiteral (val, 0));
 	  break;
 	case 3:
-	  /* PENDING: 0x02 or 0x%02x, CDATA? */
-	  fprintf (oFile, "\t.byte %s,%s,#0x02\n",
-		   aopLiteral (val, 0), aopLiteral (val, 1));
+	  if (IS_GENPTR(type) && floatFromVal(val)!=0) {
+	    // non-zero mcs51 generic pointer
+	    werrorfl (sym->fileDef, sym->lineDef, E_LITERAL_GENERIC);
+	  }
+	  if (port->little_endian) {
+	    fprintf (oFile, "\t.byte %s,%s,%s\n",
+	 	     aopLiteral (val, 0), 
+		     aopLiteral (val, 1),
+		     aopLiteral (val, 2));
+	  } else {
+	    fprintf (oFile, "\t.byte %s,%s,%s\n",
+	 	     aopLiteral (val, 2), 
+		     aopLiteral (val, 1),
+		     aopLiteral (val, 0));
+	  }
+	  break;
+	case 4:
+	  if (IS_GENPTR(type) && floatFromVal(val)!=0) {
+	    // non-zero ds390 generic pointer
+	    werrorfl (sym->fileDef, sym->lineDef, E_LITERAL_GENERIC);
+	  }
+	  if (port->little_endian) {
+	    fprintf (oFile, "\t.byte %s,%s,%s,%s\n",
+		     aopLiteral (val, 0), 
+		     aopLiteral (val, 1), 
+		     aopLiteral (val, 2),
+		     aopLiteral (val, 3));
+	  } else {
+	    fprintf (oFile, "\t.byte %s,%s,%s,%s\n",
+		     aopLiteral (val, 3), 
+		     aopLiteral (val, 2), 
+		     aopLiteral (val, 1),
+		     aopLiteral (val, 0));
+	  }
 	  break;
 	default:
 	  assert (0);
@@ -866,7 +1045,7 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
       return;
     }
 
-  if (!(val = initPointer (ilist)))
+  if (!(val = initPointer (ilist, type)))
     return;
 
   /* if character pointer */
@@ -875,8 +1054,10 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
       return;
 
   /* check the type      */
-  if (compareType (type, val->type) == 0)
-    werror (W_INIT_WRONG);
+  if (compareType (type, val->type) == 0) {
+    werrorfl (ilist->filename, ilist->lineno, W_INIT_WRONG);
+    printFromToType (val->type, type);
+  }
 
   /* if val is literal */
   if (IS_LITERAL (val->etype))
@@ -889,12 +1070,22 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
 	case 2:
 	  if (port->use_dw_for_init)
 	    tfprintf (oFile, "\t!dws\n", aopLiteralLong (val, 0, 2));
-	  else
+	  else if (port->little_endian)
 	    tfprintf (oFile, "\t.byte %s,%s\n", aopLiteral (val, 0), aopLiteral (val, 1));
+	  else
+	    tfprintf (oFile, "\t.byte %s,%s\n", aopLiteral (val, 1), aopLiteral (val, 0));
 	  break;
-	case 3:
-	  fprintf (oFile, "\t.byte %s,%s,#0x02\n",
-		   aopLiteral (val, 0), aopLiteral (val, 1));
+	case 3: // how about '390??
+	  if (port->little_endian)
+	    {
+	      fprintf (oFile, "\t.byte %s,%s,#0x%d\n",
+		       aopLiteral (val, 0), aopLiteral (val, 1), GPTYPE_CODE);
+	    }
+	  else
+	    {
+	      fprintf (oFile, "\t.byte %s,%s,#0x%d\n",
+		       aopLiteral (val, 1), aopLiteral (val, 0), GPTYPE_CODE);
+	    }
 	}
       return;
     }
@@ -929,6 +1120,8 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
 void 
 printIval (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
 {
+  sym_link *itype;
+  
   if (!ilist)
     return;
 
@@ -939,13 +1132,6 @@ printIval (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
       return;
     }
 
-  /* if this is a pointer */
-  if (IS_PTR (type))
-    {
-      printIvalPtr (sym, type, ilist, oFile);
-      return;
-    }
-
   /* if this is an array   */
   if (IS_ARRAY (type))
     {
@@ -953,10 +1139,43 @@ printIval (symbol * sym, sym_link * type, initList * ilist, FILE * oFile)
       return;
     }
 
+  // not an aggregate, ilist must be a node
+  if (ilist->type!=INIT_NODE) {
+      // or a 1-element list
+    if (ilist->init.deep->next) {
+      werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "scalar", 
+	      sym->name);
+    } else {
+      ilist=ilist->init.deep;
+    }
+  }
+
+  // and the type must match
+  itype=ilist->init.node->ftype;
+
+  if (compareType(type, itype)==0) {
+    // special case for literal strings
+    if (IS_ARRAY (itype) && IS_CHAR (getSpec(itype)) &&
+	// which are really code pointers
+	IS_PTR(type) && DCL_TYPE(type)==CPOINTER) {
+      // no sweat
+    } else {
+      werrorfl (ilist->filename, ilist->lineno, E_TYPE_MISMATCH, "assignment", " ");
+      printFromToType(itype, type);
+    }
+  }
+
+  /* if this is a pointer */
+  if (IS_PTR (type))
+    {
+      printIvalPtr (sym, type, ilist, oFile);
+      return;
+    }
+
   /* if type is SPECIFIER */
   if (IS_SPEC (type))
     {
-      printIvalType (type, ilist, oFile);
+      printIvalType (sym, type, ilist, oFile);
       return;
     }
 }
@@ -969,9 +1188,7 @@ emitStaticSeg (memmap * map, FILE * out)
 {
   symbol *sym;
 
-  /*     fprintf(map->oFile,"\t.area\t%s\n",map->sname); */
-  if (!out)
-    out = code->oFile;
+  /* fprintf(out, "\t.area\t%s\n", map->sname); */
 
   /* for all variables in this segment do */
   for (sym = setFirstItem (map->syms); sym;
@@ -985,11 +1202,13 @@ emitStaticSeg (memmap * map, FILE * out)
       /* if it is not static add it to the public
          table */
       if (!IS_STATIC (sym->etype))
-	addSetHead (&publics, sym);
+        {
+          addSetHead (&publics, sym);
+        }
 
       /* print extra debug info if required */
       if (options.debug) {
-	cdbSymbol (sym, cdbFile, FALSE, FALSE);
+
 	if (!sym->level)
 	  {			/* global */
 	    if (IS_STATIC (sym->etype))
@@ -1024,22 +1243,33 @@ emitStaticSeg (memmap * map, FILE * out)
 	    {
 	      fprintf (out, "%s:\n", sym->rname);
 	      noAlloc++;
-	      resolveIvalSym (sym->ival);
+	      resolveIvalSym (sym->ival, sym->type);
 	      printIval (sym, sym->type, sym->ival, out);
 	      noAlloc--;
+	      /* if sym is a simple string and sym->ival is a string, 
+		 WE don't need it anymore */
+	      if (IS_ARRAY(sym->type) && IS_CHAR(sym->type->next) &&
+		  IS_AST_SYM_VALUE(list2expr(sym->ival)) &&
+		  list2val(sym->ival)->sym->isstrlit) {
+		freeStringSymbol(list2val(sym->ival)->sym);
+	      }
 	    }
-	  else
-	    {
+	  else {
 	      /* allocate space */
+	      int size = getSize (sym->type);
+	      
+	      if (size==0) {
+		  werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE,sym->name);
+	      }
 	      fprintf (out, "%s:\n", sym->rname);
 	      /* special case for character strings */
 	      if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) &&
 		  SPEC_CVAL (sym->etype).v_char)
-		printChar (out,
-			   SPEC_CVAL (sym->etype).v_char,
-			   strlen (SPEC_CVAL (sym->etype).v_char) + 1);
+		  printChar (out,
+			     SPEC_CVAL (sym->etype).v_char,
+			     size);
 	      else
-		tfprintf (out, "\t!ds\n", (unsigned int) getSize (sym->type) & 0xffff);
+		  tfprintf (out, "\t!ds\n", (unsigned int) size & 0xffff);
 	    }
 	}
     }
@@ -1049,7 +1279,7 @@ emitStaticSeg (memmap * map, FILE * out)
 /* emitMaps - emits the code for the data portion the code         */
 /*-----------------------------------------------------------------*/
 void 
-emitMaps ()
+emitMaps (void)
 {
   inInitMode++;
   /* no special considerations for the following
@@ -1058,12 +1288,19 @@ emitMaps ()
   emitRegularMap (idata, TRUE, TRUE);
   emitRegularMap (bit, TRUE, FALSE);
   emitRegularMap (xdata, TRUE, TRUE);
+  if (port->genXINIT) {
+    emitRegularMap (xidata, TRUE, TRUE);
+  }
   emitRegularMap (sfr, FALSE, FALSE);
   emitRegularMap (sfrbit, FALSE, FALSE);
   emitRegularMap (home, TRUE, FALSE);
   emitRegularMap (code, TRUE, FALSE);
 
   emitStaticSeg (statsg, code->oFile);
+  if (port->genXINIT) {
+    tfprintf (code->oFile, "\t!area\n", xinit->sname);
+    emitStaticSeg (xinit, code->oFile);
+  }
   inInitMode--;
 }
 
@@ -1091,13 +1328,13 @@ createInterruptVect (FILE * vFile)
   /* only if the main function exists */
   if (!(mainf = findSymWithLevel (SymbolTab, mainf)))
     {
-      if (!options.cc_only && !noAssemble)
+      if (!options.cc_only && !noAssemble && !options.c1mode)
 	werror (E_NO_MAIN);
       return;
     }
 
   /* if the main is only a prototype ie. no body then do nothing */
-  if (!mainf->fbody)
+  if (!IFFUNC_HASBODY(mainf->type))
     {
       /* if ! compile only then main function should be present */
       if (!options.cc_only && !noAssemble)
@@ -1112,20 +1349,26 @@ createInterruptVect (FILE * vFile)
   if (!port->genIVT || !(port->genIVT (vFile, interrupts, maxInterrupts)))
     {
       /* "generic" interrupt table header (if port doesn't specify one).
-
        * Look suspiciously like 8051 code to me...
        */
 
       fprintf (vFile, "\tljmp\t__sdcc_gsinit_startup\n");
 
-
       /* now for the other interrupts */
       for (; i < maxInterrupts; i++)
 	{
 	  if (interrupts[i])
-	    fprintf (vFile, "\tljmp\t%s\n\t.ds\t5\n", interrupts[i]->rname);
+	    {
+	      fprintf (vFile, "\tljmp\t%s\n", interrupts[i]->rname);
+	      if ( i != maxInterrupts - 1 )
+	 	fprintf (vFile, "\t.ds\t5\n");
+	    }
 	  else
-	    fprintf (vFile, "\treti\n\t.ds\t7\n");
+	    {
+	      fprintf (vFile, "\treti\n");
+	      if ( i != maxInterrupts - 1 )
+		fprintf (vFile, "\t.ds\t7\n");
+	    }
 	}
     }
 }
@@ -1149,7 +1392,7 @@ initialComments (FILE * afile)
   time_t t;
   time (&t);
   fprintf (afile, "%s", iComments1);
-  fprintf (afile, "; Version %s %s\n", VersionString, asctime (localtime (&t)));
+  fprintf (afile, "; Version " SDCC_VERSION_STR " %s\n", asctime (localtime (&t)));
   fprintf (afile, "%s", iComments2);
 }
 
@@ -1184,7 +1427,7 @@ printExterns (FILE * afile)
 
   for (sym = setFirstItem (externs); sym;
        sym = setNextItem (externs))
-    tfprintf (afile, "\t!global\n", sym->rname);
+    tfprintf (afile, "\t!extern\n", sym->rname);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1207,11 +1450,6 @@ emitOverlay (FILE * afile)
 
       if (elementsInSet (ovrset))
 	{
-	  /* this dummy area is used to fool the assembler
-	     otherwise the assembler will append each of these
-	     declarations into one chunk and will not overlay
-	     sad but true */
-	  fprintf (afile, "\t.area _DUMMY\n");
 	  /* output the area informtion */
 	  fprintf (afile, "\t.area\t%s\n", port->mem.overlay_name);	/* MOF */
 	}
@@ -1219,8 +1457,7 @@ emitOverlay (FILE * afile)
       for (sym = setFirstItem (ovrset); sym;
 	   sym = setNextItem (ovrset))
 	{
-
-	  /* if extern then add it to the publics tabledo nothing */
+	  /* if extern then it is in the publics table: do nothing */
 	  if (IS_EXTERN (sym->etype))
 	    continue;
 
@@ -1236,7 +1473,9 @@ emitOverlay (FILE * afile)
 	     and addPublics allowed then add it to the public set */
 	  if ((sym->_isparm && !IS_REGPARM (sym->etype))
 	      && !IS_STATIC (sym->etype))
-	    addSetHead (&publics, sym);
+            {
+              addSetHead (&publics, sym);
+            }
 
 	  /* if extern then do nothing or is a function
 	     then do nothing */
@@ -1246,8 +1485,6 @@ emitOverlay (FILE * afile)
 	  /* print extra debug info if required */
 	  if (options.debug)
 	    {
-	      cdbSymbol (sym, cdbFile, FALSE, FALSE);
-
 	      if (!sym->level)
 		{		/* global */
 		  if (IS_STATIC (sym->etype))
@@ -1274,34 +1511,74 @@ emitOverlay (FILE * afile)
 		       sym->rname,
 		       SPEC_ADDR (sym->etype));
 	    }
-	  else
-	    {
+	  else {
+	      int size = getSize(sym->type);
+
+	      if (size==0) {
+		  werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE);
+	      }	      
 	      if (options.debug)
-		fprintf (afile, "==.\n");
+		  fprintf (afile, "==.\n");
 	      
 	      /* allocate space */
 	      tfprintf (afile, "!labeldef\n", sym->rname);
 	      tfprintf (afile, "\t!ds\n", (unsigned int) getSize (sym->type) & 0xffff);
-	    }
-
+	  }
+	  
 	}
     }
 }
+
+
+/*-----------------------------------------------------------------*/
+/* spacesToUnderscores - replace spaces with underscores        */
+/*-----------------------------------------------------------------*/
+static char *
+spacesToUnderscores (char *dest, const char *src, size_t len)
+{
+  int i;
+  char *p;
+
+  assert(dest != NULL);
+  assert(src != NULL);
+  assert(len > 0);
+
+  --len;
+  for (p = dest, i = 0; *src != '\0' && i < len; ++src, ++i) {
+    *p++ = isspace(*src) ? '_' : *src;
+  }
+  *p = '\0';
+
+  return dest;
+}
+
 
 /*-----------------------------------------------------------------*/
 /* glue - the final glue that hold the whole thing together        */
 /*-----------------------------------------------------------------*/
 void 
-glue ()
+glue (void)
 {
   FILE *vFile;
   FILE *asmFile;
   FILE *ovrFile = tempfile ();
+  char moduleBuf[PATH_MAX];
+  int mcs51_like;
+
+  if(port->general.glue_up_main &&
+    (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_XA51 || TARGET_IS_DS400))
+  {
+      mcs51_like=1; /*So it has bits, sfr, sbits, data, idata, etc...*/
+  }
+  else
+  {
+      mcs51_like=0;
+  }
 
   addSetHead (&tmpfileSet, ovrFile);
   /* print the global struct definitions */
   if (options.debug)
-    cdbStructBlock (0, cdbFile);
+    cdbStructBlock (0);
 
   vFile = tempfile ();
   /* PENDING: this isnt the best place but it will do */
@@ -1318,17 +1595,20 @@ glue ()
   /* do the overlay segments */
   emitOverlay (ovrFile);
 
+  outputDebugSymbols();
+
   /* now put it all together into the assembler file */
   /* create the assembler file name */
 
-  if (!options.c1mode)
+  /* -o option overrides default name? */
+  if ((noAssemble || options.c1mode) && fullDstFileName)
     {
-      sprintf (scratchFileName, srcFileName);
-      strcat (scratchFileName, port->assembler.file_ext);
+      strncpyz (scratchFileName, fullDstFileName, PATH_MAX);
     }
   else
     {
-      strcpy (scratchFileName, options.out_name);
+      strncpyz (scratchFileName, dstFileName, PATH_MAX);
+      strncatz (scratchFileName, port->assembler.file_ext, PATH_MAX);
     }
 
   if (!(asmFile = fopen (scratchFileName, "w")))
@@ -1341,7 +1621,35 @@ glue ()
   initialComments (asmFile);
 
   /* print module name */
-  tfprintf (asmFile, "\t!module\n", moduleName);
+  tfprintf (asmFile, "\t!module\n",
+    spacesToUnderscores (moduleBuf, moduleName, sizeof moduleBuf));
+  if(mcs51_like)
+  {
+    fprintf (asmFile, "\t.optsdcc -m%s", port->target);
+
+    switch(options.model)
+    {
+        case MODEL_SMALL:   fprintf (asmFile, " --model-small");   break;
+        case MODEL_COMPACT: fprintf (asmFile, " --model-compact"); break;
+        case MODEL_MEDIUM:  fprintf (asmFile, " --model-medium");  break;
+        case MODEL_LARGE:   fprintf (asmFile, " --model-large");   break;
+        case MODEL_FLAT24:  fprintf (asmFile, " --model-flat24");  break;
+        case MODEL_PAGE0:   fprintf (asmFile, " --model-page0");   break;
+        default: break;
+    }
+    /*if(options.stackAuto)      fprintf (asmFile, " --stack-auto");*/
+    if(options.useXstack)      fprintf (asmFile, " --xstack");
+    /*if(options.intlong_rent)   fprintf (asmFile, " --int-long-rent");*/
+    /*if(options.float_rent)     fprintf (asmFile, " --float-rent");*/
+    if(options.noRegParams)    fprintf (asmFile, " --no-reg-params");
+    if(options.parms_in_bank1) fprintf (asmFile, " --parms-in-bank1");
+    fprintf (asmFile, "\n");
+  }
+  else if(TARGET_IS_Z80 || TARGET_IS_GBZ80 )
+  {
+    fprintf (asmFile, "\t.optsdcc -m%s\n", port->target);
+  }
+
   tfprintf (asmFile, "\t!fileprelude\n");
 
   /* Let the port generate any global directives, etc. */
@@ -1355,33 +1663,58 @@ glue ()
   if (port->assembler.externGlobal)
     printExterns (asmFile);
 
-  /* copy the sfr segment */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; special function registers\n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, sfr->oFile);
-
-  /* copy the sbit segment */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; special function bits \n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, sfrbit->oFile);
+  if(( mcs51_like )
+   ||( TARGET_IS_Z80 )) /*.p.t.20030924 need to output SFR table for Z80 as well */
+  {
+      /* copy the sfr segment */
+      fprintf (asmFile, "%s", iComments2);
+      fprintf (asmFile, "; special function registers\n");
+      fprintf (asmFile, "%s", iComments2);
+      copyFile (asmFile, sfr->oFile);
+  }
+  
+  if(mcs51_like)
+  {
+      /* copy the sbit segment */
+      fprintf (asmFile, "%s", iComments2);
+      fprintf (asmFile, "; special function bits \n");
+      fprintf (asmFile, "%s", iComments2);
+      copyFile (asmFile, sfrbit->oFile);
+  
+      /*JCF: Create the areas for the register banks*/
+	  if(RegBankUsed[0]||RegBankUsed[1]||RegBankUsed[2]||RegBankUsed[3])
+	  {
+		 fprintf (asmFile, "%s", iComments2);
+		 fprintf (asmFile, "; overlayable register banks \n");
+		 fprintf (asmFile, "%s", iComments2);
+		 if(RegBankUsed[0])
+			fprintf (asmFile, "\t.area REG_BANK_0\t(REL,OVR,DATA)\n\t.ds 8\n");
+		 if(RegBankUsed[1]||options.parms_in_bank1)
+			fprintf (asmFile, "\t.area REG_BANK_1\t(REL,OVR,DATA)\n\t.ds 8\n");
+		 if(RegBankUsed[2])
+			fprintf (asmFile, "\t.area REG_BANK_2\t(REL,OVR,DATA)\n\t.ds 8\n");
+		 if(RegBankUsed[3])
+			fprintf (asmFile, "\t.area REG_BANK_3\t(REL,OVR,DATA)\n\t.ds 8\n");
+	  }
+  }
 
   /* copy the data segment */
   fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; internal ram data\n");
+  fprintf (asmFile, "; %s ram data\n", mcs51_like?"internal":"");
   fprintf (asmFile, "%s", iComments2);
   copyFile (asmFile, data->oFile);
 
 
   /* create the overlay segments */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; overlayable items in internal ram \n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, ovrFile);
+  if (overlay) {
+    fprintf (asmFile, "%s", iComments2);
+    fprintf (asmFile, "; overlayable items in %s ram \n", mcs51_like?"internal":"");
+    fprintf (asmFile, "%s", iComments2);
+    copyFile (asmFile, ovrFile);
+  }
 
   /* create the stack segment MOF */
-  if (mainf && mainf->fbody)
+  if (mainf && IFFUNC_HASBODY(mainf->type))
     {
       fprintf (asmFile, "%s", iComments2);
       fprintf (asmFile, "; Stack segment in internal ram \n");
@@ -1391,19 +1724,23 @@ glue ()
     }
 
   /* create the idata segment */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; indirectly addressable internal ram data\n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, idata->oFile);
+  if ( (idata) && (mcs51_like) ) {
+    fprintf (asmFile, "%s", iComments2);
+    fprintf (asmFile, "; indirectly addressable internal ram data\n");
+    fprintf (asmFile, "%s", iComments2);
+    copyFile (asmFile, idata->oFile);
+  }
 
   /* copy the bit segment */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; bit data\n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, bit->oFile);
+  if (mcs51_like) {
+    fprintf (asmFile, "%s", iComments2);
+    fprintf (asmFile, "; bit data\n");
+    fprintf (asmFile, "%s", iComments2);
+    copyFile (asmFile, bit->oFile);
+  }
 
   /* if external stack then reserve space of it */
-  if (mainf && mainf->fbody && options.useXstack)
+  if (mainf && IFFUNC_HASBODY(mainf->type) && options.useXstack)
     {
       fprintf (asmFile, "%s", iComments2);
       fprintf (asmFile, "; external stack \n");
@@ -1414,13 +1751,28 @@ glue ()
 
 
   /* copy xtern ram data */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; external ram data\n");
-  fprintf (asmFile, "%s", iComments2);
-  copyFile (asmFile, xdata->oFile);
+  if (mcs51_like) {
+    fprintf (asmFile, "%s", iComments2);
+    fprintf (asmFile, "; external ram data\n");
+    fprintf (asmFile, "%s", iComments2);
+    copyFile (asmFile, xdata->oFile);
+  }
 
+  /* copy xternal initialized ram data */
+  fprintf (asmFile, "%s", iComments2);
+  fprintf (asmFile, "; external initialized ram data\n");
+  fprintf (asmFile, "%s", iComments2);
+  copyFile (asmFile, xidata->oFile);
+
+  /* If the port wants to generate any extra areas, let it do so. */
+  if (port->extraAreas.genExtraAreaDeclaration)
+  {
+      port->extraAreas.genExtraAreaDeclaration(asmFile, 
+					       mainf && IFFUNC_HASBODY(mainf->type));
+  }
+    
   /* copy the interrupt vector table */
-  if (mainf && mainf->fbody)
+  if (mainf && IFFUNC_HASBODY(mainf->type))
     {
       fprintf (asmFile, "%s", iComments2);
       fprintf (asmFile, "; interrupt vector \n");
@@ -1443,7 +1795,7 @@ glue ()
   tfprintf (asmFile, "\t!area\n", port->mem.post_static_name);
   tfprintf (asmFile, "\t!area\n", port->mem.static_name);
 
-  if (mainf && mainf->fbody)
+  if (mainf && IFFUNC_HASBODY(mainf->type))
     {
       fprintf (asmFile, "__sdcc_gsinit_startup:\n");
       /* if external stack is specified then the
@@ -1458,16 +1810,14 @@ glue ()
 		   (unsigned int) options.xdata_loc & 0xff);
 	}
 
-      /* initialise the stack pointer */
-      /* if the user specified a value then use it */
-      if (options.stack_loc)
-	fprintf (asmFile, "\tmov\tsp,#%d\n", options.stack_loc);
-      else
-	/* no: we have to compute it */
-      if (!options.stackOnData && maxRegBank <= 3)
-	fprintf (asmFile, "\tmov\tsp,#%d\n", ((maxRegBank + 1) * 8) - 1);
-      else
-	fprintf (asmFile, "\tmov\tsp,#__start__stack\n");	/* MOF */
+	// This should probably be a port option, but I'm being lazy.
+	// on the 400, the firmware boot loader gives us a valid stack
+	// (see '400 data sheet pg. 85 (TINI400 ROM Initialization code)
+	if (!TARGET_IS_DS400)
+	{
+	    /* initialise the stack pointer.  JCF: aslink takes care of the location */
+	    fprintf (asmFile, "\tmov\tsp,#__start__stack - 1\n");	/* MOF */
+	}
 
       fprintf (asmFile, "\tlcall\t__sdcc_external_startup\n");
       fprintf (asmFile, "\tmov\ta,dpl\n");
@@ -1475,10 +1825,15 @@ glue ()
       fprintf (asmFile, "\tljmp\t__sdcc_program_startup\n");
       fprintf (asmFile, "__sdcc_init_data:\n");
 
+      // if the port can copy the XINIT segment to XISEG
+      if (port->genXINIT) {
+	port->genXINIT(asmFile);
+      }
+
     }
   copyFile (asmFile, statsg->oFile);
 
-  if (port->general.glue_up_main && mainf && mainf->fbody)
+  if (port->general.glue_up_main && mainf && IFFUNC_HASBODY(mainf->type))
     {
       /* This code is generated in the post-static area.
        * This area is guaranteed to follow the static area
@@ -1500,7 +1855,7 @@ glue ()
   fprintf (asmFile, "; code\n");
   fprintf (asmFile, "%s", iComments2);
   tfprintf (asmFile, "\t!areacode\n", CODE_NAME);
-  if (mainf && mainf->fbody)
+  if (mainf && IFFUNC_HASBODY(mainf->type))
     {
 
       /* entry point @ start of CSEG */
@@ -1524,58 +1879,170 @@ glue ()
     }
   copyFile (asmFile, code->oFile);
 
+  if (port->genAssemblerEnd) {
+      port->genAssemblerEnd(asmFile);
+  }
   fclose (asmFile);
-  applyToSet (tmpfileSet, closeTmpFiles);
-  applyToSet (tmpfileNameSet, rmTmpFiles);
+
+  rm_tmpfiles ();
 }
 
-#if defined (__MINGW32__) || defined (__CYGWIN__) || defined (_MSC_VER)
-void
-rm_tmpfiles (void)
+
+/** Creates a temporary file with unoque file name
+    Scans, in order:
+    - TMP, TEMP, TMPDIR env. varibles
+    - if Un*x system: /usr/tmp and /tmp
+    - root directory using mkstemp() if avaliable
+    - default location using tempnam()
+*/
+static int
+tempfileandname(char *fname, size_t len)
 {
-  applyToSet (tmpfileSet, closeTmpFiles);
-  applyToSet (tmpfileNameSet, rmTmpFiles);
-}
+#define TEMPLATE      "sdccXXXXXX"
+#define TEMPLATE_LEN  ((sizeof TEMPLATE) - 1)
+
+  const char *tmpdir = NULL;
+  int fd;
+
+  if ((tmpdir = getenv ("TMP")) == NULL)
+    if ((tmpdir = getenv ("TEMP")) == NULL)
+      tmpdir = getenv ("TMPDIR");
+
+#if defined(_WIN32)
+  {
+    static int warning_emitted;
+
+    if (tmpdir == NULL)
+      {
+        tmpdir = "c:\\";
+        if (!warning_emitted)
+          {
+            fprintf (stderr, "TMP not defined in environment, using %s for temporary files\n.", tmpdir);
+	    warning_emitted = 1;
+	  }
+      }
+  }
+#else
+  {
+    /* try with /usr/tmp and /tmp on Un*x systems */
+    struct stat statbuf;
+
+    if (tmpdir == NULL) {
+      if (stat("/usr/tmp", &statbuf) != -1)
+        tmpdir = "/usr/tmp";
+      else if (stat("/tmp", &statbuf) != -1)
+        tmpdir = "/tmp";
+    }
+  }
 #endif
 
-/** Creates a temporary file a'la tmpfile which avoids the bugs
-    in cygwin wrt c:\tmp.
-    Scans, in order: TMP, TEMP, TMPDIR, else uses tmpfile().
+#ifdef HAVE_MKSTEMP
+  {
+    char fnamebuf[PATH_MAX];
+    size_t name_len;
+
+    if (fname == NULL || len == 0) {
+      fname = fnamebuf;
+      len = sizeof fnamebuf;
+    }
+
+    if (tmpdir) {
+      name_len = strlen(tmpdir) + 1 + TEMPLATE_LEN;
+
+      assert(name_len < len);
+      if (!(name_len < len))  /* in NDEBUG is defined */
+        return -1;            /* buffer too small, temporary file can not be created */
+
+      sprintf(fname, "%s" DIR_SEPARATOR_STRING TEMPLATE, tmpdir);
+    }
+    else {
+      name_len = TEMPLATE_LEN;
+
+      assert(name_len < len);
+      if (!(name_len < len))  /* in NDEBUG is defined */
+        return -1;            /* buffer too small, temporary file can not be created */
+
+      strcpy(fname, TEMPLATE);
+    }
+
+    fd = mkstemp(fname);
+  }
+#else
+  {
+    char *name = tempnam(tmpdir, "sdcc");
+
+    if (name == NULL) {
+      perror("Can't create temporary file name");
+      exit(1);
+    }
+
+    assert(strlen(name) < len);
+    if (!(strlen(name) < len))  /* in NDEBUG is defined */
+      return -1;                /* buffer too small, temporary file can not be created */
+
+    strcpy(fname, name);
+#ifdef _WIN32
+    fd = open(name, O_CREAT | O_EXCL | O_RDWR, S_IREAD | S_IWRITE);
+#else
+    fd = open(name, O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+#endif
+  }
+#endif
+
+  if (fd == -1) {
+    perror("Can't create temporary file");
+    exit(1);
+  }
+
+  return fd;
+}
+
+
+/** Create a temporary file name
+*/
+char *
+tempfilename(void)
+{
+  int fd;
+  static char fnamebuf[PATH_MAX];
+
+  if ((fd = tempfileandname(fnamebuf, sizeof fnamebuf)) == -1) {
+    fprintf(stderr, "Can't create temporary file name!");
+    exit(1);
+  }
+
+  fd = close(fd);
+  assert(fd != -1);
+
+  return fnamebuf;
+}
+
+
+/** Create a temporary file and add it to tmpfileNameSet,
+    so that it is removed explicitly by rm_tmpfiles()
+    or implicitly at program extit.
 */
 FILE *
-tempfile (void)
+tempfile(void)
 {
-#if !defined(_MSC_VER)
-  const char *tmpdir = NULL;
-  if (getenv ("TMP"))
-    tmpdir = getenv ("TMP");
-  else if (getenv ("TEMP"))
-    tmpdir = getenv ("TEMP");
-  else if (getenv ("TMPDIR"))
-    tmpdir = getenv ("TMPDIR");
-  if (tmpdir)
-    {
-      char *name = tempnam (tmpdir, "sdcc");
-      if (name)
-	{
-	  FILE *fp = fopen (name, "w+b");
-	  if (fp)
-	    {
-	      addSetHead (&tmpfileNameSet, name);
-	    }
-	  return fp;
-	}
-      return NULL;
-    }
-#endif
-  return tmpfile ();
-}
+  int fd;
+  char *tmp;
+  FILE *fp;
+  char fnamebuf[PATH_MAX];
 
-char *
-gc_strdup (const char *s)
-{
-  char *ret;
-  ret = Safe_calloc (1, strlen (s) + 1);
-  strcpy (ret, s);
-  return ret;
+  if ((fd = tempfileandname(fnamebuf, sizeof fnamebuf)) == -1) {
+    fprintf(stderr, "Can't create temporary file!");
+    exit(1);
+  }
+
+  tmp = Safe_strdup(fnamebuf);
+  if (tmp)
+    addSetHead(&tmpfileNameSet, tmp);
+
+  if ((fp = fdopen(fd, "w+b")) == NULL) {
+      perror("Can't create temporary file!");
+      exit(1);
+  }
+
+  return fp;
 }

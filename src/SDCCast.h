@@ -31,19 +31,19 @@
 #include "SDCCset.h"
 #include "SDCCmem.h"
 
-#define  EX_OP       0
-#define  EX_VALUE    1
-#define  EX_LINK     2
-#define  EX_STMNT    3
-#define  EX_OPERAND  4
+typedef enum {
+  EX_OP=0,
+  EX_VALUE,
+  EX_LINK,
+  EX_OPERAND
+} ASTTYPE;
 
 /* expression tree   */
 typedef struct ast
   {
 
-    unsigned type:3;
+    ASTTYPE type;
     unsigned decorated:1;
-    unsigned hasVargs:1;
     unsigned isError:1;
     unsigned funcName:1;
     unsigned rvalue:1;
@@ -51,13 +51,13 @@ typedef struct ast
     unsigned initMode:1;
     int level;			/* level for expr */
     int block;			/* block number   */
+    int seqPoint;		/* sequence point */
     /* union of values expression can have */
     union
       {
 	value *val;		/* value if type = EX_VALUE */
 	sym_link *lnk;		/* sym_link * if type= EX_LINK  */
 	struct operand *oprnd;	/* used only for side effecting function calls */
-	unsigned stmnt;		/* statement if type=EX_STMNT */
 	unsigned op;		/* operator if type= EX_OP  */
       }
     opval;
@@ -92,6 +92,7 @@ typedef struct ast
 	unsigned literalFromCast;	/* true if this is an EX_VALUE of LITERAL 
 					 * type resulting from a typecast.
 					 */
+	int argreg;                     /* argreg number when operand type == EX_OPERAND */
       }
     values;
 
@@ -101,8 +102,6 @@ typedef struct ast
     sym_link *ftype;		/* start of type chain for this subtree */
     sym_link *etype;		/* end of type chain for this subtree   */
 
-    symbol *argSym;		/* argument symbols            */
-    value *args;		/* args of a function          */
     struct ast *left;		/* pointer to left tree        */
     struct ast *right;		/* pointer to right tree       */
     symbol *trueLabel;		/* if statement trueLabel */
@@ -145,6 +144,8 @@ ast;
 #define AST_VALUE(x)            (x->opval.val)
 #define AST_VALUES(x,y)	(x->values.y)
 #define AST_FOR(x,y) x->values.forVals.y
+#define AST_ARGREG(x) x->values.argreg
+
 #define  IS_AST_PARAM(x)	(IS_AST_OP(x) && x->opval.op == PARAM)
 
 #define  CAN_EVAL(x)	(     x	==  '[' || x == '.' || x == PTR_OP ||	\
@@ -169,6 +170,17 @@ ast;
 			  x == AND_ASSIGN || x == OR_ASSIGN || x == INC_OP || x == DEC_OP)
 #define IS_DEREF_OP(x) (( x->opval.op == '*' && x->right == NULL) || x->opval.op == '.')
 
+typedef enum
+{
+  RESULT_TYPE_NONE = 0,
+  RESULT_CHECK = 0, /* TODO: replace all occurences with the appropriate type and remove me */
+  RESULT_TYPE_BIT,
+  RESULT_TYPE_CHAR,
+  RESULT_TYPE_INT,
+  RESULT_TYPE_OTHER,
+  RESULT_TYPE_IFX,
+} RESULT_TYPE;
+
 /* forward declarations for global variables */
 extern ast *staticAutos;
 extern FILE *codeOutFile;
@@ -178,33 +190,41 @@ extern struct memmap *GcurMemmap;
 ast *newAst_VALUE (value * val);
 ast *newAst_OP (unsigned op);
 ast *newAst_LINK (sym_link * val);
-ast *newAst_STMNT (unsigned val);
 
 void initAst ();
 ast *newNode (long, ast *, ast *);
 ast *copyAst (ast *);
+ast *removeIncDecOps (ast *);
+ast *removePreIncDecOps (ast *);
+ast *removePostIncDecOps (ast *);
 value *sizeofOp (sym_link *);
 value *evalStmnt (ast *);
 ast *createFunction (symbol *, ast *);
 ast *createBlock (symbol *, ast *);
 ast *createLabel (symbol *, ast *);
 ast *createCase (ast *, ast *, ast *);
-ast *createDefault (ast *, ast *);
-ast *optimizeCompare (ast *);
+ast *createDefault (ast *, ast *, ast *);
 ast *forLoopOptForm (ast *);
 ast *argAst (ast *);
 ast *resolveSymbols (ast *);
-ast *decorateType (ast *);
+ast *decorateType (ast *, RESULT_TYPE);
 ast *createWhile (symbol *, symbol *, symbol *, ast *, ast *);
 ast *createIf (ast *, ast *, ast *);
 ast *createDo (symbol *, symbol *, symbol *, ast *, ast *);
 ast *createFor (symbol *, symbol *, symbol *, symbol *, ast *, ast *, ast *, ast *);
 void eval2icode (ast *);
 value *constExprValue (ast *, int);
+bool constExprTree (ast *);
+int setAstLineno (ast *, int);
 symbol *funcOfType (char *, sym_link *, sym_link *, int, int);
+symbol * funcOfTypeVarg (char *, char * , int , char **);
 ast *initAggregates (symbol *, initList *, ast *);
 bool hasSEFcalls (ast *);
 void addSymToBlock (symbol *, ast *);
+void freeStringSymbol(symbol *);
+DEFSETFUNC(resetParmKey);
+int astErrors(ast *);
+RESULT_TYPE getResultTypeFromType (sym_link *);
 
 // exported variables 
 extern set *operKeyReset;

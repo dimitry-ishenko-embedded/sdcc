@@ -19,13 +19,16 @@ exec_prefix     = @exec_prefix@
 bindir          = @bindir@
 libdir          = @libdir@
 datadir         = @datadir@
-sdcc_datadir    = @sdcc_datadir@
 includedir      = @includedir@
 mandir          = @mandir@
 man1dir         = $(mandir)/man1
 man2dir         = $(mandir)/man2
 infodir         = @infodir@
 srcdir          = @srcdir@
+
+include_dir_suffix = @include_dir_suffix@
+
+sdcc_includedir    = $(datadir)/$(include_dir_suffix)
 
 CPPFLAGS        = @CPPFLAGS@ -I$(PRJDIR)
 
@@ -34,17 +37,20 @@ CPPFLAGS        = @CPPFLAGS@ -I$(PRJDIR)
 # ------------------------------------------
 all:
 
-
-# Compiling and installing everything and runing test
-# ---------------------------------------------------
+# Compiling and installing everything and running test
+# ----------------------------------------------------
 install: all installdirs
-	$(CP) -r asm *.h $(sdcc_datadir)/include/
+	$(CP) -r asm *.h $(sdcc_includedir)
+	if [ "`grep pic16 ../../ports.build`" = pic16 ]; then \
+		$(CP) pic16/*.h $(sdcc_includedir)/pic16 ; \
+	fi
+	rm -rf `find $(sdcc_includedir) -type d -name 'CVS'`
 
 
 # Deleting all the installed files
 # --------------------------------
 uninstall:
-	for hdr in *.h; do rm -f $(sdcc_datadir)/$$hdr; done
+	rm -rf $(sdcc_includedir)
 
 
 # Performing self-test
@@ -60,7 +66,8 @@ installcheck:
 # Creating installation directories
 # ---------------------------------
 installdirs:
-	[ -d $(sdcc_datadir)/include ] || mkdir -p $(sdcc_datadir)/include
+	[ -d $(sdcc_includedir) ] || mkdir -p $(sdcc_includedir)
+	[ -d $(sdcc_includedir)/pic16 ] || mkdir -p $(sdcc_includedir)/pic16
 
 
 # Creating dependencies

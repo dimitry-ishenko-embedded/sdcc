@@ -15,6 +15,9 @@ Z80_SUB_PORT;
 typedef struct
   {
     Z80_SUB_PORT sub;
+    int calleeSavesBC;
+    int port_mode;
+    int port_back;
   }
 Z80_OPTS;
 
@@ -26,5 +29,6 @@ extern Z80_OPTS z80_opts;
 enum
   {
     ACCUSE_A = 1,
-    ACCUSE_HL
+    ACCUSE_SCRATCH,
+    ACCUSE_IY
   };

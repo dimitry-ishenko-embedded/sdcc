@@ -40,7 +40,7 @@ _newHashtItem (int key, void *pkey, void *item)
 {
   hashtItem *htip;
 
-  htip = Safe_calloc (1, sizeof (hashtItem));
+  htip = Safe_alloc ( sizeof (hashtItem));
 
   htip->key = key;
   htip->pkey = pkey;
@@ -57,12 +57,12 @@ newHashTable (int size)
 {
   hTab *htab;
 
-  htab = Safe_calloc (1, sizeof (hTab));
+  htab = Safe_alloc ( sizeof (hTab));
 
-  if (!(htab->table = calloc ((size + 1), sizeof (hashtItem *))))
+  if (!(htab->table = Safe_alloc ((size + 1) * sizeof (hashtItem *))))
     {
       fprintf (stderr, "out of virtual memory %s %d\n",
-	       __FILE__, (size + 1) * sizeof (hashtItem *));
+	       __FILE__, (size + 1) * (int) sizeof (hashtItem *));
       exit (1);
     }
   htab->minKey = htab->size = size;
@@ -193,13 +193,13 @@ hTabDeleteAll (hTab * p)
 	  jn = jc->next;
 	  while (jc)
 	    {
-	      free (jc);
+	      Safe_free (jc);
 	      if ((jc = jn))
 		jn = jc->next;
 	    }
 	  p->table[i] = NULL;
 	}
-      free (p->table);
+      Safe_free (p->table);
     }
 }
 
@@ -279,6 +279,7 @@ int
 hTabDeleteByKey (hTab ** h, int key, const void *pkey, int (*compare) (const void *, const void *))
 {
   hashtItem *htip, **htipp;
+  bool found = FALSE;
 
   if (!(*h))
     return 0;
@@ -300,16 +301,22 @@ hTabDeleteByKey (hTab ** h, int key, const void *pkey, int (*compare) (const voi
 	   pkey == htip->pkey)
 	{
 	  *htipp = htip->next;
+          found = TRUE;
 	  break;
 	}
       htipp = &(htip->next);
     }
-  (*h)->nItems--;
 
-  if (!(*h)->nItems)
+  if (found == TRUE)
     {
-      *h = NULL;
+      (*h)->nItems--;
+      
+      if (!(*h)->nItems)
+        {
+          *h = NULL;
+        }
     }
+
   return 1;
 }
 
@@ -507,6 +514,14 @@ hTabItemWithKey (hTab * htab, int key)
 }
 
 /*-----------------------------------------------------------------*/
+/* hTabMaxKey - return the maxKey of item in the hashTable         */
+/*-----------------------------------------------------------------*/
+int hTabMaxKey (hTab *htab)
+{
+    return (htab ? htab->maxKey : 0);
+}	
+
+/*-----------------------------------------------------------------*/
 /*hTabAddItemIfNotP - adds an item with nothing found with key     */
 /*-----------------------------------------------------------------*/
 void 
@@ -546,11 +561,21 @@ _hash (const char *sz)
 void 
 shash_add (hTab ** h, const char *szKey, const char *szValue)
 {
+  char *val;
   int key = _hash (szKey);
-  /* First, delete any that currently exist */
-  hTabDeleteByKey (h, key, szKey, _compare);
+
+  /* Find value of the item */
+  val = (char *)hTabFindByKey(*h, key, szKey, _compare);
+  /* Delete any that currently exist */
+  hTabDeleteByKey(h, key, szKey, _compare);
+  /* Deallocate old value in not NULL */
+  if (val != NULL)
+    Safe_free(val);
+  /* Duplicate new value if not NULL */
+  if (szValue != NULL)
+    szValue = Safe_strdup(szValue);
   /* Now add in ours */
-  hTabAddItemLong (h, key, gc_strdup (szKey), gc_strdup (szValue));
+  hTabAddItemLong (h, key, Safe_strdup (szKey), (void *)szValue);
 }
 
 const char *

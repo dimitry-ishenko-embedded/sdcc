@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
   vprintf.c - formatted output conversion
- 
+
              Written By - Martijn van Balen aed@iae.nl (1999)
 	     Added %f By - johan.knol@iduna.nl (2000)
 
@@ -8,19 +8,19 @@
    under the terms of the GNU General Public License as published by the
    Free Software Foundation; either version 2, or (at your option) any
    later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-   
+
    In other words, you are welcome to use, share and improve this program.
    You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!  
+   what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 
 /* this module uses some global variables instead function parameters, so: */
@@ -28,7 +28,7 @@
 #warning "this module cannot yet be use as a reentrant one"
 #endif
 
-#ifdef __ds390
+#if defined(__ds390)
 #define USE_FLOATS 1
 #endif
 
@@ -37,19 +37,17 @@
 #include <ctype.h>
 #include <stdio.h>
 
-#define PTR value.p 
+#define PTR value.p
 
 #ifdef SDCC_ds390
 #define NULL_STRING "<NULL>"
 #define NULL_STRING_LENGTH 6
 #endif
 
-/* XSPEC is defined in stdio.h and used here to place
-   auto variables in XSEG */
-
 /****************************************************************************/
 
-typedef char * ptr_t;
+//typedef char * ptr_t;
+#define ptr_t char *
 
 #ifdef toupper
 #undef toupper
@@ -80,7 +78,7 @@ static data value_t value;
 
 static unsigned char radix;
 
-// jwk: TODO: this makes the whole dammed thing nonreentrent
+// this makes the whole dammed thing nonreentrent
 static int charsOutputted;
 
 /****************************************************************************/
@@ -166,7 +164,7 @@ static void output_float (float f, unsigned char reqWidth,
 			  bit left, bit zero, bit sign, bit space)
 {
   char negative=0;
-  long integerPart;
+  unsigned long integerPart;
   float decimalPart;
   char fpBuffer[128];
   char fpBI=0, fpBD;
@@ -176,6 +174,31 @@ static void output_float (float f, unsigned char reqWidth,
   if (f<0) {
     negative=1;
     f=-f;
+  }
+
+  if (f>0x00ffffff) {
+    // this part is from Frank van der Hulst
+    signed char exp;
+    
+    for (exp = 0; f >= 10.0; exp++) f /=10.0;
+    for (       ; f < 1.0;   exp--) f *=10.0;
+
+    if (negative) {
+      putchar ('-');
+    } else {
+      if (sign) {
+	putchar ('+');
+      }
+    }
+    output_float(f, 0, reqDecimals, 0, 0, 0, 0);
+    putchar ('e');
+    if (exp<0) {
+      putchar ('-');
+      exp = -exp;
+    }
+    putchar ('0'+exp/10);
+    putchar ('0'+exp%10);
+    return;
   }
 
   // split the float
@@ -269,7 +292,7 @@ int vsprintf (const char *buf, const char *format, va_list ap)
 
   unsigned char  width;
   signed char decimals;
-  unsigned char  length;
+  volatile unsigned char  length;
   char           c;
 
   // reset output chars
@@ -415,7 +438,7 @@ get_conversion_spec:
 	output_char(':');
 	output_char('0');
 	output_char('x');
-	if ((value.byte[2] != 0x00 /* DSEG */) && 
+	if ((value.byte[2] != 0x00 /* DSEG */) &&
 	    (value.byte[2] != 0x03 /* SSEG */))
 	  output_2digits( value.byte[1] );
 	output_2digits( value.byte[0] );
@@ -507,7 +530,6 @@ get_conversion_spec:
 	length=0;
         lsd = 1;
 
-	//jwk20000814: do this at least once, e.g.: printf ("%d", (int)0);
 	do {
           value.byte[4] = 0;
 	  calculate_digit();
@@ -530,7 +552,7 @@ _endasm;
           lsd = ~lsd;
 	} while( (value.byte[0] != 0) || (value.byte[1] != 0) ||
 		 (value.byte[2] != 0) || (value.byte[3] != 0) );
-	
+
 	if (width == 0)
 	{
 	  // default width. We set it to 1 to output
@@ -540,7 +562,7 @@ _endasm;
 	}
 
 	/* prepend spaces if needed */
-	if (!zero_padding)
+	if (!zero_padding && !left_justify)
 	{
 	  while ( width > length+1 )
 	  {
@@ -573,9 +595,18 @@ _endasm;
 	}
 
 	/* prepend zeroes/spaces if needed */
-	while ( width-- > length )
+	if (!left_justify)
+	  while ( width-- > length )
+	  {
+	    output_char( zero_padding ? '0' : ' ' );
+	  }
+	else
 	{
-	  output_char( zero_padding ? '0' : ' ' );
+	  /* spaces are appended after the digits */
+	  if (width > length)
+	    width -= length;
+	  else
+	    width = 0;
 	}
 
 	/* output the digits */
@@ -600,6 +631,9 @@ _endasm;
 
 	  output_digit( value.byte[4] );
 	}
+	if (left_justify)
+	  while (width-- > 0)
+	    output_char(' ');
       }
     }
     else
@@ -608,7 +642,7 @@ _endasm;
       output_char( c );
     }
   }
-       
+
   // Copy \0 to the end of buf
   // Modified by JB 17/12/99
   if (output_to_string) {

@@ -42,11 +42,22 @@ char	*rp;		/*	pointer into the LST file
 char	rb[NINPUT];	/*	LST file text line being
 			 *	address relocated
 			 */
+
+char sdccopt[NINPUT]="";
+char sdccopt_module[NINPUT]="";
+char curr_module[NINPUT]="";
+
 int     dflag;          /*      Debug information output flag
 			 */
 int	oflag;		/*	Output file type flag
 			 */
 int	mflag;		/*	Map output flag
+			 */
+int	sflag;		/*	JCF: Memory usage output flag
+			 */
+int	packflag=0;	/*	JCF: Pack internal memory flag
+			 */
+int	stacksize=0;    /*	JCF: Stack size
 			 */
 int	aflag;		/*	Overlapping area warning flag
 			 */
@@ -90,6 +101,10 @@ int	gcntr;		/*	LST file relocation active
 			 *	counter
 			 */
 Addr_T	iram_size;	/*	internal ram size
+			 */
+long	xram_size=-1;	/*	external ram size
+			 */
+long	code_size=-1;	/*	code size
 			 */
 
 /*
@@ -434,7 +449,7 @@ struct	lbfile	*lbfhead;	/*	pointer to the first
  *	array of character types, one per
  *	ASCII character
  */
-char	ctype[128] = {
+unsigned char	ctype[128] = {
 /*NUL*/	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,
 /*BS*/	ILL,	SPACE,	ILL,	ILL,	SPACE,	ILL,	ILL,	ILL,
 /*DLE*/	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,

@@ -11,6 +11,7 @@ SHELL		= /bin/sh
 CC		= @CC@
 CPP		= @CPP@
 INSTALL		= @INSTALL@
+STRIP           = @STRIP@
 
 PRJDIR		= ../..
 SLIB		= $(PRJDIR)/support/Util
@@ -33,6 +34,8 @@ CFLAGS		= @CFLAGS@
 M_OR_MM		= @M_OR_MM@
 LDFLAGS		= @LDFLAGS@
 
+EXEEXT          = @EXEEXT@
+
 LIBS            = @LIBS@
 LIBDIRS         =
 
@@ -43,7 +46,7 @@ OBJECTS		= sdcdb.o symtab.o simi.o $(PRJDIR)/src/SDCCset.o \
 		  $(PRJDIR)/support/Util/SDCCerr.o
 SOURCES		= $(patsubst %.o,%.c,$(OBJECTS))
 
-TARGET		= $(PRJDIR)/bin/sdcdb
+TARGET		= $(PRJDIR)/bin/sdcdb$(EXEEXT)
 
 
 # Compiling entire program or any subproject
@@ -53,7 +56,8 @@ all: checkconf $(TARGET)
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
-	$(INSTALL) -s $(TARGET) $(bindir)/sdcdb
+	$(INSTALL) $(TARGET) $(bindir)/sdcdb$(EXEEXT)
+	$(STRIP) $(bindir)/sdcdb$(EXEEXT)
 	cp $(PRJDIR)/debugger/mcs51/sdcdb.el $(bindir)/sdcdb.el
 	cp $(PRJDIR)/debugger/mcs51/sdcdbsrc.el $(bindir)/sdcdbsrc.el
 
@@ -61,7 +65,7 @@ install: all installdirs
 # Deleting all the installed files
 # --------------------------------
 uninstall:
-	rm -f $(bindir)/sdcdb
+	rm -f $(bindir)/sdcdb$(EXEEXT)
 	rm -f $(bindir)/sdcdb.el
 	rm -f $(bindir)/sdcdbsrc.el
 

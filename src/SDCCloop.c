@@ -39,14 +39,14 @@ newInduction (operand * sym, unsigned int op,
 {
   induction *ip;
 
-  ip = Safe_calloc (1, sizeof (induction));
+  ip = Safe_alloc ( sizeof (induction));
 
   ip->sym = sym;
   ip->asym = asym;
   ip->op = op;
   ip->cval = constVal;
   ip->ic = ic;
-  updateSpillLocation(ic,1);
+//updateSpillLocation(ic,1);
   return ip;
 }
 
@@ -58,7 +58,7 @@ newRegion ()
 {
   region *lp;
 
-  lp = Safe_calloc (1, sizeof (region));
+  lp = Safe_alloc ( sizeof (region));
 
   return lp;
 }
@@ -231,10 +231,10 @@ DEFSETFUNC (addToExitsMarkDepth)
   V_ARG (region *, lr);
 
   /* mark the loop depth of this block */
-  if (!ebp->depth)
+  //if (!ebp->depth)
+  if (ebp->depth<depth)
     ebp->depth = depth;
 
-  /* put the loop region info in the block */
   /* NOTE: here we will update only the inner most loop
      that it is a part of */
   if (!ebp->partOfLoop)
@@ -306,7 +306,7 @@ DEFSETFUNC (addDefInExprs)
   V_ARG (int, count);
 
   addSetHead (&ebp->inExprs, cdp);
-  cseBBlock (ebp, 0, ebbs, count);
+  cseBBlock (ebp, optimize.global_cse, ebbs, count);
   return 0;
 }
 
@@ -328,7 +328,7 @@ assignmentsToSym (set * sset, operand * sym)
          in this block */
       bitVect *defs = bitVectIntersect (ebp->ldefs, OP_DEFS (sym));
       assigns += bitVectnBitsOn (defs);
-      setToNull ((void **) &defs);
+      setToNull ((void *) &defs);
 
     }
 
@@ -445,14 +445,31 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	  int lin, rin;
 	  cseDef *ivar;
 
-	  /* if there are function calls in this block and this
-	     is a pointer get, the function could have changed it
-	     so skip, ISO-C99 according to David A. Long */
-	  if (fCallsInBlock && POINTER_GET(ic)) {
-	    continue;
+	  /* TODO this is only needed if the call is between
+	     here and the definition, but I am too lazy to do that now */
+
+	  /* if there are function calls in this block */
+	  if (fCallsInBlock) {
+
+	    /* if this is a pointer get */
+	    if (POINTER_GET(ic)) {
+	      continue;
+	    }
+
+	    /* if this is an assignment from a global */
+	    if (ic->op=='=' && isOperandGlobal(IC_RIGHT(ic))) {
+	      continue;
+	    }
 	  }
 
 	  if (SKIP_IC (ic) || POINTER_SET (ic) || ic->op == IFX)
+	    continue;
+	  
+	  /* iTemp assignment from a literal may be invariant, but it
+	     will needlessly increase register pressure if the
+	     iCode(s) that use this iTemp are not also invariant */
+	  if (ic->op=='=' && IS_ITEMP (IC_RESULT (ic))
+	      && IS_OP_LITERAL (IC_RIGHT (ic)))
 	    continue;
 
 	  /* if result is volatile then skip */
@@ -497,7 +514,8 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	      applyToSet (theLoop->regBlocks, hasNonPtrUse, IC_LEFT (ic)))
 	    continue;
 
-	  /* if both the left & right are invariants : then check that */
+
+          /* if both the left & right are invariants : then check that */
 	  /* this definition exists in the out definition of all the  */
 	  /* blocks, this will ensure that this is not assigned any   */
 	  /* other value in the loop , and not used in this block     */
@@ -508,7 +526,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	      eBBlock *sBlock;
 	      set *lSet = setFromSet (theLoop->regBlocks);
 
-	      /* if this block does not dominate all exists */
+	      /* if this block does not dominate all exits */
 	      /* make sure this defintion is not used anywhere else */
 	      if (!domsAllExits)
 		{
@@ -557,7 +575,9 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	      /* now we know it is a true invariant */
 	      /* remove it from the insts chain & put */
 	      /* in the invariant set                */
-	      OP_SYMBOL (IC_RESULT (ic))->isinvariant = 1;
+	      
+              OP_SYMBOL (IC_RESULT (ic))->isinvariant = 1;
+              SPIL_LOC (IC_RESULT (ic)) = NULL;
 	      remiCodeFromeBBlock (lBlock, ic);
 
 	      /* maintain the data flow */
@@ -857,9 +877,9 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 			      iCode *newic = newiCode ('=', NULL,
 					operandFromOperand (IC_RIGHT (ic)));
 			      IC_RESULT (newic) = operandFromOperand (IC_RESULT (ic));
-			      OP_DEFS (IC_RESULT (newic)) =
+			      OP_DEFS(IC_RESULT (newic))=
 				bitVectSetBit (OP_DEFS (IC_RESULT (newic)), newic->key);
-			      OP_USES (IC_RIGHT (newic)) =
+			      OP_USES(IC_RIGHT (newic))=
 				bitVectSetBit (OP_USES (IC_RIGHT (newic)), newic->key);
 			      /* and add it */
 			      if (eblock->sch && eblock->sch->op == LABEL)
@@ -1043,10 +1063,10 @@ loopInduction (region * loopReg, eBBlock ** ebbs, int count)
       /* add the induction variable vector to the last
          block in the loop */
       lastBlock->isLastInLoop = 1;
-      lastBlock->linds = indVect;
+      lastBlock->linds = bitVectUnion(lastBlock->linds,indVect);
     }
 
-  setToNull ((void **) &indVars);
+  setToNull ((void *) &indVars);
   return change;
 }
 
@@ -1074,7 +1094,7 @@ DEFSETFUNC (mergeRegions)
       if (lp->entry == theLoop->entry)
 	{
 	  theLoop->regBlocks = unionSets (theLoop->regBlocks,
-					  lp->regBlocks, THROW_BOTH);
+					  lp->regBlocks, THROW_DEST);
 	  lp->merged = 1;
 	}
     }
@@ -1157,6 +1177,7 @@ createLoopRegions (eBBlock ** ebbs, int count)
 
   applyToSet (allRegion, mergeInnerLoops, allRegion, &maxDepth);
   maxDepth++;
+
   /* now create all the exits .. also */
   /* create an ordered set of loops   */
   /* i.e. we process loops in the inner to outer order */

@@ -2,7 +2,6 @@
  */
 #include <testfwk.h>
 #include <string.h>
-#include <stdio.h>
 
 int
 verifyBlock(char *p, char val, int len)
@@ -15,8 +14,8 @@ verifyBlock(char *p, char val, int len)
   return 1;
 }
 
-char
-spoil(char a)
+int
+spoil(int a)
 {
   return a;
 }
@@ -31,7 +30,7 @@ spoil(char a)
 #else
 
 // test mcs51 with much less memory
-#define ABOVE_MEM_SIZE       35
+#define ABOVE_MEM_SIZE       30
 #define ABOVE_MEM_TEST_SIZE  17
 #define BELOW_MEM_SIZE       20
 #define BELOW_MEM_TEST_SIZE   7
@@ -42,7 +41,7 @@ void
 testBP(void)
 {
   char above[ABOVE_MEM_SIZE];
-  char f;
+  int f;
   char below[BELOW_MEM_SIZE];
 
   memset(above, ABOVE_MEM_TEST_SIZE, sizeof(above));
@@ -56,4 +55,5 @@ testBP(void)
 
   ASSERT(verifyBlock(above, ABOVE_MEM_TEST_SIZE, sizeof(above)));
   ASSERT(verifyBlock(below, BELOW_MEM_TEST_SIZE, sizeof(below)));
+
 }

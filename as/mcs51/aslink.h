@@ -80,13 +80,26 @@
 #endif
 
 /*
+ * PATH_MAX
+ */
+#include <limits.h>
+#ifndef PATH_MAX		/* POSIX, but not required   */
+ #if defined(__BORLANDC__) || defined(_MSC_VER)
+  #include <stdlib.h>
+  #define PATH_MAX	_MAX_PATH
+ #else
+  #define PATH_MAX	255	/* define a reasonable value */
+ #endif
+#endif
+
+/*
  * This file defines the format of the
  * relocatable binary file.
  */
 
 #define NCPS	80		/* characters per symbol (JLH: change from 8) */
 #define	NDATA	16		/* actual data */
-#define	NINPUT	FILENAME_MAX	/* Input buffer size (BH: change from 128) */
+#define	NINPUT	PATH_MAX	/* Input buffer size */
 #define	NHASH	64		/* Buckets in hash table */
 #define	HMASK	077		/* Hash mask */
 #define	NLPP	60		/* Lines per page */
@@ -231,6 +244,7 @@ struct	area
 	struct	areax	*a_axp;	/* Area extension link */
 	Addr_T	a_addr;		/* Beginning address of area */
 	Addr_T	a_size;		/* Total size of the area */
+	Addr_T	a_unaloc;	/* Total number of unalocated bytes, for error reporting */
 	char	a_type;		/* Area subtype */
 	char	a_flag;		/* Flag byte */
 	char	a_id[NCPS];	/* Name */
@@ -420,6 +434,7 @@ struct lbfile {
 	char		*libspc;
 	char		*relfil;
 	char		*filspc;
+	long		offset; /*>=0 if rel file is embedded in a lib file at this offset*/
 };
 
 /*
@@ -441,9 +456,13 @@ extern	char	*rp;		/*	pointer into the LST file
 extern	char	rb[NINPUT];	/*	LST file text line being
 				 *	address relocated
 				 */
-extern	char	ctype[];	/*	array of character types, one per
+extern	unsigned char	ctype[];	/*	array of character types, one per
 				 *	ASCII character
 				 */
+
+extern char sdccopt[NINPUT];
+extern char sdccopt_module[NINPUT];
+extern char curr_module[NINPUT];
 
 /*
  *	Character Type Definitions
@@ -557,6 +576,12 @@ extern	int	oflag;		/*	Output file type flag
 				 */
 extern	int	mflag;		/*	Map output flag
 				 */
+extern	int	sflag;		/*	JCF: Memory usage output flag
+				 */
+extern	int	packflag;	/*	Pack data memory flag
+				 */
+extern	int	stacksize;	/*	Pack data memory flag
+				 */
 extern	int	jflag;		/*	NoICE output flag
 				 */
 extern	int	xflag;		/*	Map file radix type flag
@@ -607,6 +632,10 @@ extern	struct lbfile *lbfhead;	/*	pointer to the first
 				 */
 extern	Addr_T iram_size;	/*	internal ram size
 				 */
+extern	long xram_size;	/*	external ram size
+				 */
+extern	long code_size;	/*	code size
+				 */
 
 
 /* C Library function definitions */
@@ -631,6 +660,8 @@ extern	FILE *		afile();
 extern	VOID		bassav();
 extern	VOID		gblsav();
 extern	VOID		iramsav();
+extern	VOID		xramsav();
+extern	VOID		codesav();
 extern	VOID		iramcheck();
 extern	VOID		link_main();
 extern	VOID		lkexit();
@@ -659,6 +690,7 @@ extern	VOID		chop_crlf();
 /* lkarea.c */
 extern	VOID		lkparea();
 extern	VOID		lnkarea();
+extern	VOID		lnkarea2();
 extern	VOID		lnksect();
 extern	VOID		newarea();
 
@@ -719,7 +751,7 @@ extern	VOID		prntval();
 extern  int		lastExtendedAddress;
 
 /* lklibr.c */
-extern	VOID		addfile();
+extern	int		addfile();
 extern	VOID		addlib();
 extern	VOID		addpath();
 extern	int		fndsym();
@@ -733,13 +765,18 @@ extern	VOID		s19();
 /* lkihx.c */
 extern	VOID		ihx();
 extern	VOID		ihxEntendedLinearAddress(Addr_T);
+extern	VOID		newArea();
+
 /* lkstore.c */
 extern char 		*StoreString( char *str );
 
 /* lknoice.c */
 extern void             DefineNoICE( char *name, Addr_T value, int page );
 
-/* SD added this to change
-	strcmpi --> strcmp (strcmpi NOT ANSI) */
-#define strcmpi strcmp
+/* JCF: lkmem.c */
+extern int summary(struct area * xp);
+extern int summary2(struct area * xp);
 
+/* JCF: lkaomf51.c */
+extern void SaveLinkedFilePath(char * filepath);
+extern void CreateAOMF51(void);

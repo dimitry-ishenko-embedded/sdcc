@@ -13,11 +13,13 @@ SRC	= lkarea.c lkdata.c lkeval.c lkhead.c lkihx.c lklex.c \
 OBJS	= $(SRC:%.c=$(OBJDIR)/%.o) 
 SLIBOBJS	= $(SLIBSRC:%.c=$(OBJDIR)/%.o) 
 
-BINS	= $(BUILDDIR)link$(EXT)
+BINS	= $(BUILDDIR)link$(EXT)$(EXEEXT)
 
-CFLAGS	+= $(OPTS) -DINDEXLIB -DMLH_MAP -DUNIX -DSDK
+CFLAGS	+= $(CPPFLAGS) $(OPTS) -DINDEXLIB -DMLH_MAP -DUNIX -DSDK
 CFLAGS	+= -funsigned-char -DUNIX
 CFLAGS	+= -I$(PRJDIR)/as/$(PORT) -I$(SLIB) 
+
+LDFLAGS += -lm $(EXTRALIBS)
 
 all:	$(BINS)
 

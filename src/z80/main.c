@@ -1,6 +1,33 @@
+/*-------------------------------------------------------------------------
+  main.c - Z80 specific definitions.
+
+  Michael Hope <michaelh@juju.net.nz> 2001
+
+   This program is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2, or (at your option) any
+   later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+   In other words, you are welcome to use, share and improve this program.
+   You are forbidden to forbid anyone else to use, share and improve
+   what you give them.   Help stamp out software-hoarding!
+-------------------------------------------------------------------------*/
+
+#include <sys/stat.h>
 #include "z80.h"
 #include "MySystem.h"
 #include "BuildCmd.h"
+#include "SDCCutil.h"
+#include "dbuf.h"
 
 static char _z80_defaultRules[] =
 {
@@ -16,12 +43,26 @@ static char _gbz80_defaultRules[] =
 
 Z80_OPTS z80_opts;
 
+static OPTION _z80_options[] = 
+  {
+    {  0,   "--callee-saves-bc", &z80_opts.calleeSavesBC, "Force a called function to always save BC" },
+    {  0,   "--portmode=",       NULL,                    "Determine PORT I/O mode (z80/z180)" },
+    {  0, NULL }
+  };
+
+static OPTION _gbz80_options[] = 
+  {
+    {  0,   "--callee-saves-bc", &z80_opts.calleeSavesBC, "Force a called function to always save BC" },
+    {  0, NULL }
+  };
+
 typedef enum
   {
     /* Must be first */
     ASM_TYPE_ASXXXX,
     ASM_TYPE_RGBDS,
-    ASM_TYPE_ISAS
+    ASM_TYPE_ISAS,
+    ASM_TYPE_Z80ASM
   }
 ASM_TYPE;
 
@@ -38,6 +79,8 @@ static char *_keywords[] =
   "sfr",
   "nonbanked",
   "banked",
+  "at",       //.p.t.20030714 adding support for 'sfr at ADDR' construct
+  "_naked",   //.p.t.20030714 adding support for '_naked' functions
   NULL
 };
 
@@ -45,6 +88,14 @@ extern PORT gbz80_port;
 extern PORT z80_port;
 
 #include "mappings.i"
+
+static builtins _z80_builtins[] = {
+  /* Disabled for now.
+    { "__builtin_strcpy", "v", 2, {"cg*", "cg*" } },
+    { "__builtin_memcpy", "cg*", 3, {"cg*", "cg*", "ui" } },
+  */
+    { NULL , NULL,0, {NULL}}
+};    
 
 static void
 _z80_init (void)
@@ -85,47 +136,38 @@ _reg_parm (sym_link * l)
         }
     }
 }
-
-static bool
-_startsWith (const char *sz, const char *key)
-{
-  return !strncmp (sz, key, strlen (key));
-}
-
-static void
-_chomp (char *sz)
-{
-  char *nl;
-  while ((nl = strrchr (sz, '\n')))
-    *nl = '\0';
-}
-
 static int
 _process_pragma (const char *sz)
 {
-  if (_startsWith (sz, "bank="))
+  if( startsWith( sz, "bank=" ) || startsWith( sz, "bank " ))
+  {
+    char buffer[128];
+    
+    if (sz[4]=='=')
+      werror(W_DEPRECATED_PRAGMA, "bank=");
+    
+    strncpy (buffer, sz + 5, sizeof (buffer));
+    buffer[sizeof (buffer) - 1 ] = '\0';
+    chomp (buffer);
+    if (isdigit (buffer[0]))
     {
-      char buffer[128];
-      strcpy (buffer, sz + 5);
-      _chomp (buffer);
-      if (isdigit (buffer[0]))
-	{
 
-	}
-      else if (!strcmp (buffer, "BASE"))
-	{
-	  strcpy (buffer, "HOME");
-	}
-      if (isdigit (buffer[0]))
-	{
+    }
+    else if (!strcmp (buffer, "BASE"))
+    {
+      strcpy (buffer, "HOME");
+    }
+    if (isdigit (buffer[0]))
+    {
 	  /* Arg was a bank number.  Handle in an ASM independent
 	     way. */
-	  char num[128];
-	  strcpy (num, sz + 5);
-	  _chomp (num);
+      char num[128];
+      strncpy (num, sz + 5, sizeof (num));
+      num[sizeof (num) -1] = '\0';
+      chomp (num);
 
-	  switch (_G.asmType)
-	    {
+      switch (_G.asmType)
+      {
 	    case ASM_TYPE_ASXXXX:
 	      sprintf (buffer, "CODE_%s", num);
 	      break;
@@ -138,38 +180,52 @@ _process_pragma (const char *sz)
 	      break;
 	    default:
 	      wassert (0);
-	    }
-	}
-      gbz80_port.mem.code_name = gc_strdup (buffer);
-      code->sname = gbz80_port.mem.code_name;
-      return 0;
+      }
     }
+    gbz80_port.mem.code_name = Safe_strdup (buffer);
+    code->sname = gbz80_port.mem.code_name;
+    return 0;
+  }
+  else if( startsWith( sz, "portmode=" ) || startsWith( sz, "portmode " ))
+  { /*.p.t.20030716 - adding pragma to manipulate z80 i/o port addressing modes */
+    char bfr[128];
+
+    if (sz[8]=='=')
+      werror(W_DEPRECATED_PRAGMA, "portmode=");
+
+    strncpy( bfr, sz + 9, sizeof (bfr));
+    bfr[sizeof (bfr) - 1] = '\0';
+    chomp( bfr );
+
+    if     ( !strcmp( bfr, "z80"     )){ z80_opts.port_mode =  80; }
+    else if( !strcmp( bfr, "z180"    )){ z80_opts.port_mode = 180; }
+    else if( !strcmp( bfr, "save"    )){ z80_opts.port_back = z80_opts.port_mode; }
+    else if( !strcmp( bfr, "restore" )){ z80_opts.port_mode = z80_opts.port_back; }
+    else                                 return( 1 );
+
+    return( 0 );
+  }
+
   return 1;
 }
 
 static const char *_gbz80_rgbasmCmd[] =
 {
-  "rgbasm", "-o$1.o", "$1.asm", NULL
+  "rgbasm", "-o\"$1.o\"", "\"$1.asm\"", NULL
 };
 
 static const char *_gbz80_rgblinkCmd[] =
 {
-  "xlink", "-tg", "-n$1.sym", "-m$1.map", "-zFF", "$1.lnk", NULL
+  "xlink", "-tg", "-n\"$1.sym\"", "-m\"$1.map\"", "-zFF", "\"$1.lnk\"", NULL
 };
 
 static void
 _gbz80_rgblink (void)
 {
   FILE *lnkfile;
-  const char *sz;
-
-  int i;
-  sz = srcFileName;
-  if (!sz)
-    sz = "a";
 
   /* first we need to create the <filename>.lnk file */
-  sprintf (scratchFileName, "%s.lnk", sz);
+  sprintf (scratchFileName, "%s.lnk", dstFileName);
   if (!(lnkfile = fopen (scratchFileName, "w")))
     {
       werror (E_FILE_OPEN_ERR, scratchFileName);
@@ -178,23 +234,19 @@ _gbz80_rgblink (void)
 
   fprintf (lnkfile, "[Objects]\n");
 
-  if (srcFileName)
-    fprintf (lnkfile, "%s.o\n", sz);
+  fprintf (lnkfile, "%s.o\n", dstFileName);
 
-  for (i = 0; i < nrelFiles; i++)
-    fprintf (lnkfile, "%s\n", relFiles[i]);
+  fputStrSet(lnkfile, relFilesSet);
 
   fprintf (lnkfile, "\n[Libraries]\n");
   /* additional libraries if any */
-  for (i = 0; i < nlibFiles; i++)
-    fprintf (lnkfile, "%s\n", libFiles[i]);
+  fputStrSet(lnkfile, libFilesSet);
 
-
-  fprintf (lnkfile, "\n[Output]\n" "%s.gb", sz);
+  fprintf (lnkfile, "\n[Output]\n" "%s.gb", dstFileName);
 
   fclose (lnkfile);
 
-  buildCmdLine (buffer,port->linker.cmd, sz, NULL, NULL, NULL);
+  buildCmdLine (buffer,port->linker.cmd, dstFileName, NULL, NULL, NULL);
   /* call the linker */
   if (my_system (buffer))
     {
@@ -217,12 +269,12 @@ _parseOptions (int *pargc, char **argv, int *i)
 	    case 'o':
 	      /* ROM bank */
 	      sprintf (buffer, "CODE_%u", bank);
-	      gbz80_port.mem.code_name = gc_strdup (buffer);
+	      gbz80_port.mem.code_name = Safe_strdup (buffer);
 	      return TRUE;
 	    case 'a':
 	      /* RAM bank */
 	      sprintf (buffer, "DATA_%u", bank);
-	      gbz80_port.mem.data_name = gc_strdup (buffer);
+	      gbz80_port.mem.data_name = Safe_strdup (buffer);
 	      return TRUE;
 	    }
 	}
@@ -250,9 +302,107 @@ _parseOptions (int *pargc, char **argv, int *i)
 	      _G.asmType = ASM_TYPE_ISAS;
 	      return TRUE;
 	    }
+	  else if (!strcmp (argv[*i], "--asm=z80asm"))
+	    {
+              port->assembler.externGlobal = TRUE;
+	      asm_addTree (&_z80asm_z80);
+	      _G.asmType = ASM_TYPE_ISAS;
+	      return TRUE;
+	    }
 	}
+      else if (!strncmp (argv[*i], "--portmode=", 11))
+	{
+	  if (!strcmp (argv[*i], "--portmode=z80"))
+	    {
+	      z80_opts.port_mode =  80;
+	      return TRUE;
+	    }
+	  else if (!strcmp (argv[*i], "--portmode=z180"))
+	    {
+	      z80_opts.port_mode =  180;
+	      return TRUE;
+	    }
+	 }
     }
   return FALSE;
+}
+
+static void
+_setValues(void)
+{
+  const char *s;
+
+  if (options.nostdlib == FALSE)
+    {
+      const char *s;
+      char path[PATH_MAX];
+      struct dbuf_s dbuf;
+
+      dbuf_init(&dbuf, PATH_MAX);
+
+      for (s = setFirstItem(libDirsSet); s != NULL; s = setNextItem(libDirsSet))
+        {
+          buildCmdLine2(path, sizeof path, "-k\"%s" DIR_SEPARATOR_STRING "{port}\" ", s);
+          dbuf_append(&dbuf, path, strlen(path));
+        }
+      buildCmdLine2(path, sizeof path, "-l\"{port}.lib\"", s);
+      dbuf_append(&dbuf, path, strlen(path));
+
+      setMainValue ("z80libspec", dbuf_c_str(&dbuf));
+      dbuf_destroy(&dbuf);
+
+      for (s = setFirstItem(libDirsSet); s != NULL; s = setNextItem(libDirsSet))
+        {
+          struct stat stat_buf;
+
+          buildCmdLine2(path, sizeof path, "%s" DIR_SEPARATOR_STRING "{port}" DIR_SEPARATOR_STRING "crt0{objext}", s);
+          if (stat(path, &stat_buf) == 0)
+            break;
+        }
+
+      if (s == NULL)
+        setMainValue ("z80crt0", "\"crt0{objext}\"");
+      else
+        {
+          char *buf;
+          size_t len = strlen(path) + 3;
+
+          buf = Safe_alloc(len);
+          SNPRINTF(buf, len, "\"%s\"", path);
+          setMainValue("z80crt0", buf);
+          Safe_free(buf);
+        } 
+    }
+  else
+    {
+      setMainValue ("z80libspec", "");
+      setMainValue ("z80crt0", "");
+    }
+
+  setMainValue ("z80extralibfiles", (s = joinStrSet(libFilesSet)));
+  Safe_free((void *)s);
+  setMainValue ("z80extralibpaths", (s = joinStrSet(libPathsSet)));
+  Safe_free((void *)s);
+
+  if (IS_GB)
+    {
+      setMainValue ("z80outputtypeflag", "-z");
+      setMainValue ("z80outext", ".gb");
+    }
+  else
+    {
+      setMainValue ("z80outputtypeflag", "-i");
+      setMainValue ("z80outext", ".ihx");
+    }
+
+  setMainValue ("stdobjdstfilename" , "{dstfilename}{objext}");
+  setMainValue ("stdlinkdstfilename", "{dstfilename}{z80outext}");
+
+  setMainValue ("z80extraobj", (s = joinStrSet(relFilesSet)));
+  Safe_free((void *)s);
+
+  sprintf (buffer, "-b_CODE=0x%04X -b_DATA=0x%04X", options.code_loc, options.data_loc);
+  setMainValue ("z80bases", buffer);
 }
 
 static void
@@ -262,17 +412,19 @@ _finaliseOptions (void)
   port->mem.default_globl_map = data;
   if (_G.asmType == ASM_TYPE_ASXXXX && IS_GB)
     asm_addTree (&_asxxxx_gb);
+
+  _setValues();
 }
 
 static void
 _setDefaultOptions (void)
 {
-  options.genericPtr = 1;	/* default on */
   options.nopeep = 0;
   options.stackAuto = 1;
   options.mainreturn = 1;
   /* first the options part */
   options.intlong_rent = 1;
+  options.float_rent = 1;
   options.noRegParams = 1;
   /* Default code and data locations. */
   options.code_loc = 0x200;
@@ -325,7 +477,7 @@ _mangleSupportFunctionName(char *original)
           options.noRegParams ? "s" : "bds"
           );
 
-  return gc_strdup(buffer);
+  return Safe_strdup(buffer);
 }
 
 static const char *
@@ -335,159 +487,79 @@ _getRegName (struct regs *reg)
     {
       return reg->name;
     }
-  assert (0);
+  /*  assert (0); */
   return "err";
 }
 
-/** $1 is always the basename.
-    $2 is always the output file.
-    $3 varies
-    $l is the list of extra options that should be there somewhere...
-    MUST be terminated with a NULL.
+static bool
+_hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
+{
+  sym_link *test = NULL;
+  value *val;
+
+  if ( ic->op != '*')
+    {
+      return FALSE;
+    }
+
+  if ( IS_LITERAL (left))
+    {
+      test = left;
+      val = OP_VALUE (IC_LEFT (ic));
+    }
+  else if ( IS_LITERAL (right))
+    {
+      test = left;
+      val = OP_VALUE (IC_RIGHT (ic));
+    }
+  else
+    {
+      return FALSE;
+    }
+
+  if ( getSize (test) <= 2)
+    {
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+/* Indicate which extended bit operations this port supports */
+static bool
+hasExtBitOp (int op, int size)
+{
+  if (op == GETHBIT)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+/* Indicate the expense of an access to an output storage class */
+static int
+oclsExpense (struct memmap *oclass)
+{
+  if (IN_FARSPACE(oclass))
+    return 1;
+    
+  return 0;
+}
+
+
+#define LINKCMD "link-{port} -nf {dstfilename}"
+/*
+#define LINKCMD \
+    "link-{port} -n -c -- {z80bases} -m -j" \
+    " {z80libspec}" \
+    " {z80extralibfiles} {z80extralibpaths}" \
+    " {z80outputtypeflag} \"{linkdstfilename}\"" \
+    " {z80crt0}" \
+    " \"{dstfilename}{objext}\"" \
+    " {z80extraobj}"
 */
-static const char *_z80_asmCmd[] =
-{
-    "as-z80", 
-    "-plosgff", 
-    "$1.o", 
-    "$1.asm", 
-    NULL
-};
 
-static const char *_z80_linkCmd[] =
-{
-    "link-z80", 
-    "-n",                       // Don't echo output
-    "-c",                       // Command line input
-    "--",                       // Again, command line input...
-    "-b_CODE=0x200",            // Code starts at 0x200
-    "-b_DATA=0x8000",           // RAM starts at 0x8000
-    "-j",                       // Output a symbol file as well
-    "-k" SDCC_LIB_DIR "/z80",   // Library path
-    "-lz80.lib",                // Library to use
-    "-i",                       // Output Intel IHX
-    "$1.ihx",                   // Output to
-    SDCC_LIB_DIR "/z80/crt0.o", // Link in crt0 first
-    "$1.o",                     // Actual code
-    NULL
-};
-
-static const char *_gbz80_asmCmd[] =
-{
-    "as-gbz80", 
-    "-plosgff", 
-    "$1.o", 
-    "$1.asm", 
-    NULL
-};
-
-static const char *_gbz80_linkCmd[] =
-{
-    "link-gbz80", 
-    "-n",                       // Don't echo output
-    "-c",                       // Command line input
-    "--",                       // Again, command line input...
-    "-b_CODE=0x200",            // Code starts at 0x200
-    "-b_DATA=0xC000",           // RAM starts at 0xC000
-    "-j",                       // Output a symbol file as well
-    "-k" SDCC_LIB_DIR "/gbz80", // Library path
-    "-lgbz80.lib",              // Library to use
-    "-z",                       // Output Gameboy image
-    "$1.gb",                    // Output to
-    SDCC_LIB_DIR "/gbz80/crt0.o",// Link in crt0 first
-    "$1.o",                     // Actual code
-    NULL
-};
-
-/* sprintf that appends to the string. */
-static void
-_saprintf(char *pinto, const char *format, ...)
-{
-    va_list ap;
-    va_start(ap, format);
-
-    vsprintf(pinto + strlen(pinto), format, ap);
-    va_end(ap);
-}
-
-static void
-_link(const char *portName, const char *portExt, const char *portOutputType)
-{
-    int i;
-    // PENDING
-    char buffer[2048];
-
-    sprintf(buffer, 
-            "link-%s "
-            "-n "                       // Don't echo output
-            "-c "                       // Command line input
-            "-- "                       // Again, command line input...
-            "-b_CODE=0x%04X "           // Code starts at 0x200
-            "-b_DATA=0x%04X "           // RAM starts at 0x8000
-            "-m "			// Map file
-            "-j ",                      // Output a symbol file as well
-            portName,
-            options.code_loc,
-            options.data_loc
-            );
-
-    // Add the standard lib in.
-    if (options.nostdlib == FALSE) {
-        _saprintf(buffer,
-                  "-k" SDCC_LIB_DIR "/%s "    // Library path
-                  "-l%s.lib ",                // Library to use
-                  portName, portName
-                  );
-    }
-
-    // Add in the library paths and libraries
-    for (i = 0; i < nlibFiles; i++) {
-        _saprintf(buffer, "-k%s ", libFiles[i]);
-    }
-    for (i = 0; i < nlibPaths; i++) {
-        _saprintf(buffer, "-l%s ", libPaths[i]);
-    }
-
-    _saprintf(buffer,
-              "-%s "                      // Output type
-              "%s.%s ",                   // Output to
-              portOutputType, srcFileName, portExt
-              );
-
-    if (options.nostdlib == FALSE) {
-        _saprintf(buffer, 
-                  SDCC_LIB_DIR "/%s/crt0.o ", // Link in crt0 first
-                  portName
-                  );
-    }
-
-    _saprintf(buffer,
-              "%s.o ",                    // Actual code
-              srcFileName
-              );
-
-    // Append all the other targets
-    for (i = 0; i < nrelFiles; i++) {
-        _saprintf(buffer, "%s ", relFiles[i]);
-    }
-
-    // Do it.
-    if (my_system (buffer)) {
-        exit(1);
-    }
-}
-
-static void
-_z80_link(void)
-{
-  _link("z80", "ihx", "i");
-}
-
-static void
-_gbz80_link(void)
-{
-  _link("gbz80", "gb", "z");
-}
+#define ASMCMD \
+    "as-{port} -plosgff \"{objdstfilename}\" \"{dstfilename}{asmext}\""
 
 /* Globals */
 PORT z80_port =
@@ -495,22 +567,27 @@ PORT z80_port =
   TARGET_ID_Z80,
   "z80",
   "Zilog Z80",			/* Target name */
+  NULL,				/* Processor name */
   {
+    glue,
     FALSE,
     MODEL_MEDIUM | MODEL_SMALL,
     MODEL_SMALL
   },
   {
-    _z80_asmCmd,
+    NULL,
+    ASMCMD,
     "-plosgff",			/* Options with debug */
     "-plosgff",			/* Options without debug */
     0,
     ".asm"
   },
   {
-    _z80_linkCmd,
-    _z80_link,
-    ".o"
+    NULL,
+    LINKCMD,
+    NULL,
+    ".o",
+    1
   },
   {
     _z80_defaultRules
@@ -532,10 +609,13 @@ PORT z80_port =
     "OVERLAY",
     "GSFINAL",
     "HOME",
+    NULL, /* xidata */
+    NULL, /* xinit */
     NULL,
     NULL,
     1
   },
+  { NULL, NULL },
   {
     -1, 0, 0, 4, 0, 2
   },
@@ -546,18 +626,25 @@ PORT z80_port =
   "_",
   _z80_init,
   _parseOptions,
+  _z80_options,
   _finaliseOptions,
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
   _keywords,
   0,				/* no assembler preamble */
+  NULL,				/* no genAssemblerEnd */
   0,				/* no local IVT generation code */
+  0,                            /* no genXINIT code */
   _reset_regparm,
   _reg_parm,
   _process_pragma,
   _mangleSupportFunctionName,
+  _hasNativeMulFor,
+  hasExtBitOp,			/* hasExtBitOp */
+  oclsExpense,			/* oclsExpense */
   TRUE,
+  TRUE,				/* little endian */
   0,				/* leave lt */
   0,				/* leave gt */
   1,				/* transform <= to ! > */
@@ -565,6 +652,11 @@ PORT z80_port =
   1,				/* transform != to !(a == b) */
   0,				/* leave == */
   TRUE,                         /* Array initializer support. */	
+  0,                            /* no CSE cost estimation yet */
+  _z80_builtins,		/* no builtin functions */
+  GPOINTER,			/* treat unqualified pointers as "generic" pointers */
+  1,				/* reset labelKey to 1 */
+  1,				/* globals & local static allowed */
   PORT_MAGIC
 };
 
@@ -574,22 +666,28 @@ PORT gbz80_port =
   TARGET_ID_GBZ80,
   "gbz80",
   "Gameboy Z80-like",		/* Target name */
+  NULL,
   {
+    glue,
     FALSE,
     MODEL_MEDIUM | MODEL_SMALL,
     MODEL_SMALL
   },
   {
-    _gbz80_asmCmd,
+    NULL,
+    ASMCMD,
     "-plosgff",			/* Options with debug */
     "-plosgff",			/* Options without debug */
     0,
-    ".asm"
+    ".asm",
+    NULL			/* no do_assemble function */
   },
   {
-    _gbz80_linkCmd,
-    _gbz80_link,
-    ".o"
+    NULL,
+    LINKCMD,
+    NULL,
+    ".o",
+    1
   },
   {
     _gbz80_defaultRules
@@ -611,10 +709,13 @@ PORT gbz80_port =
     "OVERLAY",
     "GSFINAL",
     "HOME",
+    NULL, /* xidata */
+    NULL, /* xinit */
     NULL,
     NULL,
     1
   },
+  { NULL, NULL },
   {
     -1, 0, 0, 2, 0, 4
   },
@@ -625,24 +726,36 @@ PORT gbz80_port =
   "_",
   _gbz80_init,
   _parseOptions,
+  _gbz80_options,
   _finaliseOptions,
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
   _keywords,
   0,				/* no assembler preamble */
+  NULL,				/* no genAssemblerEnd */
   0,				/* no local IVT generation code */
+  0,                            /* no genXINIT code */
   _reset_regparm,
   _reg_parm,
   _process_pragma,
   _mangleSupportFunctionName,
+  _hasNativeMulFor,
+  hasExtBitOp,			/* hasExtBitOp */
+  oclsExpense,			/* oclsExpense */
   TRUE,
+  TRUE,				/* little endian */
   0,				/* leave lt */
   0,				/* leave gt */
   1,				/* transform <= to ! > */
   1,				/* transform >= to ! < */
   1,				/* transform != to !(a == b) */
   0,				/* leave == */
-  FALSE,                        /* No array initializer support. */
+  TRUE,                         /* Array initializer support. */
+  0,                            /* no CSE cost estimation yet */
+  NULL, 			/* no builtin functions */
+  GPOINTER,			/* treat unqualified pointers as "generic" pointers */
+  1,				/* reset labelKey to 1 */
+  1,				/* globals & local static allowed */
   PORT_MAGIC
 };

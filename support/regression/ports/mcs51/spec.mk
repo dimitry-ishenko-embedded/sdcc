@@ -1,26 +1,41 @@
 # Port specification for the mcs51 port running with uCsim
+#
+# model small
 
-S51 = ../../sim/ucsim/s51.src/s51
+# path to uCsim
+S51A = $(SDCC_DIR)/sim/ucsim/s51.src/s51
+S51B = $(SDCC_DIR)/bin/s51
 
-SDCCFLAGS += --lesspedantic -DREENTRANT=reentrant -DGENERIC= --stack-after-data
+S51 = $(shell if [ -f $(S51A) ]; then echo $(S51A); else echo $(S51B); fi)
+
+SDCCFLAGS +=--less-pedantic -DREENTRANT=reentrant
 
 OBJEXT = .rel
 EXEEXT = .ihx
 
-# Needs parts of gbdk-lib, namely the internal mul/div/mod functions.
-EXTRAS = fwk/lib/testfwk$(OBJEXT) ports/$(PORT)/support$(OBJEXT)
+EXTRAS = $(PORTS_DIR)/$(PORT)/testfwk$(OBJEXT) $(PORTS_DIR)/$(PORT)/support$(OBJEXT)
 
 # Rule to link into .ihx
-%.ihx: %$(OBJEXT) $(EXTRAS)
-	$(SDCC) $(SDCCFLAGS) $(EXTRAS) $<
-	mv fwk/lib/testfwk.ihx $@
-	mv fwk/lib/testfwk.map $(@:.ihx=.map)
+%$(EXEEXT): %$(OBJEXT) $(EXTRAS)
+	$(SDCC) $(SDCCFLAGS) $(EXTRAS) $< -o $@
 
 %$(OBJEXT): %.c
-	$(SDCC) $(SDCCFLAGS) -c $<
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
 
-# PENDING: Path to sdcc-extra
-%.out: %$(EXEEXT)
+$(PORTS_DIR)/$(PORT)/testfwk$(OBJEXT): fwk/lib/testfwk.c
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
+
+# run simulator with 30 seconds timeout
+%.out: %$(EXEEXT) fwk/lib/timeout
 	mkdir -p `dirname $@`
-	$(S51) -t32 -S in=$(shell tty),out=$@ $< < ports/mcs51/uCsim.cmd >/dev/null 2>&1
+	-fwk/lib/timeout 30 $(S51) -t32 -S in=/dev/null,out=$@ $< < $(PORTS_DIR)/mcs51/uCsim.cmd >/dev/null \
+	  || echo -e --- FAIL: \"timeout, simulation killed\" in $(<:$(EXEEXT)=.c)"\n"--- Summary: 1/1/1: timeout >> $@
 	-grep -n FAIL $@ /dev/null || true
+
+fwk/lib/timeout: fwk/lib/timeout.c
+
+
+_clean:
+	rm -f fwk/lib/timeout fwk/lib/timeout.exe $(PORTS_DIR)/$(PORT)/*.rel $(PORTS_DIR)/$(PORT)/*.rst \
+	      $(PORTS_DIR)/$(PORT)/*.lst $(PORTS_DIR)/$(PORT)/*.sym $(PORTS_DIR)/$(PORT)/*.asm \
+	      $(PORTS_DIR)/$(PORT)/*.lnk $(PORTS_DIR)/$(PORT)/*.map $(PORTS_DIR)/$(PORT)/*.mem

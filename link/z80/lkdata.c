@@ -38,6 +38,11 @@ char	*rp;		/*	pointer into the LST file
 char	rb[NINPUT];	/*	LST file text line being
 			 *	address relocated
 			 */
+
+char sdccopt[NINPUT]="";
+char sdccopt_module[NINPUT]="";
+char curr_module[NINPUT]="";
+
 int	oflag;		/*	Output file type flag
 			 */
 int	mflag;		/*	Map output flag
@@ -419,7 +424,7 @@ struct	lbfile	*lbfhead;	/*	pointer to the first
  *	array of character types, one per
  *	ASCII character
  */
-char	ctype[128] = {
+unsigned char	ctype[128] = {
 /*NUL*/	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,
 /*BS*/	ILL,	SPACE,	ILL,	ILL,	SPACE,	ILL,	ILL,	ILL,
 /*DLE*/	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,	ILL,

@@ -1,5 +1,7 @@
+#define __16F873
+#include "p16f873.h"
 
-unsigned char success = 0;
+unsigned char failures = 0;
 unsigned char dummy = 0;
 
 unsigned char uchar0=0;
@@ -47,7 +49,7 @@ void main(void)
   //incptr(&uchar0);
   inc(uchar0);
   if(uchar0 !=2)
-    success++;
+    failures++;
 
   uchar0 = 2;
   uchar1 = 1;
@@ -55,7 +57,7 @@ void main(void)
   nested_call(uchar2);
 
   if(uchar0 !=4)
-    success++;
+    failures++;
 
   done();
 }

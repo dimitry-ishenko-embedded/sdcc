@@ -57,6 +57,7 @@ typedef struct initList
   {
     int type;
     int lineno;
+    char *filename;
     union
       {
 	struct ast *node;
@@ -104,7 +105,7 @@ initList *copyIlist (initList *);
 double list2int (initList *);
 value *list2val (initList *);
 struct ast *list2expr (initList *);
-void resolveIvalSym (initList *);
+void resolveIvalSym (initList *, sym_link *);
 value *valFromType (sym_link *);
 value *constFloatVal (char *);
 int getNelements (sym_link *, initList *);

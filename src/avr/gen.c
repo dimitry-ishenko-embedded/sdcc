@@ -1,5 +1,5 @@
 /*-------------------------------------------------------------------------
-  avrgen.c - source file for code generation for ATMEL AVR
+  gen.c - source file for code generation for ATMEL AVR
 
   Written By -  Sandeep Dutta . sandeep.dutta@usa.net (2000)
 
@@ -31,19 +31,6 @@
 #include "SDCCglobl.h"
 #include "newalloc.h"
 
-#ifdef HAVE_SYS_ISA_DEFS_H
-#include <sys/isa_defs.h>
-#else
-#ifdef HAVE_ENDIAN_H
-#include <endian.h>
-#else
-#if !defined(__BORLANDC__) && !defined(_MSC_VER) && !defined(__MINGW32__) && !defined(__CYGWIN__)
-#warning "Cannot determine ENDIANESS of this machine assuming LITTLE_ENDIAN"
-#warning "If you running sdcc on an INTEL 80x86 Platform you are okay"
-#endif
-#endif
-#endif
-
 #include "common.h"
 #include "SDCCpeeph.h"
 #include "ralloc.h"
@@ -64,20 +51,7 @@ static char *spname;
 char *fReturnAVR[] = { "r16", "r17", "r18", "r19" };
 unsigned fAVRReturnSize = 4;	/* shared with ralloc.c */
 char **fAVRReturn = fReturnAVR;
-static char *larray[4] = { "lo8", "hi8", "hlo8", "hhi8" };
-
-#if 0
-// PENDING: Unused
-static short rbank = -1;
-static char *tscr[4] = { "r0", "r1", "r24", "r25" };
-static unsigned char SLMask[] = { 0xFF, 0xFE, 0xFC, 0xF8, 0xF0,
-	0xE0, 0xC0, 0x80, 0x00
-};
-static unsigned char SRMask[] = { 0xFF, 0x7F, 0x3F, 0x1F, 0x0F,
-	0x07, 0x03, 0x01, 0x00
-};
-
-#endif
+static char *larray[4] = { ">", "<", "hlo8", "hhi8" };
 
 static struct {
 	short xPushed;
@@ -299,6 +273,7 @@ hasInc (operand *op, iCode *ic)
 	int isize ;
   
 	if (IS_BITVAR(retype)||!IS_PTR(type)) return NULL;
+	if (IS_AGGREGATE(type->next)) return NULL;
 	isize = getSize(type->next);
 	while (lic) {
 		/* if operand of the form op = op + <sizeof *op> */
@@ -696,6 +671,22 @@ isRegPair (asmop * aop)
 }
 
 /*-----------------------------------------------------------------*/
+/* allHigh - all registers are high registers                      */
+/*-----------------------------------------------------------------*/
+static int allHigh (asmop * aop)
+{
+	int i;
+	
+	if (aop->type == AOP_X || aop->type == AOP_Z)
+		return 1;
+	if (aop->type != AOP_REG)
+		return 0;
+	for (i=0; i < aop->size ; i++ ) 
+		if (aop->aopu.aop_reg[i]->rIdx < R16_IDX) return 0;
+	return 1;
+}
+
+/*-----------------------------------------------------------------*/
 /* aopOp - allocates an asmop for an operand  :                    */
 /*-----------------------------------------------------------------*/
 static void
@@ -776,6 +767,10 @@ aopOp (operand * op, iCode * ic, bool result)
 		}
 
 		/* else spill location  */
+		if (sym->usl.spillLoc && getSize(sym->type) != getSize(sym->usl.spillLoc->type)) {
+		    /* force a new aop if sizes differ */
+		    sym->usl.spillLoc->aop = NULL;
+		}
 		sym->aop = op->aop = aop =
 			aopForSym (ic, sym->usl.spillLoc, result);
 		aop->size = getSize (sym->type);
@@ -1706,7 +1701,7 @@ static void
 genFunction (iCode * ic)
 {
 	symbol *sym;
-	sym_link *fetype;
+	sym_link *ftype;
 	int i = 0;
 
 	_G.nRegsSaved = 0;
@@ -1717,13 +1712,13 @@ genFunction (iCode * ic)
 	emitcode (";", "-----------------------------------------");
 
 	emitcode ("", "%s:", sym->rname);
-	fetype = getSpec (operandType (IC_LEFT (ic)));
+	ftype = operandType (IC_LEFT (ic));
 
 	/* if critical function then turn interrupts off */
-	if (SPEC_CRTCL (fetype))
+	if (IFFUNC_ISCRITICAL (ftype))
 		emitcode ("cli", "");
 
-	if (IS_ISR (sym->etype)) {
+	if (IFFUNC_ISISR (sym->type)) {
 	}
 
 	/* save the preserved registers that are used in this function */
@@ -1817,10 +1812,10 @@ genEndFunction (iCode * ic)
 		}
 	}
 
-	if (SPEC_CRTCL (sym->etype))
+	if (IFFUNC_ISCRITICAL (sym->type))
 		emitcode ("sti", "");
 
-	if (IS_ISR (sym->etype)) {
+	if (IFFUNC_ISISR (sym->type)) {
 		emitcode ("rti", "");
 	}
 	else {
@@ -2106,7 +2101,7 @@ genMinusDec (iCode * ic)
 
 	/* if the sizes are greater than 2 or they are not the same regs
 	   then we cannot */
-	if (!sameRegs (AOP (IC_LEFT (ic)), AOP (IC_RIGHT (ic))))
+	if (!sameRegs (AOP (IC_LEFT (ic)), AOP (IC_RESULT (ic))))
 		return FALSE;
 
 	/* so we know LEFT & RESULT in the same registers and add
@@ -2309,7 +2304,7 @@ genMult (iCode * ic)
 	}
 
 	/* should have been converted to function call */
-	assert (1);
+	assert (0);
 
       release:
 	freeAsmop (left, NULL, ic, (RESULTONSTACK (ic) ? FALSE : TRUE));
@@ -2324,7 +2319,7 @@ static void
 genDiv (iCode * ic)
 {
 	/* should have been converted to function call */
-	assert (1);
+	assert (0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -2334,7 +2329,7 @@ static void
 genMod (iCode * ic)
 {
 	/* should have been converted to function call */
-	assert (1);
+	assert (0);
 
 }
 
@@ -2367,7 +2362,7 @@ revavrcnd (int type)
 		if (rar[i].rtype == type)
 			return rar[i].type;
 	}
-	assert (1);		/* cannot happen */
+	assert (0);		/* cannot happen */
 	return 0;		/* makes the compiler happy */
 }
 
@@ -2492,7 +2487,7 @@ static void
 genCmpGt (iCode * ic, iCode * ifx)
 {
 	/* should have transformed by the parser */
-	assert (1);
+	assert (0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -4576,6 +4571,10 @@ genPointerSet (iCode * ic, iCode *pi)
 	case GPOINTER:
 		genGenPointerSet (right, result, ic, pi);
 		break;
+
+	default:
+	  werror (E_INTERNAL_ERROR, __FILE__, __LINE__, 
+		  "genPointerSet: illegal pointer type");
 	}
 
 }
@@ -4612,23 +4611,17 @@ genIfx (iCode * ic, iCode * popIc)
 
 	lbl = newiTempLabel(NULL);
 	if (IC_TRUE(ic)) {
-		if (tob)
-			emitcode ("breq","L%05d",lbl->key);
-		else
-			emitcode ("brne","L%05d",lbl->key);
+		emitcode ("breq","L%05d",lbl->key);
 		emitcode ("jmp","L%05d",IC_TRUE(ic)->key);
 		emitcode ("","L%05d:",lbl->key);
 	} else {
-		if (tob)
-			emitcode ("brne","L%05d",lbl->key);
-		else
-			emitcode ("breq","L%05d",lbl->key);
+		emitcode ("brne","L%05d",lbl->key);
 		emitcode ("jmp","L%05d",IC_FALSE(ic)->key);
 		emitcode ("","L%05d:",lbl->key);
 	}
 	ic->generated = 1;
 }
-/* here */
+
 /*-----------------------------------------------------------------*/
 /* genAddrOf - generates code for address of                       */
 /*-----------------------------------------------------------------*/
@@ -4639,21 +4632,51 @@ genAddrOf (iCode * ic)
 	int size, offset;
 
 	aopOp (IC_RESULT (ic), ic, FALSE);
-
+	assert(AOP_SIZE(IC_RESULT(ic)) >= 2);
 	/* if the operand is on the stack then we
 	   need to get the stack offset of this
 	   variable */
 	if (sym->onStack) {
 		/* if it has an offset then we need to compute it */
 		if (sym->stack) {
-			emitcode ("mov", "a,_bp");
-			emitcode ("add", "a,#0x%02x",
-				  ((char) sym->stack & 0xff));
-			aopPut (AOP (IC_RESULT (ic)), "a", 0);
+			if (allHigh(AOP(IC_RESULT(ic)))) {
+				if (isRegPair (AOP(IC_RESULT(ic)))) {
+					emitcode ("movw","%s,r28",aopGet(AOP(IC_RESULT(ic)),0));					
+				} else {
+					emitcode ("mov","%s,r28",aopGet(AOP(IC_RESULT(ic)),0));
+					emitcode ("mov","%s,r29",aopGet(AOP(IC_RESULT(ic)),1));					
+				}
+				if (sym->stack < 0) {
+					emitcode("subi","%s,<(%d)",aopGet(AOP(IC_RESULT(ic)),0),-sym->stack);
+					emitcode("sbci","%s,>(%d)",aopGet(AOP(IC_RESULT(ic)),1),-sym->stack);
+				} else {
+					emitcode("subi","%s,<(-%d)",aopGet(AOP(IC_RESULT(ic)),0),sym->stack);
+					emitcode("sbci","%s,>(-%d)",aopGet(AOP(IC_RESULT(ic)),1),sym->stack);
+				}
+			} else {
+				emitcode("movw","r24,r28");
+				if (sym->stack > -63 && sym->stack < 63) {
+					if (sym->stack < 0)
+						emitcode("sbiw","r24,%d",-sym->stack);
+					else
+						emitcode("sbiw","r24,%d",sym->stack);
+				} else {					
+					if (sym->stack < 0) {
+						emitcode("subi","r24,<(%d)",-sym->stack);
+						emitcode("sbci","r25,>(%d)",-sym->stack);
+					} else {
+						emitcode("subi","r24,<(-%d)",sym->stack);
+						emitcode("sbci","r25,>(-%d)",sym->stack);
+					}
+				}
+				
+				aopPut(AOP(IC_RESULT(ic)),"r24",0);
+				aopPut(AOP(IC_RESULT(ic)),"r25",1);
+			}
 		}
 		else {
-			/* we can just move _bp */
-			aopPut (AOP (IC_RESULT (ic)), "_bp", 0);
+			aopPut(AOP(IC_RESULT(ic)),"r28",0);
+			aopPut(AOP(IC_RESULT(ic)),"r29",1);
 		}
 		/* fill the result with zero */
 		size = AOP_SIZE (IC_RESULT (ic)) - 2;
@@ -4668,13 +4691,13 @@ genAddrOf (iCode * ic)
 	/* object not on stack then we need the name */
 	size = AOP_SIZE (IC_RESULT (ic));
 	offset = 0;
-
+	assert(size<=2);
 	while (size--) {
 		char s[SDCC_NAME_MAX];
 		if (offset)
-			sprintf (s, "(%s >> %d)", sym->rname, offset * 8);
+			sprintf (s, ">(%s)", sym->rname);
 		else
-			sprintf (s, "%s", sym->rname);
+			sprintf (s, "<(%s)", sym->rname);
 		aopPut (AOP (IC_RESULT (ic)), s, offset++);
 	}
 
@@ -4905,8 +4928,6 @@ genCast (iCode * ic)
 
 		/* pointer to generic pointer */
 		if (IS_GENPTR (ctype)) {
-			char *l = zero;
-
 			if (IS_PTR (type))
 				p_type = DCL_TYPE (type);
 			else {
@@ -4922,30 +4943,22 @@ genCast (iCode * ic)
 					aopGet (AOP (right), offset), offset);
 				offset++;
 			}
-			/* the last byte depending on type */
-			switch (p_type) {
-			case IPOINTER:
-			case POINTER:
-				l = zero;
-				break;
-			case FPOINTER:
-				l = one;
-				break;
-			case CPOINTER:
-				l = "0x02";
-				break;
-			case PPOINTER:
-				l = "0x03";
-				break;
-
-			default:
-				/* this should never happen */
-				werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
-					"got unknown pointer type");
-				exit (1);
+		    
+		    /* the last byte depending on type */
+		    {
+			int gpVal = pointerTypeToGPByte(p_type, NULL, NULL);
+			char gpValStr[10];
+			
+			if (gpVal == -1)
+			{
+			    // pointerTypeToGPByte will have bitched.
+			    exit(1);
 			}
-			aopPut (AOP (result), l, GPTRSIZE - 1);
-			goto release;
+			
+			sprintf(gpValStr, "#0x%d", gpVal);
+			aopPut (AOP (result), gpValStr, GPTRSIZE - 1);
+		    }		    
+		    goto release;
 		}
 
 		/* just copy the pointers */
@@ -5074,6 +5087,18 @@ genReceive (iCode * ic)
 }
 
 /*-----------------------------------------------------------------*/
+/* genDummyRead - generate code for dummy read of volatiles        */
+/*-----------------------------------------------------------------*/
+static void
+genDummyRead (iCode * ic)
+{
+  emitcode (";     genDummyRead","");
+  emitcode (";     not implemented","");
+
+  ic = ic;
+}
+
+/*-----------------------------------------------------------------*/
 /* gen51Code - generate code for 8051 based controllers            */
 /*-----------------------------------------------------------------*/
 void
@@ -5090,7 +5115,7 @@ genAVRCode (iCode * lic)
 	/* if debug information required */
 	/*     if (options.debug && currFunc) { */
 	if (currFunc) {
-		cdbSymbol (currFunc, cdbFile, FALSE, TRUE);
+		debugFile->writeFunction(currFunc);
 		_G.debugLine = 1;
 /* 		emitcode ("", ".type %s,@function", currFunc->name); */
 		_G.debugLine = 0;
@@ -5302,6 +5327,10 @@ genAVRCode (iCode * lic)
 
 		case SEND:
 			addSet (&_G.sendSet, ic);
+			break;
+
+		case DUMMY_READ_VOLATILE:
+			genDummyRead (ic);
 			break;
 
 		default:

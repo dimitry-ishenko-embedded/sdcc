@@ -35,31 +35,33 @@ testShiftRight(void)
     {attr} {storage} {type} i, result;
 
     i = -120;
+    ASSERT(i>>1 == -60);
     ASSERT(i>>2 == -30);
-
+    ASSERT(i>>3 == -15);
+    ASSERT(i>>4 == -8);
+    ASSERT(i>>5 == -4);
+    ASSERT(i>>6 == -2);
+    ASSERT(i>>7 == -1);
+    ASSERT(i>>8 == -1);
     result = i;
     result >>= 3;
     ASSERT(result == -15); 
 }
 
-/** PENDING: Disabled. */
 static void
 testShiftByteMultiples(void)
 {
-#if 0
-    /* PENDING */
     {attr} {storage} {type} i;
 
     i = ({type}){vals};
-    ASSERT(i>>8  == (({type}){vals} >> 8));
-    ASSERT(i>>16 == (({type}){vals} >> 16));
-    ASSERT(i>>24 == (({type}){vals} >> 24));
+    ASSERT(i>>8  == ({type})({vals} >> 8));
+    ASSERT(i>>16 == ({type})({vals} >> 16));
+    ASSERT(i>>24 == ({type})({vals} >> 24));
 
     i = ({type}){vals};
-    ASSERT(i<<8  == (({type}){vals} << 8));;
-    ASSERT(i<<16 == (({type}){vals} << 16));
-    ASSERT(i<<24 == (({type}){vals} << 24));
-#endif
+    ASSERT( ({type})(i<<8)  ==  ({type})({vals} << 8));;
+    ASSERT((({type}) i<<16) == (({type}) {vals} << 16));
+    ASSERT((({type}) i<<24) == (({type}) {vals} << 24));
 }
 
 static void

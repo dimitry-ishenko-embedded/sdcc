@@ -9,7 +9,8 @@ STARTYEAR	= 1997
 SHELL		= /bin/sh
 
 PRJDIR		= .
-PKGS		= cmd.src sim.src gui.src s51.src avr.src z80.src doc
+include packages.mk
+#PKGS		= cmd.src sim.src gui.src s51.src avr.src z80.src doc
 
 srcdir          = .
 
@@ -49,18 +50,16 @@ uninstall:
 # Deleting all files created by building the program
 # --------------------------------------------------
 clean:
-	rm -f *core *[%~] *.[oa] *.so ucsim
-	rm -f .[a-z]*~
+	$(MAKE) -f clean.mk clean EXEEXT=$(EXEEXT)
 	@for pkg in $(PKGS); do\
-	  $(MAKE) -C $$pkg -f clean.mk clean ;\
+	  $(MAKE) -C $$pkg -f clean.mk clean EXEEXT=$(EXEEXT) ;\
 	done
 
 
 # Deleting all files created by configuring or building the program
 # -----------------------------------------------------------------
 distclean: clean
-	rm -f config.cache config.log config.status
-	rm -f ddconfig.h main.mk *.dep
+	$(MAKE) -f clean.mk distclean
 	@for pkg in $(PKGS); do\
 	  $(MAKE) -C $$pkg -f clean.mk distclean ;\
 	done
@@ -70,6 +69,7 @@ distclean: clean
 # Like clean but some files may still exist
 # -----------------------------------------
 mostlyclean: clean
+	$(MAKE) -f clean.mk mostlyclean
 	@for pkg in $(PKGS); do\
 	  $(MAKE) -C $$pkg -f clean.mk mostlyclean ;\
 	done
@@ -79,6 +79,7 @@ mostlyclean: clean
 # everything deleted by distclean plus files created by bison, stc.
 # -----------------------------------------------------------------------
 realclean: distclean
+	$(MAKE) -f clean.mk realclean
 	@for pkg in $(PKGS); do\
 	  $(MAKE) -C $$pkg -f clean.mk realclean ;\
 	done
@@ -97,6 +98,16 @@ dist: distclean
 # Performing self-test
 # --------------------
 check:
+	$(MAKE) -f main.mk check
+	@for pkg in $(PKGS); do\
+	  $(MAKE) -C $$pkg check ;\
+	done
+
+test:
+	$(MAKE) -f main.mk test
+	@for pkg in $(PKGS); do\
+	  $(MAKE) -C $$pkg test ;\
+	done
 
 
 # Performing installation test
@@ -151,28 +162,29 @@ lines:
 # Remaking configuration
 # ----------------------
 configure: configure.in
-	@echo "RE-CREATING CONFIGURE"
+	@$(PRJDIR)/mkecho $(PRJDIR) "RE-CREATING CONFIGURE"
 	$(SHELL) autoconf configure.in >configure
 	chmod 755 configure
 
 config.status: configure
-	@echo "RE-CHECKING CONFIGURATION"
+	@$(PRJDIR)/mkecho $(PRJDIR) "RE-CHECKING CONFIGURATION"
 	./config.status -recheck
 
 makefiles: config.status
-	@echo "RE-MAKING MAKEFILES"
+	@$(PRJDIR)/mkecho $(PRJDIR) "RE-MAKING MAKEFILES"
 	$(SHELL) ./config.status
 
 main.mk: $(srcdir)/main_in.mk $(srcdir)/configure.in
-	@echo "RE-MAKING MAIN.MK"
+	@$(PRJDIR)/mkecho $(PRJDIR) "RE-MAKING MAIN.MK"
 	$(SHELL) ./config.status
 
 freshconf: echo_freshconf configure main.mk
 
 echo_freshconf:
-	@echo "FRESHCONF"
+	@$(PRJDIR)/mkecho $(PRJDIR) "FRESHCONF"
 
 checkconf:
+	@$(PRJDIR)/mkecho $(PRJDIR) "CHECKCONF"
 	@if [ -f devel ]; then $(MAKE) freshconf; fi
 
 # End of Makefile

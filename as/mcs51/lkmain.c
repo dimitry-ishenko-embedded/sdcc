@@ -19,6 +19,29 @@
 #include <string.h>
 #include "aslink.h"
 
+#ifdef WIN32T
+#include <time.h>
+
+void Timer(int action, char * message)
+{
+	static double start, end, total=0.0;
+    static const double secs_per_tick = 1.0 / CLOCKS_PER_SEC;
+
+    if(action==0) start=clock()*secs_per_tick;
+    else if(action==1)
+    {
+    	end=clock() * secs_per_tick;
+		printf("%s \t%f seconds.\n", message, (end-start));
+		total+=end-start;
+    }
+    else
+    {
+		printf("Total time: \t%f seconds.\n", total);
+		total=0.0;
+    }
+}
+#endif
+
 /* yuck - but including unistd.h causes problems on Cygwin by redefining
  * Addr_T.
  */
@@ -50,6 +73,72 @@ extern int unlink(const char *);
  *					command option tect lines
  *
  */
+
+/*JCF: 	Creates some of the default areas so they are allocated in the right order.*/
+void Areas51 (void)
+{
+	char * rel[]={
+		"XH",
+		"H 7 areas 0 global symbols",
+		"A _CODE size 0 flags 0",		/*Each .rel has one, so...*/
+		"A REG_BANK_0 size 0 flags 4",	/*Register banks are overlayable*/
+		"A REG_BANK_1 size 0 flags 4",
+		"A REG_BANK_2 size 0 flags 4",
+		"A REG_BANK_3 size 0 flags 4",
+		"A BSEG size 0 flags 80",		/*BSEG must be just before BITS*/
+		"A BSEG_BYTES size 0 flags 0",	/*Size will be obtained from BSEG in lnkarea()*/
+		""
+	};
+	
+    char * rel2[]={
+		"XH",
+		"H B areas 0 global symbols",
+		"A _CODE size 0 flags 0",		/*Each .rel has one, so...*/
+		"A REG_BANK_0 size 0 flags 4",	/*Register banks are overlayable*/
+		"A REG_BANK_1 size 0 flags 4",
+		"A REG_BANK_2 size 0 flags 4",
+		"A REG_BANK_3 size 0 flags 4",
+		"A BSEG size 0 flags 80",		/*BSEG must be just before BITS*/
+		"A BSEG_BYTES size 0 flags 0",	/*Size will be obtained from BSEG in lnkarea()*/
+		"A DSEG size 0 flags 0",
+		"A OSEG size 0 flags 4",
+		"A ISEG size 0 flags 0",
+		"A SSEG size 0 flags 4",
+		""
+	};
+	int j;
+
+    if(packflag)
+    {
+	    for (j=0; rel2[j][0]!=0; j++)
+	    {
+		    ip=rel2[j];
+		    link_main();
+	    }
+    }
+    else
+    {
+	    for (j=0; rel[j][0]!=0; j++)
+	    {
+		    ip=rel[j];
+		    link_main();
+	    }
+    }
+	
+	/*Set the start address of the default areas:*/
+	for(ap=areap; ap; ap=ap->a_ap)
+	{
+		/**/ if (!strcmp(ap->a_id, "REG_BANK_0")) { ap->a_addr=0x00; ap->a_type=1; }
+		else if (!strcmp(ap->a_id, "REG_BANK_1")) { ap->a_addr=0x08; ap->a_type=1; }
+		else if (!strcmp(ap->a_id, "REG_BANK_2")) { ap->a_addr=0x10; ap->a_type=1; }
+		else if (!strcmp(ap->a_id, "REG_BANK_3")) { ap->a_addr=0x18; ap->a_type=1; }
+		else if (!strcmp(ap->a_id, "BSEG_BYTES")) { ap->a_addr=0x20; ap->a_type=1; }
+		else if (!strcmp(ap->a_id, "SSEG"))
+        {
+            if(stacksize) ap->a_axp->a_size=stacksize;
+        }
+	}
+}
 
 /*)Function	VOID	main(argc,argv)
  *
@@ -142,7 +231,9 @@ char *argv[];
 	register char *p;
 	register int c, i;
 
-	fprintf(stdout, "\n");
+#ifdef WIN32T
+    Timer(0, "");
+#endif
 
 	startp = (struct lfile *) new (sizeof (struct lfile));
 
@@ -212,7 +303,9 @@ char *argv[];
 	syminit();
 	
 	if (dflag){
-	    dfp = afile("temp", "cdb", 1);
+	    //dfp = afile("temp", "cdb", 1);
+		SaveLinkedFilePath(linkp->f_idp); //Must be the first one... 
+		dfp = afile(linkp->f_idp,"cdb",1); //JCF: Nov 30, 2002
 	    if (dfp == NULL) 
 		lkexit(1);
 	}
@@ -223,6 +316,8 @@ char *argv[];
 		filep = linkp;
 		hp = NULL;
 		radix = 10;
+		
+		Areas51(); /*JCF: Create the default 8051 areas in the right order*/
 
 		while (getline()) {
 			ip = ib;
@@ -245,7 +340,10 @@ char *argv[];
 			/*
 			 * Link all area addresses.
 			 */
-			lnkarea();
+			if(!packflag)
+                lnkarea();
+            else
+                lnkarea2();
 			/*
 			 * Process global definitions.
 			 */
@@ -271,7 +369,19 @@ char *argv[];
 			if (mflag || jflag)
 				map();
 
-			if (iram_size)
+			if (sflag) /*JCF: memory usage summary output*/
+            {
+                if(!packflag)
+                {
+				    if(summary(areap)) lkexit(1);
+                }
+                else
+                {
+				    if(summary2(areap)) lkexit(1);
+                }
+            }
+
+			if ((iram_size) && (!packflag))
 				iramcheck();
 
 			/*
@@ -302,6 +412,13 @@ char *argv[];
 			reloc('E');
 		}
 	}
+	//JCF:
+	CreateAOMF51();
+
+#ifdef WIN32T
+    Timer(1, "Linker execution time");
+#endif
+
 	lkexit(lkerr);
 	return 0;
 }
@@ -341,14 +458,15 @@ int i;
 	if (rfp != NULL) fclose(rfp);
 	if (sfp != NULL) fclose(sfp);
 	if (tfp != NULL) fclose(tfp);
-	if (dfp != NULL) {
+	if (dfp != NULL) fclose(dfp);
+	/*if (dfp != NULL)
 	    FILE *xfp = afile(linkp->f_idp,"cdb",1);
 	    dfp = freopen("temp.cdb","r",dfp);
 	    copyfile(xfp,dfp);
 	    fclose(xfp);
 	    fclose(dfp);
 	    unlink("temp.cdb");
-	}
+	}*/
 	exit(i);
 }
 
@@ -391,6 +509,29 @@ link_main()
 	if ((c=endline()) == 0) { return; }
 	switch (c) {
 
+    case 'O': /*For some important sdcc options*/
+        if (pass == 0)
+        {
+            if(strlen(sdccopt)==0)
+            {
+                strcpy(sdccopt, &ip[1]);
+                strcpy(sdccopt_module, curr_module);
+            }
+            else
+            {
+                if(strcmp(sdccopt, &ip[1])!=0)
+                {
+				    fprintf(stderr,
+				    "?ASlink-Warning-Conflicting sdcc options:\n"
+                    "   \"%s\" in module \"%s\" and\n"
+                    "   \"%s\" in module \"%s\".\n",
+                    sdccopt, sdccopt_module, &ip[1], curr_module);
+				    lkerr++;
+                }
+            }
+        }
+		break;
+
 	case 'X':
 		radix = 16;
 		break;
@@ -416,12 +557,14 @@ link_main()
 		sdp.s_area = NULL;
 		sdp.s_areax = NULL;
 		sdp.s_addr = 0;
-		// jwk lastExtendedAddress = -1;
 		break;
 
 	case 'M':
 		if (pass == 0)
+        {
+            strcpy(curr_module, &ip[1]);
 			module();
+        }
 		break;
 
 	case 'A':
@@ -676,6 +819,25 @@ parse()
 					++mflag;
 					break;
 
+				case 'y': /*JCF: memory usage summary output*/
+					++sflag;
+					break;
+
+                case 'Y':
+                    unget(getnb());
+                    packflag=1;
+                    break;
+
+                case 'A':
+                    unget(getnb());
+                    if (ip && *ip)
+                    {
+                        stacksize=expr(0);
+                        if(stacksize>256) stacksize=256;
+                        else if(stacksize<0) stacksize=0;
+                    }
+ 					return(0);
+
 				case 'j':
 				case 'J':
 					jflag = 1;
@@ -739,12 +901,21 @@ parse()
 					return(0);
 
 				case 'a':
-				case 'A':
 					iramsav();
 					return(0);
 
+				case 'v':
+				case 'V':
+					xramsav();
+					return(0);
+
+				case 'w':
+				case 'W':
+					codesav();
+					return(0);
+
 				case 'z':
-                                case 'Z':
+                case 'Z':
 				        dflag = 1;					
 					return(0);
 				default:
@@ -871,14 +1042,14 @@ setbas()
 			}
 			if (ap == NULL) {
 				fprintf(stderr,
-				"No definition of area %s\n", id);
+				"ASlink-Warning-No definition of area %s\n", id);
 				lkerr++;
 			} else {
 				ap->a_addr = v;
                                 ap->a_type = 1;	/* JLH: value set */
 			}
 		} else {
-			fprintf(stderr, "No '=' in base expression");
+			fprintf(stderr, "ASlink-Warning-No '=' in base expression");
 			lkerr++;
 		}
 		bsp = bsp->b_base;
@@ -1019,12 +1190,8 @@ setgbl()
  *	the assembler on an open error.
  *
  *	local variables:
- *		int	c		character value
  *		char	fb[]		constructed file specification string
  *		FILE *	fp		filehandle for opened file
- *		char *	p1		pointer to filespec string fn
- *		char *	p2		pointer to filespec string fb
- *		char *	p3		pointer to filetype string ft
  *
  *	global variables:
  *		int	lkerr		error flag
@@ -1042,36 +1209,35 @@ afile(fn, ft, wf)
 char *fn;
 char *ft;
 {
-	register char *p1, *p2, *p3;
-	register int c;
 	FILE *fp;
-	char fb[FILENAME_MAX];
+	char fb[PATH_MAX];
 	char *omode = (wf ? (wf == 2 ? "a" : "w") : "r");
+	int i;
 
-	p1 = fn;
-	p2 = fb;
-	p3 = ft;
-	while ((c = *p1++) != 0 && c != FSEPX) {
-		if (p2 < &fb[FILENAME_MAX-4])
-			*p2++ = c;
+	/*Look backward the name path and get rid of the extension, if any*/
+	i=strlen(fn);
+	for(; (fn[i]!='.')&&(fn[i]!='\\')&&(fn[i]!='/')&&(i>=0); i--);
+	if( (fn[i]=='.') && strcmp(ft, "lnk") )
+	{
+		strncpy(fb, fn, i);
+		fb[i]=0;
 	}
-	*p2++ = FSEPX;
-	if (*p3 == 0) {
-		if (c == FSEPX) {
-			p3 = p1;
-		} else {
-			p3 = "rel";
-		}
+	else
+	{
+		strcpy(fb, fn);
 	}
-	while ((c = *p3++) != 0) {
-		if (p2 < &fb[FILENAME_MAX-1])
-			*p2++ = c;
-	}
-	*p2++ = 0;	
-	if ((fp = fopen(fb, omode)) == NULL) {
-	    if (strcmp(ft,"cdb")) {
-		fprintf(stderr, "%s: cannot %s.\n", fb, wf?"create":"open");
-		lkerr++;
+
+	/*Add the extension*/
+	strcat(fb, ".");
+	strcat(fb, strlen(ft)?ft:"rel");
+	
+	fp = fopen(fb, omode);
+	if (fp==NULL)
+	{
+	    if (strcmp(ft,"adb"))/*Do not complaint for optional adb files*/
+		{
+			fprintf(stderr, "%s: cannot %s.\n", fb, wf?"create":"open");
+			lkerr++;
 	    }
 	}
 	return (fp);
@@ -1112,6 +1278,29 @@ iramsav()
   else
     iram_size = 128;		/* Default is 128 (0x80) bytes */
 }
+
+/*Similar to iramsav but for xram memory*/
+VOID
+xramsav()
+{
+  unget(getnb());
+  if (ip && *ip)
+    xram_size = expr(0);	/* evaluate size expression */
+  else
+	xram_size = rflag?0x1000000:0x10000;
+}
+
+/*Similar to iramsav but for code memory*/
+VOID
+codesav()
+{
+  unget(getnb());
+  if (ip && *ip)
+    code_size = expr(0);	/* evaluate size expression */
+  else
+	code_size = rflag?0x1000000:0x10000;
+}
+
 
 /*)Function	VOID	iramcheck()
  *
@@ -1178,11 +1367,16 @@ char *usetxt[] = {
 	"  -i	Intel Hex as file[IHX]",
 	"  -s	Motorola S19 as file[S19]",
 	"  -j	Produce NoICE debug as file[NOI]",
-	"  -z   Produce SDCdb debug as file[cdb]",
+	"  -z	Produce SDCdb debug as file[cdb]",
 /*	"List:", */
 	"  -u	Update listing file(s) with link data as file(s)[.RST]",
 	"Miscellaneous:\n"
 	"  -a	[iram-size] Check for internal RAM overflow",
+	"  -v	[xram-size] Check for external RAM overflow",
+	"  -w	[code-size] Check for code overflow",
+	"  -y	Generate memory usage summary file[mem]",
+	"  -Y	Pack internal ram",
+	"  -A	[stack-size] Allocate space for stack",
 	"End:",
 	"  -e	or null line terminates input",
 	0

@@ -22,12 +22,11 @@
    what you give them.   Help stamp out software-hoarding!  
 -------------------------------------------------------------------------*/
 #include "string.h" 
-#define NULL (void *)0
 
 int memcmp (
 	void * buf1,
 	void * buf2,
-	int count
+	size_t count
 	) 
 {
 	if (!count)

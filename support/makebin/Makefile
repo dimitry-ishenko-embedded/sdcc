@@ -1,10 +1,21 @@
-BIN = makebin
-OBJ = makebin.o
+PRJDIR = ../..
+
+SOURCES = makebin.c
+BIN = $(PRJDIR)/bin/makebin$(EXEEXT)
+
+include $(PRJDIR)/Makefile.common
 
 all: $(BIN)
 
-clean:
-	rm -f $(BIN) $(OBJ) *~
+$(BIN): $(OBJ)
+	$(CC) $(LDFLAGS) -o $(BIN) $(OBJ)
 
 install: all
-	install --strip $(BIN) /usr/bin
+	mkdir -p $(bindir)
+	$(INSTALL) $(BIN) `echo $(bindir)/makebin$(EXEEXT)|sed '$(transform)'`
+	$(STRIP) `echo $(bindir)/makebin$(EXEEXT)|sed '$(transform)'`
+
+uninstall:
+	rm -f $(bindir)/makebin$(EXEEXT)
+
+include clean.mk

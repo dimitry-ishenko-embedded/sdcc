@@ -1,3 +1,5 @@
+#define __16F873
+#include "p16f873.h"
 //
 // compare3.c
 // regression testing program for comparing literals to variables
@@ -185,9 +187,34 @@ void c_abcd(void)
   if(aint0 == 0x00cd)
     failures++;
 
-  if(aint0 == 0x1234abcd)
+  if(aint0 == 0x05cd)
     failures++;
 
+  if(aint0 == 0xab05)
+    failures++;
+
+  if(aint0 == 0xab01)
+    failures++;
+
+  if(aint0 == 0x01cd)
+    failures++;
+
+  //  if(aint0 == 0x1234abcd)
+    //    failures++;
+
+}
+
+// assumes achar1 == 0
+void c_ifelse1(void)
+{
+
+  if(achar0)
+    achar0 = achar1;
+  else
+    achar0 = 0;
+
+  if(achar0)
+    failures++;
 }
 
 void
@@ -213,6 +240,13 @@ main (void)
 
   aint0 = 0xabcd;
   c_abcd();
+
+  achar0 = 0;
+  achar1 = 0;
+  c_ifelse1();
+
+  achar0 = 1;
+  c_ifelse1();
 
   success = failures;
   done ();

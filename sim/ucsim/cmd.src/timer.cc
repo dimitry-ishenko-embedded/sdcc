@@ -52,16 +52,16 @@ COMMAND_DO_WORK_UC(cl_timer_cmd)
   if (cmdline->param(0) == 0)
     {
       if (long_help)
-	con->printf("%s\n", long_help);
+	con->dd_printf("%s\n", long_help);
       else
-	con->printf("What to do?\n");
+	con->dd_printf("What to do?\n");
       return(0);
     }
   if ((s= cmdline->param(0)->get_svalue()))
     {
       if (cmdline->param(1) == 0)
 	{
-	  con->printf("Timer number is missing\n");
+	  con->dd_printf("Timer number is missing\n");
 	  return(0);
 	}
       set_ticker(uc, cmdline->param(1));
@@ -80,7 +80,7 @@ COMMAND_DO_WORK_UC(cl_timer_cmd)
       else if (strstr(s, "v") == s)
 	return(val(uc, cmdline, con));
       else
-	con->printf("Undefined timer command: \"%s\". Try \"help timer\"\n",
+	con->dd_printf("Undefined timer command: \"%s\". Try \"help timer\"\n",
 		    s);
     }
   return(0);
@@ -90,8 +90,8 @@ void
 cl_timer_cmd::set_ticker(class cl_uc *uc,
 			 class cl_cmd_arg *param)
 {
-  if ((name= param->get_svalue()))
-    ticker= uc->get_counter(name);
+  if (set_name(param->get_svalue()))
+    ticker= uc->get_counter(get_name());
   else
     if (param->get_ivalue(&what))
       ticker= uc->get_counter(what);
@@ -111,37 +111,37 @@ cl_timer_cmd::add(class cl_uc *uc,
 				 cmdline->param(3) };
   long dir= +1, in_isr= 0;
   
-  if (!name &&
+  if (!get_name() &&
       what < 1)
     {
-      con->printf("Error: Timer id must be greater then zero or a string\n");
+      con->dd_printf("Error: Timer id must be greater then zero or a string\n");
       return(DD_FALSE);
     }
   if (ticker)
     {
-      if (name)
-	con->printf("Error: Timer \"%s\" already exists\n", name);
+      if (get_name())
+	con->dd_printf("Error: Timer \"%s\" already exists\n", get_name());
       else
-	con->printf("Error: Timer %d already exists\n", what);
+	con->dd_printf("Error: Timer %d already exists\n", what);
       return(0);
     }
   if (params[2])
     if (!params[2]->get_ivalue(&dir))
       {
-	con->printf("Error: Wrong direction\n");
+	con->dd_printf("Error: Wrong direction\n");
 	return(DD_FALSE);
       }
   if (params[3])
     if (!params[3]->get_ivalue(&in_isr))
       {
-	con->printf("Error: Wrong parameter\n");
+	con->dd_printf("Error: Wrong parameter\n");
 	return(DD_FALSE);
       }
 
-  if (name)
+  if (get_name())
     {
-      ticker= new cl_ticker(dir, in_isr, name);
-      uc->add_counter(ticker, name);
+      ticker= new cl_ticker(dir, in_isr, get_name());
+      uc->add_counter(ticker, get_name());
     }
   else
     {
@@ -162,14 +162,14 @@ cl_timer_cmd::del(class cl_uc *uc,
 {
   if (!ticker)
     {
-      if (name)
-	con->printf("Timer \"%s\" does not exist\n", name);
+      if (get_name())
+	con->dd_printf("Timer \"%s\" does not exist\n", get_name());
       else
-	con->printf("Timer %d does not exist\n", what);
+	con->dd_printf("Timer %d does not exist\n", what);
       return(0);
     }
-  if (name)
-    uc->del_counter(name);
+  if (get_name())
+    uc->del_counter(get_name());
   else
     uc->del_counter(what);
 
@@ -212,10 +212,10 @@ cl_timer_cmd::run(class cl_uc *uc,
 {
   if (!ticker)
     {
-      if (name)
-	con->printf("Timer %d does not exist\n", name);
+      if (get_name())
+	con->dd_printf("Timer %d does not exist\n", get_name());
       else
-	con->printf("Timer %d does not exist\n", what);
+	con->dd_printf("Timer %d does not exist\n", what);
       return(0);
     }
   ticker->options|= TICK_RUN;
@@ -233,10 +233,10 @@ cl_timer_cmd::stop(class cl_uc *uc,
 {
   if (!ticker)
     {
-      if (name)
-	con->printf("Timer %d does not exist\n", name);
+      if (get_name())
+	con->dd_printf("Timer %d does not exist\n", get_name());
       else
-	con->printf("Timer %d does not exist\n", what);
+	con->dd_printf("Timer %d does not exist\n", what);
       return(0);
     }
   ticker->options&= ~TICK_RUN;
@@ -260,21 +260,21 @@ cl_timer_cmd::val(class cl_uc *uc,
   
   if (!ticker)
     {
-      if (name)
-	con->printf("Error: Timer %d does not exist\n", name);
+      if (get_name())
+	con->dd_printf("Error: Timer %d does not exist\n", get_name());
       else
-	con->printf("Error: Timer %d does not exist\n", what);
+	con->dd_printf("Error: Timer %d does not exist\n", what);
       return(0);
     }
   if (params[2])
     {
-      con->printf("Error: Value is missing\n");
+      con->dd_printf("Error: Value is missing\n");
       return(DD_FALSE);
     }
   long val;
   if (!params[2]->get_ivalue(&val))
     {
-      con->printf("Error: Wrong parameter\n");
+      con->dd_printf("Error: Wrong parameter\n");
       return(DD_FALSE);
     }
   ticker->ticks= val;

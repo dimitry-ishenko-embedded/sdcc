@@ -1,0 +1,9 @@
+usr/bin/s51
+usr/bin/savr
+usr/bin/shc08
+usr/bin/sdcdb
+usr/bin/serialview
+usr/share/emacs/site-lisp/sdcc-ucsim/*.el
+usr/share/doc/sdcc-ucsim/*.html
+usr/share/doc/sdcc-ucsim/*.gif
+usr/share/doc/sdcc-ucsim/*.jpg

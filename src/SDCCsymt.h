@@ -25,9 +25,46 @@
 #define  SDCCSYMT_H
 
 #define MAX_NEST_LEVEL  256
-#define SDCC_NAME_MAX    64
+#define SDCC_SYMNAME_MAX 64
+#define SDCC_NAME_MAX  3*SDCC_SYMNAME_MAX // big enough for _<func>_<var>_etc
 #include "SDCChasht.h"
+#include "SDCCglobl.h"
 
+#define INTNO_MAX 255			/* maximum allowed interrupt number */
+#define INTNO_UNSPEC (INTNO_MAX+1)	/* interrupt number unspecified */
+
+#define BITVAR_PAD -1
+
+enum {
+    TYPEOF_INT=1,
+    TYPEOF_SHORT,
+    TYPEOF_CHAR,
+    TYPEOF_LONG,
+    TYPEOF_FLOAT,
+    TYPEOF_BIT,
+    TYPEOF_BITFIELD,
+    TYPEOF_SBIT,
+    TYPEOF_SFR,
+    TYPEOF_VOID,
+    TYPEOF_STRUCT,
+    TYPEOF_ARRAY,
+    TYPEOF_FUNCTION,
+    TYPEOF_POINTER,
+    TYPEOF_FPOINTER,
+    TYPEOF_CPOINTER,
+    TYPEOF_GPOINTER,
+    TYPEOF_PPOINTER,
+    TYPEOF_IPOINTER,
+    TYPEOF_EEPPOINTER
+};
+
+// values for first byte of generic pointer.
+#define GPTYPE_NEAR	0
+#define GPTYPE_FAR	1
+#define GPTYPE_CODE	2
+#define GPTYPE_XSTACK	3
+#define GPTYPE_GPTR	4 	// Never used?
+#define GPTYPE_IDATA	5
 
 #define HASHTAB_SIZE 256
 
@@ -49,6 +86,7 @@ typedef struct structdef
     unsigned char level;	/* Nesting level         */
     struct symbol *fields;	/* pointer to fields     */
     unsigned size;		/* sizeof the table in bytes  */
+    int type;			/* STRUCT or UNION */
   }
 structdef;
 
@@ -62,6 +100,7 @@ typedef enum
     V_STRUCT,
     V_LABEL,
     V_BIT,
+    V_BITFIELD,
     V_SBIT,
     V_DOUBLE
   }
@@ -101,33 +140,24 @@ typedef struct specifier
     unsigned _static:1;		/* 1=static keyword found     */
     unsigned _extern:1;		/* 1=extern found             */
     unsigned _absadr:1;		/* absolute address specfied  */
-    unsigned _reent:1;		/* function is reentrant      */
-    unsigned _intrtn:1;		/* this is an interrupt routin */
-    unsigned _rbank:1;		/* seperate register bank     */
     unsigned _volatile:1;	/* is marked as volatile      */
     unsigned _const:1;		/* is a constant              */
-    unsigned _critical:1;	/* critical function          */
-    unsigned _naked:1;		/* naked function	      */
     unsigned _typedef:1;	/* is typedefed               */
     unsigned _isregparm:1;	/* is the first parameter     */
     unsigned _isenum:1;		/* is an enumerated type      */
-    unsigned nonbanked:1;	/* function has the nonbanked attribute */
-    unsigned banked:1;		/* function has the banked attribute */
-    unsigned _IntNo;		/* 1=Interrupt svc routine    */
-    short _regbank;		/* register bank 2b used      */
     unsigned _addr;		/* address of symbol          */
     unsigned _stack;		/* stack offset for stacked v */
     unsigned _bitStart;		/* bit start position         */
     int _bitLength;		/* bit length                 */
-
+    int argreg;  	        /* reg no for regparm 	      */
     union
       {				/* Values if constant or enum */
-	int v_int;		/* int and char values        */
-	char *v_char;		/* character string           */
-	unsigned v_uint;	/* unsigned int const value   */
-	long v_long;		/* long constant value        */
-	unsigned long v_ulong;	/* unsigned long constant val */
-	double v_float;		/* floating point constant value */
+	TYPE_WORD   v_int;	/* 2 bytes: int and char values        */
+	char       *v_char;	/*          character string           */
+	TYPE_UWORD  v_uint;	/* 2 bytes: unsigned int const value   */
+	TYPE_DWORD  v_long;	/* 4 bytes: long constant value        */
+	TYPE_UDWORD v_ulong;	/* 4 bytes: unsigned long constant val */
+	double      v_float;	/*          floating point constant value */
 	struct symbol *v_enum;	/* ptr 2 enum_list if enum==1 */
       }
     const_val;
@@ -155,26 +185,51 @@ typedef struct declarator
   {
     DECLARATOR_TYPE dcl_type;	/* POINTER,ARRAY or FUNCTION  */
     unsigned int num_elem;	/* # of elems if type==array  */
-    short ptr_const:1;		/* pointer is constant        */
-    short ptr_volatile:1;	/* pointer is volatile        */
-    struct sym_link *tspec;	/* pointer type specifier      */
+    unsigned ptr_const:1;	/* pointer is constant        */
+    unsigned ptr_volatile:1;	/* pointer is volatile        */
+    struct sym_link *tspec;	/* pointer type specifier     */
   }
 declarator;
 
-#define DECLARATOR   0
-#define SPECIFIER    1
+typedef enum {
+  DECLARATOR=1,
+  SPECIFIER
+} SYM_LINK_CLASS;
+#define DECLSPEC2TXT(select) (select==DECLARATOR?"DECLARATOR":select==SPECIFIER?"SPECIFIER":"UNKNOW")
 
 typedef struct sym_link
   {
-    unsigned class:1;		/* DECLARATOR or SPECIFIER    */
+    SYM_LINK_CLASS class;	/* DECLARATOR or SPECIFIER    */
     unsigned tdef:1;		/* current link created by    */
     /* typedef if this flag is set */
     union
       {
 	specifier s;		/* if CLASS == SPECIFIER      */
 	declarator d;		/* if CLASS == DECLARATOR     */
-      }
-    select;
+      } select;
+
+    /* function attributes */
+    struct {
+      struct value *args;       /* the defined arguments      */
+      unsigned hasVargs:1;      /* functions has varargs      */
+      unsigned calleeSaves:1;	/* functions uses callee save */
+      unsigned hasbody:1;     	/* function body defined      */
+      unsigned hasFcall:1;	/* does it call other functions */
+      unsigned reent:1;		/* function is reentrant      */
+      unsigned naked:1;		/* naked function	      */
+
+      unsigned nonbanked:1;	/* function has the nonbanked attribute */
+      unsigned banked:1;	/* function has the banked attribute */
+      unsigned critical:1;	/* critical function          */
+      unsigned intrtn:1;	/* this is an interrupt routin */
+      unsigned rbank:1;		/* seperate register bank     */
+      unsigned intno;		/* 1=Interrupt svc routine    */
+      unsigned regbank;		/* register bank 2b used      */
+      unsigned builtin;		/* is a builtin function      */
+      unsigned javaNative;    	/* is a JavaNative Function (TININative ONLY) */
+      unsigned overlay;    	/* force parameters & locals into overlay segment */
+      unsigned hasStackParms;   /* function has parameters on stack */
+    } funcAttrs;
 
     struct sym_link *next;	/* next element on the chain  */
   }
@@ -182,17 +237,14 @@ sym_link;
 
 typedef struct symbol
   {
-    char name[SDCC_NAME_MAX + 1];	/* Input Variable Name     */
+    char name[SDCC_SYMNAME_MAX + 1];	/* Input Variable Name     */
     char rname[SDCC_NAME_MAX + 1];	/* internal name           */
 
     short level;		/* declration lev,fld offset */
     short block;		/* sequential block # of defintion */
     int key;
-    unsigned fbody:1;		/* function body defined             */
     unsigned implicit:1;	/* implicit flag                     */
     unsigned undefined:1;	/* undefined variable                */
-    unsigned ret:1;		/* return statement for a function   */
-    unsigned hasVargs:1;	/* has a variable argument list      */
     unsigned _isparm:1;		/* is a parameter          */
     unsigned ismyparm:1;	/* is parameter of the function being generated */
     unsigned isitmp:1;		/* is an intermediate temp */
@@ -200,13 +252,9 @@ typedef struct symbol
     unsigned isref:1;		/* has been referenced  */
     unsigned isind:1;		/* is a induction variable */
     unsigned isinvariant:1;	/* is a loop invariant  */
-    unsigned isstrlit:1;	/* is a string literal  */
     unsigned cdef:1;		/* compiler defined symbol */
-    unsigned allocreq:1;	/* allocation is required for this variable */
     unsigned addrtaken:1;	/* address of the symbol was taken */
     unsigned isreqv:1;		/* is the register quivalent of a symbol */
-    unsigned hasFcall:1;	/* for functions does it call other functions */
-    unsigned calleeSave:1;	/* for functions uses callee save paradigm */
     unsigned udChked:1;		/* use def checking has been already done */
 
     /* following flags are used by the backend
@@ -214,6 +262,7 @@ typedef struct symbol
        if a better scheme for backend is thought of */
     unsigned isLiveFcall:1;	/* is live at or across a function call */
     unsigned isspilt:1;		/* has to be spilt */
+    unsigned spillA:1;		/* spilt be register allocator */
     unsigned remat:1;		/* can be remateriazed */
     unsigned isptr:1;		/* is a pointer */
     unsigned uptr:1;		/* used as a pointer */
@@ -228,12 +277,16 @@ typedef struct symbol
     unsigned spildir:1;		/* spilt in direct space */
     unsigned ptrreg:1;		/* this symbol assigned to a ptr reg */
     unsigned noSpilLoc:1;	/* cannot be assigned a spil location */
+    unsigned isstrlit;		/* is a string literal and it's usage count  */
     unsigned accuse;		/* can be left in the accumulator
 				   On the Z80 accuse is devided into
 				   ACCUSE_A and ACCUSE_HL as the idea
 				   is quite similar.
 				 */
-
+    unsigned dptr;		/* 8051 variants with multiple DPTRS
+				   currently implemented in DS390 only
+				*/
+    int allocreq ;		/* allocation is required for this variable */
     int stack;			/* offset on stack      */
     int xstack;			/* offset on xternal stack */
     short nRegs;		/* number of registers required */
@@ -244,6 +297,7 @@ typedef struct symbol
     struct iCode *fuse;		/* furthest use */
     struct iCode *rematiCode;	/* rematerialse with which instruction */
     struct operand *reqv;	/* register equivalent of a local variable */
+    struct symbol *prereqv;	/* symbol before register equiv. substituion */
     union
       {
 	struct symbol *spillLoc;	/* register spil location */
@@ -254,10 +308,10 @@ typedef struct symbol
     unsigned offset;		/* offset from top if struct */
 
     int lineDef;		/* defined line number        */
+    char *fileDef;		/* defined filename           */
     int lastLine;		/* for functions the last line */
     struct sym_link *type;	/* 1st link to declator chain */
     struct sym_link *etype;	/* last link to declarator chn */
-    struct value *args;		/* arguments if function      */
     struct symbol *next;	/* crosslink to next symbol   */
     struct symbol *localof;	/* local variable of which function */
     struct initList *ival;	/* ptr to initializer if any  */
@@ -268,51 +322,93 @@ typedef struct symbol
     int liveTo;			/* live to sequence number */
     int used;			/* no. of times this was used */
     int recvSize;		/* size of first argument  */
+    struct bitVect *clashes;    /* overlaps with what other symbols */
   }
 symbol;
 
+extern sym_link *validateLink(sym_link 	*l, 
+			       const char 	*macro,
+			       const char 	*args,
+			       const char 	select,
+			       const char 	*file, 
+			       unsigned 	line);
 /* Easy Access Macros */
-#define DCL_TYPE(l)  l->select.d.dcl_type
-#define DCL_ELEM(l)  l->select.d.num_elem
-#define DCL_PTR_CONST(l) l->select.d.ptr_const
-#define DCL_PTR_VOLATILE(l) l->select.d.ptr_volatile
-#define DCL_TSPEC(l) l->select.d.tspec
-#define SPEC_NOUN(x) x->select.s.noun
-#define SPEC_LONG(x) x->select.s._long
-#define SPEC_USIGN(x) x->select.s._unsigned
-#define SPEC_SCLS(x) x->select.s.sclass
-#define SPEC_ENUM(x) x->select.s._isenum
-#define SPEC_OCLS(x) x->select.s.oclass
-#define SPEC_STAT(x) x->select.s._static
-#define SPEC_EXTR(x) x->select.s._extern
-#define SPEC_CODE(x) x->select.s._codesg
-#define SPEC_RENT(x) x->select.s._reent
-#define SPEC_INTN(x) x->select.s._IntNo
-#define SPEC_ABSA(x) x->select.s._absadr
-#define SPEC_BANK(x) x->select.s._regbank
-#define SPEC_ADDR(x) x->select.s._addr
-#define SPEC_STAK(x) x->select.s._stack
-#define SPEC_CVAL(x) x->select.s.const_val
-#define SPEC_BSTR(x) x->select.s._bitStart
-#define SPEC_BLEN(x) x->select.s._bitLength
+#define DCL_TYPE(l)  validateLink(l, "DCL_TYPE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.dcl_type
+#define DCL_ELEM(l)  validateLink(l, "DCL_ELEM", #l, DECLARATOR, __FILE__, __LINE__)->select.d.num_elem
+#define DCL_PTR_CONST(l) validateLink(l, "DCL_PTR_CONST", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_const
+#define DCL_PTR_VOLATILE(l) validateLink(l, "DCL_PTR_VOLATILE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_volatile
+#define DCL_TSPEC(l) validateLink(l, "DCL_TSPEC", #l, DECLARATOR, __FILE__, __LINE__)->select.d.tspec
+
+#define FUNC_DEBUG //assert(IS_FUNC(x));
+#define FUNC_HASVARARGS(x) (x->funcAttrs.hasVargs)
+#define IFFUNC_HASVARARGS(x) (IS_FUNC(x) && FUNC_HASVARARGS(x))
+#define FUNC_ARGS(x) (x->funcAttrs.args)
+#define IFFUNC_ARGS(x) (IS_FUNC(x) && FUNC_ARGS(x))
+#define FUNC_HASFCALL(x) (x->funcAttrs.hasFcall)
+#define IFFUNC_HASFCALL(x) (IS_FUNC(x) && FUNC_HASFCALL(x))
+#define FUNC_HASBODY(x) (x->funcAttrs.hasbody)
+#define IFFUNC_HASBODY(x) (IS_FUNC(x) && FUNC_HASBODY(x))
+#define FUNC_CALLEESAVES(x) (x->funcAttrs.calleeSaves)
+#define IFFUNC_CALLEESAVES(x) (IS_FUNC(x) && FUNC_CALLEESAVES(x))
+#define FUNC_ISISR(x) (x->funcAttrs.intrtn)
+#define IFFUNC_ISISR(x) (IS_FUNC(x) && FUNC_ISISR(x))
+#define IFFUNC_RBANK(x) (IS_FUNC(x) && FUNC_RBANK(x))
+#define FUNC_INTNO(x) (x->funcAttrs.intno)
+#define FUNC_REGBANK(x) (x->funcAttrs.regbank)
+#define FUNC_HASSTACKPARM(x) (x->funcAttrs.hasStackParms)
+
+#define FUNC_ISREENT(x) (x->funcAttrs.reent)
+#define IFFUNC_ISREENT(x) (IS_FUNC(x) && FUNC_ISREENT(x))
+#define FUNC_ISNAKED(x) (x->funcAttrs.naked)
+#define IFFUNC_ISNAKED(x) (IS_FUNC(x) && FUNC_ISNAKED(x))
+#define FUNC_NONBANKED(x) (x->funcAttrs.nonbanked)
+#define IFFUNC_NONBANKED(x) (IS_FUNC(x) && FUNC_NONBANKED(x))
+#define FUNC_BANKED(x) (x->funcAttrs.banked)
+#define IFFUNC_BANKED(x) (IS_FUNC(x) && FUNC_BANKED(x))
+#define FUNC_ISCRITICAL(x) (x->funcAttrs.critical)
+#define IFFUNC_ISCRITICAL(x) (IS_FUNC(x) && FUNC_ISCRITICAL(x))
+#define FUNC_ISBUILTIN(x) (x->funcAttrs.builtin)
+#define IFFUNC_ISBUILTIN(x) (IS_FUNC(x) && FUNC_ISBUILTIN(x))
+#define FUNC_ISJAVANATIVE(x) (x->funcAttrs.javaNative)
+#define IFFUNC_ISJAVANATIVE(x) (IS_FUNC(x) && FUNC_ISJAVANATIVE(x))
+#define FUNC_ISOVERLAY(x) (x->funcAttrs.overlay)
+#define IFFUNC_ISOVERLAY(x) (IS_FUNC(x) && FUNC_ISOVERLAY(x))
+
+#define IFFUNC_ISBANKEDCALL(x) (!IFFUNC_NONBANKED(x) && \
+  (options.model == MODEL_LARGE || \
+   options.model == MODEL_MEDIUM || \
+  IFFUNC_BANKED(x)))
+
+#define SPEC_NOUN(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.noun
+#define SPEC_LONG(x) validateLink(x, "SPEC_LONG", #x, SPECIFIER, __FILE__, __LINE__)->select.s._long
+#define SPEC_SHORT(x) validateLink(x, "SPEC_LONG", #x, SPECIFIER, __FILE__, __LINE__)->select.s._short
+#define SPEC_USIGN(x) validateLink(x, "SPEC_USIGN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._unsigned
+#define SPEC_SCLS(x) validateLink(x, "SPEC_SCLS", #x, SPECIFIER, __FILE__, __LINE__)->select.s.sclass
+#define SPEC_ENUM(x) validateLink(x, "SPEC_ENUM", #x, SPECIFIER, __FILE__, __LINE__)->select.s._isenum
+#define SPEC_OCLS(x) validateLink(x, "SPEC_OCLS", #x, SPECIFIER, __FILE__, __LINE__)->select.s.oclass
+#define SPEC_STAT(x) validateLink(x, "SPEC_STAT", #x, SPECIFIER, __FILE__, __LINE__)->select.s._static
+#define SPEC_EXTR(x) validateLink(x, "SPEC_EXTR", #x, SPECIFIER, __FILE__, __LINE__)->select.s._extern
+#define SPEC_CODE(x) validateLink(x, "SPEC_CODE", #x, SPECIFIER, __FILE__, __LINE__)->select.s._codesg
+#define SPEC_ABSA(x) validateLink(x, "SPEC_ABSA", #x, SPECIFIER, __FILE__, __LINE__)->select.s._absadr
+#define SPEC_BANK(x) validateLink(x, "SPEC_BANK", #x, SPECIFIER, __FILE__, __LINE__)->select.s._regbank
+#define SPEC_ADDR(x) validateLink(x, "SPEC_ADDR", #x, SPECIFIER, __FILE__, __LINE__)->select.s._addr
+#define SPEC_STAK(x) validateLink(x, "SPEC_STAK", #x, SPECIFIER, __FILE__, __LINE__)->select.s._stack
+#define SPEC_CVAL(x) validateLink(x, "SPEC_CVAL", #x, SPECIFIER, __FILE__, __LINE__)->select.s.const_val
+#define SPEC_BSTR(x) validateLink(x, "SPEC_BSTR", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitStart
+#define SPEC_BLEN(x) validateLink(x, "SPEC_BLEN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitLength
 
 /* Sleaze: SPEC_ISR_SAVED_BANKS is only used on 
  * function type symbols, which obviously cannot
  * be of BIT type. Therefore, we recycle the 
  * _bitStart field instead of defining a new field.
  */
-#define SPEC_ISR_SAVED_BANKS(x) x->select.s._bitStart
-#define SPEC_BNKF(x) x->select.s._rbank
-#define SPEC_INTRTN(x) x->select.s._intrtn
-#define SPEC_CRTCL(x) x->select.s._critical
-#define SPEC_NAKED(x) x->select.s._naked
-#define SPEC_VOLATILE(x) x->select.s._volatile
-#define SPEC_CONST(x) x->select.s._const
-#define SPEC_STRUCT(x) x->select.s.v_struct
-#define SPEC_TYPEDEF(x) x->select.s._typedef
-#define SPEC_REGPARM(x) x->select.s._isregparm
-#define SPEC_NONBANKED(x) x->select.s.nonbanked
-#define SPEC_BANKED(x) x->select.s.banked
+#define SPEC_ISR_SAVED_BANKS(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitStart
+#define SPEC_VOLATILE(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._volatile
+#define SPEC_CONST(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._const
+#define SPEC_STRUCT(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.v_struct
+#define SPEC_TYPEDEF(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._typedef
+#define SPEC_REGPARM(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._isregparm
+#define SPEC_ARGREG(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.argreg
 
 /* type check macros */
 #define IS_DECL(x)   ( x && x->class == DECLARATOR	)
@@ -333,8 +429,12 @@ symbol;
 #define IS_GENPTR(x) (IS_DECL(x) && DCL_TYPE(x) == GPOINTER)
 #define IS_FUNC(x)   (IS_DECL(x) && DCL_TYPE(x) == FUNCTION)
 #define IS_LONG(x)   (IS_SPEC(x) && x->select.s._long)
+#define IS_UNSIGNED(x) (IS_SPEC(x) && x->select.s._unsigned)
 #define IS_TYPEDEF(x)(IS_SPEC(x) && x->select.s._typedef)
-#define IS_CONSTANT(x)  (IS_SPEC(x) && ( x->select.s._const == 1))
+#define IS_CONSTANT(x)  (!x ? 0 : \
+                           IS_SPEC(x) ? \
+                           x->select.s._const : \
+                           x->select.d.ptr_const)
 #define IS_STRUCT(x) (IS_SPEC(x) && x->select.s.noun == V_STRUCT)
 #define IS_ABSOLUTE(x)  (IS_SPEC(x) && x->select.s._absadr )
 #define IS_REGISTER(x)  (IS_SPEC(x) && SPEC_SCLS(x) == S_REGISTER)
@@ -344,23 +444,25 @@ symbol;
 #define IS_VOID(x)   (IS_SPEC(x) && x->select.s.noun == V_VOID)
 #define IS_CHAR(x)   (IS_SPEC(x) && x->select.s.noun == V_CHAR)
 #define IS_EXTERN(x)	(IS_SPEC(x) && x->select.s._extern)
-#define IS_VOLATILE(x)  (IS_SPEC(x) && x->select.s._volatile )
+#define IS_VOLATILE(x)  (!x ? 0 : \
+			   IS_SPEC(x) ? \
+			   x->select.s._volatile : \
+			   x->select.d.ptr_volatile)
 #define IS_INTEGRAL(x) (IS_SPEC(x) && (x->select.s.noun == V_INT ||  \
                                        x->select.s.noun == V_CHAR || \
+                                       x->select.s.noun == V_BITFIELD || \
                                        x->select.s.noun == V_BIT ||  \
                                        x->select.s.noun == V_SBIT ))
-#define IS_BITFIELD(x) (IS_SPEC(x) && (x->select.s.noun == V_BIT))
-#define IS_BITVAR(x) (IS_SPEC(x) && (x->select.s.noun  == V_BIT ||   \
+#define IS_BITFIELD(x) (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD))
+#define IS_BITVAR(x) (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD || \
+                                     x->select.s.noun  == V_BIT ||   \
                                      x->select.s.noun == V_SBIT ))
 #define IS_FLOAT(x)  (IS_SPEC(x) && x->select.s.noun == V_FLOAT)
 #define IS_ARITHMETIC(x) (IS_INTEGRAL(x) || IS_FLOAT(x))
 #define IS_AGGREGATE(x) (IS_ARRAY(x) || IS_STRUCT(x))
 #define IS_LITERAL(x)   (IS_SPEC(x)  && x->select.s.sclass == S_LITERAL)
-#define IS_ISR(x)	(IS_SPEC(x)  && SPEC_INTRTN(x))
+#define IS_CODE(x)      (IS_SPEC(x)  && SPEC_SCLS(x) == S_CODE)
 #define IS_REGPARM(x)   (IS_SPEC(x) && SPEC_REGPARM(x))
-#define IS_NONBANKED(x) (IS_SPEC(x) && SPEC_NONBANKED(x))
-#define IS_BANKED(x)	(IS_SPEC(x) && SPEC_BANKED(x))
-#define IS_BANKEDCALL(x) (IS_SPEC(x) && !SPEC_NONBANKED(x) && !SPEC_STAT(x) && (options.model == MODEL_LARGE || options.model == MODEL_MEDIUM || SPEC_BANKED(x)))
 
 /* forward declaration for the global vars */
 extern bucket *SymbolTab[];
@@ -403,12 +505,11 @@ extern sym_link *floatType;
 /* forward definitions for the symbol table related functions */
 void initSymt ();
 symbol *newSymbol (char *, int);
-sym_link *newLink ();
+sym_link *newLink (SYM_LINK_CLASS);
 sym_link *newFloatLink ();
 structdef *newStruct (char *);
 void addDecl (symbol *, int, sym_link *);
 sym_link *mergeSpec (sym_link *, sym_link *, char *name);
-sym_link *cloneSpec (sym_link *);
 symbol *reverseSyms (symbol *);
 sym_link *reverseLink (sym_link *);
 symbol *copySymbol (symbol *);
@@ -432,23 +533,24 @@ sym_link *newIntLink ();
 sym_link *newCharLink ();
 sym_link *newLongLink ();
 int compareType (sym_link *, sym_link *);
-int checkFunction (symbol *);
+int compareTypeExact (sym_link *, sym_link *, int);
+int checkFunction (symbol *, symbol *);
 void cleanUpLevel (bucket **, int);
 void cleanUpBlock (bucket **, int);
 int funcInChain (sym_link *);
 void addSymChain (symbol *);
-sym_link *structElemType (sym_link *, value *, value **);
+sym_link *structElemType (sym_link *, value *);
 symbol *getStructElement (structdef *, symbol *);
-sym_link *computeType (sym_link *, sym_link *);
-void processFuncArgs (symbol *, int);
+sym_link *computeType (sym_link *, sym_link *, bool promoteCharToInt);
+void processFuncArgs (symbol *);
 int isSymbolEqual (symbol *, symbol *);
-int powof2 (unsigned long);
+int powof2 (TYPE_UDWORD);
 void printTypeChain (sym_link *, FILE *);
+void printTypeChainRaw (sym_link *, FILE *);
 void initCSupport ();
+void initBuiltIns ();
 void pointerTypes (sym_link *, sym_link *);
-void cdbTypeInfo (sym_link *, FILE *);
-void cdbSymbol (symbol *, FILE *, int, int);
-void cdbStructBlock (int, FILE *);
+void cdbStructBlock (int);
 void initHashT ();
 bucket *newBucket ();
 void addSym (bucket **, void *, char *, int, int, int checkType);
@@ -458,7 +560,12 @@ void *findSymWithLevel (bucket **, struct symbol *);
 void *findSymWithBlock (bucket **, struct symbol *, int);
 void changePointer (symbol * sym);
 void checkTypeSanity(sym_link *etype, char *name);
-/* noun strings */
-extern char *nounName(sym_link *);
+sym_link *typeFromStr (char *) ;
+STORAGE_CLASS sclsFromPtr(sym_link *ptr);
+sym_link *newEnumType (symbol *);
+
+
+extern char *nounName(sym_link *); /* noun strings */
+extern void printFromToType (sym_link *, sym_link *);
 
 #endif

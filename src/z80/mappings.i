@@ -15,9 +15,19 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     { "enter", "" },
     { "enterx", 
       "lda sp,-%d(sp)" },
+    { "enterxl",
+                "ld hl,#-%d\n"
+                "\tadd\thl,sp\n"
+                "\tld\tsp,hl"
+    },
     { "leave", ""
     },
     { "leavex", "lda sp,%d(sp)"
+    },
+    { "leavexl",
+                "ld hl,#%d\n"
+                "\tadd\thl,sp\n"
+                "\tld\tsp,hl"
     },
     { "pusha", 
       "push af\n"
@@ -70,14 +80,14 @@ static const ASM_MAPPING _asxxxx_z80_mapping[] = {
 		"\tadd\tix,sp\n"
 		"\tld\thl,#-%d\n"
 		"\tadd\thl,sp\n"
-		"\tld\tsp,hl\n" 
+		"\tld\tsp,hl" 
         },
     { "leave", 
-		"pop\tix\n"
+		"pop\tix"
     },
     { "leavex", 
 		"ld sp,ix\n"
-		"\tpop\tix\n"
+		"\tpop\tix"
     },
     { "pusha", 
       		"push af\n"
@@ -99,6 +109,7 @@ static const ASM_MAPPING _asxxxx_z80_mapping[] = {
 
 static const ASM_MAPPING _rgbds_mapping[] = {
     { "global", "GLOBAL %s" },
+    { "extern", "GLOBAL %s" },
     { "slabeldef", "%s:" },
     { "labeldef", "%s:" },
     { "tlabeldef", ".l%05d:" },
@@ -108,8 +119,7 @@ static const ASM_MAPPING _rgbds_mapping[] = {
       "\t; We have to define these here as sdcc dosnt make them global by default\n"
       "\tGLOBAL __mulschar\n"
       "\tGLOBAL __muluchar\n"
-      "\tGLOBAL __mulsint\n"
-      "\tGLOBAL __muluint\n"
+      "\tGLOBAL __mulint\n"
       "\tGLOBAL __divschar\n"
       "\tGLOBAL __divuchar\n"
       "\tGLOBAL __divsint\n"
@@ -118,7 +128,7 @@ static const ASM_MAPPING _rgbds_mapping[] = {
       "\tGLOBAL __moduchar\n"
       "\tGLOBAL __modsint\n"
       "\tGLOBAL __moduint\n"
-      "\tGLOBAL __mulslong\n"  
+      "\tGLOBAL __mullong\n"  
       "\tGLOBAL __modslong\n"  
       "\tGLOBAL __divslong\n"  
       "\tGLOBAL banked_call\n"
@@ -182,6 +192,7 @@ static const ASM_MAPPING _rgbds_gb_mapping[] = {
 
 static const ASM_MAPPING _isas_mapping[] = {
     { "global", "GLOBAL %s" },
+    { "extern", "GLOBAL %s" },
     { "slabeldef", "%s:" },
     { "labeldef", "%s:" },
     { "tlabeldef", "?l%05d:" },
@@ -193,11 +204,10 @@ static const ASM_MAPPING _isas_mapping[] = {
       "\tCAPSOFF      ; Case sensitive\n"
       "\tISDMG        ; Gameboy mode\n"
       "_CODE\tGROUP\n"
-      "\t; We have to define these here as sdcc dosnt make them global by default\n"
+      "\t; We have to define these here as sdcc doesnt make them global by default\n"
       "\tGLOBAL __mulschar\n"
       "\tGLOBAL __muluchar\n"
-      "\tGLOBAL __mulsint\n"
-      "\tGLOBAL __muluint\n"
+      "\tGLOBAL __mulint\n"
       "\tGLOBAL __divschar\n"
       "\tGLOBAL __divuchar\n"
       "\tGLOBAL __divsint\n"
@@ -264,6 +274,116 @@ static const ASM_MAPPING _isas_gb_mapping[] = {
     { NULL, NULL }
 };
 
+static const ASM_MAPPING _z80asm_mapping[] = {
+    { "global", "XDEF %s" },
+    { "extern", "XREF %s" },
+    { "slabeldef", "\n.%s" },
+    { "labeldef", "\n.%s" },
+    { "tlabeldef", "\n.l%N%05d" },
+    { "tlabel", "l%N%05d" },
+    { "fileprelude", 
+        "; Generated using the z80asm/z88 tokens.\n"
+        "\tXREF __muluchar_rrx_s\n"
+        "\tXREF __mulschar_rrx_s\n"
+        "\tXREF __mulint_rrx_s\n"
+        "\tXREF __mullong_rrx_s\n"
+        "\tXREF __divuchar_rrx_s\n"
+        "\tXREF __divschar_rrx_s\n"
+        "\tXREF __divsint_rrx_s\n"
+        "\tXREF __divuint_rrx_s\n"
+        "\tXREF __divulong_rrx_s\n"
+        "\tXREF __divslong_rrx_s\n"
+        "\tXREF __rrulong_rrx_s\n"
+        "\tXREF __rrslong_rrx_s\n"
+        "\tXREF __rlulong_rrx_s\n"
+        "\tXREF __rlslong_rrx_s\n"
+    },
+    { "functionheader", 
+      "; ---------------------------------\n"
+      "; Function %s\n"
+      "; ---------------------------------"
+    },
+    { "functionlabeldef", ".%s" },
+    { "zero", "$00" },
+    { "one", "$01" },
+    { "ascii", "DEFM \"%s\"" },
+    { "ds", "DEFS %d" },
+    { "db", "DEFB" },
+    { "dbs", "DEFB %s" },
+    { "dw", "DEFW" },
+    { "dws", "DEFB %s" },
+    { "immed", "" },
+    { "constbyte", "$%02X" },
+    { "constword", "$%04X" },
+    { "immedword", "$%04X" },
+    { "immedbyte", "$%02X" },
+    { "hashedstr", "%s" },
+    { "lsbimmeds", "%s & $FF" },
+    { "msbimmeds", "%s / 256" },
+
+    { "bankimmeds", "BANK(%s)" },
+    { "module", "MODULE %s" },
+    { "area", "; Area  %s" },
+    { "areadata", "; Aread BSS" },
+    { "areacode", "; Area CODE" }, 
+    { "areahome", "; Area HOME" },
+    { NULL, NULL }
+};
+
+static const ASM_MAPPING _z80asm_z80_mapping[] = {
+    { "*ixx", "(ix%+d)" },
+    { "*iyx", "(iy%+d)" },
+    { "*hl", "(hl)" },
+    { "di", "di" },
+    { "ldahli", 
+		"ld a,(hl)\n"
+		"\tinc\thl" },
+    { "ldahlsp", 
+		"ld hl,%d\n"
+		"\tadd\thl,sp" },
+    { "ldaspsp", 
+		"ld hl,%d\n"
+		"\tadd\thl,sp\n"
+		"\tld\tsp,hl" },
+    { "*pair", "(%s)" },
+    { "shortjp", "jp" },
+    { "enter", 
+		"push\tix\n"
+		"\tld\tix,0\n"
+		"\tadd\tix,sp" },
+    { "enterx", 
+		"push\tix\n"
+		"\tld\tix,0\n"
+		"\tadd\tix,sp\n"
+		"\tld\thl,-%d\n"
+		"\tadd\thl,sp\n"
+		"\tld\tsp,hl" 
+        },
+    { "leave", 
+		"pop\tix"
+    },
+    { "leavex", 
+		"ld sp,ix\n"
+		"\tpop\tix"
+    },
+    { "pusha", 
+      		"push af\n"
+      		"\tpush\tbc\n"
+      		"\tpush\tde\n"
+      		"\tpush\thl"
+    },
+    { "adjustsp", "lda sp,(sp%+d)" },
+    { "profileenter",
+                "ld a,3\n"
+                "\trst\t$08"
+    },
+    { "profileexit",
+                "ld a,4\n"
+                "\trst\t$08"
+    },
+    { NULL, NULL }
+};
+
 static const ASM_MAPPINGS _isas = {
     NULL,
     _isas_mapping
@@ -292,4 +412,14 @@ const ASM_MAPPINGS _asxxxx_gb = {
 const ASM_MAPPINGS _asxxxx_z80 = {
     &asm_asxxxx_mapping,
     _asxxxx_z80_mapping
+};
+
+static const ASM_MAPPINGS _z80asm = {
+    NULL,
+    _z80asm_mapping
+};
+
+const ASM_MAPPINGS _z80asm_z80 = {
+    &_z80asm,
+    _z80asm_z80_mapping
 };

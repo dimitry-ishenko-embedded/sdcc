@@ -509,6 +509,8 @@ cpp_create_reader (table, lang)
   CPP_OPTION (pfile, show_column) = 1;
   CPP_OPTION (pfile, tabstop) = 8;
   CPP_OPTION (pfile, operator_names) = 1;
+  /* SDCC _asm specific */
+  CPP_OPTION (pfile, preproc_asm) = 1;
 
   CPP_OPTION (pfile, pending) =
     (struct cpp_pending *) xcalloc (1, sizeof (struct cpp_pending));
@@ -558,6 +560,8 @@ cpp_create_reader (table, lang)
   s->n__CHAR_UNSIGNED__ = cpp_lookup (pfile, DSC("__CHAR_UNSIGNED__"));
   s->n__VA_ARGS__       = cpp_lookup (pfile, DSC("__VA_ARGS__"));
   s->n__VA_ARGS__->flags |= NODE_DIAGNOSTIC;
+  /* SDCC _asm specific */
+  s->n__asm             = cpp_lookup (pfile, DSC("_asm"));
 
   return pfile;
 }

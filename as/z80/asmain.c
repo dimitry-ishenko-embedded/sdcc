@@ -160,6 +160,21 @@ main(int argc, char **argv)
 	register int c, i;
 	struct area *ap;
 
+	/* Check to make sure there are the right number of filenames */
+	/* before openning any of them */
+#ifdef SDK
+	inpfil = -2;
+#else /* SDK */
+	inpfil = -1;
+#endif /* SDK */
+	for (i=1; i<argc; ++i) {
+		p = argv[i];
+		if (*p != '-')
+			inpfil++;
+	}
+	if (inpfil < 0)
+		usage();
+
 #ifdef SDK
 	inpfil = -2;
 #else /* SDK */
@@ -839,7 +854,7 @@ loop:
 		break;
 
 	case S_MODUL:
-		getst(id, -1);
+	        getst(id, getnb()); // a module can start with a digit
 		if (pass == 0) {
 			if (module[0]) {
 				err('m');
@@ -849,6 +864,19 @@ loop:
 		}
 		lmode = SLIST;
 		break;
+
+    case S_OPTSDCC:
+		p = optsdcc;
+		if ((c = getnb()) != 0) {
+			do {
+				if (p < &optsdcc[NINPUT-1])
+					*p++ = c;
+			} while ((c = get()) != 0);
+		}
+		*p = 0;
+		unget(c);
+		lmode = SLIST;
+        break;
 
 	case S_GLOBL:
 		do {

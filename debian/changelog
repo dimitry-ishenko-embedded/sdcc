@@ -1,3 +1,157 @@
+sdcc (2.4.0-3) unstable; urgency=low
+
+  * Fixed FTBFS with gcc-3.4. Thanks to Andreas Jochens for the patch (closes:
+    bug#280878).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed,  1 Dec 2004 19:07:17 +0100
+
+sdcc (2.4.0-2) unstable; urgency=low
+
+  * Fixed debian/rules to not build documentation on binary-only target.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed,  3 Mar 2004 23:04:37 +0100
+
+sdcc (2.4.0-1) unstable; urgency=low
+
+  * New upstream version.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu, 26 Feb 2004 12:36:01 +0100
+
+sdcc (2.3.8+cvs20040218-1) unstable; urgency=low
+
+  * New CVS version.
+    - Fix build error with the TININative target (closes: bug#233277).
+  * Split out libraries in a separate package (closes: bug#233440).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed, 18 Feb 2004 18:10:27 +0100
+
+sdcc (2.3.5+cvs20031021-2) unstable; urgency=low
+
+  * Switched from LaTeX2HTML to HeVeA to generate the documentation
+    (closes: bug#221349).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed, 19 Nov 2003 21:33:06 +0100
+
+sdcc (2.3.5+cvs20031021-1) unstable; urgency=low
+
+  * New CVS version.
+  * Build back against flex (instead of flex-old) as flex (>= 2.5.31) support
+    have been re-added.
+  * Updated Policy standard compliance to 3.6.1 (no changes).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Tue, 21 Oct 2003 11:47:08 +0200
+
+sdcc (2.3.5+cvs20031017-1) unstable; urgency=low
+
+  * New CVS version:
+    - Fix possible data loss in az-80 (closes: bug#216219).
+  * Built against flex-old as the upstream authors have removed the
+    modifications done to support flex (>= 2.5.31).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 18 Oct 2003 14:28:18 +0200
+
+sdcc (2.3.5+cvs20030901-1) unstable; urgency=low
+
+  * New CVS version.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon,  1 Sep 2003 18:55:05 +0200
+
+sdcc (2.3.5+cvs20030727-1) unstable; urgency=low
+
+  * New CVS version.
+  * Build-Depends on g++-3.2 (>= 3.2.3-7) on Sparc. I hope it would build 
+    correctly now.
+  * Updated Policy standard compliance to 3.6.0.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 27 Jul 2003 21:32:47 +0200
+
+sdcc (2.3.5+cvs20030710-1) unstable; urgency=low
+
+  * New CVS version.
+  * Updated manpages (closes: bug#200762).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu, 10 Jul 2003 22:00:52 +0200
+
+sdcc (2.3.5+cvs20030704-1) unstable; urgency=low
+
+  * New CVS version.
+  * Added patch from Nick Craig-Wood <ncw@alphawave.net> to a bug in the
+    vprintf library implementation.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat,  5 Jul 2003 00:01:25 +0200
+
+sdcc (2.3.5+cvs20030624-1) unstable; urgency=low
+
+  * New version from CVS. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Tue, 24 Jun 2003 09:31:10 +0200
+
+sdcc (2.3.5+cvs20030521-2) unstable; urgency=low
+
+  * Corrected path to the documentation in the manpages.
+  * Also provide doc for aslink (closes: bug#198376).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 23 Jun 2003 00:08:17 +0200
+
+sdcc (2.3.5+cvs20030521-1) unstable; urgency=low
+
+  * Version 2.3.5 from CVS.
+  * Updated Policy standard compliance to 3.5.10.
+  * Split out documentation into sdcc-doc package.
+    For the ftp-master:
+     1. the documentation is built from LyX files and could take very
+        long time to build on slowest architectures ;
+     2. the size of the unpacked documentation is 964 kB.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed, 21 May 2003 01:24:18 +0200
+
+sdcc (2.3.3+cvs20030131-4) unstable; urgency=low
+
+  * Fixed SDCC.lex to make it usable with the new flex (closes: bug#191200).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed, 14 May 2003 02:11:53 +0200
+
+sdcc (2.3.3+cvs20030131-3) unstable; urgency=low
+
+  * More fixes for 64-bit archs.
+  * Depends on ${misc:Depends}.
+  * Uses debian/compat instead of DH_COMPAT.
+  * Uses dh_install instead of dh_movefiles. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed,  5 Mar 2003 00:21:49 +0100
+
+sdcc (2.3.3+cvs20030131-2) unstable; urgency=low
+
+  * Fixed an optimization on 64-bit platforms (closes: bug#182457).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat,  1 Mar 2003 00:46:26 +0100
+
+sdcc (2.3.3+cvs20030131-1) unstable; urgency=low
+
+  * Version 2.3.3 from CVS as the authors advice to use.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Tue, 25 Feb 2003 10:55:57 +0100
+
+sdcc (2.3.0-13) unstable; urgency=low
+
+  * Rebuilt with gcc-3.2. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed,  8 Jan 2003 00:22:40 +0100
+
+sdcc (2.3.0-12) unstable; urgency=low
+
+  * Fixed some errors in src/SDCC.y (closes: bug#166598).
+  * Updated Policy standard compliance to 3.5.7
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 28 Oct 2002 15:58:31 +0100
+
+sdcc (2.3.0-11) unstable; urgency=low
+
+  * Fixed case sensitivity in the assembler. Thanks to Adam Majer for 
+    noticing the problem. (closes: Bug#151032)
+
+ -- Aurelien Jarno <aurel32@debian.org>  Fri,  5 Jul 2002 02:27:25 +0200
+
 sdcc (2.3.0-10) unstable; urgency=low
 
   * Fixed description. (closes: Bug#142390) 
@@ -6,7 +160,7 @@ sdcc (2.3.0-10) unstable; urgency=low
 
 sdcc (2.3.0-9) unstable; urgency=low
 
-  * Changed my maintainer e-mail address to <aurel32@debian.org>.  :)
+  * Changed my maintainer e-mail address to <aurel32@debian.org>. :)
 
  -- Aurelien Jarno <aurel32@debian.org>  Mon, 18 Mar 2002 21:42:09 +0100
 
@@ -46,9 +200,9 @@ sdcc (2.3.0-4) unstable; urgency=low
  
 sdcc (2.3.0-3) unstable; urgency=low
 
-  * Merging sdcc-doc with sdcc and sdcc-ucsim
+  * Merged sdcc-doc with sdcc and sdcc-ucsim
   * Documentation is now registered with install-docs.
-  * Create sdccman.css et test_suite_spec.css since they are not include in the
+  * Create sdccman.css and test_suite_spec.css since they are not include in the
     upstream file.
   * INSTALL.TXT removed from documentation.
 

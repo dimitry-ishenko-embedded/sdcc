@@ -135,7 +135,9 @@ PORT tlcs900h_port =
   TARGET_ID_TLCS900H,
   "tlcs900h",
   "Toshiba TLCS-900H",		/* Target name */
+  NULL,
   {
+    glue,
     TRUE,			/* Emit glue around main */
     MODEL_SMALL,
     MODEL_SMALL
@@ -144,11 +146,14 @@ PORT tlcs900h_port =
     _asmCmd,
     NULL,
     NULL,
+    NULL,
     0,
-    NULL
+    NULL,
+    NULL			/* no do_assemble function */
   },
   {
     _linkCmd,
+    NULL,
     NULL,
     ".o"
   },
@@ -172,6 +177,8 @@ PORT tlcs900h_port =
     "OSEG    (OVR,DATA)",
     "GSFINAL (CODE)",
     "HOME	 (CODE)",
+    NULL, // xidata
+    NULL, // xinit
     NULL,
     NULL,
     1
@@ -192,9 +199,12 @@ PORT tlcs900h_port =
   _tlcs900h_getRegName,
   _tlcs900h_keywords,
   _tlcs900h_genAssemblerPreamble,
+  NULL,				/* no genAssemblerEnd */
   _tlcs900h_genIVT,
+  0, // _tlcs900h_genXINIT
   _tlcs900h_reset_regparm,
   _tlcs900h_regparm,
+  NULL,
   NULL,
   NULL,
   FALSE,
@@ -205,5 +215,10 @@ PORT tlcs900h_port =
   1,				/* transform != to !(a == b) */
   0,				/* leave == */
   FALSE,                        /* No array initializer support. */	
+  0,                            /* no CSE cost estimation yet */
+  NULL, 			/* no builtin functions */
+  GPOINTER,			/* treat unqualified pointers as "generic" pointers */
+  1,				/* reset labelKey to 1 */
+  1,				/* globals & local static allowed */
   PORT_MAGIC
 };

@@ -5,11 +5,11 @@ import sys, re, tempfile, os
 
 # Globals
 # Directory that the generated files should be placed into
-outdir = 'gen'
+outdir = sys.argv[2]
 
 # Start of the test function table definition
 testfuntableheader = """
-static void (*const _tests[])(void) = {
+static TESTFUNP _tests[] = {
 """
 
 
@@ -20,10 +20,10 @@ testfuntablefooter = """\tNULL
 
 # Code to generate the suite function
 testfunsuite = """
-void **
+TESTFUNP *
 suite(void)
 {
-    return (void **)_tests;
+    return _tests;
 }
 
 const char *
@@ -171,17 +171,22 @@ class InstanceGenerator:
         createdir(outdir)
 
         # Generate
-        self.permute(os.path.join(outdir, self.basename), self.replacements.keys())
+        self.permute(os.path.join(outdir, os.path.basename(self.basename)), self.replacements.keys())
 
         # Remove the temporary file
         os.remove(self.tmpname)
 
-# Check and parse the command line arguments
-if len(sys.argv) < 2:
-    # PENDING: How to throw an error?
-    print "usage: generate-cases.py template.c"
+def main():
+    # Check and parse the command line arguments
+    if len(sys.argv) < 3:
+        print "usage: generate-cases.py template.c outdir"
+        sys.exit(-1)
+        
+    # Input name is the first arg.
 
-# Input name is the first arg.
+    s = InstanceGenerator(sys.argv[1])
+    s.generate()
 
-s = InstanceGenerator(sys.argv[1])
-s.generate()
+if __name__ == '__main__':
+    main()
+    

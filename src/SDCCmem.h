@@ -37,10 +37,13 @@ extern FILE *junkFile;
 #define  DATA_NAME     port->mem.data_name
 #define  IDATA_NAME    port->mem.idata_name
 #define  XDATA_NAME    port->mem.xdata_name
+#define  XIDATA_NAME   port->mem.xidata_name
+#define  XINIT_NAME    port->mem.xinit_name
 #define  BIT_NAME      port->mem.bit_name
 #define  REG_NAME      port->mem.reg_name
 #define  STATIC_NAME   port->mem.static_name
 #define	 HOME_NAME     port->mem.home_name
+#define  OVERLAY_NAME  port->mem.overlay_name
 
 /* forward definition for variables */
 extern memmap *xstack;		/* xternal stack data         */
@@ -48,6 +51,8 @@ extern memmap *istack;		/* internal stack             */
 extern memmap *code;		/* code segment               */
 extern memmap *data;		/* internal data upto 128     */
 extern memmap *xdata;		/* external data              */
+extern memmap *xidata;          /* the initialized xdata       */
+extern memmap *xinit;           /* the initializers for xidata */
 extern memmap *idata;		/* internal data upto 256     */
 extern memmap *bit;		/* bit addressable space      */
 extern memmap *statsg;		/* static code segment        */
@@ -75,7 +80,7 @@ extern int maxRegBank;
 #define IN_CODESPACE(map)       (map && map->codesp)
 #define IN_REGSP(map)		(map && map->regsp)
 #define PTR_TYPE(map)           (map ? (map->ptrType ? map->ptrType : POINTER)\
-                                     : GPOINTER)
+                                     : port->unqualified_pointer)
 
 /* forward decls for functions    */
 memmap *allocMap (char, char, char, char, char, char, unsigned, const char *, char, int);
@@ -91,4 +96,5 @@ void overlay2data ();
 void redoStackOffsets ();
 void printAllocInfo (struct symbol *, FILE *);
 void doOverlays (struct eBBlock **, int count);
+void deleteFromSeg(struct symbol *);
 #endif

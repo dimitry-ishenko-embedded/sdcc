@@ -34,7 +34,8 @@ typedef struct cseDef
     unsigned int key;
     operand *sym;		/* defining symbol */
     iCode *diCode;		/* defining instruction */
-
+    bitVect *ancestors;		/* keys of the symbol's ancestors */
+    int fromGlobal:1;		/* defining symbol's value computed from a global */
   }
 cseDef;
 
@@ -42,7 +43,6 @@ cseDef;
 cseDef *newCseDef (operand *, iCode *);
 int isCseDefEqual (void *, void *);
 int pcseDef (void *, va_list);
-void algebraicOpts (iCode *);
 DEFSETFUNC (ifDiCodeIsX);
 int ifDiCodeIs (set *, iCode *);
 DEFSETFUNC (ifDefSymIsX);
@@ -51,10 +51,12 @@ DEFSETFUNC (findPrevIc);
 DEFSETFUNC (ifOperandsHave);
 DEFSETFUNC (findCheaperOp);
 int cseBBlock (eBBlock *, int, eBBlock **, int);
-int cseAllBlocks (eBBlock **, int);
+int cseAllBlocks (eBBlock **, int, int computeOnly);
 void ifxOptimize (iCode *, set *, int, eBBlock *, int *, eBBlock **, int);
 void unsetDefsAndUses (iCode *);
 void updateSpillLocation (iCode * ic,int);
 void setUsesDefs (operand *, bitVect *, bitVect *, bitVect **);
 void replaceAllSymBySym (iCode *, operand *, operand *, bitVect **);
+iCode *findBackwardDef(operand *,iCode *);
+void ReplaceOpWithCheaperOp(operand **op, operand *cop);
 #endif

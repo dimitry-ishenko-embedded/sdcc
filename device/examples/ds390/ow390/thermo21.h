@@ -27,21 +27,20 @@
 //  thermo.h - Include file for Thermochron demo.
 //
 //  Version: 2.00
-//    
+//
 //    History:
-//           1.03 -> 2.00  Reorganization of Public Domain Kit 
+//           1.03 -> 2.00  Reorganization of Public Domain Kit
 
 #ifndef THERMO_TYPES
 
 #define THERMO_TYPES
 
 // hacks for sdcc->TINI
-#define NULL ((void*)0)
 #define FILE void
 #define stdin ((void *)0)
 #define stdout ((void *)0)
 #define stderr ((void *)0)
-int fprintf (FILE *fp, xdata char *format, ...) reentrant;
+int fprintf (FILE *fp, char *format, ...) reentrant;
 FILE *fopen (char *, char *);
 int fclose (FILE *);
 

@@ -22,11 +22,10 @@
    what you give them.   Help stamp out software-hoarding!  
 -------------------------------------------------------------------------*/
 #include "string.h" 
-#define NULL (void *)0
 
 #if defined(SDCC_MODEL_LARGE) || defined (SDCC_MODEL_FLAT24)
-#pragma NOINDUCTION
-#pragma NOINVARIANT
+#pragma noinduction
+#pragma noinvariant
 #endif
 
 char * strtok (
@@ -38,7 +37,16 @@ char * strtok (
 
 	if ( str )
 		s = str ;
+	if ( !s )
+		return NULL;
 
+	while (*s) {
+		if (strchr(control,*s))
+			s++;
+		else
+			break;
+	}
+	
 	s1 = s ;
 
 	while (*s) {
@@ -48,6 +56,12 @@ char * strtok (
 		}
 		s++ ;
 	}
-	return (NULL);
+
+	s = NULL;
+
+	if (*s1)
+		return s1;
+	else
+		return NULL;
 }  
 

@@ -17,9 +17,9 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "SDCCerr.h"
-
 
 #define USE_STDOUT_FOR_ERRORS		0
 
@@ -32,6 +32,7 @@
 static struct {
     ERROR_LOG_LEVEL logLevel;
     FILE *out;
+    int style; /* 1=MSVC */
 } _SDCCERRG;
 
 extern char *filename ;
@@ -52,9 +53,9 @@ struct
 { E_DUPLICATE, ERROR_LEVEL_ERROR,
    "Duplicate symbol '%s', symbol IGNORED" },
 { E_SYNTAX_ERROR, ERROR_LEVEL_ERROR,
-   "Syntax Error Declaration ignored" },
+   "Syntax error, declaration ignored at '%s'" },
 { E_CONST_EXPECTED, ERROR_LEVEL_ERROR,
-   "Constant Expected Found Variable" },
+    "Initializer element is not constant" },
 { E_OUT_OF_MEM, ERROR_LEVEL_ERROR,
    "'malloc' failed file '%s' for size %ld" },
 { E_FILE_OPEN_ERR, ERROR_LEVEL_ERROR,
@@ -71,13 +72,13 @@ struct
    "FATAL Compiler Internal Error in file '%s' line number '%d' : %s \n"
    "Contact Author with source code" },
 { E_LVALUE_REQUIRED, ERROR_LEVEL_ERROR,
-   "'lvalue' required for '%s' operation ." },
+   "'lvalue' required for '%s' operation." },
 { E_TMPFILE_FAILED, ERROR_LEVEL_ERROR,
    "Creation of temp file failed" },
 { E_FUNCTION_EXPECTED, ERROR_LEVEL_ERROR,
    "called object is not a function" },
 { E_USING_ERROR, ERROR_LEVEL_ERROR,
-   "'using', 'interrupt' or 'reentrant' must follow a function definiton .'%s'" },
+   "'using', 'interrupt' or 'reentrant' must follow a function definiton.'%s'" },
 { E_SFR_INIT, ERROR_LEVEL_ERROR,
    "Absolute address & initial value both cannot be specified for\n"
    " a 'sfr','sbit' storage class, initial value ignored '%s'" },
@@ -99,8 +100,8 @@ struct
    "Array or pointer required for '%s' operation " },
 { E_IDX_NOT_INT, ERROR_LEVEL_ERROR,
    "Array index not an integer" },
-{ E_ARRAY_BOUND, ERROR_LEVEL_ERROR,
-   "Array bound Exceeded, assuming zero" },
+{ W_IDX_OUT_OF_BOUNDS, ERROR_LEVEL_WARNING,
+   "index %i is outside of the array bounds (array size is %i)" },
 { E_STRUCT_UNION, ERROR_LEVEL_ERROR,
    "Structure/Union expected left of '.%s'" },
 { E_NOT_MEMBER, ERROR_LEVEL_ERROR,
@@ -114,11 +115,11 @@ struct
 { E_INT_REQD, ERROR_LEVEL_ERROR,
    "type must be INT for bit field definition" },
 { E_BITFLD_SIZE, ERROR_LEVEL_ERROR,
-   "bit field size greater than 16 . assuming 16" },
+   "bit field size cannot be greater than int (%d bits)" },
 { W_TRUNCATION, ERROR_LEVEL_WARNING,
    "high order truncation might occur" },
 { E_CODE_WRITE, ERROR_LEVEL_ERROR,
-   "Attempt to assign value to a constant variable %s" },
+   "Attempt to assign value to a constant variable (%s)" },
 { E_LVALUE_CONST, ERROR_LEVEL_ERROR,
    "Lvalue specifies constant object" },
 { E_ILLEGAL_ADDR, ERROR_LEVEL_ERROR,
@@ -132,7 +133,7 @@ struct
 { E_ARG_COUNT, ERROR_LEVEL_ERROR,
    "Function was expecting more arguments" },
 { E_FUNC_EXPECTED, ERROR_LEVEL_ERROR,
-   "Function name expected '%s'.ANSI style declaration REQUIRED" },
+   "Function name expected '%s'. ANSI style declaration REQUIRED" },
 { E_PLUS_INVALID, ERROR_LEVEL_ERROR,
    "invalid operand '%s'" },
 { E_PTR_PLUS_PTR, ERROR_LEVEL_ERROR,
@@ -145,7 +146,7 @@ struct
    "operand invalid for bitwise operation" },
 { E_ANDOR_OP, ERROR_LEVEL_ERROR,
    "Invalid operand for '&&' or '||'" },
-{ E_TYPE_MISMATCH, ERROR_LEVEL_WARNING,
+{ E_TYPE_MISMATCH, ERROR_LEVEL_ERROR,
    "indirections to different types %s %s " },
 { E_AGGR_ASSIGN, ERROR_LEVEL_ERROR,
    "cannot assign values to aggregates" },
@@ -154,7 +155,7 @@ struct
 { E_BIT_ARRAY, ERROR_LEVEL_ERROR,
    "Array or Pointer to bit|sbit|sfr not allowed.'%s'" },
 { E_DUPLICATE_TYPEDEF, ERROR_LEVEL_ERROR,
-   "typedef/enum '%s' duplicate.Previous definiton Ignored" },
+   "typedef/enum '%s' duplicate. Previous definiton Ignored" },
 { E_ARG_TYPE, ERROR_LEVEL_ERROR,
    "Actual Argument type different from declaration %d" },
 { E_RET_VALUE, ERROR_LEVEL_ERROR,
@@ -164,19 +165,19 @@ struct
 { E_FUNC_DEF, ERROR_LEVEL_ERROR,
    "ANSI Style declaration needed" },
 { E_DUPLICATE_LABEL, ERROR_LEVEL_ERROR,
-   "Label name redefined '%s'" },
+   "Duplicate label '%s'" },
 { E_LABEL_UNDEF, ERROR_LEVEL_ERROR,
    "Label undefined '%s'" },
 { E_FUNC_VOID, ERROR_LEVEL_ERROR,
    "void function returning value" },
-{ E_VOID_FUNC, ERROR_LEVEL_ERROR,
+{ W_VOID_FUNC, ERROR_LEVEL_WARNING,
    "function '%s' must return value" },
 { W_RETURN_MISMATCH, ERROR_LEVEL_WARNING,
    "function return value mismatch" },
 { E_CASE_CONTEXT, ERROR_LEVEL_ERROR,
-   "'case/default' found without 'switch'.statement ignored" },
+   "'case/default' found without 'switch'. Statement ignored" },
 { E_CASE_CONSTANT, ERROR_LEVEL_ERROR,
-   "'case' expression not constant. statement ignored" },
+   "'case' expression not constant. Statement ignored" },
 { E_BREAK_CONTEXT, ERROR_LEVEL_ERROR,
    "'break/continue' statement out of context" },
 { E_SWITCH_AGGR, ERROR_LEVEL_ERROR,
@@ -207,12 +208,12 @@ struct
    "Pre-Processor %s" },
 { E_DUP_FAILED, ERROR_LEVEL_ERROR,
    "_dup call failed" },
-{ W_INCOMPAT_CAST, ERROR_LEVEL_WARNING,
-   "pointer being cast to incompatible type " },
+{ E_INCOMPAT_TYPES, ERROR_LEVEL_ERROR,
+   "incompatible types" },
 { W_LOOP_ELIMINATE, ERROR_LEVEL_WARNING,
-   "'while' loop with 'zero' constant.loop eliminated" },
+   "'while' loop with 'zero' constant. Loop eliminated" },
 { W_NO_SIDE_EFFECTS, ERROR_LEVEL_WARNING,
-   "%s expression has NO side effects.expr eliminated" },
+   "%s expression has NO side effects. Expr eliminated" },
 { W_CONST_TOO_LARGE, ERROR_LEVEL_PEDANTIC,
    "constant value '%s', out of range." },
 { W_BAD_COMPARE, ERROR_LEVEL_WARNING,
@@ -220,15 +221,16 @@ struct
 { E_TERMINATING, ERROR_LEVEL_ERROR,
    "Compiler Terminating , contact author with source" },
 { W_LOCAL_NOINIT, ERROR_LEVEL_WARNING,
-   "'auto' variable '%s' may be used before initialization at %s(%d)" },
+   "'auto' variable '%s' may be used before initialization" },
 { W_NO_REFERENCE, ERROR_LEVEL_WARNING,
    "in function %s unreferenced %s : '%s'" },
 { E_OP_UNKNOWN_SIZE, ERROR_LEVEL_ERROR,
    "unknown size for operand" },
 { W_LONG_UNSUPPORTED, ERROR_LEVEL_WARNING,
-   "'%s' 'long' not supported , declared as 'int' ." },
-{ W_LITERAL_GENERIC, ERROR_LEVEL_WARNING,
-   "LITERAL value being cast to '_generic' pointer" },
+   "'%s' 'long' not supported , declared as 'int'." },
+{ E_LITERAL_GENERIC, ERROR_LEVEL_ERROR,
+    //"illegal cast of LITERAL value to 'generic' pointer: assuming 'xdata' pointer" },
+    "illegal cast of LITERAL value to 'generic' pointer" },
 { E_SFR_ADDR_RANGE, ERROR_LEVEL_ERROR,
    "%s '%s' address out of range" },
 { E_BITVAR_STORAGE, ERROR_LEVEL_ERROR,
@@ -240,7 +242,7 @@ struct
 { W_DOUBLE_UNSUPPORTED, ERROR_LEVEL_WARNING,
    "type 'double' not supported assuming 'float'" },
 { W_IF_NEVER_TRUE, ERROR_LEVEL_WARNING,
-   "if-statement condition always false.if-statement not generated" },
+   "if-statement condition always false, if-statement not generated" },
 { W_FUNC_NO_RETURN, ERROR_LEVEL_WARNING,
    "no 'return' statement found for function '%s'" },
 { W_PRE_PROC_WARNING, ERROR_LEVEL_WARNING,
@@ -272,15 +274,15 @@ struct
 { W_FUNC_TOO_LARGE, ERROR_LEVEL_WARNING,
    "function '%s' too large for global optimization" },
 { W_CONTROL_FLOW, ERROR_LEVEL_PEDANTIC,
-   "conditional flow changed by optimizer '%s(%d)':so said EVELYN the modified DOG" },
+   "conditional flow changed by optimizer: so said EVELYN the modified DOG" },
 { W_PTR_TYPE_INVALID, ERROR_LEVEL_WARNING,
-   "invalid type specifier for pointer type specifier ignored" },
+   "invalid type specifier for pointer type; specifier ignored" },
 { W_IMPLICIT_FUNC, ERROR_LEVEL_WARNING,
    "function '%s' implicit declaration" },
 { W_CONTINUE, ERROR_LEVEL_WARNING,
    "%s" },
-{ I_TOOMANY_SPILS, ERROR_LEVEL_INFO,
-   "extended by %d bytes for compiler temp(s) :in function  '%s': %s " },
+{ I_EXTENDED_STACK_SPILS, ERROR_LEVEL_INFO,
+   "extended stack by %d bytes for compiler temp(s) :in function  '%s': %s " },
 { W_UNKNOWN_PRAGMA, ERROR_LEVEL_WARNING,
    "unknown or unsupported #pragma directive '%s'" },
 { W_SHIFT_CHANGED, ERROR_LEVEL_PEDANTIC,
@@ -292,7 +294,7 @@ struct
 { W_UNKNOWN_FEXT, ERROR_LEVEL_WARNING,
    "don't know what to do with file '%s'. file extension unsupported" },
 { W_TOO_MANY_SRC, ERROR_LEVEL_WARNING,
-   "cannot compile more than one source file . file '%s' ignored" },
+   "cannot compile more than one source file. file '%s' ignored" },
 { I_CYCLOMATIC, ERROR_LEVEL_INFO,
    "function '%s', # edges %d , # nodes %d , cyclomatic complexity %d" },
 { E_DIVIDE_BY_ZERO, ERROR_LEVEL_ERROR,
@@ -304,13 +306,13 @@ struct
 { W_CONST_RANGE, ERROR_LEVEL_WARNING,
    "constant is out of range %s" },
 { W_CODE_UNREACH, ERROR_LEVEL_PEDANTIC,
-   "unreachable code %s(%d)" },
-{ W_NONPTR2_GENPTR, ERROR_LEVEL_WARNING,
-   "non-pointer type cast to _generic pointer" },
+   "unreachable code" },
+{ E_NONPTR2_GENPTR, ERROR_LEVEL_ERROR,
+   "non-pointer type cast to generic pointer" },
 { W_POSSBUG, ERROR_LEVEL_WARNING,
    "possible code generation error at line %d,\n"
    " send source to sandeep.dutta@usa.net" },
-{ W_PTR_ASSIGN, ERROR_LEVEL_WARNING,
+{ E_INCOMPAT_PTYPES, ERROR_LEVEL_ERROR,
    "pointer types incompatible " },
 { W_UNKNOWN_MODEL, ERROR_LEVEL_WARNING,
    "unknown memory model at %s : %d" },
@@ -347,8 +349,8 @@ struct
     "both signed and unsigned specified for %s '%s'" },
 { E_TWO_OR_MORE_STORAGE_CLASSES, ERROR_LEVEL_ERROR,
     "two or more storage classes in declaration for '%s'" },
-{ W_EXESS_ARRAY_INITIALIZERS, ERROR_LEVEL_WARNING,
-    "excess elements in array initializer after `%s' at line %d" },
+{ W_EXCESS_INITIALIZERS, ERROR_LEVEL_WARNING,
+    "excess elements in %s initializer after `%s'" },
 { E_ARGUMENT_MISSING, ERROR_LEVEL_ERROR,
    "Option %s requires an argument." },
 { W_STRAY_BACKSLASH, ERROR_LEVEL_WARNING,
@@ -361,6 +363,52 @@ struct
     "Only one short option can be specified at a time.  Rest of %s ignored." },
 { E_VOID_VALUE_USED, ERROR_LEVEL_ERROR,
     "void value not ignored as it ought to be" },
+{ W_INTEGRAL2PTR_NOCAST, ERROR_LEVEL_WARNING,
+    "converting integral to pointer without a cast" },
+{ W_PTR2INTEGRAL_NOCAST, ERROR_LEVEL_WARNING,
+    "converting pointer to integral without a cast" },
+{ W_SYMBOL_NAME_TOO_LONG, ERROR_LEVEL_WARNING,
+    "symbol name too long, truncated to %d chars" },
+{ W_CAST_STRUCT_PTR,ERROR_LEVEL_WARNING,
+	  "cast of struct %s * to struct %s * " },
+{ W_IF_ALWAYS_TRUE, ERROR_LEVEL_WARNING,
+    "if-statement condition always true, if-statement not generated" },
+{ E_PARAM_NAME_OMITTED, ERROR_LEVEL_ERROR,
+    "in function %s: name omitted for parameter %d" },
+{ W_NO_FILE_ARG_IN_C1, ERROR_LEVEL_WARNING,
+    "only standard input is compiled in c1 mode. file '%s' ignored" },
+{ E_NEED_OPT_O_IN_C1, ERROR_LEVEL_ERROR,
+    "must specify assembler file name with -o in c1 mode" },
+{ W_ILLEGAL_OPT_COMBINATION, ERROR_LEVEL_WARNING,
+    "illegal combination of options (--c1mode, -E, -S -c)" },
+{ E_DUPLICATE_MEMBER, ERROR_LEVEL_ERROR,
+    "duplicate %s member '%s'" },
+{ E_STACK_VIOLATION, ERROR_LEVEL_ERROR,
+    "'%s' internal stack %s" },
+{ W_INT_OVL, ERROR_LEVEL_PEDANTIC,
+    "integer overflow in expression" },
+{ W_USELESS_DECL, ERROR_LEVEL_WARNING,
+    "useless declaration (possible use of keyword as variable name)" },
+{ E_INT_BAD_INTNO, ERROR_LEVEL_ERROR,
+    "interrupt number '%u' is not valid" },
+{ W_BITFLD_NAMED, ERROR_LEVEL_WARNING,
+    "ignoring declarator of 0 length bitfield" },
+{ E_FUNC_ATTR, ERROR_LEVEL_ERROR,
+    "function attribute following non-function declaration"},
+{ W_SAVE_RESTORE, ERROR_LEVEL_PEDANTIC,
+    "unmatched #pragma save and #pragma restore" },
+{ E_INVALID_CRITICAL, ERROR_LEVEL_ERROR,
+    "not allowed in a critical section" },
+{ E_NOT_ALLOWED, ERROR_LEVEL_ERROR,
+    "%s not allowed here" },
+{ E_BAD_TAG, ERROR_LEVEL_ERROR,
+    "'%s' is not a %s tag" },
+{ E_ENUM_NON_INTEGER, ERROR_LEVEL_ERROR,
+   "enumeration constant not an integer" },
+{ W_DEPRECATED_PRAGMA, ERROR_LEVEL_WARNING,
+   "pragma %s is deprecated, please see documentation for details" },
+{ E_SIZEOF_INCOMPLETE_TYPE, ERROR_LEVEL_ERROR,
+   "sizeof applied to an incomplete type" },
 };
 
 /*
@@ -400,7 +448,7 @@ void vwerror (int errNum, va_list marker)
     if (ErrTab[errNum].errIndex != errNum)
     {
         fprintf(_SDCCERRG.out, 
-        	"*** Internal error: error table entry for %d inconsistent.", errNum);
+        	"Internal error: error table entry for %d inconsistent.", errNum);
     }
 
 
@@ -409,22 +457,27 @@ void vwerror (int errNum, va_list marker)
             fatalError++ ;
   
         if ( filename && lineno ) {
-            fprintf(_SDCCERRG.out, "%s(%d):",filename,lineno);
-        } else if (lineno) {
-            fprintf(_SDCCERRG.out, "at %d:", lineno);
+			if(_SDCCERRG.style)
+				fprintf(_SDCCERRG.out, "%s(%d) : ",filename,lineno);
+			else
+				fprintf(_SDCCERRG.out, "%s:%d: ",filename,lineno);
+         } else if (lineno) {
+            fprintf(_SDCCERRG.out, "at %d: ", lineno);
+        } else {
+            fprintf(_SDCCERRG.out, "-:0: ");
         }
     
         switch(ErrTab[errNum].errType)
         {
             case ERROR_LEVEL_ERROR:
-            	fprintf(_SDCCERRG.out, "error   *** ");
+            	fprintf(_SDCCERRG.out, "error: ");
             	break;
             case ERROR_LEVEL_WARNING:
             case ERROR_LEVEL_PEDANTIC:
-            	fprintf(_SDCCERRG.out, "warning *** ");
+            	fprintf(_SDCCERRG.out, "warning: ");
             	break;
             case ERROR_LEVEL_INFO:
-            	fprintf(_SDCCERRG.out, "info    *** ");
+            	fprintf(_SDCCERRG.out, "info: ");
             	break;
 	    default:
 	    	break;            	
@@ -434,7 +487,7 @@ void vwerror (int errNum, va_list marker)
         fprintf(_SDCCERRG.out, "\n");
     }
     else {
-        // Below the logging level, drop.
+        /* Below the logging level, drop. */
     }
 }
 /*
@@ -444,11 +497,63 @@ werror - Output a standard eror message with variable number of arguements
 -------------------------------------------------------------------------------
 */
 
-void werror (int errNum, ... )
+void werror (int errNum, ...)
 {
-    va_list	marker;
+    va_list marker;
     va_start(marker,errNum);
     vwerror(errNum, marker);
-    va_end( marker );
+    va_end(marker);
 }
 
+/*
+-------------------------------------------------------------------------------
+werrorfl - Output a standard eror message with variable number of arguements.
+           Use a specified filename and line number instead of the default.
+
+-------------------------------------------------------------------------------
+*/
+
+void werrorfl (char *newFilename, int newLineno, int errNum, ...)
+{
+    char *oldFilename = filename;
+    int oldLineno = lineno;
+    va_list marker;
+
+    filename = newFilename;
+    lineno = newLineno;
+
+    va_start(marker,errNum);
+    vwerror(errNum, marker);
+    va_end(marker);
+
+    filename = oldFilename;
+    lineno = oldLineno;
+}
+
+
+/*
+-------------------------------------------------------------------------------
+fatal - Output a standard eror message with variable number of arguements and
+        call exit()
+-------------------------------------------------------------------------------
+*/
+void fatal (int exitCode, int errNum, ...)
+{
+    va_list marker;
+    va_start(marker,errNum);
+    vwerror(errNum, marker);
+    va_end(marker);
+
+    exit(exitCode);
+}
+
+/*
+-------------------------------------------------------------------------------
+style - Change the output error style to MSVC
+-------------------------------------------------------------------------------
+*/
+
+void    MSVC_style (int style)
+{
+    _SDCCERRG.style = style;
+}
