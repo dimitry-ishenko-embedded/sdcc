@@ -1,3 +1,9 @@
+sdcc (2.4.0-4) unstable; urgency=low
+
+  * Also install sdcclib (closes: bug#298313). 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun,  6 Mar 2005 23:07:22 +0100
+
 sdcc (2.4.0-3) unstable; urgency=low
 
   * Fixed FTBFS with gcc-3.4. Thanks to Andreas Jochens for the patch (closes:

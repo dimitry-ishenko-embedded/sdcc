@@ -9,4 +9,5 @@ usr/bin/link-z80
 usr/bin/makebin
 usr/bin/packihx
 usr/bin/sdcc
+usr/bin/sdcclib
 usr/bin/sdcpp
