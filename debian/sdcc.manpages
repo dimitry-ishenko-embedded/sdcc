@@ -1,0 +1,11 @@
+debian/aslink.1
+debian/asxxxx.1
+debian/asx8051.1
+debian/as-gbz80.1
+debian/as-z80.1
+debian/link-z80.1
+debian/link-gbz80.1
+debian/sdcc.1
+debian/sdcpp.1
+debian/sdcppold.1
+debian/packihx.1

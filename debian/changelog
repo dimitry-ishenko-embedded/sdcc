@@ -1,0 +1,67 @@
+sdcc (2.3.0-10) unstable; urgency=low
+
+  * Fixed description. (closes: Bug#142390) 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu, 11 Apr 2002 18:15:34 +0200
+
+sdcc (2.3.0-9) unstable; urgency=low
+
+  * Changed my maintainer e-mail address to <aurel32@debian.org>.  :)
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 18 Mar 2002 21:42:09 +0100
+
+sdcc (2.3.0-8) unstable; urgency=low
+
+  * Improved man pages. (closes: Bug#135044, Bug#135095)
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Thu, 21 Feb 2002 16:33:27 +0100
+
+sdcc (2.3.0-7) unstable; urgency=low
+
+  * Added "-fdollars-in-identifiers" to Makefile, so gcc will compile uCsim 
+    on arm architecture. (closes: Bug#131605)
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Thu, 31 Jan 2002 21:47:59 +0100
+
+sdcc (2.3.0-6) unstable; urgency=low
+
+  * Added Build-Depends. (closes: Bug#130655)
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Thu, 24 Jan 2002 15:09:47 +0100
+
+sdcc (2.3.0-5) unstable; urgency=low
+
+  * Initial Debian upload. (closes: #129651)
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Sat, 19 Jan 2002 14:45:01 +0100
+ 
+sdcc (2.3.0-4) unstable; urgency=low
+
+  * Changed the description (redundancy and typos) as suggested by Andreas
+    Bombe <aeb@debian.org>.
+  * Moved debugger to sdcc-ucsim as it can only be used with a simulator. 
+    Also suggested by Andreas.
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Thu, 17 Jan 2002 16:14:23 +0100
+ 
+sdcc (2.3.0-3) unstable; urgency=low
+
+  * Merging sdcc-doc with sdcc and sdcc-ucsim
+  * Documentation is now registered with install-docs.
+  * Create sdccman.css et test_suite_spec.css since they are not include in the
+    upstream file.
+  * INSTALL.TXT removed from documentation.
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Fri, 14 Dec 2001 20:18:07 +0100
+
+sdcc (2.3.0-2) unstable; urgency=low
+
+  * Now use realclean instead of clean.
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Tue, 11 Dec 2001 16:00:07 +0100
+
+sdcc (2.3.0-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Aurelien Jarno <aurelien@aurel32.net>  Sat, 01 Dec 2001 17:42:52 +0100

@@ -1,0 +1,25 @@
+Source: sdcc
+Section: electronics
+Priority: optional
+Maintainer: Aurelien Jarno <aurel32@debian.org>
+Build-Depends: debhelper (>> 3.0.0), flex, bison, libncurses5-dev
+Standards-Version: 3.5.2
+
+Package: sdcc
+Architecture: any
+Depends: ${shlibs:Depends}
+Suggests: sdcc-ucsim
+Description: Small Device C Compiler
+ SDCC is a C compiler for the Intel MCS51 family, AVR and Z80 
+ microcontrollers. The package includes the compiler, assemblers 
+ and linkers, and a core library.
+
+Package: sdcc-ucsim
+Architecture: any
+Depends: ${shlibs:Depends}
+Suggests: sdcc
+Description: Micro-controller simulator for SDCC
+ uCsim is a microcontroller simulator. It is extensible to support
+ different microcontroller families. Currently it supports Intel MCS51
+ family. Atmel AVR core is working now and Z80 support is under
+ development. This package also include the source debugger for SDCC.

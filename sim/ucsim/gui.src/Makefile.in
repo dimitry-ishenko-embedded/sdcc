@@ -17,7 +17,7 @@ DEFS            = $(subs -DHAVE_CONFIG_H,,@DEFS@)
 CPPFLAGS        = @CPPFLAGS@ -I. -I$(PRJDIR) \
 		  -I$(PRJDIR)/sim.src -I$(PRJDIR)/cmd.src
 CFLAGS          = @CFLAGS@ -Wall
-CXXFLAGS        = @CXXFLAGS@ -Wall
+CXXFLAGS        = @CXXFLAGS@ -Wall -fdollars-in-identifiers
 M_OR_MM         = @M_OR_MM@
 
 LIBS		= @LIBS@ @CURSES_LIBS@ -L$(PRJDIR)

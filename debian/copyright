@@ -1,0 +1,22 @@
+This package was debianized by Aurelien Jarno <aurelien@aurel32.net> on
+Sat, 01 Dec 2001 17:42:52 +0100.
+
+It was downloaded from http://sdcc.sourceforge.net
+
+Upstream Authors: 
+* Sandeep Dutta (sandeep@users.sourceforge.net)
+
+* Daniel Drotos     <drdani@mazsola.iit.uni-miskolc.hu>
+* Jean Loius-VERN   <jlvern@writeme.com>
+* Johan Knol        <johan.knol@iduna.nl>
+* Karl Bongers      <karl@turbobit.com>
+* Kevin Vigor       <kevin@vigor.nu>
+* Michael Hope      <michaelh@juju.net.nz> <nz_michaelh@yahoo.com>
+* Scott Dattalo     <scott@dattalo.com>
+
+Copyright:
+
+You are free to redistribute this software under the terms of the GNU
+General Public License.
+On Debian systems, the complete text of the GNU General Public License can
+be found at /usr/share/common-licenses/GPL
