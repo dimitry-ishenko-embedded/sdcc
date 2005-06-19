@@ -10,8 +10,3 @@ Files: /usr/share/doc/sdcc-doc/sdccman.pdf.gz
 Format: text
 Files: /usr/share/doc/sdcc-doc/sdccman.txt.gz
 
-Format: HTML
-Index: /usr/share/doc/sdcc-doc/sdccman.html
-Files: /usr/share/doc/sdcc-doc/sdccman.html
-
-  

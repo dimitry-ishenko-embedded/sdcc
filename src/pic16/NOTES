@@ -1,5 +1,5 @@
-NOTES file for SDCC pic16 port
-$Id: NOTES,v 1.2 2004/02/20 00:48:07 vrokas Exp $
+lNOTES file for SDCC pic16 port
+$Id: NOTES,v 1.9 2005/03/31 16:25:04 vrokas Exp $
 
 Current pic16 port status is: Development
 
@@ -11,13 +11,94 @@ For any questions please ask the current port
 developers.
 
 Current developer:
-Vangelis Rokas	<vrokas AT otenet.gr>
+Vangelis Rokas	<vrokas AT users.sourceforge.net>
+Raphael Neider	<rneider AT web.de>
 
 Other people to contact:
 Scott Dattalo	<scott AT dattalo.com>
 
 ======================================================================
 ======================================================================
+2005-Mar-23 Vangelis Rokas
+1. I have added some optimizations that are controlled via enviroment
+variables to allow checking. Later these will be either enabled globally
+or controlled by command line options. The variables are:
+	a. OPTIMIZE_BITFIELD_POINTER_GET : optimizes bit field pointer reads
+
+	b. NO_REG_OPT : there is no register optimization performed by pCode
+			optimizer
+
+
+
+2004-Oct-29 Vangelis Rokas
+1. Function parameters are passed now all via stack. This might
+lower performance, but some issues are solved this way. Later
+we can enable passing through WREG,PRODL,PRODH,FSR0L by implementing
+specific pragmas
+
+
+2004-Sep-27 Vangelis Rokas
+1. Function parameters have been extended to cover functions with
+variable arguments. Now function parameters follow the rules below:
+
+  a) void foo(long a, int b, char c)
+     void foo(long a, int b, char c) reentrant
+
+Stack layout: c, b+1, b, a+3, a+2, a+1 and WREG = a
+
+  b) prototype: void foo(long a, int b, ...)
+
+	example: foo(0xaaffeedd, 0xbbcc, 0x4455, 0x7788);
+
+Stack layout: 0x77, 0x88, 0x44, 0x55, 0xbb, 0xcc, 0xaa, 0xff, 0xee, 0xdd
+
+WREG is not used in functions with variable arguments so that the address
+of the first parameter can be taken.
+
+
+
+
+2004-Sep-24 Vangelis Rokas
+1. Began implementation of generic pointers, current specs are:
+	0x0 xxxxxxx -> code pointer
+	0x8 xxxxxxx -> data pointer
+	0x4 xxxxxxx -> eeprom pointer (currently unimplemented)
+
+
+2004-Aug-30 Vangelis Rokas
+1. A few months ago Hans Dorn had the idea to support general pointer
+for accessing all code, eeprom data and data ram memory. These pointers
+would have 3 bytes of size (24-bits), of which only the 21 lower bits
+would be useful. The rest of them could be used to indicate the pointer
+type. I.e.
+0x4xxxxxxx would mean code pointer
+0x8xxxxxxx would mean eeprom pointer
+0xcxxxxxxx would mean data ram pointer
+
+The implementatio of such pointers needs a lot of work and general
+reform of pointer access, data initializing functions and the writing
+of support functions for decoding their type.
+
+The implementation of such pointers along with the implementation of
+a more SDCC like stack access system will allow the writing of variable
+arguments functions like printf etc... Also one set of functions will be
+able to handle all data types without having to worry about where they
+are placed.
+
+
+2004-May-23 Vangelis Rokas
+
+1. The improvement of the port has been stalled a bit. But, struct/union
+SFR headers are ready for the PIC18F[45][45][28] chips along with their
+respective sources.
+
+2. The genCmp function should be rewritten from scratch.
+
+3. The internal helper functions for char/int/long/float arithmetic
+now compile and will be placed in the appropriate directory under device/
+
+
+
 2004-Feb-20 Vangelis Rokas
 Major update with many bugfixes.
 
@@ -55,9 +136,7 @@ programs is:
 	--pcode-verbose	enable verbose pcode generator messages
 
 - port options
-	--pgen-banksel	enable banksel directives for the assembler
-			This will be turned on by default later, but left as
-			is for now
+	--pno-banksel	disable banksel directives for the assembler
 	--pomit-config-words	does not emit configuration instruction in
 			the translation This is useful when copmiling
 			multiple sources, when you do not want multiple

@@ -25,7 +25,9 @@
 
 #include "common.h"   // Include everything in the SDCC src directory
 #include "newalloc.h"
+
 //#define PCODE_DEBUG
+
 #include "pcode.h"
 #include "pcodeflow.h"
 #include "ralloc.h"
@@ -39,13 +41,14 @@
 pCodeOp *pic16_popCopyGPR2Bit(pCodeOpReg *pc, int bitval);
 
 pCodeOp *pic16_newpCodeOpWild(int id, pCodeWildBlock *pcwb, pCodeOp *subtype);
+pCodeOp *pic16_newpCodeOpWild2(int id, int id2, pCodeWildBlock *pcwb, pCodeOp *subtype, pCodeOp *subtype2);
 pCode *pic16_newpCodeWild(int pCodeID, pCodeOp *optional_operand, pCodeOp *optional_label);
 pCode * pic16_findNextInstruction(pCode *pc);
 int pic16_getpCode(char *mnem,int dest);
 int pic16_getpCodePeepCommand(char *cmd);
 void pic16_pBlockMergeLabels(pBlock *pb);
-char *pCode2str(char *str, int size, pCode *pc);
-char *pic16_get_op( pCodeOp *pcop,char *buf,int buf_size);
+char *pic16_pCode2str(char *str, int size, pCode *pc);
+//char *pic16_get_op(pCodeOp *pcop,char *buf, size_t buf_size);
 pCodeOp *pic16_popCombine2(pCodeOp *, pCodeOp *, int);
 
 extern pCodeInstruction *pic16Mnemonics[];
@@ -219,7 +222,7 @@ static char alt_mnem1a[]    = { PCP_STR, PCP_WILDVAR, 0};
 static char alt_mnem1b[]    = { PCP_STR, PCP_NUMBER, 0};
 static char alt_mnem2[]     = { PCP_STR, PCP_STR, PCP_COMMA, PCP_STR, 0};
 static char alt_mnem2a[]    = { PCP_STR, PCP_WILDVAR, PCP_COMMA, PCP_STR, 0};
-//static char alt_mnem2b[]    = { PCP_STR, PCP_WILDVAR, PCP_COMMA, PCP_WILDVAR, 0};
+static char alt_mnem2b[]    = { PCP_STR, PCP_WILDVAR, PCP_COMMA, PCP_WILDVAR, 0};
 static char alt_mnem3[]     = { PCP_STR, PCP_STR, PCP_COMMA, PCP_NUMBER, 0};
 static char alt_mnem4[]	    = { PCP_STR, PCP_NUMBER, PCP_COMMA, PCP_STR, 0};	// for lfsr 0 , name
 static char alt_mnem4a[]    = { PCP_STR, PCP_NUMBER, PCP_COMMA, PCP_NUMBER, 0}; // for lfsr 0 , value
@@ -233,7 +236,7 @@ static void * cvt_altpat_mnem1a(void *pp,pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem1b(void *pp,pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem2(void *pp,pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb);
-//static void * cvt_altpat_mnem2b(void *pp, pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem2b(void *pp, pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem3(void *pp,pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem4(void *pp, pCodeWildBlock *pcwb);
 static void * cvt_altpat_mnem4a(void *pp, pCodeWildBlock *pcwb);
@@ -245,7 +248,7 @@ static pcPattern altArr[] = {
   {ALT_MNEM4a,       alt_mnem4a, cvt_altpat_mnem4a},
   {ALT_MNEM4,        alt_mnem4,  cvt_altpat_mnem4},
   {ALT_MNEM3,        alt_mnem3,  cvt_altpat_mnem3},
-//  {ALT_MNEM2B,       alt_mnem2b, cvt_altpat_mnem2b},
+  {ALT_MNEM2B,       alt_mnem2b, cvt_altpat_mnem2b},
   {ALT_MNEM2A,       alt_mnem2a, cvt_altpat_mnem2a},
   {ALT_MNEM2,        alt_mnem2,  cvt_altpat_mnem2},
   {ALT_MNEM1B,       alt_mnem1b, cvt_altpat_mnem1b},
@@ -510,7 +513,7 @@ static void * cvt_altpat_mnem1a(void *pp,pCodeWildBlock *pcwb)
   }
 
   if(pic16Mnemonics[opcode]->isBitInst)
-    pcosubtype = pic16_newpCodeOpBit(NULL,-1,0);
+    pcosubtype = pic16_newpCodeOpBit(NULL,-1,0, PO_GPR_REGISTER);
   else
     pcosubtype = pic16_newpCodeOp(NULL,PO_GPR_REGISTER);
 
@@ -634,7 +637,7 @@ static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb)
   int dest;
 
   pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
+  pCodeOp *pcosubtype, *pcosubtype2;
 
   if(!pcwb) {
     fprintf(stderr,"ERROR %s:%d - can't assemble line\n",__FILE__,__LINE__);
@@ -649,6 +652,14 @@ static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb)
 	  p[3].pct[0].tok.s,
 	  dest));
 
+#if 0
+  fprintf(stderr,"altpat_mnem2a %s var %d destination %s(%d)\n",
+	  p->pct[0].tok.s,
+	  p[1].pct[1].tok.n,
+	  p[3].pct[0].tok.s,
+	  dest);
+#endif
+
 
   opcode = pic16_getpCode(p->pct[0].tok.s,dest);
   if(opcode < 0) {
@@ -656,21 +667,26 @@ static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb)
     return NULL;
   }
 
-  if(pic16Mnemonics[opcode]->isBitInst)
+  if(pic16Mnemonics[opcode]->isBitInst) {
     pcosubtype = pic16_newpCodeOp(NULL,PO_BIT);
-  else
+    pcosubtype2 = NULL;
+  } else {
+#if 0
   if(pic16Mnemonics[opcode]->is2MemOp) {
-	return NULL;
   	/* support for movff instruction */
-  	pcosubtype = pic16_popCombine2(
-  		pic16_newpCodeOp(p[1].pct[0].tok.s, PO_GPR_REGISTER),
-  		pic16_newpCodeOp(p[3].pct[0].tok.s, PO_GPR_REGISTER), 0);
-  } else
-    pcosubtype = pic16_newpCodeOp(NULL,PO_GPR_REGISTER);
+	pcosubtype = pic16_newpCodeOp(NULL, PO_GPR_REGISTER);
+	pcosubtype2 = pic16_newpCodeOp(p[3].pct[0].tok.s, PO_STR);
+  } else {
+#endif
+    pcosubtype = pic16_newpCodeOp(NULL,PO_GPR_REGISTER); pcosubtype2 = NULL; }
 
 
-  pci = PCI(pic16_newpCode(opcode,
+  if(!pcosubtype2)
+  	pci = PCI(pic16_newpCode(opcode,
 		     pic16_newpCodeOpWild(p[1].pct[1].tok.n, pcwb, pcosubtype)));
+  else
+  	pci = PCI(pic16_newpCode(opcode,
+		     pic16_newpCodeOpWild2(p[1].pct[1].tok.n, p[3].pct[1].tok.n, pcwb, pcosubtype, pcosubtype2)));
 
   /* Save the index of the maximum wildcard variable */
   //if(p[1].pct[1].tok.n > sMaxWildVar)
@@ -686,7 +702,6 @@ static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb)
 
 }
 
-#if 0
 /*-----------------------------------------------------------------*/
 /* cvt_altpat_mem2b - convert assembly line type to a pCode        */
 /*                    instruction with 2 wild operands             */
@@ -704,7 +719,7 @@ static void * cvt_altpat_mnem2b(void *pp,pCodeWildBlock *pcwb)
   int dest;
 
   pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
+  pCodeOp *pcosubtype, *pcosubtype2;
 
   if(!pcwb) {
     fprintf(stderr,"ERROR %s:%d - can't assemble line\n",__FILE__,__LINE__);
@@ -718,6 +733,12 @@ static void * cvt_altpat_mnem2b(void *pp,pCodeWildBlock *pcwb)
 	  p[1].pct[1].tok.n,
 	  p[3].pct[1].tok.n));
 
+#if 0
+  fprintf(stderr,"altpat_mnem2b %s src: %d dst: %d\n",
+	  p->pct[0].tok.s,
+	  p[1].pct[1].tok.n,
+	  p[3].pct[1].tok.n);
+#endif
 
   opcode = pic16_getpCode(p->pct[0].tok.s,dest);
   if(opcode < 0) {
@@ -727,13 +748,13 @@ static void * cvt_altpat_mnem2b(void *pp,pCodeWildBlock *pcwb)
 
   if(pic16Mnemonics[opcode]->is2MemOp) {
   	/* support for movff instruction */
-  	pcosubtype = pic16_popCombine2(
-  		pic16_newpCodeOp(NULL, PO_GPR_REGISTER),
-  		pic16_newpCodeOp(NULL, PO_GPR_REGISTER), 0);
-  } else pcosubtype = NULL;
+	pcosubtype = pic16_newpCodeOp(NULL, PO_GPR_REGISTER);
+	pcosubtype2 = pic16_newpCodeOp(NULL, PO_GPR_REGISTER);
+  } else pcosubtype = pcosubtype2 = NULL;
 
   pci = PCI(pic16_newpCode(opcode,
-		     pic16_newpCodeOpWild(p[1].pct[1].tok.n, pcwb, pcosubtype)));
+		     pic16_newpCodeOpWild2(p[1].pct[1].tok.n, p[3].pct[1].tok.n,
+		     	pcwb, pcosubtype, pcosubtype2)));
 
   /* Save the index of the maximum wildcard variable */
   //if(p[1].pct[1].tok.n > sMaxWildVar)
@@ -748,7 +769,6 @@ static void * cvt_altpat_mnem2b(void *pp,pCodeWildBlock *pcwb)
   return pci;
 
 }
-#endif
 
 
 /*-----------------------------------------------------------------*/
@@ -790,7 +810,7 @@ static void * cvt_altpat_mnem3(void *pp,pCodeWildBlock *pcwb)
     //pcosubtype = cvt_extract_status(p[1].pct[0].tok.s, p[3].pct[0].tok.s);
 
     //if(pcosubtype == NULL) {
-    pcosubtype = pic16_newpCodeOpBit(p[1].pct[0].tok.s,p[3].pct[0].tok.n,0);
+    pcosubtype = pic16_newpCodeOpBit(p[1].pct[0].tok.s,p[3].pct[0].tok.n,0, PO_GPR_REGISTER);
     //}
   } else
     pcosubtype = pic16_newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
@@ -1719,13 +1739,13 @@ int pic16_pCodeSearchCondition(pCode *pc, unsigned int cond)
  *-----------------------------------------------------------------*/
 static int pCodeOpCompare(pCodeOp *pcops, pCodeOp *pcopd)
 {
-  char b[50], *n2;
+  char b[1024], *n2;
 
   if(!pcops || !pcopd)
     return 0;
 
 #if 0
-  fprintf(stderr," Comparing operands %s",
+  fprintf(stderr,"%s:%d Comparing operands %s", __FILE__, __LINE__, 
 	  pic16_get_op( pcops,NULL,0));
 
   fprintf(stderr," to %s\n",
@@ -1745,20 +1765,20 @@ static int pCodeOpCompare(pCodeOp *pcops, pCodeOp *pcopd)
     return 0;
   }
 
-  b[0]=0;
-  pic16_get_op(pcops,b,50);
+  memset(b, 0, sizeof(b) );       //b[0]=0;
+  pic16_get_op(pcops,b, sizeof(b) );
 
   n2 = pic16_get_op(pcopd,NULL,0);
 
   if( !n2 || strcmp(b,n2)) {
-    //fprintf(stderr,"  - fail - diff names: %s, len=%d,  %s, len=%d\n",b,strlen(b), n2, strlen(n2) );
+//	fprintf(stderr,"  - fail - diff names: %s, len=%d,  %s, len=%d\n",b,strlen(b), n2, strlen(n2) );
     return 0;  // different names
   }
 
   switch(pcops->type) {
   case PO_DIR:
     if( PCOR(pcops)->instance != PCOR(pcopd)->instance) {
-      //fprintf(stderr, "  - fail different instances\n");
+//	fprintf(stderr, "  - fail different instances\n");
       return 0;
     }
     break;
@@ -1857,7 +1877,8 @@ static int pCodePeepMatchLabels(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 {
   int index;   // index into wild card arrays
-
+  int havematch=0;
+  
   /* one-for-one match. Here the source and destination opcodes 
    * are not wild. However, there may be a label or a wild operand */
 
@@ -1886,7 +1907,8 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 
       /* Compare the operands */
       if(PCI(pcd)->pcop) {
-	if (PCI(pcd)->pcop->type == PO_WILD) {
+	/* assert that optimizations do not touch operations that work on SFRs or INDF registers */
+	if ((PCI(pcd)->pcop->type == PO_WILD) && (!(PCI(pcs)->pcop) || ((PCI(pcs)->pcop->type != PO_SFR_REGISTER) && (PCI(pcs)->pcop->type != PO_INDF0)))) {
 	  index = PCOW(PCI(pcd)->pcop)->id;
 	  //DFPRINTF((stderr,"destination is wild\n"));
 #ifdef DEBUG_PCODEPEEP
@@ -1897,6 +1919,7 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 #endif
 
 	  PCOW(PCI(pcd)->pcop)->matched = PCI(pcs)->pcop;
+	  havematch = -1;
 	  if(!peepBlock->target.wildpCodeOps[index]) {
 	    peepBlock->target.wildpCodeOps[index] = PCI(pcs)->pcop;
 
@@ -1912,10 +1935,11 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 	      );
 	    */
 
-	    return pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index]);
+	    havematch = pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index]);
+//	    return pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index]);
 	  }
 
-	  if(PCI(pcs)->pcop) {
+	  if((havematch==-1) && PCI(pcs)->pcop) {
 	    char *n;
 
 	    switch(PCI(pcs)->pcop->type) {
@@ -1934,43 +1958,93 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 	    else {
 	      DFPRINTF((stderr,"first time for a variable: %d, %s\n",index,n));
 	      peepBlock->target.vars[index] = n;
-	      return 1;
+	      havematch = 1;
+//	      return 1;
 	    }
 	  }
+
+	  /* now check whether the second operand matches */
+	  /* assert that optimizations do not touch operations that work on SFRs or INDF registers */
+	  if(PCOW2(PCI(pcd)->pcop) && (PCOR2(PCI(pcd)->pcop)->pcop2->type == PO_WILD) && (!(PCOR2(PCI(pcs)->pcop)->pcop2) || ((PCOR2(PCI(pcs)->pcop)->pcop2->type != PO_SFR_REGISTER) && (PCOR2(PCI(pcs)->pcop)->pcop2) && (PCOR2(PCI(pcs)->pcop)->pcop2->type != PO_INDF0)))) {
+	
+//		fprintf(stderr, "%s:%d %s second operand is wild\n", __FILE__, __LINE__, __FUNCTION__);
+	
+		  index = PCOW2(PCI(pcd)->pcop)->id;
+		//DFPRINTF((stderr,"destination is wild\n"));
+#ifdef DEBUG_PCODEPEEP
+		if (index > peepBlock->nops) {
+			DFPRINTF((stderr,"%s - variables exceeded\n",__FUNCTION__));
+			exit(1);
+		}
+#endif
+
+		PCOW2(PCI(pcd)->pcop)->matched = PCOR2(PCI(pcs)->pcop)->pcop2;
+		if(!peepBlock->target.wildpCodeOps[index]) {
+			peepBlock->target.wildpCodeOps[index] = PCOR2(PCI(pcs)->pcop)->pcop2;
+
+		//if(PCI(pcs)->pcop->type == PO_GPR_TEMP) 
+
+		} else {
+			/*
+			pcs->print(stderr,pcs);
+			pcd->print(stderr,pcd);
+
+			fprintf(stderr, "comparing operands of these instructions, result %d\n",
+				pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index])
+				);
+			*/
+
+		  return ((havematch==1) && pCodeOpCompare(PCOR2(PCI(pcs)->pcop)->pcop2,
+				peepBlock->target.wildpCodeOps[index]));
+		}
+
+		if(PCOR2(PCI(pcs)->pcop)->pcop2) {
+		  char *n;
+
+			switch(PCOR2(PCI(pcs)->pcop)->pcop2->type) {
+			case PO_GPR_TEMP:
+			case PO_FSR0:
+		      //case PO_INDF0:
+				n = PCOR(PCOR2(PCI(pcs)->pcop)->pcop2)->r->name;
+				break;
+			default:
+				n = PCOR2(PCI(pcs)->pcop)->pcop2->name;
+			}
+
+			if(peepBlock->target.vars[index])
+				return  (havematch && (strcmp(peepBlock->target.vars[index],n) == 0));
+			else {
+				DFPRINTF((stderr,"first time for a variable: %d, %s\n",index,n));
+				peepBlock->target.vars[index] = n;
+				return (havematch==1);		//&& 1;
+			}
+		}
 	  
-	  if(PCI(pcs)->is2MemOp) {
-	    char *n;
-
-	    switch(PCOP(PCOR2(PCI(pcs))->pcop2)->type) {
-	    case PO_GPR_TEMP:
-	    case PO_FSR0:
-	      //case PO_INDF0:
-		n = PCOR(PCOR2(PCI(pcs))->pcop2)->r->name;
-
-	      break;
-	    default:
-	      n = PCI(pcs)->pcop->name;
+	  } else if (PCOW2(PCI(pcd)->pcop) && (PCOR2(PCI(pcd)->pcop)->pcop2->type == PO_WILD) && PCOR2(PCI(pcs)->pcop)->pcop2)
+	    {
+	      return 0;
+	    } else {
+	      return havematch;
 	    }
+#if 0
+	 else if (PCI(pcd)->pcop->type == PO_LITERAL) {
+	  return (havematch &&
+	  	pCodeOpCompare(PCOR2(PCI(pcs)->pcop)->pcop2, PCOR2(PCI(pcd)->pcop)->pcop2));
 
-	    if(peepBlock->target.vars[index])
-	      return  (strcmp(peepBlock->target.vars[index],n) == 0);
-	    else {
-	      DFPRINTF((stderr,"first time for a variable: %d, %s\n",index,n));
-	      peepBlock->target.vars[index] = n;
-	      return 1;
-	    }
-	  }
+	}
+#endif
 
 	} else if (PCI(pcd)->pcop->type == PO_LITERAL) {
 	  return pCodeOpCompare(PCI(pcs)->pcop, PCI(pcd)->pcop);
 
 	}
+  }
+
 	/* FIXME - need an else to check the case when the destination 
 	 * isn't a wild card */
       } else
 	/* The pcd has no operand. Lines match if pcs has no operand either*/
 	return (PCI(pcs)->pcop == NULL);
-    }
   }
 
   /* Compare a wild instruction to a regular one. */
@@ -2158,7 +2232,7 @@ pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop)
 
   case PO_GPR_BIT:
 
-    pcopnew = pic16_newpCodeOpBit(pcop->name, PCORB(pcop)->bit,PCORB(pcop)->inBitSpace);
+    pcopnew = pic16_newpCodeOpBit(pcop->name, PCORB(pcop)->bit,PCORB(pcop)->inBitSpace, PO_GPR_REGISTER);
     PCOR(pcopnew)->r = PCOR(pcop)->r;
     PCOR(pcopnew)->rIdx = PCOR(pcop)->rIdx;
     DFPRINTF((stderr," pCodeOpCopy Bit -register index\n"));
@@ -2169,6 +2243,9 @@ pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop)
   case PO_GPR_TEMP:
   case PO_FSR0:
   case PO_INDF0:
+  case PO_WREG: // moved from below
+  case PO_PRODL: // moved from below
+  case PO_PRODH: // moved from below
     //DFPRINTF((stderr,"pCodeOpCopy GPR register\n"));
     pcopnew = Safe_calloc(1,sizeof(pCodeOpReg) );
     PCOR(pcopnew)->r = PCOR(pcop)->r;
@@ -2192,13 +2269,13 @@ pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop)
   case PO_STR:
   case PO_NONE:
   case PO_W:
-  case PO_WREG:
+  //case PO_WREG: // moved up
   case PO_INTCON:
   case PO_PCL:
   case PO_PCLATH:
   case PO_PCLATU:
-  case PO_PRODL:
-  case PO_PRODH:
+  //case PO_PRODL: // moved up
+  //case PO_PRODH: // moved up
   case PO_REL_ADDR:
     //DFPRINTF((stderr,"pCodeOpCopy register type %d\n", pcop->type));
     pcopnew = Safe_calloc(1,sizeof(pCodeOp) );
@@ -2263,6 +2340,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
   pCodeCSource *pc_cline=NULL;
   _DLL *peeprules;
   int matched;
+  pCode *pcr;
 
   peeprules = (_DLL *)peepSnippets;
 
@@ -2327,7 +2405,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	  (pic16_pCodeSearchCondition(pcin,peepBlock->postFalseCond) > 0) )
 	matched = 0;
 
-      //fprintf(stderr," condition results = %d\n",pic16_pCodeSearchCondition(pcin,peepBlock->postFalseCond));
+//	fprintf(stderr," condition results = %d\n",pic16_pCodeSearchCondition(pcin,peepBlock->postFalseCond));
 
 
       //if(!matched) fprintf(stderr,"failed on conditions\n");
@@ -2336,7 +2414,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
     if(matched) {
 
       pCode *pcprev;
-      pCode *pcr;
+//      pCode *pcr;
 
 
       /* We matched a rule! Now we have to go through and remove the
@@ -2360,16 +2438,16 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	pcin->prev = pc->prev;
 
 
-#if 0
+#if 1
       {
 	/*     DEBUG    */
 	/* Converted the deleted pCodes into comments */
 
-	char buf[256];
+	char buf[1024];
 	pCodeCSource *pc_cline2=NULL;
 
-	buf[0] = ';';
-	buf[1] = '#';
+//	buf[0] = ';';
+	buf[0] = '#';
 
 	while(pc &&  pc!=pcin) {
 
@@ -2383,7 +2461,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	    }
 	  }
 
-	  pCode2str(&buf[2], 254, pc);
+	  pic16_pCode2str(&buf[1], sizeof( buf )-1, pc);
 	  pic16_pCodeInsertAfter(pcprev, pic16_newpCodeCharP(buf));
 	  pcprev = pcprev->next;
 	  pc = pc->next;
@@ -2396,6 +2474,8 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 
       if(pcin)
 	pCodeDeleteChain(pc,pcin);
+
+//	fprintf(stderr, "%s:%d rule matched\n", __FILE__, __LINE__);
 
       /* Generate the replacement code */
       pc = pcprev;
@@ -2411,6 +2491,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	     * Is it wild? */
 	    if(PCI(pcr)->pcop->type == PO_WILD) {
 	      int index = PCOW(PCI(pcr)->pcop)->id;
+//		fprintf(stderr, "%s:%d replacing index= %d\n", __FUNCTION__, __LINE__, index);
 	      //DFPRINTF((stderr,"copying wildopcode\n"));
 	      if(peepBlock->target.wildpCodeOps[index])
 		pcop = pic16_pCodeOpCopy(peepBlock->target.wildpCodeOps[index]);
@@ -2419,6 +2500,26 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	    } else
 	      pcop = pic16_pCodeOpCopy(PCI(pcr)->pcop);
 	  }
+
+	  if(PCI(pcr)->is2MemOp && PCOR2(PCI(pcr)->pcop)->pcop2) {
+	    /* The replacing instruction has also a second operand.
+	     * Is it wild? */
+//		fprintf(stderr, "%s:%d pcop2= %p\n", __FILE__, __LINE__, PCOR2(PCI(pcr)->pcop)->pcop2);
+	    if(PCOR2(PCI(pcr)->pcop)->pcop2->type == PO_WILD) {
+	      int index = PCOW2(PCI(pcr)->pcop)->id;
+//		fprintf(stderr, "%s:%d replacing index= %d\n", __FUNCTION__, __LINE__, index);
+	      //DFPRINTF((stderr,"copying wildopcode\n"));
+	      if(peepBlock->target.wildpCodeOps[index])
+		pcop = pic16_popCombine2(pic16_pCodeOpCopy(pcop),
+			pic16_pCodeOpCopy(peepBlock->target.wildpCodeOps[index]), 0);
+	      else
+		DFPRINTF((stderr,"error, wildopcode in replace but not source?\n"));
+	    } else
+	      pcop = pic16_popCombine2(pic16_pCodeOpCopy(pcop),
+	      	pic16_pCodeOpCopy(PCOR2(PCI(pcr)->pcop)->pcop2), 0);
+	      
+	  }
+	  
 	  //DFPRINTF((stderr,"inserting pCode\n"));
 	  pic16_pCodeInsertAfter(pc, pic16_newpCode(PCI(pcr)->op,pcop));
 	} else if (pcr->type == PC_WILD) {

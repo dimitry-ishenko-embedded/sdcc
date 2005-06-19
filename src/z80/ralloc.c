@@ -886,6 +886,7 @@ deassignLRs (iCode * ic, eBBlock * ebp)
 	      (result = OP_SYMBOL (IC_RESULT (ic))) &&	/* has a result */
 	      result->liveTo > ic->seq &&	/* and will live beyond this */
 	      result->liveTo <= ebp->lSeq &&	/* does not go beyond this block */
+	      result->liveFrom == ic->seq &&    /* does not start before here */
 	      result->regType == sym->regType &&	/* same register types */
 	      result->nRegs &&	/* which needs registers */
 	      !result->isspilt &&	/* and does not already have them */
@@ -1130,6 +1131,13 @@ serialRegAssign (eBBlock ** ebbs, int count)
 	      int j;
 
 	      D (D_ALLOC, ("serialRegAssign: in loop on result %p\n", sym));
+                
+	      /* Make sure any spill location is definately allocated */
+	      if (sym->isspilt && !sym->remat && sym->usl.spillLoc &&
+		  !sym->usl.spillLoc->allocreq)
+		{
+		  sym->usl.spillLoc->allocreq++;
+		}
 
 	      /* if it does not need or is spilt 
 	         or is already assigned to registers
@@ -1166,6 +1174,17 @@ serialRegAssign (eBBlock ** ebbs, int count)
 		  spillThis (sym);
 		  continue;
 
+		}
+
+	      /* If the live range preceeds the point of definition 
+		 then ideally we must take into account registers that 
+		 have been allocated after sym->liveFrom but freed
+		 before ic->seq. This is complicated, so spill this
+		 symbol instead and let fillGaps handle the allocation. */
+	      if (sym->liveFrom < ic->seq)
+		{
+		    spillThis (sym);
+		    continue;		      
 		}
 
 	      /* if it has a spillocation & is used less than
@@ -1672,26 +1691,57 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
       if (SKIP_IC2 (dic))
 	continue;
 
-      if (IS_SYMOP (IC_RESULT (dic)) &&
-	  IC_RESULT (dic)->key == IC_RIGHT (ic)->key)
-	{
-	  break;
-	}
+      if (dic->op == IFX)
+        {
+          if (IS_SYMOP (IC_COND (dic)) &&
+	      (IC_COND (dic)->key == IC_RESULT (ic)->key ||
+	       IC_COND (dic)->key == IC_RIGHT (ic)->key))
+	    {
+	      dic = NULL;
+	      break;
+	    }
+        }
+      else
+        {
+          if (IS_TRUE_SYMOP (IC_RESULT (dic)) &&
+	      IS_OP_VOLATILE (IC_RESULT (dic)))
+	    {
+	      dic = NULL;
+	      break;
+	    }
 
-      if (IS_SYMOP (IC_RIGHT (dic)) &&
-	  (IC_RIGHT (dic)->key == IC_RESULT (ic)->key ||
-	   IC_RIGHT (dic)->key == IC_RIGHT (ic)->key))
-	{
-	  dic = NULL;
-	  break;
-	}
+          if (IS_SYMOP (IC_RESULT (dic)) &&
+	      IC_RESULT (dic)->key == IC_RIGHT (ic)->key)
+	    {
+	      if (POINTER_SET (dic))
+	        dic = NULL;
 
-      if (IS_SYMOP (IC_LEFT (dic)) &&
-	  (IC_LEFT (dic)->key == IC_RESULT (ic)->key ||
-	   IC_LEFT (dic)->key == IC_RIGHT (ic)->key))
-	{
-	  dic = NULL;
-	  break;
+	      break;
+	    }
+
+          if (IS_SYMOP (IC_RIGHT (dic)) &&
+	      (IC_RIGHT (dic)->key == IC_RESULT (ic)->key ||
+	       IC_RIGHT (dic)->key == IC_RIGHT (ic)->key))
+	    {
+	      dic = NULL;
+	      break;
+	    }
+
+          if (IS_SYMOP (IC_LEFT (dic)) &&
+	      (IC_LEFT (dic)->key == IC_RESULT (ic)->key ||
+	       IC_LEFT (dic)->key == IC_RIGHT (ic)->key))
+	    {
+	      dic = NULL;
+	      break;
+	    }
+
+          if (IS_SYMOP (IC_RESULT (dic)) &&
+	      IC_RESULT (dic)->key == IC_RESULT (ic)->key)
+	    {
+	      dic = NULL;
+	      break;
+	    }
+	    
 	}
     }
 
@@ -3051,8 +3101,10 @@ joinPushes (iCode *lic)
 /* assignRegisters - assigns registers to each live range as need  */
 /*-----------------------------------------------------------------*/
 void 
-z80_assignRegisters (eBBlock ** ebbs, int count)
+z80_assignRegisters (ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->bbOrder;
+  int count = ebbi->count;
   iCode *ic;
   int i;
 
@@ -3084,7 +3136,7 @@ z80_assignRegisters (eBBlock ** ebbs, int count)
   recomputeLiveRanges (ebbs, count);
 
   if (options.dump_pack)
-    dumpEbbsToFileExt (DUMP_PACK, ebbs, count);
+    dumpEbbsToFileExt (DUMP_PACK, ebbi);
 
   /* first determine for each live range the number of 
      registers & the type of registers required for each */
@@ -3112,7 +3164,7 @@ z80_assignRegisters (eBBlock ** ebbs, int count)
     }
 
   if (options.dump_rassgn) {
-    dumpEbbsToFileExt (DUMP_RASSGN, ebbs, count);
+    dumpEbbsToFileExt (DUMP_RASSGN, ebbi);
     dumpLiveRanges (DUMP_LRANGE, liveRanges);
   }
 

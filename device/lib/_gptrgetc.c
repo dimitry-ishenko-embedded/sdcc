@@ -27,7 +27,7 @@
 /* the  return value is expected to be in acc, and not in the standard
  * location dpl. Therefore we choose return type void here: */
 void
-_gptrgetc (char *gptr)
+_gptrgetc (char *gptr) _naked
 {
     gptr; /* hush the compiler */
 
@@ -45,7 +45,7 @@ _gptrgetc (char *gptr)
         dec     a
         jz      00003$	; 2 code
 	dec     a
-	jz      00004$
+	jz      00004$  ; 3 pdata
 	dec     a	; 4 skip generic pointer
 	dec     a
 	jz      00001$	; 5 idata
@@ -53,14 +53,14 @@ _gptrgetc (char *gptr)
     ;   any other value for type
     ;   return xFF
 	mov     a,#0xff
-	sjmp    00005$
+	ret
     ;
     ;   Pointer to data space
     ;
  00001$:
 	mov     r0,dpl     ; use only low order address
 	mov     a,@r0
-        sjmp    00005$
+        ret
 ;
 ;   pointer to xternal data
 ;   pointer to code area
@@ -68,7 +68,7 @@ _gptrgetc (char *gptr)
  00003$:
 	; clr     a  is already 0
         movc    a,@a+dptr
-        sjmp    00005$
+        ret
 ;
 ;   pointer to xternal stack
 ;
@@ -78,10 +78,10 @@ _gptrgetc (char *gptr)
 ;
 ;   restore and return
 ;
- 00005$:
         mov     r0,a
         pop     acc
-	xch     a,r0
+        xch     a,r0
+        ret
      _endasm ;
 
 }

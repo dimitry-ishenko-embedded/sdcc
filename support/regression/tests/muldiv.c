@@ -85,6 +85,8 @@ testDiv(void)
     ASSERT(i/25 == -2);
     LOG(("i/-12 == 4 = %u\n", (int)i/-12));
     ASSERT(i/-12 == 4);
+    //power of 2
+    ASSERT(i/4 == -12);
 }
 
 void
@@ -98,14 +100,16 @@ testMod(void)
     //    LOG(("i%%17 == 15 = %u\n", (int)(i%9)));
     ASSERT(i%17 == 15);
 
-#if MOD_SIGN_FOLLOWS_DIVIDEND
     //    LOG(("i%%-7 == 2 = %u\n", (int)i%-7));
     ASSERT(i%-7 == 2);
+    //power of 2
+    ASSERT(i%-8 == 4);
 
     i = -49;
     //    LOG(("i%%3 == -1 = %u\n", (int)i%3));
     ASSERT(i%3 == -1);
     //    LOG(("i%%-5 == -4 = %u\n", (int)i%-5));
     ASSERT(i%-5 == -4);
-#endif
+    //power of 2
+    ASSERT(i%4 == -1);
 }

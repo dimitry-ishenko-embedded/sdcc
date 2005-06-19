@@ -7,7 +7,7 @@
 # The GNU PIC Library is maintained by,
 # 	Vangelis Rokas <vrokas@otenet.gr>
 #
-# $Id: Makefile,v 1.1 2004/01/12 22:10:38 vrokas Exp $
+# $Id: Makefile,v 1.7 2005/01/22 18:02:13 vrokas Exp $
 #
 #
 
@@ -15,53 +15,46 @@
 include ./Makefile.common
 
 
-# The devices to build libraries for
-DEVICES	=	18f242	\
-		18f248	\
-		18f252	\
-		18f258	\
-		18f442	\
-		18f448	\
-		18f452	\
-		18f458
+DIRS	=	startup \
+		libdev	\
+		libsdcc	\
+		libc \
+		libm \
+		debug
+		
+#		libio 
 
 
-all: compile-library
+all: build-all-libraries
 
-compile-library: compile-sources build-library
-
-build-library:
-	@for temp in $(DEVICES) ; do		\
-		$(AR) -c pic$$temp.lib pic$$temp/pic$$temp.o ; \
-	done ;
-
-compile-sources:
-	@for temp in $(DEVICES); do				\
-		$(MAKE) -C pic$$temp make-target;	\
+build-all-libraries:
+	@for temp in $(DIRS) ; do \
+		$(MAKE) -C $$temp MODELFLAGS=$(MODELFLAGS) ; \
 	done
+
+
+lib-io:
+	$(MAKE) -C libio MODELFLAGS=$(MODELFLAGS)
 
 clean: all-clean
-	$(RM) -f pic*.lib
+	$(RM) -f bin/*.*
 
-clean-intermediate:
-	@for temp in $(DEVICES) ; do \
-		$(MAKE) -C pic$$temp clean-intermediate; \
+
+
+all-clean:
+	@for temp in $(DIRS) ; do \
+		$(MAKE) -C $$temp clean ; \
 	done
 
-real-clean:
-	@for temp in $(DEVICES) ; do \
-		$(MAKE) -C pic$$temp real-clean; \
-	done ;
-	rm -f config.* ;
+clean-intermediate:
+	@for temp in $(DIRS) ; do \
+		$(MAKE) -C $$temp clean-intermediate ; \
+	done
+
 
 dep: all-dep
 
-all-clean:
-	for temp in $(DEVICES) ; do		\
-		$(MAKE) -C pic$$temp clean;	\
-	done
-
 all-dep:
-	for temp in $(DEVICES) ; do		\
-		$(MAKE) -C pic$$temp dep;	\
+	for temp in $(DIRS) ; do \
+		$(MAKE) -C $$temp dep ; \
 	done

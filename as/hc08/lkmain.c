@@ -359,6 +359,12 @@ char *argv[];
 				}
 				/* include NoICE command to load hex file */
         	                if (jfp) fprintf( jfp, "LOAD %s.S19\n", linkp->f_idp );
+			} else
+			if (oflag == 3) {
+				ofp = afile(linkp->f_idp, "elf", 4);
+				if (ofp == NULL) {
+					lkexit(1);
+				}
 			}
 		} else {
 			/*
@@ -369,7 +375,7 @@ char *argv[];
 		}
 	}
 	//JCF:
-	CreateAOMF51();
+	//CreateAOMF51();
 
 #ifdef WIN32T
     Timer(1, "Linker execution time");
@@ -756,6 +762,8 @@ parse()
 	char fid[NINPUT];
 
 	while ((c = getnb()) != 0) {
+		if ( c == ';')
+			return(0);
 		if ( c == '-') {
 			while (ctype[c=get()] & LETTER) {
 				switch(c) {
@@ -768,6 +776,11 @@ parse()
 				case 's':
 				case 'S':
 					oflag = 2;
+					break;
+
+				case 't':
+				case 'T':
+					oflag = 3;
 					break;
 
 				case 'm':
@@ -866,6 +879,8 @@ parse()
 					lkexit(1);
 				}
 			}
+			if ( c == ';')
+				return(0);
 		} else
                if (ctype[c] & ILL) {
                        fprintf(stderr, "Invalid input");
@@ -1154,12 +1169,22 @@ char *ft;
 {
 	FILE *fp;
 	char fb[PATH_MAX];
-	char *omode = (wf ? (wf == 2 ? "a" : "w") : "r");
+	char *omode;
 	int i;
+	
+	switch (wf) {
+		case 0: omode = "r"; break;
+		case 1: omode = "w"; break;
+		case 2: omode = "a"; break;
+		case 3: omode = "rb"; break;
+		case 4: omode = "wb"; break;
+		case 5: omode = "ab"; break;
+		default: omode = "r"; break;
+	}
 
 	/*Look backward the name path and get rid of the extension, if any*/
 	i=strlen(fn);
-	for(; (fn[i]!='.')&&(fn[i]!='\\')&&(fn[i]!='/')&&(i>=0); i--);
+	for(; (fn[i]!='.')&&(fn[i]!='\\')&&(fn[i]!='/')&&(i>0); i--);
 	if( (fn[i]=='.') && strcmp(ft, "lnk") )
 	{
 		strncpy(fb, fn, i);
@@ -1171,9 +1196,12 @@ char *ft;
 	}
 
 	/*Add the extension*/
-	strcat(fb, ".");
-	strcat(fb, strlen(ft)?ft:"rel");
-	
+	if (fb[i] != '.')
+	{
+		strcat(fb, ".");
+		strcat(fb, strlen(ft)?ft:"rel");
+	}
+		
 	fp = fopen(fb, omode);
 	if (fp==NULL)
 	{
@@ -1309,6 +1337,7 @@ char *usetxt[] = {
 	"Output:",
 	"  -i	Intel Hex as file[IHX]",
 	"  -s	Motorola S19 as file[S19]",
+        "  -t   ELF executable as file[elf]",
 	"  -j	Produce NoICE debug as file[NOI]",
 	"  -z   Produce SDCdb debug as file[cdb]",
 /*	"List:", */

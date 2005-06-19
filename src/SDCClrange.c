@@ -8,19 +8,19 @@
    under the terms of the GNU General Public License as published by the
    Free Software Foundation; either version 2, or (at your option) any
    later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-   
+
    In other words, you are welcome to use, share and improve this program.
    You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!  
+   what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 
 #include "common.h"
@@ -34,7 +34,7 @@ hTab *iCodeSeqhTab = NULL;
 /*-----------------------------------------------------------------*/
 /* hashiCodeKeys - add all iCodes to the hash table                */
 /*-----------------------------------------------------------------*/
-void 
+void
 hashiCodeKeys (eBBlock ** ebbs, int count)
 {
   int i;
@@ -43,14 +43,14 @@ hashiCodeKeys (eBBlock ** ebbs, int count)
     {
       iCode *ic;
       for (ic = ebbs[i]->sch; ic; ic = ic->next)
-	hTabAddItem (&iCodehTab, ic->key, ic);
+        hTabAddItem (&iCodehTab, ic->key, ic);
     }
 }
 
 /*-----------------------------------------------------------------*/
 /* sequenceiCode - creates a sequence number for the iCode & add   */
 /*-----------------------------------------------------------------*/
-void 
+void
 sequenceiCode (eBBlock ** ebbs, int count)
 {
   int i;
@@ -94,7 +94,7 @@ setFromRange (operand * op, int from)
 /*-----------------------------------------------------------------*/
 /* setToRange - set the range to for an operand                    */
 /*-----------------------------------------------------------------*/
-void 
+void
 setToRange (operand * op, int to, bool check)
 {
   /* only for compiler defined temps */
@@ -143,16 +143,16 @@ markLiveRanges (eBBlock ** ebbs, int count)
 {
   int i, key;
   symbol *sym;
-  
+
   for (i = 0; i < count; i++)
     {
       iCode *ic;
-      
+
       for (ic = ebbs[i]->sch; ic; ic = ic->next)
         {
 	  if (ic->op == CALL || ic->op == PCALL)
-	      if (bitVectIsZero (OP_SYMBOL (IC_RESULT (ic))->uses))
-		bitVectUnSetBit (ebbs[i]->defSet, ic->key);
+	    if (bitVectIsZero (OP_SYMBOL (IC_RESULT (ic))->uses))
+              bitVectUnSetBit (ebbs[i]->defSet, ic->key);
 
 	  /* for all iTemps alive at this iCode */
 	  for (key = 1; key < ic->rlive->size; key++)
@@ -219,7 +219,8 @@ findNextUseSym (eBBlock *ebp, iCode *ic, symbol * sym)
   if (ebp->visited)
     return 0;
 
-  ebp->visited = 1;
+  if (ic == ebp->sch)
+    ebp->visited = 1;
 
   /* for all remaining instructions in current block */
   for (uic = ic; uic; uic = uic->next)
@@ -236,7 +237,7 @@ findNextUseSym (eBBlock *ebp, iCode *ic, symbol * sym)
 	      return 1;
 	    }
 	   continue;
-	 }
+	}
 
       if (uic->op == IFX)
         {
@@ -246,7 +247,7 @@ findNextUseSym (eBBlock *ebp, iCode *ic, symbol * sym)
 	      return 1;
 	    }
 	   continue;
-	 }
+	}
 
       if (IS_ITEMP (IC_LEFT (uic)))
         if (IC_LEFT (uic)->key == sym->key)
@@ -320,8 +321,104 @@ void unvisitBlocks (eBBlock ** ebbs, int count)
     ebbs[i]->visited = 0;
 }
 
+/*------------------------------------------------------------------*/
+/* findRecursiveSucc - build a bit vector of recursive successors   */
+/*------------------------------------------------------------------*/
+DEFSETFUNC (findRecursiveSucc)
+{
+  eBBlock *ebp = item;
+  V_ARG (bitVect *, succVect);
+  
+  if (ebp->visited)
+    return 0;
+  
+  ebp->visited = 1;
+  bitVectSetBit (succVect, ebp->bbnum);
+  applyToSet (ebp->succList, findRecursiveSucc, succVect);
+  return 0;
+}
+
+
+/*------------------------------------------------------------------*/
+/* findRecursivePred - build a bit vector of recursive predecessors */
+/*------------------------------------------------------------------*/
+DEFSETFUNC (findRecursivePred)
+{
+  eBBlock *ebp = item;
+  V_ARG (bitVect *, predVect);
+  
+  if (ebp->visited)
+    return 0;
+  
+  ebp->visited = 1;
+  bitVectSetBit (predVect, ebp->bbnum);
+  applyToSet (ebp->predList, findRecursivePred, predVect);
+  return 0;
+}
+
+
+/*------------------------------------------------------------------*/
+/* findPrevUse - handle degenerate case of a symbol used prior to   */
+/*               findNextUse() marking any definition.              */
+/*------------------------------------------------------------------*/
+void
+findPrevUse (eBBlock *ebp, iCode *ic, operand *op, eBBlock **ebbs, int count)
+{
+  int i;
+  bitVect * succVect;
+  bitVect * predVect;
+  eBBlock * pred;
+
+  /* If liveness is already known, then a previous call to findNextUse() */
+  /* has already taken care of everything. */
+  if (ic && bitVectBitValue(ic->rlive, op->key))
+    return;
+
+  if (!ic)
+    {
+      /* We are at the start of a block. If the operand is alive at the */
+      /* end of all predecessors, then a previous call to findNextUse() */
+      /* has already taken care of everything. */
+      
+      pred = setFirstItem (ebp->predList);
+      for (; pred; pred = setNextItem (ebp->predList))
+        if (pred->ech && !bitVectBitValue(pred->ech->rlive, op->key))
+          break;
+      
+      if (!pred)
+        return;
+    }
+
+  if (op->isaddr)
+    OP_SYMBOL (op)->isptr = 1;
+
+  OP_SYMBOL (op)->key = op->key;
+
+  /* Otherwise, it appears that this symbol was used prior to definition.     */
+  /* Just fix the live range; we'll deal with a diagnostic message elsewhere. */
+  /* If the symbol use was in a loop, we need to extend the live range to the */
+  /* outermost loop. */
+  unvisitBlocks (ebbs, count);
+  succVect = newBitVect (count);
+  applyToSet (ebp->succList, findRecursiveSucc, succVect);
+  unvisitBlocks (ebbs, count);
+  predVect = newBitVect (count);
+  applyToSet (ebp->predList, findRecursivePred, predVect);
+
+  /* Blocks that are both recursively predecessors and successors are in */
+  /* a loop with the current iCode. Mark the operand as alive in them.   */
+  for (i = 0; i < count; i++)
+    {
+      if (bitVectBitValue(succVect, i) && bitVectBitValue(predVect, i))
+        markAlive (ebbs[i]->sch, ebbs[i]->ech, op->key);
+    }
+
+  freeBitVect (succVect);
+  freeBitVect (predVect);
+}
+
 /*-----------------------------------------------------------------*/
-/* unvisitBlocks - clears visited in all blocks                    */
+/* incUsed - increment a symbol's usage count                      */
 /*-----------------------------------------------------------------*/
 void
 incUsed (iCode *ic, operand *op)
@@ -386,6 +483,7 @@ rlivePoint (eBBlock ** ebbs, int count)
 	      if (!IS_ITEMP(IC_JTCOND(ic)))
 	        continue;
 
+	      findPrevUse (ebbs[i], ic->prev, IC_JTCOND(ic), ebbs, count);
 	      unvisitBlocks(ebbs, count);
 	      ic->rlive = bitVectSetBit (ic->rlive, IC_JTCOND(ic)->key);
 	      findNextUse (ebbs[i], ic->next, IC_JTCOND(ic));
@@ -400,6 +498,7 @@ rlivePoint (eBBlock ** ebbs, int count)
 	      if (!IS_ITEMP(IC_COND(ic)))
 	        continue;
 
+	      findPrevUse (ebbs[i], ic->prev, IC_COND(ic), ebbs, count);
 	      unvisitBlocks (ebbs, count);
 	      ic->rlive = bitVectSetBit (ic->rlive, IC_COND(ic)->key);
 	      findNextUse (ebbs[i], ic->next, IC_COND(ic));
@@ -413,6 +512,7 @@ rlivePoint (eBBlock ** ebbs, int count)
 	      if (IS_ITEMP(IC_LEFT(ic)))
 	        {
 
+	          findPrevUse (ebbs[i], ic->prev, IC_LEFT(ic), ebbs, count);
 	          unvisitBlocks(ebbs, count);
 	          ic->rlive = bitVectSetBit (ic->rlive, IC_LEFT(ic)->key);
 	          findNextUse (ebbs[i], ic->next, IC_LEFT(ic));
@@ -431,6 +531,8 @@ rlivePoint (eBBlock ** ebbs, int count)
 			}
 		    }
 		}
+//                fprintf(stderr, "%s:%d IS_SYMOP left\t", __FILE__, __LINE__);printOperand(IC_LEFT(ic), stderr);
+//                fprintf(stderr, "\n");
 	    }
 
 	  if (IS_SYMOP(IC_RIGHT(ic)))
@@ -438,10 +540,13 @@ rlivePoint (eBBlock ** ebbs, int count)
 	      incUsed (ic, IC_RIGHT(ic));
 	      if (IS_ITEMP(IC_RIGHT(ic)))
 	        {
+	          findPrevUse (ebbs[i], ic->prev, IC_RIGHT(ic), ebbs, count);
 	          unvisitBlocks(ebbs, count);
 	          ic->rlive = bitVectSetBit (ic->rlive, IC_RIGHT(ic)->key);
 	          findNextUse (ebbs[i], ic->next, IC_RIGHT(ic));
 		}
+//                fprintf(stderr, "%s:%d IS_SYMOP right\t", __FILE__, __LINE__);printOperand(IC_RIGHT(ic), stderr);
+//                fprintf(stderr, "\n");
 	    }
 
 	  if (POINTER_SET(ic) && IS_SYMOP(IC_RESULT(ic)))
@@ -449,6 +554,10 @@ rlivePoint (eBBlock ** ebbs, int count)
 
 	  if (IS_ITEMP(IC_RESULT(ic)))
 	    {
+	      if (POINTER_SET(ic))
+	        {
+	          findPrevUse (ebbs[i], ic->prev, IC_RESULT(ic), ebbs, count);
+		}
 	      unvisitBlocks(ebbs, count);
 	      ic->rlive = bitVectSetBit (ic->rlive, IC_RESULT(ic)->key);
 	      findNextUse (ebbs[i], ic->next, IC_RESULT(ic));
@@ -476,6 +585,8 @@ rlivePoint (eBBlock ** ebbs, int count)
       if (ebbs[i]->ech)
         alive = bitVectCplAnd ( bitVectCopy (ebbs[i]->ech->rlive), alive);
 
+      if(!alive)
+        continue;
       for (key = 1; key < alive->size; key++)
         {
 	  if (!bitVectBitValue (alive, key))
@@ -525,7 +636,7 @@ computeClash (eBBlock ** ebbs, int count)
 		    continue;
 
 		  sym2 = hTabItemWithKey(liveRanges, key2);
-		  
+
 		  if (!sym2->isitmp)
 		    continue;
 
@@ -535,7 +646,9 @@ computeClash (eBBlock ** ebbs, int count)
 		      IS_ITEMP(IC_RESULT(ic)) &&
 		      (IS_ITEMP(IC_LEFT(ic)) || IS_ITEMP(IC_RIGHT(ic))))
 		    {
-		      if (OP_SYMBOL(IC_RESULT(ic))->key == key1)
+		      if (OP_SYMBOL(IC_RESULT(ic))->key == key1
+			  && sym1->liveFrom == ic->seq
+			  && sym2->liveTo == ic->seq)
 		        {
 		          if (IS_SYMOP(IC_LEFT(ic)))
 			    if (OP_SYMBOL(IC_LEFT(ic))->key == key2)
@@ -545,7 +658,9 @@ computeClash (eBBlock ** ebbs, int count)
 			      continue;
 			}
 
-		      if (OP_SYMBOL(IC_RESULT(ic))->key == key2)
+		      if (OP_SYMBOL(IC_RESULT(ic))->key == key2
+			  && sym2->liveFrom == ic->seq
+			  && sym1->liveTo == ic->seq)
 		        {
 		          if (IS_SYMOP(IC_LEFT(ic)))
 			    if (OP_SYMBOL(IC_LEFT(ic))->key == key1)
@@ -594,7 +709,6 @@ allDefsOutOfRange (bitVect * defs, int fseq, int toseq)
       if (bitVectBitValue (defs, i) &&
 	  (ic = hTabItemWithKey (iCodehTab, i)) &&
 	  (ic->seq >= fseq && ic->seq <= toseq))
-
 	return FALSE;
 
     }
@@ -620,11 +734,11 @@ void
 adjustIChain (eBBlock ** ebbs, int count)
 {
   int i;
-  
+
   for (i = 0; i < count; i++)
     {
       iCode *ic;
-      
+
       if (ebbs[i]->noPath)
         continue;
 
@@ -636,7 +750,7 @@ adjustIChain (eBBlock ** ebbs, int count)
       while (ic->prev)
         ic = ic->prev;
       ebbs[i]->sch = ic;
-      
+
       ic = ebbs[i]->ech;
       while (ic->next)
         ic = ic->next;

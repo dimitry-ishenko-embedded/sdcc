@@ -28,7 +28,13 @@ struct	mne	mne[] = {
     {	NULL,	"ABS",		S_ATYP,		0,	A_ABS|A_OVR	},
     {	NULL,	"NOPAG",	S_ATYP,		0,	A_NOPAG	},
     {	NULL,	"PAG",		S_ATYP,		0,	A_PAG	},
+    {	NULL,	"CODE",		S_ATYP,		0,	A_CODE	},
+    {	NULL,	"DATA",		S_ATYP,		0,	A_DATA	},
+    {	NULL,	"LOAD",		S_ATYP,		0,	A_LOAD	},
+    {	NULL,	"NOLOAD",	S_ATYP,		0,	A_NOLOAD },
 
+    {	NULL,	".uleb128",	S_ULEB128,	0,	0	},
+    {	NULL,	".sleb128",	S_SLEB128,	0,	0	},
     {	NULL,	".byte",	S_BYTE,		0,	1	},
     {	NULL,	".db",		S_BYTE,		0,	1	},
     {	NULL,	".word",	S_WORD,		0,	2	},
@@ -53,6 +59,7 @@ struct	mne	mne[] = {
     {	NULL,	".org",		S_ORG,		0,	0	},
     {	NULL,	".module",	S_MODUL,	0,	0	},
     {	NULL,	".ascis",	S_ASCIS,	0,	0	},
+    {	NULL,	".optsdcc",	S_OPTSDCC,	0,	0},
 //    {	NULL,	".assume",	S_ERROR,	0,	0	},
 //    {	NULL,	".error",	S_ERROR,	0,	1	},
 

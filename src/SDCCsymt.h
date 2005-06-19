@@ -63,8 +63,6 @@ enum {
 #define GPTYPE_FAR	1
 #define GPTYPE_CODE	2
 #define GPTYPE_XSTACK	3
-#define GPTYPE_GPTR	4 	// Never used?
-#define GPTYPE_IDATA	5
 
 #define HASHTAB_SIZE 256
 
@@ -152,13 +150,13 @@ typedef struct specifier
     int argreg;  	        /* reg no for regparm 	      */
     union
       {				/* Values if constant or enum */
-	TYPE_WORD   v_int;	/* 2 bytes: int and char values        */
-	char       *v_char;	/*          character string           */
-	TYPE_UWORD  v_uint;	/* 2 bytes: unsigned int const value   */
-	TYPE_DWORD  v_long;	/* 4 bytes: long constant value        */
-	TYPE_UDWORD v_ulong;	/* 4 bytes: unsigned long constant val */
+	TYPE_WORD   v_int;	/* 2 bytes: int and char values           */
+	char       *v_char;	/*          character string              */
+	TYPE_UWORD  v_uint;	/* 2 bytes: unsigned int const value      */
+	TYPE_DWORD  v_long;	/* 4 bytes: long constant value           */
+        TYPE_UDWORD v_ulong;    /* 4 bytes: unsigned long constant value  */
 	double      v_float;	/*          floating point constant value */
-	struct symbol *v_enum;	/* ptr 2 enum_list if enum==1 */
+        struct symbol *v_enum;  /* ptr to enum_list if enum==1            */
       }
     const_val;
     struct structdef *v_struct;	/* structure pointer      */
@@ -218,13 +216,15 @@ typedef struct sym_link
       unsigned reent:1;		/* function is reentrant      */
       unsigned naked:1;		/* naked function	      */
 
+      unsigned shadowregs:1;    /* function uses shadow registers (pic16 port) */
+      unsigned wparam:1;	/* first byte of arguments is passed via WREG (pic16 port) */
       unsigned nonbanked:1;	/* function has the nonbanked attribute */
       unsigned banked:1;	/* function has the banked attribute */
       unsigned critical:1;	/* critical function          */
-      unsigned intrtn:1;	/* this is an interrupt routin */
+      unsigned intrtn:1;        /* this is an interrupt routine */
       unsigned rbank:1;		/* seperate register bank     */
       unsigned intno;		/* 1=Interrupt svc routine    */
-      unsigned regbank;		/* register bank 2b used      */
+      short    regbank;		/* register bank 2b used      */
       unsigned builtin;		/* is a builtin function      */
       unsigned javaNative;    	/* is a JavaNative Function (TININative ONLY) */
       unsigned overlay;    	/* force parameters & locals into overlay segment */
@@ -279,7 +279,7 @@ typedef struct symbol
     unsigned noSpilLoc:1;	/* cannot be assigned a spil location */
     unsigned isstrlit;		/* is a string literal and it's usage count  */
     unsigned accuse;		/* can be left in the accumulator
-				   On the Z80 accuse is devided into
+                                   On the Z80 accuse is divided into
 				   ACCUSE_A and ACCUSE_HL as the idea
 				   is quite similar.
 				 */
@@ -295,9 +295,10 @@ typedef struct symbol
     struct regs *regs[4];	/* can have at the most 4 registers */
     struct asmop *aop;		/* asmoperand for this symbol */
     struct iCode *fuse;		/* furthest use */
-    struct iCode *rematiCode;	/* rematerialse with which instruction */
+    struct iCode *rematiCode;   /* rematerialise with which instruction */
     struct operand *reqv;	/* register equivalent of a local variable */
     struct symbol *prereqv;	/* symbol before register equiv. substituion */
+    struct symbol *psbase;	/* if pseudo symbol, the symbol it is based on */
     union
       {
 	struct symbol *spillLoc;	/* register spil location */
@@ -310,8 +311,8 @@ typedef struct symbol
     int lineDef;		/* defined line number        */
     char *fileDef;		/* defined filename           */
     int lastLine;		/* for functions the last line */
-    struct sym_link *type;	/* 1st link to declator chain */
-    struct sym_link *etype;	/* last link to declarator chn */
+    struct sym_link *type;      /* 1st link to declarator chain */
+    struct sym_link *etype;     /* last link to declarator chain */
     struct symbol *next;	/* crosslink to next symbol   */
     struct symbol *localof;	/* local variable of which function */
     struct initList *ival;	/* ptr to initializer if any  */
@@ -359,6 +360,10 @@ extern sym_link *validateLink(sym_link 	*l,
 
 #define FUNC_ISREENT(x) (x->funcAttrs.reent)
 #define IFFUNC_ISREENT(x) (IS_FUNC(x) && FUNC_ISREENT(x))
+#define FUNC_ISSHADOWREGS(x) (x->funcAttrs.shadowregs)
+#define IFFUNC_ISSHADOWREGS(x) (IS_FUNC(x) && FUNC_ISSHADOWREGS(x))
+#define FUNC_ISWPARAM(x) (x->funcAttrs.wparam)
+#define IFFUNC_ISWPARAM(x) (IS_FUNC(x) && FUNC_ISWPARAM(x))
 #define FUNC_ISNAKED(x) (x->funcAttrs.naked)
 #define IFFUNC_ISNAKED(x) (IS_FUNC(x) && FUNC_ISNAKED(x))
 #define FUNC_NONBANKED(x) (x->funcAttrs.nonbanked)
@@ -457,12 +462,17 @@ extern sym_link *validateLink(sym_link 	*l,
 #define IS_BITVAR(x) (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD || \
                                      x->select.s.noun  == V_BIT ||   \
                                      x->select.s.noun == V_SBIT ))
+#define IS_BIT(x) (IS_SPEC(x) && (x->select.s.noun  == V_BIT ||   \
+                                  x->select.s.noun == V_SBIT ))
 #define IS_FLOAT(x)  (IS_SPEC(x) && x->select.s.noun == V_FLOAT)
 #define IS_ARITHMETIC(x) (IS_INTEGRAL(x) || IS_FLOAT(x))
 #define IS_AGGREGATE(x) (IS_ARRAY(x) || IS_STRUCT(x))
 #define IS_LITERAL(x)   (IS_SPEC(x)  && x->select.s.sclass == S_LITERAL)
 #define IS_CODE(x)      (IS_SPEC(x)  && SPEC_SCLS(x) == S_CODE)
 #define IS_REGPARM(x)   (IS_SPEC(x) && SPEC_REGPARM(x))
+
+/* symbol check macros */
+#define IS_AUTO(x) (x->level && !IS_STATIC(x->etype) && !IS_EXTERN(x->etype))
 
 /* forward declaration for the global vars */
 extern bucket *SymbolTab[];
@@ -502,6 +512,16 @@ extern sym_link *floatType;
 
 #include "SDCCval.h"
 
+typedef enum
+{
+  RESULT_TYPE_NONE = 0,	/* operands will be promoted to int */
+  RESULT_TYPE_BIT,
+  RESULT_TYPE_CHAR,
+  RESULT_TYPE_INT,
+  RESULT_TYPE_OTHER,	/* operands will be promoted to int */
+  RESULT_TYPE_IFX,
+} RESULT_TYPE;
+
 /* forward definitions for the symbol table related functions */
 void initSymt ();
 symbol *newSymbol (char *, int);
@@ -528,6 +548,7 @@ value *checkStructIval (symbol *, value *);
 value *checkArrayIval (sym_link *, value *);
 value *checkIval (sym_link *, value *);
 unsigned int getSize (sym_link *);
+unsigned int getAllocSize (sym_link *);
 unsigned int bitsForType (sym_link *);
 sym_link *newIntLink ();
 sym_link *newCharLink ();
@@ -541,7 +562,7 @@ int funcInChain (sym_link *);
 void addSymChain (symbol *);
 sym_link *structElemType (sym_link *, value *);
 symbol *getStructElement (structdef *, symbol *);
-sym_link *computeType (sym_link *, sym_link *, bool promoteCharToInt);
+sym_link *computeType (sym_link *, sym_link *, RESULT_TYPE, int);
 void processFuncArgs (symbol *);
 int isSymbolEqual (symbol *, symbol *);
 int powof2 (TYPE_UDWORD);
@@ -558,11 +579,12 @@ void deleteSym (bucket **, void *, char *);
 void *findSym (bucket **, void *, const char *);
 void *findSymWithLevel (bucket **, struct symbol *);
 void *findSymWithBlock (bucket **, struct symbol *, int);
-void changePointer (symbol * sym);
+void changePointer (sym_link * p);
 void checkTypeSanity(sym_link *etype, char *name);
 sym_link *typeFromStr (char *) ;
 STORAGE_CLASS sclsFromPtr(sym_link *ptr);
 sym_link *newEnumType (symbol *);
+void  promoteAnonStructs (int, structdef *);
 
 
 extern char *nounName(sym_link *); /* noun strings */

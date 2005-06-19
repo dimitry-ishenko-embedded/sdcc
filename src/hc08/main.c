@@ -12,6 +12,8 @@
 
 void copyFile(FILE *dest, FILE *src);
 extern char * iComments2;
+extern DEBUGFILE dwarf2DebugFile;
+extern int dwarf2FinalizeFile(FILE *);
 
 static char _defaultRules[] =
 {
@@ -49,7 +51,7 @@ static char *_hc08_keywords[] =
 };
 
 
-void hc08_assignRegisters (eBBlock ** ebbs, int count);
+void hc08_assignRegisters (ebbIndex *);
 
 static int regParmFlg = 0;	/* determine if we can register a parameter */
 
@@ -60,7 +62,7 @@ _hc08_init (void)
 }
 
 static void
-_hc08_reset_regparm ()
+_hc08_reset_regparm (void)
 {
   regParmFlg = 0;
 }
@@ -96,8 +98,21 @@ _hc08_regparm (sym_link * l)
 static bool
 _hc08_parseOptions (int *pargc, char **argv, int *i)
 {
+  if (!strcmp (argv[*i], "--out-fmt-elf"))
+    {
+      options.out_fmt = 2;
+      debugFile = &dwarf2DebugFile;
+      return TRUE;
+    }
+    
   return FALSE;
 }
+
+static OPTION _hc08_options[] = 
+  {
+    {  0,   "--out-fmt-elf", NULL, "Output executable in ELF format" },
+    {  0, NULL }
+  };
 
 static void
 _hc08_finaliseOptions (void)
@@ -116,6 +131,7 @@ _hc08_finaliseOptions (void)
       port->mem.default_globl_map = data;
     }
 
+  istack->ptrType = FPOINTER;
 }
 
 static void
@@ -123,7 +139,7 @@ _hc08_setDefaultOptions (void)
 {
   options.code_loc = 0x8000;
   options.data_loc = 0x80;
-  options.xdata_loc = 0x100;
+  options.xdata_loc = 0;	/* 0 means immediately following data */
   options.stack_loc = 0x7fff;
   options.out_fmt = 1;		/* use motorola S19 output */
 
@@ -149,6 +165,7 @@ _hc08_genAssemblerPreamble (FILE * of)
   mainExists->block=0;
 
   fprintf (of, "\t.area %s\n",port->mem.code_name);
+  fprintf (of, "\t.area GSINIT0 (CODE)\n");
   fprintf (of, "\t.area %s\n",port->mem.static_name);
   fprintf (of, "\t.area %s\n",port->mem.post_static_name);
   fprintf (of, "\t.area %s\n",port->mem.xinit_name);
@@ -181,7 +198,7 @@ _hc08_genAssemblerPreamble (FILE * of)
 	fprintf (of, "\t.org\t0xfffe\n");
       fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n\n");
         
-      fprintf (of, "\t.area GSINIT\n");
+      fprintf (of, "\t.area GSINIT0\n");
       fprintf (of, "__sdcc_gs_init_startup:\n");
       if (options.stack_loc)
         {
@@ -215,6 +232,15 @@ _hc08_genAssemblerPreamble (FILE * of)
       fprintf (of, "\tjsr\t_main\n");
       fprintf (of, "\tbra\t.\n");
       
+    }
+}
+
+static void
+_hc08_genAssemblerEnd (FILE * of)
+{
+  if (options.out_fmt == 2 && options.debug)
+    {
+      dwarf2FinalizeFile (of);
     }
 }
 
@@ -317,6 +343,26 @@ oclsExpense (struct memmap *oclass)
 }
 
 
+/*----------------------------------------------------------------------*/
+/* hc08_dwarfRegNum - return the DWARF register number for a register.  */
+/*   These are defined for the HC08 in "Motorola 8- and 16-bit Embedded */
+/*   Application Binary Interface (M8/16EABI)"                          */
+/*----------------------------------------------------------------------*/
+static int
+hc08_dwarfRegNum (regs * reg)
+{
+  switch (reg->rIdx)
+    {
+    case A_IDX: return 0;
+    case H_IDX: return 1;
+    case X_IDX: return 2;
+    case CND_IDX: return 17;
+    case SP_IDX: return 15;
+    }
+  return -1;
+}
+
+
 
 /** $1 is always the basename.
     $2 is always the output file.
@@ -374,16 +420,17 @@ PORT hc08_port =
   {
     "XSEG",
     "STACK",
-    "CSEG",
+    "CSEG (CODE)",
     "DSEG",
     NULL, /* "ISEG" */
+    NULL, /* "PSEG" */
     "XSEG",
     "BSEG",
     "RSEG",
-    "GSINIT",
+    "GSINIT (CODE)",
     "OSEG    (OVR)",
-    "GSFINAL",
-    "HOME",
+    "GSFINAL (CODE)",
+    "HOME (CODE)",
     "XISEG", // initialized xdata
     "XINIT", // a code copy of xiseg
     NULL,
@@ -393,15 +440,42 @@ PORT hc08_port =
   { _hc08_genExtraAreas,
     NULL },
   {
-    -1, 0, 4, 2, 0, 0
+    -1,		/* direction (-1 = stack grows down) */
+    0,		/* bank_overhead (switch between register banks) */
+    4,		/* isr_overhead */
+    2,		/* call_overhead */
+    0,		/* reent_overhead */
+    0		/* banked_overhead (switch between code banks) */
   },
     /* hc08 has an 8 bit mul */
   {
     1, -1
   },
+  {
+    hc08_emitDebuggerSymbol,
+    {
+      hc08_dwarfRegNum,
+      NULL,
+      NULL,
+      4,				/* addressSize */
+      14,			/* regNumRet */
+      15,			/* regNumSP */
+      -1,			/* regNumBP */
+      1,			/* offsetSP */
+    },
+  },
+  {
+    256,        /* maxCount */
+    2,          /* sizeofElement */
+    {8,16,32},  /* sizeofMatchJump[] */
+    {8,16,32},  /* sizeofRangeCompare[] */
+    5,          /* sizeofSubtract */
+    10,         /* sizeofDispatch */
+  },
   "_",
   _hc08_init,
   _hc08_parseOptions,
+  _hc08_options,
   NULL,
   _hc08_finaliseOptions,
   _hc08_setDefaultOptions,
@@ -409,9 +483,10 @@ PORT hc08_port =
   _hc08_getRegName,
   _hc08_keywords,
   _hc08_genAssemblerPreamble,
-  NULL,				/* no genAssemblerEnd */
+  _hc08_genAssemblerEnd,	/* no genAssemblerEnd */
   _hc08_genIVT,
   _hc08_genXINIT,
+  NULL, 			/* genInitStartup */
   _hc08_reset_regparm,
   _hc08_regparm,
   NULL,				/* process_pragma */

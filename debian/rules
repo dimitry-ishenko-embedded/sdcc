@@ -41,18 +41,13 @@ config.status: configure
 		--enable-xa51-port \
 		--enable-hc08-port
 
-build-arch: build-arch-stamp
-build-arch-stamp: config.status
+build: build-stamp
+build-stamp: config.status
 	dh_testdir
 	$(MAKE)
-	touch build-arch-stamp
-
-build-indep: build-arch-stamp build-indep-stamp 
-build-indep-stamp: config.status
-	dh_testdir
 	cd doc && $(MAKE)
 	cd doc/z80 && PRJDIR="$(CURDIR)" $(MAKE)
-	touch build-indep-stamp
+	touch build-stamp
 
 clean:
 	dh_testdir
@@ -60,42 +55,56 @@ clean:
 	rm -f *-stamp
 
 	-$(MAKE) -C sim/ucsim distclean
+	-$(MAKE) -C device/lib/ds400/ clean
 	-$(MAKE) -C doc/z80 clean
+	-$(MAKE) -C doc clean
 	-$(MAKE) clean
 	-$(MAKE) realclean
-	-rm -f $(CURDIR)/src/ds400/*.{a,o}
-	-rm -f $(CURDIR)/src/hc08/*.{a,o}
-
+	-find $(CURDIR)/ -name *.o -exec rm {} \;
+	-find $(CURDIR)/ -name *.a -exec rm {} \;
+	-find $(CURDIR)/ -name Makefile.dep -exec rm {} \;
+	rm -f as/hc08/Makefile
+	rm -f as/mcs51/Makefile
+	rm -f device/lib/Makefile
+	rm -f sim/ucsim/xa.src/Makefile
+	rm -f sim/ucsim/z80.src/Makefile
+	rm -f sim/ucsim/libtool
+	rm -f sim/ucsim/packages.mk
+	rm -f src/hc08/peeph.rul
+	
 	dh_clean
 
 
-install-arch: install-arch-stamp
-install-arch-stamp: build-arch
+install: install-stamp
+install-stamp: build
 	dh_testdir
 	dh_testroot
 	dh_clean -k
-	dh_installdirs -a
+	dh_installdirs
 
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
-
-	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
-	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc/ucsim/* $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
 
 	# Install emacs helper file.
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 	mv $(CURDIR)/debian/tmp/usr/bin/*.el $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 
+	# Remove not needed files
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/ -name *.o -exec rm {} \;
+	rm -f $(CURDIR)/debian/tmp/usr/share/sdcc/doc/INSTALL.txt
+	
 	# Removing execute permission on some text files.
-	chmod -x $(CURDIR)/debian/tmp/usr/share/sdcc/include/*.h
-	chmod -x $(CURDIR)/debian/tmp/usr/share/sdcc/lib/src/ds390/*.c
-	chmod -x $(CURDIR)/debian/tmp/usr/share/sdcc/lib/src/ds400/*.c
-	chmod -x $(CURDIR)/debian/tmp/usr/share/sdcc/lib/src/*.c
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/ -type f -exec chmod -x {} \;
 
-	dh_install -a --sourcedir=debian/tmp
+	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
+	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc/ucsim/* $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
+	
+	# Moving all other files in /usr/share/sdcc/doc to /usr/share/doc/sdcc-doc
+	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc $(CURDIR)/debian/tmp/usr/share/doc/sdcc-doc
 
-	touch install-arch-stamp
+	dh_install --sourcedir=debian/tmp --list-missing
 
+	touch install-stamp
 
 install-indep: install-indep-stamp
 install-indep-stamp: build-indep install-arch
@@ -103,27 +112,9 @@ install-indep-stamp: build-indep install-arch
 	dh_testroot
 	dh_installdirs -i
 
-	# Install doc files
-	cd doc && cp -a *.txt *.pdf *.html $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
-	cd doc && cp -a avr/*.txt $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/avr
-	cd doc && cp -a z80/*.pdf $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/z80
-	cp as/doc/*.{doc,txt,html} $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/aslink
-	cp as/doc/README $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/aslink
-
-	# Remove some files that are not need
-	rm $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/README.txt
-	rm $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/INSTALL.txt
-	
-	dh_install -i --sourcedir=debian/tmp
-	
-	touch install-indep-stamp
-
-
-install: install-arch install-indep
-
 
 # Build architecture-independent files here.
-binary-indep: install-indep
+binary-indep: build install
 	dh_testdir -i
 	dh_testroot -i
 #	dh_installdebconf -i
@@ -152,7 +143,7 @@ binary-indep: install-indep
 	dh_builddeb -i
 
 # Build architecture-dependent files here.
-binary-arch: install-arch
+binary-arch: build install
 	dh_testdir -a
 	dh_testroot -a
 #	dh_installdebconf -a
@@ -181,4 +172,4 @@ binary-arch: install-arch
 	dh_builddeb -a
 
 binary: binary-arch binary-indep
-.PHONY: build clean binary-indep binary-arch binary install install-arch install-indep
+.PHONY: build clean binary-indep binary-arch binary install

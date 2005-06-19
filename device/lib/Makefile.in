@@ -14,6 +14,9 @@ CP              = @CP@
 
 PRJDIR		= ../..
 INCDIR		= $(PRJDIR)/device/include
+ifndef PORTINCDIR
+PORTINCDIR	= $(INCDIR)/mcs51
+endif
 
 CC		= $(PRJDIR)/bin/sdcc
 CPP		= $(PRJDIR)/bin/sdcpp
@@ -32,9 +35,9 @@ srcdir          = @srcdir@
 
 lib_dir_suffix  = @lib_dir_suffix@
 
-sdcc_libdir     = $(datadir)/$(lib_dir_suffix)
+sdcc_libdir     = $(DESTDIR)$(datadir)/$(lib_dir_suffix)
 
-CPPFLAGS        = -I$(INCDIR)
+CPPFLAGS        = -I$(INCDIR) -I$(PORTINCDIR)
 CFLAGS		= $(MODELFLAGS) --nostdinc
 
 BUILDDIR        = build
@@ -46,22 +49,30 @@ SOURCES		= _atof.c _atoi.c _atol.c _autobaud.c _bp.c _schar2fs.c \
 		  _decdptr.c _divsint.c _divslong.c _divuint.c \
 		  _divulong.c _fs2schar.c _fs2sint.c _fs2slong.c \
 		  _fs2uchar.c _fs2uint.c _fs2ulong.c _fsadd.c \
-		  _fsdiv.c _fseq.c _fsgt.c _fslt.c _fsmul.c \
+		  _fsdiv.c _fseq.c _fsgt.c _fslt.c _fscmp.c _fsmul.c \
 		  _fsneq.c _fssub.c _gptrget.c _gptrgetc.c _gptrput.c \
 		  _sint2fs.c _iscntrl.c _isdigit.c _isgraph.c \
 		  _islower.c _isprint.c _ispunct.c _isspace.c \
 		  _isupper.c _isxdigit.c _itoa.c _ltoa.c \
-                  _slong2fs.c _memcmp.c \
-		  _memcpy.c _memmove.c _memset.c _modsint.c _modslong.c \
-		  _moduint.c _modulong.c _mulint.c _mullong.c \
+		  _slong2fs.c \
+		  _memcmp.c _memcpy.c _memmove.c _memset.c \
+		  _modsint.c _modslong.c _moduint.c _modulong.c \
+		  _mulint.c _mullong.c \
+		  abs.c labs.c \
 		  _ser.c _setjmp.c \
-		  _spx.c _startup.c _strchr.c _strcmp.c _strcpy.c \
+		  _spx.c _startup.c \
+		  _strcat.c _strchr.c _strcmp.c _strcpy.c \
 		  _strcspn.c _strlen.c _strncat.c _strncmp.c \
 		  _strncpy.c _strpbrk.c _strrchr.c _strspn.c \
-		  _strstr.c _strtok.c _uchar2fs.c _uint2fs.c \
-		  _ulong2fs.c malloc.c serial.c ser_ir.c printfl.c \
-		  printf_large.c vprintf.c puts.c gets.c \
-		  assert.c _strcat.c time.c printf_fast.c bpx.c \
+		  _strstr.c _strtok.c \
+		  _uchar2fs.c _uint2fs.c _ulong2fs.c \
+		  calloc.c malloc.c realloc.c free.c \
+		  serial.c ser_ir.c printfl.c \
+		  printf_large.c sprintf.c vprintf.c puts.c gets.c \
+		  printf_fast.c printf_fast_f.c printf_tiny.c \
+		  assert.c time.c bpx.c \
+		  _fsget1arg.c _fsget2args.c _fsnormalize.c \
+		  _fsreturnval.c _fsrshift.c _fsswapargs.c _logexpf.c \
 		  fabsf.c frexpf.c ldexpf.c expf.c powf.c sincosf.c sinf.c \
 		  cosf.c logf.c log10f.c sqrtf.c tancotf.c tanf.c cotf.c \
 		  asincosf.c asinf.c acosf.c atanf.c atan2f.c sincoshf.c \
@@ -72,25 +83,27 @@ OBJECTS		= $(patsubst %.c,$(PORTDIR)/%.rel,$(SOURCES))
 Z80SOURCES      = _atof.c _atoi.c \
 		  _iscntrl.c _isdigit.c _isgraph.c \
 		  _islower.c _isprint.c _ispunct.c _isspace.c \
-		  _isupper.c _isxdigit.c _memcmp.c \
-		  _memcpy.c _memmove.c _memset.c \
-		  _startup.c _strchr.c _strcmp.c _strcpy.c \
+		  _isupper.c _isxdigit.c \
+		  _memcmp.c _memcpy.c _memmove.c _memset.c \
+		  _startup.c \
+		  _strcat.c _strchr.c _strcmp.c _strcpy.c \
 		  _strcspn.c _strlen.c _strncat.c _strncmp.c \
 		  _strncpy.c _strpbrk.c _strrchr.c _strspn.c \
 		  _strstr.c _strtok.c \
-		  puts.c gets.c \
-		  assert.c _strcat.c \
+		  assert.c \
 		  _modslong.c _modulong.c \
 		  _mullong.c \
+		  abs.c labs.c \
 		  _divslong.c _divulong.c \
-		  malloc.c \
+		  calloc.c malloc.c realloc.c free.c \
+		  printf_large.c sprintf.c vprintf.c puts.c gets.c \
 		  _fs2schar.c _fs2sint.c _fs2slong.c \
 		  _fs2uchar.c _fs2uint.c _fs2ulong.c _fsadd.c \
 		  _fsdiv.c _fseq.c _fsgt.c _fslt.c _fsmul.c \
 		  _fsneq.c _fssub.c \
 		  _uchar2fs.c _uint2fs.c \
 		  _ulong2fs.c \
-		  _slong2fs.c _sint2fs.c _schar2fs.c 
+		  _slong2fs.c _sint2fs.c _schar2fs.c
 
 Z80OBJECTS      = $(Z80SOURCES:%.c=$(PORTDIR)/%.o)
 
@@ -105,13 +118,16 @@ XA51SOURCES      = _atof.c _atoi.c _atol.c _schar2fs.c \
 		  _isupper.c _isxdigit.c _slong2fs.c _memcmp.c \
 		  _memcpy.c _memmove.c _memset.c _modsint.c _modslong.c \
 		  _moduint.c _modulong.c _mulint.c _mullong.c \
-		  _strchr.c _strcmp.c _strcpy.c \
+		  abs.c labs.c \
+		  _strcat.c _strchr.c _strcmp.c _strcpy.c \
 		  _strcspn.c _strlen.c _strncat.c _strncmp.c \
 		  _strncpy.c _strpbrk.c _strrchr.c _strspn.c \
-		  _strstr.c _strtok.c _uchar2fs.c _uint2fs.c \
-		  _ulong2fs.c malloc.c puts.c gets.c \
+		  _strstr.c _strtok.c \
+		  _uchar2fs.c _uint2fs.c _ulong2fs.c \
+		  calloc.c malloc.c realloc.c free.c \
+		  puts.c gets.c \
 		  printf_large.c puts.c gets.c \
-		  assert.c _strcat.c time.c \
+		  assert.c time.c \
 		  fabsf.c frexpf.c ldexpf.c expf.c powf.c sincosf.c sinf.c \
 		  cosf.c logf.c log10f.c sqrtf.c tancotf.c tanf.c cotf.c \
 		  asincosf.c asinf.c acosf.c atanf.c atan2f.c sincoshf.c \
@@ -128,15 +144,19 @@ HC08SOURCES	= _atof.c _atoi.c _atol.c _schar2fs.c \
 		  _sint2fs.c _iscntrl.c _isdigit.c _isgraph.c \
 		  _islower.c _isprint.c _ispunct.c _isspace.c \
 		  _isupper.c _isxdigit.c _itoa.c _ltoa.c \
-                  _slong2fs.c _memcmp.c \
-		  _memcpy.c _memmove.c _memset.c _modsint.c _modslong.c \
-		  _moduint.c _modulong.c \
-		  _spx.c _startup.c _strchr.c _strcmp.c _strcpy.c \
+		  _slong2fs.c \
+		  _memcmp.c _memcpy.c _memmove.c _memset.c \
+		  _modsint.c _modslong.c _moduint.c _modulong.c \
+		  abs.c labs.c \
+		  _spx.c _startup.c \
+		  _strcat.c _strchr.c _strcmp.c _strcpy.c \
 		  _strcspn.c _strlen.c _strncat.c _strncmp.c \
 		  _strncpy.c _strpbrk.c _strrchr.c _strspn.c \
-		  _strstr.c _strtok.c _uchar2fs.c _uint2fs.c \
-		  _ulong2fs.c malloc.c \
-		  assert.c _strcat.c time.c \
+		  _strstr.c _strtok.c \
+		  _uchar2fs.c _uint2fs.c _ulong2fs.c \
+		  calloc.c malloc.c realloc.c free.c \
+		  printf_large.c sprintf.c vprintf.c \
+		  assert.c time.c \
 		  fabsf.c frexpf.c ldexpf.c expf.c powf.c sincosf.c sinf.c \
 		  cosf.c logf.c log10f.c sqrtf.c tancotf.c tanf.c cotf.c \
 		  asincosf.c asinf.c acosf.c atanf.c atan2f.c sincoshf.c \
@@ -153,25 +173,40 @@ include incl.mk
 all: checkconf models model-ds390 model-ds400 model-z80 model-gbz80 model-hc08
 
 # model-pic16
+# (needs gputils curently not available of sourceforge's compile farm)
 
 objects: build-dir $(OBJECTS) port-specific-objects lib-files clean_intermediate
 
 models:
 	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
 	  for model in $(MODELS); do \
-	    $(MAKE) MODELFLAGS="--model-$$model" PORT=$$model objects; \
+	    $(MAKE) MODELFLAGS="--model-$$model" PORT=$$model PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	  done \
+	fi
+
+model-mcs51-stack-auto:
+	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
+	  for model in $(MODELS); do \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$$model-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	  done \
+	fi
+
+model-mcs51-xstack-auto:
+	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
+	  for model in $(MODELS); do \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --xstack" PORT=$$model-xstack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
 model-ds390:
 	if [ "`grep ds390 ../../ports.build`" = ds390 ]; then \
-	  $(MAKE) MODELFLAGS="-mds390" PORT=ds390 objects; \
+	  $(MAKE) MODELFLAGS="-mds390" PORT=ds390 PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	fi
-	
+
 model-ds400:
 	if [ "`grep ds400 ../../ports.build`" = ds400 ]; then \
-	  $(MAKE) MODELFLAGS="-mds400" PORT=ds400 objects; \
-	fi	
+	  $(MAKE) MODELFLAGS="-mds400" PORT=ds400 PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	fi
 
 model-xa51:
 	if [ "`grep xa51 ../../ports.build`" = xa51 ]; then \
@@ -197,7 +232,7 @@ objects-z80: build-dir $(Z80OBJECTS) port-specific-objects clean_intermediate
 model-hc08:
 	if [ "`grep hc08 ../../ports.build`" = hc08 ]; then \
 	  $(MAKE) MODELFLAGS="-mhc08" PORT=hc08 objects-hc08; \
-	fi	
+	fi
 
 objects-hc08: build-dir $(HC08OBJECTS) port-specific-objects clean_intermediate
 	cd $(PORTDIR); ls *$(OEXT) > $(PORT).lib
@@ -225,7 +260,7 @@ port-specific-objects:
 port-specific-objects-pic16:
 	if [ -d $(PORT) ]; then \
 	  $(MAKE) -C $(PORT); \
-	  cp -f $(PORT)/*.lib $(PORTDIR); \
+	  cp -f $(PORT)/bin/*.* $(PORTDIR); \
 	fi
 
 lib-files:
@@ -240,8 +275,8 @@ clean_intermediate-pic16:
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
-	cp -r $(BUILDDIR)/* $(sdcc_libdir)
-	cp -r ds390 ds400 gbz80 z80 hc08 *.c $(sdcc_libdir)/src
+	cp -r -u $(BUILDDIR)/* $(sdcc_libdir)
+	cp -r -u ds390 ds400 gbz80 z80 hc08 *.c $(sdcc_libdir)/src
 	rm -r `find $(sdcc_libdir)/src -name '*.rel' -or -name '*.dump*' -or -name '*.sym' -or -name '*.o' -or -name '*.lst' -or -name '*.asm' -or -name 'CVS'`
 
 # Deleting all the installed files
@@ -268,16 +303,16 @@ installdirs:
 	 mkdir -p $(sdcc_libdir)/$$model; \
 	done
 	[ -d $(sdcc_libdir)/ds390 ] || mkdir -p $(sdcc_libdir)/ds390
-	[ -d $(sdcc_libdir)/ds400 ] || mkdir -p $(sdcc_libdir)/ds400	
-	[ -d $(sdcc_libdir)/hc08 ] || mkdir -p $(sdcc_libdir)/hc08	
-	[ -f $(sdcc_libdir)/pic16 ] || mkdir -p $(sdcc_libdir)/pic16
+	[ -d $(sdcc_libdir)/ds400 ] || mkdir -p $(sdcc_libdir)/ds400
+	[ -d $(sdcc_libdir)/hc08 ] || mkdir -p $(sdcc_libdir)/hc08
+	[ -d $(sdcc_libdir)/pic16 ] || mkdir -p $(sdcc_libdir)/pic16
 	mkdir -p $(sdcc_libdir)/src
 
 # Creating dependencies
 # ---------------------
 dep: Makefile.dep
 
-Makefile.dep: $(SOURCES) $(INCDIR)/*.h
+Makefile.dep: $(SOURCES) $(INCDIR)/*.h $(PORTINCDIR)/*.h
 	rm -f Makefile.dep
 	for i in $(SOURCES); do \
 	  $(CPP) -std=c99 -M $(CPPFLAGS) $$i >$${i}.dep; \

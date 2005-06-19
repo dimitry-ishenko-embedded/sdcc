@@ -169,6 +169,10 @@ SOURCE=.\SDCCdflow.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\SDCCdwarf2.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\support\Util\sdccerr.c
 # End Source File
 # Begin Source File
@@ -298,6 +302,14 @@ SOURCE=.\SDCCcse.h
 # Begin Source File
 
 SOURCE=.\SDCCdflow.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\SDCCdwarf2.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\support\Util\SDCCerr.h
 # End Source File
 # Begin Source File
 

@@ -43,7 +43,11 @@ enum
     AOP_STR,
     AOP_CRY,
     AOP_ACC,
-    AOP_PCODE
+    AOP_FSR0,
+    AOP_FSR1,
+    AOP_FSR2,
+    AOP_PCODE,
+    AOP_STA		// asmop on stack
   };
 
 /* type asmop : a homogenised type for 
@@ -82,6 +86,10 @@ typedef struct asmop
 	char *aop_str[4];	/* just a string array containing the location */
 /*	regs *aop_alloc_reg;     * points to a dynamically allocated register */
 	pCodeOp *pcop;
+	struct {
+	  int stk;
+	  pCodeOp *pop[4];
+        } stk;
       }
     aopu;
   }
@@ -89,10 +97,7 @@ asmop;
 
 void genpic16Code (iCode *);
 
-//extern char *fReturnpic16[];
-//extern char *fReturn390[];
 extern unsigned pic16_fReturnSizePic;
-//extern char **fReturn;
 
 
 #define AOP(op) op->aop
@@ -112,6 +117,8 @@ extern unsigned pic16_fReturnSizePic;
 #define RESULTONSTACK(x) \
                          (IC_RESULT(x) && IC_RESULT(x)->aop && \
                          IC_RESULT(x)->aop->type == AOP_STK )
+#define RESULTONSTA(x)	(IC_RESULT(x) && IC_RESULT(x)->aop && IC_RESULT(x)->aop->type == AOP_STA)
+
 
 #define MOVA(x) if (strcmp(x,"a") && strcmp(x,"acc")) pic16_emitcode(";XXX mov","a,%s  %s,%d",x,__FILE__,__LINE__);
 #define CLRC    pic16_emitcode(";XXX clr","c %s,%d",__FILE__,__LINE__);
@@ -146,13 +153,18 @@ extern unsigned pic16_fReturnSizePic;
 #define emitSETC    pic16_emitpcode(POC_BSF,  pic16_popCopyGPR2Bit(PCOP(&pic16_pc_status),PIC_C_BIT))
 #define emitSETDC   pic16_emitpcode(POC_BSF,  pic16_popCopyGPR2Bit(PCOP(&pic16_pc_status),PIC_DC_BIT))
 
+#define emitTOGC    pic16_emitpcode(POC_BTG,  pic16_popCopyGPR2Bit(PCOP(&pic16_pc_status),PIC_C_BIT))
+
 int pic16_getDataSize(operand *op);
 void pic16_emitpcode(PIC_OPCODE poc, pCodeOp *pcop);
 void pic16_emitpLabel(int key);
 void pic16_emitcode (char *inst,char *fmt, ...);
 void DEBUGpic16_emitcode (char *inst,char *fmt, ...);
+void pic16_emitDebuggerSymbol (char *);
 bool pic16_sameRegs (asmop *aop1, asmop *aop2 );
 char *pic16_aopGet (asmop *aop, int offset, bool bit16, bool dname);
+void DEBUGpic16_pic16_AopType(int line_no, operand *left, operand *right, operand *result);
+void DEBUGpic16_pic16_AopTypeSign(int line_no, operand *left, operand *right, operand *result);
 
 
 bool pic16_genPlusIncr (iCode *ic);
@@ -163,17 +175,21 @@ bool pic16_genMinusDec (iCode *ic);
 void pic16_addSign(operand *result, int offset, int sign);
 void pic16_genMinusBits (iCode *ic);
 void pic16_genMinus (iCode *ic);
+void pic16_genLeftShiftLiteral (operand *left, operand *right, operand *result, iCode *ic);
 
+pCodeOp *pic16_popGet2p(pCodeOp *src, pCodeOp *dst);
+void pic16_emitpcomment (char *fmt, ...);
 
 pCodeOp *pic16_popGetLabel(unsigned int key);
 pCodeOp *pic16_popCopyReg(pCodeOpReg *pc);
 pCodeOp *pic16_popCopyGPR2Bit(pCodeOp *pc, int bitval);
-pCodeOp *pic16_popGetLit(unsigned int lit);
-pCodeOp *pic16_popGetLit2(unsigned int lit, pCodeOp *arg2);
+pCodeOp *pic16_popGetLit(int lit);
+pCodeOp *pic16_popGetLit2(int lit, pCodeOp *arg2);
 pCodeOp *popGetWithString(char *str);
 pCodeOp *pic16_popGet (asmop *aop, int offset);//, bool bit16, bool dname);
-pCodeOp *pic16_popGetTempReg(void);
-void pic16_popReleaseTempReg(pCodeOp *pcop);
+pCodeOp *pic16_popGetTempReg(int lock);
+pCodeOp *pic16_popGetTempRegCond(bitVect *, bitVect *, int lock);
+void pic16_popReleaseTempReg(pCodeOp *pcop, int lock);
 
 pCodeOp *pic16_popCombine2(pCodeOpReg *src, pCodeOpReg *dst, int noalloc);
 
@@ -184,8 +200,34 @@ void pic16_outBitC(operand *result);
 void pic16_toBoolean(operand *oper);
 void pic16_freeAsmop (operand *op, asmop *aaop, iCode *ic, bool pop);
 const char *pic16_pCodeOpType(  pCodeOp *pcop);
+int pic16_my_powof2 (unsigned long num);
 
+void pic16_mov2w (asmop *aop, int offset);
 
 void dumpiCode(iCode *lic);
 
+int inWparamList(char *s);
+
+#include "device.h"
+
+#define DUMP_FUNCTION_ENTRY	1
+#define DUMP_FUNCTION_EXIT	0
+
+#if DUMP_FUNCTION_ENTRY
+#define FENTRY	if(pic16_options.debgen&2)pic16_emitpcomment("**{\t%d %s", __LINE__, __FUNCTION__)
+#define FENTRY2 if(pic16_options.debgen&2)pic16_emitpcomment("**{\t%d %s", __LINE__, __FUNCTION__)
+#else
+#define FENTRY
+#define FENTRY2
+#endif
+
+#if DUMP_FUNCTION_EXIT
+#define FEXIT	if(pic16_options.debgen&2)pic16_emitpcomment("; **}", "%d %s", __LINE__, __FUNCTION__)
+#define FEXIT2	if(pic16_options.debgen&2)pic16_emitpcomment("**{\t%d %s", __LINE__, __FUNCTION__)
+#else
+#define FEXIT
+#define FEXIT2
+#endif
+
+#define ERROR	werror(W_POSSBUG2, __FILE__, __LINE__)
 #endif

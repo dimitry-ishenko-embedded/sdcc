@@ -13,6 +13,7 @@ For complete and current documentation, refer to the
 .B
 SDCC Compiler User Guide\c
 \&.
+
 .SH "DESCRIPTION"
 .B SDCC
 is a Freeware, retargettable, optimizing ANSI-C compiler. The current 
@@ -32,6 +33,7 @@ microcontrollers and underlying hardware effectively.
 .PP
 The compiler also allows inline assembler code to be embedded anywhere in a
 function. In addition, routines developed in assembly can also be called.
+
 .SH PROCESSOR SELECTION OPTIONS
 .TP
 .BI "\-mmcs51"
@@ -40,6 +42,9 @@ processor target.
 .TP
 .BI "\-mds390"
 Generate code for the DS80C390 processor.
+.TP
+.BI "\-mds400"
+Generate code for the DS80C400 processor.
 .TP
 .BI "\-mz80"
 Generate code for the Z80 family of processors.
@@ -53,9 +58,16 @@ Generate code for the Atmel AVR processor (In development, not complete).
 .BI "\-mpic14"
 Generate code for the PIC 14-bit processors (In development, not complete).
 .TP
+.BI "\-mpic16"
+Generate code for the PIC 14-bit processors (In development, not complete).
+.TP
 .BI "\-mtlcs900h"
 Generate code for the Toshiba TLCS-900H processor (In development, not 
-complete). 
+complete).
+.BI "\-mxa51"
+Generate code for the Phillips XA51 processor (In development, not 
+complete).
+
 .SH PREPROCESSOR OPTIONS
 .TP
 .BI "\-I" "<path>"
@@ -128,6 +140,7 @@ Like
 .B `-dD'\c
 \&except that the macro arguments and contents are omitted. Only 
 `#define name' is included in the output.
+
 .SH LINKER OPTIONS
 .TP
 .BI "\-L, \-lib\-path" "<absolute path to additional libraries>"
@@ -199,6 +212,7 @@ default option).
 .TP
 .BI "\-\-out\-fmt\-s19"
 The linker output (final object code) is in Motorola S19 format.
+
 .SH MCS51 OPTIONS
 .TP
 .BI "\-\-model\-large"
@@ -210,15 +224,17 @@ compiled with small model, they will need to be recompiled.
 .BI "\-\-model\-small"
 Generate code for Small Model programs see section Memory Models for more 
 details. This is the default model.
-.SH
-.TP
-.SH DS390 OPTIONS
+
+.SH DS390 / DS400 OPTIONS
 .TP
 .BI "\-\-model\-flat24"
 Generate 24-bit flat mode code. This is the one and only that the ds390 code 
 generator supports right now and is default when using 
 .B -mds390\c
 \&.
+.TP
+.BI "\-\-protect\-sp\-update"
+Disable interrupts during ESP:SP updates.
 .TP
 .BI "\_-\-stack\-10bit"
 Generate code for the 10 bit stack mode of the Dallas DS80C390 part. This is 
@@ -243,6 +259,14 @@ should work with the
 addressing mode (see the 
 .B --model-flat24\c
 \& option).
+.SH Z80 Options
+.TP
+.BI "\-\-callee\-saves\-bc"
+Force a called function to always save BC.
+.TP
+.BI "\-\-no\-std\-crt0"
+When linking, skip the standard crt0.o object file. You must provide your own crt0.o for your system when linking.
+
 .SH OPTIMIZATIONS OPTIONS
 .TP
 .BI "\-\-nogcse"
@@ -278,6 +302,7 @@ function only.
 .TP
 .BI "\-\-noloopreverse"
 Will not do loop reversal optimization.
+
 .SH OTHER OPTIONS
 .TP
 .BI "\-c, \-\-compile\-only"
@@ -392,6 +417,7 @@ Shows the various actions the compiler is performing.
 .TP
 .BI "\-V"
 Shows the actual commands the compiler is executing.
+
 .SH INTERMEDIATE DUMP OPTIONS
 The following options are provided for the purpose of retargetting and 
 debugging the compiler. These provided a means to dump the intermediate code 
@@ -434,11 +460,14 @@ Will create a dump of the live ranges of iTemp's
 .TP
 .BI "\-\-dumpall"
 Will cause all the above mentioned dumps to be created.
+
 .SH COPYING
 The entire source code for the compiler is distributed under GNU General Public
 License.
+
 .SH SEE ALSO
 sdcpp(1), asxxxx(1), aslink(1).
+
 .SH AUTHOR
 This manual page was written by Aurelien Jarno <aurel32@debian.org>,
 for the Debian GNU/Linux system (but may be used by others).

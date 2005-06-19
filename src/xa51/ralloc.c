@@ -655,7 +655,9 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
       
       /* check if there are any live ranges that not
          used in the remainder of the block */
-      if (!_G.blockSpil && (selectS = liveRangesWith (lrcs, notUsedInRemaining, ebp, ic)))
+      if (!_G.blockSpil &&
+          !isiCodeInFunctionCall (ic) &&       
+          (selectS = liveRangesWith (lrcs, notUsedInRemaining, ebp, ic)))
 	{
 	  sym = leastUsedLR (selectS);
 	  if (sym != forSym)
@@ -983,7 +985,13 @@ serialRegAssign (eBBlock ** ebbs, int count)
 	bitVect *spillable;
 	int willCS;
 	
-	/* if it does not need or is spilt 
+	/* Make sure any spill location is definately allocated */
+	if (sym->isspilt && !sym->remat && sym->usl.spillLoc &&
+	    !sym->usl.spillLoc->allocreq) {
+	  sym->usl.spillLoc->allocreq++;
+	}
+	
+        /* if it does not need or is spilt 
 	   or is already assigned to registers
 	   or will not live beyond this instructions */
 	if (!sym->nRegs ||
@@ -1008,6 +1016,16 @@ serialRegAssign (eBBlock ** ebbs, int count)
 	if (sym->remat || (willCS && bitVectIsZero (spillable))) {		      
 	  spillThis (sym);
 	  continue;		      
+	}
+	
+	/* If the live range preceeds the point of definition 
+	   then ideally we must take into account registers that 
+	   have been allocated after sym->liveFrom but freed
+	   before ic->seq. This is complicated, so spill this
+	   symbol instead and let fillGaps handle the allocation. */
+	if (sym->liveFrom < ic->seq) {
+	    spillThis (sym);
+	    continue;		      
 	}
 	
 	/* if it has a spillocation & is used less than
@@ -2041,8 +2059,10 @@ static void packRegisters (eBBlock * ebp) {
 /* assignRegisters - assigns registers to each live range as need  */
 /*-----------------------------------------------------------------*/
 void
-xa51_assignRegisters (eBBlock ** ebbs, int count)
+xa51_assignRegisters (ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->bbOrder;
+  int count = ebbi->count;
   iCode *ic;
   int i;
   
@@ -2060,7 +2080,7 @@ xa51_assignRegisters (eBBlock ** ebbs, int count)
   recomputeLiveRanges (ebbs, count);
 
   if (options.dump_pack)
-    dumpEbbsToFileExt (DUMP_PACK, ebbs, count);
+    dumpEbbsToFileExt (DUMP_PACK, ebbi);
   
   /* first determine for each live range the number of 
      registers & the type of registers required for each */
@@ -2088,7 +2108,7 @@ xa51_assignRegisters (eBBlock ** ebbs, int count)
   
   if (options.dump_rassgn)
     {
-      dumpEbbsToFileExt (DUMP_RASSGN, ebbs, count);
+      dumpEbbsToFileExt (DUMP_RASSGN, ebbi);
       dumpLiveRanges (DUMP_LRANGE, liveRanges);
     }
   

@@ -23,33 +23,37 @@ static char _defaultRules[] =
 static char *_pic14_keywords[] =
 {
 	"at",
-		"bit",
-		"code",
-		"critical",
-		"data",
-		"far",
-		"idata",
-		"interrupt",
-		"near",
-		"pdata",
-		"reentrant",
-		"sfr",
-		"sbit",
-		"using",
-		"xdata",
-		"_data",
-		"_code",
-		"_generic",
-		"_near",
-		"_xdata",
-		"_pdata",
-		"_idata",
-		NULL
+	"bit",
+	"code",
+	"critical",
+	"data",
+	"far",
+	"idata",
+	"interrupt",
+	"near",
+	"pdata",
+	"reentrant",
+	"sfr",
+	"sbit",
+	"using",
+	"xdata",
+	"_data",
+	"_code",
+	"_generic",
+	"_near",
+	"_xdata",
+	"_pdata",
+	"_idata",
+	NULL
 };
 
 void  pCodeInitRegisters(void);
 
-void pic14_assignRegisters (eBBlock ** ebbs, int count);
+void pic14_assignRegisters (ebbIndex *);
+
+/* Also defined in gen.h, but the #include is commented out */
+/* for an unknowned reason. - EEP */
+void pic14_emitDebuggerSymbol (char *);
 
 static int regParmFlg = 0;	/* determine if we can register a parameter */
 
@@ -61,7 +65,7 @@ _pic14_init (void)
 }
 
 static void
-_pic14_reset_regparm ()
+_pic14_reset_regparm (void)
 {
 	regParmFlg = 0;
 }
@@ -432,6 +436,7 @@ PORT pic_port =
 		"code",
 		"DSEG    (DATA)",
 		"ISEG    (DATA)",
+		NULL, /* pdata */
 		"XSEG    (XDATA)",
 		"BSEG    (BIT)",
 		"RSEG    (DATA)",
@@ -453,9 +458,23 @@ PORT pic_port =
 	{
 		1, -1
 	},
+	{
+		pic14_emitDebuggerSymbol
+	},
+	{
+		255/3,      /* maxCount */
+		3,          /* sizeofElement */
+		/* The rest of these costs are bogus. They approximate */
+		/* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+		{4,4,4},    /* sizeofMatchJump[] */
+		{0,0,0},    /* sizeofRangeCompare[] */
+		0,          /* sizeofSubtract */
+		3,          /* sizeofDispatch */
+	},
 	"_",
 	_pic14_init,
 	_pic14_parseOptions,
+	NULL,
 	NULL,
 	_pic14_finaliseOptions,
 	_pic14_setDefaultOptions,
@@ -466,6 +485,7 @@ PORT pic_port =
 	NULL,				/* no genAssemblerEnd */
 	_pic14_genIVT,
 	NULL, // _pic14_genXINIT
+	NULL, 				/* genInitStartup */
 	_pic14_reset_regparm,
 	_pic14_regparm,
 	_process_pragma,				/* process a pragma */

@@ -148,7 +148,7 @@ intersectLoopSucc (set * lexits, eBBlock ** ebbs)
 /*-----------------------------------------------------------------*/
 /* loopInsert will insert a block into the loop set                */
 /*-----------------------------------------------------------------*/
-static void 
+static void
 loopInsert (set ** regionSet, eBBlock * block)
 {
   if (!isinSet (*regionSet, block))
@@ -188,7 +188,7 @@ DEFSETFUNC (isNotInBlocks)
 /* hasIncomingDefs - has definitions coming into the loop. i.e.    */
 /* check to see if the preheaders outDefs has any definitions      */
 /*-----------------------------------------------------------------*/
-int 
+int
 hasIncomingDefs (region * lreg, operand * op)
 {
   eBBlock *preHdr = lreg->entry->preHeader;
@@ -202,7 +202,7 @@ hasIncomingDefs (region * lreg, operand * op)
 /* findLoopEndSeq - will return the sequence number of the last    */
 /* iCode with the maximum dfNumber in the region                   */
 /*-----------------------------------------------------------------*/
-int 
+int
 findLoopEndSeq (region * lreg)
 {
   eBBlock *block;
@@ -302,18 +302,17 @@ DEFSETFUNC (addDefInExprs)
 {
   eBBlock *ebp = item;
   V_ARG (cseDef *, cdp);
-  V_ARG (eBBlock **, ebbs);
-  V_ARG (int, count);
+  V_ARG (ebbIndex *, ebbi);
 
   addSetHead (&ebp->inExprs, cdp);
-  cseBBlock (ebp, optimize.global_cse, ebbs, count);
+  cseBBlock (ebp, optimize.global_cse, ebbi);
   return 0;
 }
 
 /*-----------------------------------------------------------------*/
 /* assignmentsToSym - for a set of blocks determine # time assigned */
 /*-----------------------------------------------------------------*/
-int 
+int
 assignmentsToSym (set * sset, operand * sym)
 {
   eBBlock *ebp;
@@ -339,7 +338,7 @@ assignmentsToSym (set * sset, operand * sym)
 /*-----------------------------------------------------------------*/
 /* isOperandInvariant - determines if an operand is an invariant   */
 /*-----------------------------------------------------------------*/
-int 
+int
 isOperandInvariant (operand * op, region * theLoop, set * lInvars)
 {
   int opin = 0;
@@ -379,7 +378,22 @@ DEFSETFUNC (pointerAssigned)
   eBBlock *ebp = item;
   V_ARG (operand *, op);
 
-  return ebp->hasFcall || bitVectBitValue (ebp->ptrsSet, op->key);
+  if (ebp->hasFcall)
+    return 1;
+
+  if (bitVectBitValue (ebp->ptrsSet, op->key))
+    return 1;
+
+  /* Unfortunately, one of the other pointer set operations  */
+  /* may be using an alias of this operand, and the above    */
+  /* test would miss it. To be thorough, some aliasing       */
+  /* analysis should be done here. In the meantime, be       */
+  /* conservative and assume any other pointer set operation */
+  /* is dangerous                                            */
+  if (!bitVectIsZero (ebp->ptrsSet))
+    return 1;
+
+  return 0;
 }
 
 /*-----------------------------------------------------------------*/
@@ -401,9 +415,11 @@ DEFSETFUNC (hasNonPtrUse)
 /*-----------------------------------------------------------------*/
 /* loopInvariants - takes loop invariants out of region            */
 /*-----------------------------------------------------------------*/
-int 
-loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
+int
+loopInvariants (region * theLoop, ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->dfOrder;
+  int count = ebbi->count;
   eBBlock *lBlock;
   set *lInvars = NULL;
 
@@ -416,8 +432,8 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
       theLoop->exits == NULL)
     return 0;
 
-  /* we will do the elimination for those blocks        */
-  /* in the loop that dominates all exits from the loop */
+  /* we will do the elimination for those blocks       */
+  /* in the loop that dominate all exits from the loop */
   for (lBlock = setFirstItem (theLoop->regBlocks); lBlock;
        lBlock = setNextItem (theLoop->regBlocks))
     {
@@ -464,7 +480,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 
 	  if (SKIP_IC (ic) || POINTER_SET (ic) || ic->op == IFX)
 	    continue;
-	  
+
 	  /* iTemp assignment from a literal may be invariant, but it
 	     will needlessly increase register pressure if the
 	     iCode(s) that use this iTemp are not also invariant */
@@ -484,7 +500,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	    continue;
 
 	  lin = rin = 0;
-	  
+
 	  /* special case */
 	  /* if address of then it is an invariant */
 	  if (ic->op == ADDRESS_OF &&
@@ -498,14 +514,14 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 		 that the pointer set does not exist in
 		 any of the blocks */
 	      if (POINTER_GET (ic) &&
-		  (applyToSet (theLoop->regBlocks, 
+		  (applyToSet (theLoop->regBlocks,
 			       pointerAssigned, IC_LEFT (ic))))
 		lin = 0;
 	  }
-	  
+
 	  /* do the same for right */
 	  rin = isOperandInvariant (IC_RIGHT (ic), theLoop, lInvars);
-	  
+
 	  /* if this is a POINTER_GET then special case, make sure all
 	     usages within the loop are POINTER_GET any other usage
 	     would mean that this is not an invariant , since the pointer
@@ -516,11 +532,11 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 
 
           /* if both the left & right are invariants : then check that */
-	  /* this definition exists in the out definition of all the  */
-	  /* blocks, this will ensure that this is not assigned any   */
-	  /* other value in the loop , and not used in this block     */
+	  /* this definition exists in the out definition of all the   */
+	  /* blocks, this will ensure that this is not assigned any    */
+	  /* other value in the loop, and not used in this block       */
 	  /* prior to this definition which means only this definition */
-	  /* is used in this loop                                     */
+	  /* is used in this loop                                      */
 	  if (lin && rin && IC_RESULT (ic))
 	    {
 	      eBBlock *sBlock;
@@ -562,6 +578,20 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 		    }
 		  else if (bitVectBitsInCommon (sBlock->defSet, OP_DEFS (IC_RESULT (ic))))
 		    break;
+
+                  if (IC_RESULT(ic))
+                    {
+                      iCode *ic2;
+                      /* check that this definition is not assigned */
+                      /* any other value in this block */
+                      for (ic2 = sBlock->sch; ic2; ic2 = ic2->next)
+                        {
+                          if ((ic != ic2) && (isOperandEqual(IC_RESULT(ic), IC_RESULT(ic2))))
+                            break;
+                        }
+                      if (ic2) /* found another definition */
+                        break;
+                    }
 		}
 
 	      if (sBlock)
@@ -575,7 +605,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	      /* now we know it is a true invariant */
 	      /* remove it from the insts chain & put */
 	      /* in the invariant set                */
-	      
+
               OP_SYMBOL (IC_RESULT (ic))->isinvariant = 1;
               SPIL_LOC (IC_RESULT (ic)) = NULL;
 	      remiCodeFromeBBlock (lBlock, ic);
@@ -587,7 +617,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 	      bitVectUnSetBit (lBlock->defSet, ic->key);
 	      bitVectUnSetBit (lBlock->ldefs, ic->key);
 	      ivar = newCseDef (IC_RESULT (ic), ic);
-	      applyToSet (theLoop->regBlocks, addDefInExprs, ivar, ebbs, count);
+	      applyToSet (theLoop->regBlocks, addDefInExprs, ivar, ebbi);
 	      addSet (&lInvars, ivar);
 	    }
 	}
@@ -640,7 +670,7 @@ loopInvariants (region * theLoop, eBBlock ** ebbs, int count)
 /*-----------------------------------------------------------------*/
 /* addressTaken - returns true if the symbol is found in the addrof */
 /*-----------------------------------------------------------------*/
-int 
+int
 addressTaken (set * sset, operand * sym)
 {
   set *loop;
@@ -735,13 +765,27 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 	{
 
 	  operand *aSym;
-	  unsigned long litValue;
+	  long litValue;
 	  induction *ip;
 	  iCode *indIc;
 	  eBBlock *owner = NULL;
 	  int nexits;
+          sym_link *optype;
 
-	  /* look for assignments of the form */
+	  /* To find an induction variable, we need to */
+          /* find within the loop three iCodes in this */
+          /* general form:                             */
+          /*                                           */
+          /* ddic: iTempB    := symbolVar              */
+          /* dic:  iTempA    := iTempB + lit           */
+          /*    or iTempA    := iTempB - lit           */
+          /*    or iTempA    := lit + iTempB           */
+          /* ic:   symbolVar := iTempA                 */
+          /*                                           */
+          /* (symbolVar may also be an iTemp if it is  */
+          /*  register equivalent)                     */
+          
+          /* look for assignments of the form */
 	  /*   symbolVar := iTempNN */
 	  if (ic->op != '=')
 	    continue;
@@ -764,6 +808,15 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 	  if (addressTaken (loopReg->regBlocks, IC_RESULT (ic)))
 	    continue;
 
+          /* Only consider variables with integral type. */
+          /* (2004/12/06 - EEP - ds390 fails regression tests unless */
+          /* pointers are also considered for induction (due to some */
+          /* register alloctaion bugs). Remove !IS_PTR clause when */
+          /* that gets fixed) */
+          optype = operandType (IC_RIGHT (ic));
+          if (!IS_INTEGRAL (optype) && !IS_PTR (optype))
+            continue;
+
 	  /* find the definition for the result in the block */
 	  if (!(dic = findDefInRegion (setFromSet (loopReg->regBlocks),
 				       IC_RIGHT (ic), &owner)))
@@ -772,14 +825,30 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 	  /* if not +/- continue */
 	  if (dic->op != '+' && dic->op != '-')
 	    continue;
-
+	  
 	  /* make sure definition is of the form  a +/- c */
 	  if (!IS_OP_LITERAL (IC_LEFT (dic)) && !IS_OP_LITERAL (IC_RIGHT (dic)))
 	    continue;
+          
+          /* make sure the definition found is the only one */
+          if (assignmentsToSym (loopReg->regBlocks, IC_RIGHT (ic)) > 1)
+	    continue;
 
-	  aSym = (IS_OP_LITERAL (IC_RIGHT (dic)) ?
-	      (litValue = (unsigned long) operandLitValue (IC_RIGHT (dic)), IC_LEFT (dic)) :
-	      (litValue = (unsigned long) operandLitValue (IC_LEFT (dic)), IC_RIGHT (dic)));
+	  if (IS_OP_LITERAL (IC_RIGHT (dic)))
+            {
+              aSym = IC_LEFT (dic);
+              litValue = (long) operandLitValue (IC_RIGHT (dic));
+            }
+          else
+            {
+              /* For minus, the literal must not be on the left side. */
+              /* (Actually, this case could be handled, but it's probably */
+              /* not worth the extra code) */
+              if (dic->op == '-')
+                continue;
+              aSym = IC_RIGHT (dic);
+              litValue = (long) operandLitValue (IC_LEFT (dic));
+            }
 
 	  if (!isOperandEqual (IC_RESULT (ic), aSym) &&
 	      !isOperandEqual (IC_RIGHT (ic), aSym))
@@ -827,7 +896,6 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 	  if (nexits == 1)
 	    {
 	      eBBlock *exit = setFirstItem (loopReg->exits);
-
 	      /* if it is the same block then there is no
 	         need to move it about */
 	      if (exit != lBlock)
@@ -865,7 +933,18 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 		      if (bitVectBitValue (loopSuccs, i))
 			{
 
-			  eBBlock *eblock = ebbs[i];
+			  eBBlock *eblock = NULL;
+			  int j;
+
+			  /* Need to search for bbnum == i since ebbs is  */
+			  /* sorted by dfnum; a direct index won't do.  */
+			  for (j=0; j<count; j++)
+			    if (ebbs[j]->bbnum == i)
+			      {
+			        eblock = ebbs[j];
+				break;
+			      }
+			  assert(eblock);
 
 			  /* if the successor does not belong to the loop
 			     and will be executed after the loop : then
@@ -905,11 +984,13 @@ basicInduction (region * loopReg, eBBlock ** ebbs, int count)
 /*-----------------------------------------------------------------*/
 /* loopInduction - remove induction variables from a loop          */
 /*-----------------------------------------------------------------*/
-int 
-loopInduction (region * loopReg, eBBlock ** ebbs, int count)
+int
+loopInduction (region * loopReg, ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->dfOrder;
+  int count = ebbi->count;
   int change = 0;
-  eBBlock *lBlock, *lastBlock = NULL;
+  eBBlock *lBlock, *owner, *lastBlock = NULL;
   set *indVars = NULL;
   set *basicInd = NULL;
 
@@ -928,7 +1009,7 @@ loopInduction (region * loopReg, eBBlock ** ebbs, int count)
        lBlock = setNextItem (loopReg->regBlocks))
     {
 
-      iCode *ic, *indIc;
+      iCode *ic, *indIc, *dic;
       induction *ip;
 
       /* last block is the one with the highest block
@@ -939,14 +1020,17 @@ loopInduction (region * loopReg, eBBlock ** ebbs, int count)
       for (ic = lBlock->sch; ic; ic = ic->next)
 	{
 	  operand *aSym;
-	  unsigned long litVal;
-	  int lr = 0;
+	  long litVal;
 
 	  /* consider only * & / */
 	  if (ic->op != '*' && ic->op != '/')
 	    continue;
 
-	  /* if the result has more definitions then */
+          /* only consider variables with integral type */
+          if (!IS_INTEGRAL (operandType (IC_RESULT (ic))))
+            continue;
+	  
+          /* if the result has more definitions then */
 	  if (assignmentsToSym (loopReg->regBlocks, IC_RESULT (ic)) > 1)
 	    continue;
 
@@ -956,9 +1040,19 @@ loopInduction (region * loopReg, eBBlock ** ebbs, int count)
 		(IS_OP_LITERAL (IC_LEFT (ic)) && IS_SYMOP (IC_RIGHT (ic)))))
 	    continue;
 
-	  aSym = (IS_SYMOP (IC_LEFT (ic)) ?
-	  (lr = 1, litVal = (unsigned long) operandLitValue (IC_RIGHT (ic)), IC_LEFT (ic)) :
-		  (litVal = (unsigned long) operandLitValue (IC_LEFT (ic)), IC_RIGHT (ic)));
+	  if (IS_SYMOP (IC_LEFT (ic)))
+            {
+              aSym = IC_LEFT (ic);
+              litVal = (long) operandLitValue (IC_RIGHT (ic));
+            }
+          else
+            {
+              /* For division, the literal must not be on the left side */
+              if (ic->op == '/')
+                continue;
+              aSym = IC_RIGHT (ic);
+              litVal = (long) operandLitValue (IC_LEFT (ic));
+            }
 
 	  ip = NULL;
 	  /* check if this is an induction variable */
@@ -995,32 +1089,23 @@ loopInduction (region * loopReg, eBBlock ** ebbs, int count)
 	  addSet (&indVars,
 		newInduction (IC_RESULT (ic), ip->op, litVal, indIc, NULL));
 
-	  /* now change this instruction */
-	  ic->op = ip->op;
-	  if (lr)
-	    {
-	      IC_LEFT (ic) = operandFromOperand (IC_RESULT (ic));
-	      IC_RIGHT (ic) = operandFromLit (litVal);
-	    }
-	  else
-	    {
-	      IC_RIGHT (ic) = operandFromOperand (IC_RESULT (ic));
-	      IC_LEFT (ic) = operandFromLit (litVal);
-	    }
-
-	  /* we need somemore initialisation code */
-	  /* we subtract the litVal from itself if increment */
-	  if (ic->op == '+')
-	    {
-	      indIc = newiCode ('-',
-				operandFromOperand (IC_RESULT (ic)),
-				operandFromLit (litVal));
-	      indIc->lineno = ic->lineno;
-	      IC_RESULT (indIc) = operandFromOperand (IC_RESULT (ic));
-
-	      addSet (&indVars,
-		newInduction (IC_RESULT (ic), ip->op, litVal, indIc, NULL));
-	    }
+	  /* Replace mul/div with assignment to self; killDeadCode() will */
+          /* clean this up since we can't use remiCodeFromeBBlock() here. */
+          ic->op = '=';
+          IC_LEFT (ic) = NULL;
+          IC_RIGHT (ic) = IC_RESULT (ic);
+          
+          /* Insert an update of the induction variable just before */
+          /* the update of the basic induction variable. */
+          indIc = newiCode (ip->op,
+                            operandFromOperand (IC_RESULT (ic)),
+                            operandFromLit (litVal));
+          IC_RESULT (indIc) = operandFromOperand (IC_RESULT (ic));
+	  owner = NULL;
+          dic = findDefInRegion (setFromSet (loopReg->regBlocks), aSym, &owner);
+          assert (dic);
+	  addiCodeToeBBlock (owner, indIc, dic);
+          
 	}
     }
 
@@ -1149,7 +1234,7 @@ DEFSETFUNC (mergeInnerLoops)
 /* createLoopRegions - will detect and create a set of natural loops */
 /*-----------------------------------------------------------------*/
 hTab *
-createLoopRegions (eBBlock ** ebbs, int count)
+createLoopRegions (ebbIndex * ebbi)
 {
   set *allRegion = NULL;	/* set of all loops */
   hTab *orderedLoops = NULL;
@@ -1196,8 +1281,8 @@ createLoopRegions (eBBlock ** ebbs, int count)
 /*-----------------------------------------------------------------*/
 /* loopOptimizations - identify region & remove invariants & ind   */
 /*-----------------------------------------------------------------*/
-int 
-loopOptimizations (hTab * orderedLoops, eBBlock ** ebbs, int count)
+int
+loopOptimizations (hTab * orderedLoops, ebbIndex * ebbi)
 {
   region *lp;
   int change = 0;
@@ -1217,10 +1302,10 @@ loopOptimizations (hTab * orderedLoops, eBBlock ** ebbs, int count)
     {
 
       if (optimize.loopInvariant)
-	change += loopInvariants (lp, ebbs, count);
+	change += loopInvariants (lp, ebbi);
 
       if (optimize.loopInduction)
-	change += loopInduction (lp, ebbs, count);
+	change += loopInduction (lp, ebbi);
     }
 
   return change;

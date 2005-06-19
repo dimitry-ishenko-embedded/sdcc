@@ -25,8 +25,8 @@
   what you give them.   Help stamp out software-hoarding!
   
   Notes:
-  000123 mlh	Moved aopLiteral to SDCCglue.c to help the split
-  		Made everything static
+  000123 mlh  Moved aopLiteral to SDCCglue.c to help the split
+      Made everything static
 -------------------------------------------------------------------------*/
 
 #include <stdio.h>
@@ -37,7 +37,7 @@
 #include "newalloc.h"
 
 #if defined(_MSC_VER) && (_MSC_VER < 1300)
-#define __FUNCTION__		__FILE__
+#define __FUNCTION__    __FILE__
 #endif
 
 #include "common.h"
@@ -95,6 +95,47 @@ const char *AopType(short type)
 	}
 	
 	return "BAD TYPE";
+}
+
+void DebugAop(asmop *aop)
+{
+	if(!aop)
+		return;
+	printf("%s\n",AopType(aop->type));
+	printf(" current offset: %d\n",aop->coff);
+	printf("           size: %d\n",aop->size);
+	
+	switch(aop->type) {
+	case AOP_LIT:
+		printf("          name: %s\n",aop->aopu.aop_lit->name);
+		break;
+	case AOP_REG:
+		printf("          name: %s\n",aop->aopu.aop_reg[0]->name);
+		break;
+	case AOP_CRY:
+	case AOP_DIR:
+		printf("          name: %s\n",aop->aopu.aop_dir);
+		break;
+	case AOP_DPTR:
+	case AOP_DPTR2:
+	case AOP_R0:
+	case AOP_R1:
+	case AOP_ACC:
+		printf("not supported\n");
+		break;
+	case AOP_STK:
+		printf("   Stack offset: %d\n",aop->aopu.aop_stk);
+		break;
+	case AOP_IMMD:
+		printf("     immediate: %s\n",aop->aopu.aop_immd);
+		break;
+	case AOP_STR:
+		printf("    aop_str[0]: %s\n",aop->aopu.aop_str[0]);
+		break;
+	case AOP_PCODE:
+		//printpCode(stdout,aop->aopu.pcop);
+		break;
+	}
 }
 
 const char *pCodeOpType(  pCodeOp *pcop)
@@ -276,11 +317,11 @@ void genPlusBits (iCode *ic)
 		AopType(AOP_TYPE(IC_RESULT(ic))),
 		AopType(AOP_TYPE(IC_LEFT(ic))),
 		AopType(AOP_TYPE(IC_RIGHT(ic))));
-		/*
-		The following block of code will add two bits. 
-		Note that it'll even work if the destination is
-		the carry (C in the status register).
-		It won't work if the 'Z' bit is a source or destination.
+	/*
+	The following block of code will add two bits. 
+	Note that it'll even work if the destination is
+	the carry (C in the status register).
+	It won't work if the 'Z' bit is a source or destination.
 	*/
 	
 	/* If the result is stored in the accumulator (w) */
@@ -311,13 +352,28 @@ void genPlusBits (iCode *ic)
 		emitpcode(POC_XORLW, popGetLit(1));
 		emitpcode(POC_MOVWF, popGet(AOP(IC_RESULT(ic)),0));
 		break;
+		/*  case AOP_CRY:
+		if(pic14_sameRegs(AOP(IC_RESULT(ic)),AOP(IC_LEFT(ic)))) {
+		
+		  } else {
+		  
+			}
+		break;*/
 	default:
-		emitpcode(POC_MOVLW, popGet(AOP(IC_RESULT(ic)),0));
-		emitpcode(POC_BCF,   popGet(AOP(IC_RESULT(ic)),0));
-		emitpcode(POC_BTFSC, popGet(AOP(IC_RIGHT(ic)),0));
-		emitpcode(POC_XORWF, popGet(AOP(IC_RESULT(ic)),0));
-		emitpcode(POC_BTFSC, popGet(AOP(IC_LEFT(ic)),0));
-		emitpcode(POC_XORWF, popGet(AOP(IC_RESULT(ic)),0));
+		if(pic14_sameRegs(AOP(IC_RESULT(ic)),AOP(IC_LEFT(ic)))) {
+			DebugAop(AOP(IC_LEFT(ic)));
+			emitpcode(POC_MOVLW, popGet(AOP(IC_LEFT(ic)),0));
+			emitpcode(POC_BTFSC, popGet(AOP(IC_RIGHT(ic)),0));
+			emitpcode(POC_XORWF, popGet(AOP(IC_LEFT(ic)),0));
+		} else {
+			emitpcode(POC_MOVLW, popGet(AOP(IC_RESULT(ic)),0));
+			emitpcode(POC_BCF,   popGet(AOP(IC_RESULT(ic)),0));
+			emitpcode(POC_BTFSC, popGet(AOP(IC_RIGHT(ic)),0));
+			emitpcode(POC_XORWF, popGet(AOP(IC_RESULT(ic)),0));
+			emitpcode(POC_BTFSC, popGet(AOP(IC_LEFT(ic)),0));
+			emitpcode(POC_XORWF, popGet(AOP(IC_RESULT(ic)),0));
+		}
+		
 		
 		pic14_emitcode("movlw","(1 << (%s & 7))",
 			AOP(IC_RESULT(ic))->aopu.aop_dir,
@@ -397,7 +453,7 @@ static void adjustArithmeticResult(iCode *ic)
 			GPTRSIZE - 1);
 	}
 	
-	if (opIsGptr(IC_RESULT(ic)) 	   &&
+	if (opIsGptr(IC_RESULT(ic))      &&
 		AOP_SIZE(IC_LEFT(ic)) < GPTRSIZE   &&
 		AOP_SIZE(IC_RIGHT(ic)) < GPTRSIZE  &&
 		!pic14_sameRegs(AOP(IC_RESULT(ic)),AOP(IC_LEFT(ic))) &&
@@ -519,7 +575,7 @@ static void genAddLit (iCode *ic, int lit)
 						emitpcode(POC_INCFSZW, popGet(AOP(result),0));
 						emitpcode(POC_INCF, popGet(AOP(result),MSB16));
 						emitpcode(POC_INCF, popGet(AOP(result),MSB16));
-					}	  
+					}   
 					break;
 					
 					case 0xff:
@@ -533,7 +589,7 @@ static void genAddLit (iCode *ic, int lit)
 							emitpcode(POC_INCFSZ, popGet(AOP(result),0));
 							emitpcode(POC_DECF, popGet(AOP(result),MSB16));
 							break;
-							/*	case 0xff: * 0xffff *
+							/*  case 0xff: * 0xffff *
 							emitpcode(POC_INCFSZW, popGet(AOP(result),0,FALSE,FALSE));
 							emitpcode(POC_INCF, popGet(AOP(result),MSB16,FALSE,FALSE));
 							emitpcode(POC_DECF, popGet(AOP(result),0,FALSE,FALSE));
@@ -563,13 +619,13 @@ static void genAddLit (iCode *ic, int lit)
 								emitpcode(POC_MOVLW,popGetLit(hi));
 								emitpcode(POC_ADDWF,popGet(AOP(result),MSB16));
 								break;
-								/*	case 0xff: * 0xHHff *
+								/*  case 0xff: * 0xHHff *
 								emitpcode(POC_MOVFW, popGet(AOP(result),0,FALSE,FALSE));
 								emitpcode(POC_DECF, popGet(AOP(result),MSB16,FALSE,FALSE));
 								emitpcode(POC_MOVLW,popGetLit(hi));
 								emitpcode(POC_ADDWF,popGet(AOP(result),MSB16,FALSE,FALSE));
 								break;
-								*/	default:  /* 0xHHLL */
+								*/  default:  /* 0xHHLL */
 								emitpcode(POC_MOVLW,popGetLit(lo));
 								emitpcode(POC_ADDWF, popGet(AOP(result),0));
 								emitpcode(POC_MOVLW,popGetLit(hi));
@@ -579,197 +635,196 @@ static void genAddLit (iCode *ic, int lit)
 								break;
 							}
 							
-	  }
-	} else {
-		int carry_info = 0;
-		int offset = 0;
-		/* size > 2 */
-		DEBUGpic14_emitcode (";  add lit to long","%s  %d",__FUNCTION__,__LINE__);
-		
-		while(size--) {
-			lo = BYTEofLONG(lit,0);
+			}
+		} else {
+			int carry_info = 0;
+			int offset = 0;
+			/* size > 2 */
+			DEBUGpic14_emitcode (";  add lit to long","%s  %d",__FUNCTION__,__LINE__);
 			
-			if(carry_info) {
-				switch(lo) {
-				case 0:
-					switch(carry_info) {
-					case 1:
-						emitSKPNZ;
-						emitpcode(POC_INCF, popGet(AOP(result),offset));
+			while(size--) {
+				lo = BYTEofLONG(lit,0);
+				
+				if(carry_info) {
+					switch(lo) {
+					case 0:
+						switch(carry_info) {
+						case 1:
+							emitSKPNZ;
+							emitpcode(POC_INCF, popGet(AOP(result),offset));
+							break;
+						case 2:
+							emitpcode(POC_RLFW, popGet(AOP(result),offset));
+							emitpcode(POC_ANDLW,popGetLit(1));
+							emitpcode(POC_ADDWF, popGet(AOP(result),offset));
+							break;
+						default: /* carry_info = 3  */
+							emitSKPNC;
+							emitpcode(POC_INCF, popGet(AOP(result),offset));
+							carry_info = 1;
+							break;
+						}
 						break;
-					case 2:
-						emitpcode(POC_RLFW, popGet(AOP(result),offset));
-						emitpcode(POC_ANDLW,popGetLit(1));
-						emitpcode(POC_ADDWF, popGet(AOP(result),offset));
-						break;
-					default: /* carry_info = 3  */
-						emitSKPNC;
-						emitpcode(POC_INCF, popGet(AOP(result),offset));
-						carry_info = 1;
-						break;
+						case 0xff:
+							emitpcode(POC_MOVLW,popGetLit(lo));
+							if(carry_info==1) 
+								emitSKPZ;
+							else
+								emitSKPC;
+							emitpcode(POC_ADDWF, popGet(AOP(result),offset));
+							break;
+						default:
+							emitpcode(POC_MOVLW,popGetLit(lo));
+							if(carry_info==1) 
+								emitSKPNZ;
+							else
+								emitSKPNC;
+							emitpcode(POC_MOVLW,popGetLit(lo+1));
+							emitpcode(POC_ADDWF, popGet(AOP(result),offset));
+							carry_info=2;
+							break;
 					}
-					break;
-					case 0xff:
-						emitpcode(POC_MOVLW,popGetLit(lo));
-						if(carry_info==1) 
-							emitSKPZ;
-						else
-							emitSKPC;
-						emitpcode(POC_ADDWF, popGet(AOP(result),offset));
+				}else {
+					/* no carry info from previous step */
+					/* this means this is the first time to add */
+					switch(lo) {
+					case 0:
+						break;
+					case 1:
+						emitpcode(POC_INCF, popGet(AOP(result),offset));
+						carry_info=1;
 						break;
 					default:
 						emitpcode(POC_MOVLW,popGetLit(lo));
-						if(carry_info==1) 
-							emitSKPNZ;
-						else
-							emitSKPNC;
-						emitpcode(POC_MOVLW,popGetLit(lo+1));
 						emitpcode(POC_ADDWF, popGet(AOP(result),offset));
-						carry_info=2;
+						if(lit <0x100) 
+							carry_info = 3;  /* Were adding only one byte and propogating the carry */
+						else
+							carry_info = 2;
 						break;
+					}
 				}
-			}else {
-				/* no carry info from previous step */
-				/* this means this is the first time to add */
-				switch(lo) {
+				offset++;
+				lit >>= 8;
+			}
+			
+			/*
+				lo = BYTEofLONG(lit,0);
+			
+				if(lit < 0x100) {
+					if(lo) {
+						if(lo == 1) {
+							emitpcode(POC_INCF, popGet(AOP(result),0,FALSE,FALSE));
+							emitSKPNZ;
+						} else {
+							emitpcode(POC_MOVLW,popGetLit(lo));
+							emitpcode(POC_ADDWF, popGet(AOP(result),0,FALSE,FALSE));
+							emitSKPNC;
+						}
+						emitpcode(POC_INCF, popGet(AOP(result),1,FALSE,FALSE));
+						emitSKPNZ;
+						emitpcode(POC_INCF, popGet(AOP(result),2,FALSE,FALSE));
+						emitSKPNZ;
+						emitpcode(POC_INCF, popGet(AOP(result),3,FALSE,FALSE));
+						
+					} 
+				} 
+				
+			*/
+		}
+	} else {
+		int offset = 1;
+		DEBUGpic14_emitcode (";  left and result aren't same","%s  %d",__FUNCTION__,__LINE__);
+		
+		if(size == 1) {
+			
+			if(AOP_TYPE(left) == AOP_ACC) {
+				/* left addend is already in accumulator */
+				switch(lit & 0xff) {
 				case 0:
-					break;
-				case 1:
-					emitpcode(POC_INCF, popGet(AOP(result),offset));
-					carry_info=1;
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
 					break;
 				default:
-					emitpcode(POC_MOVLW,popGetLit(lo));
-					emitpcode(POC_ADDWF, popGet(AOP(result),offset));
-					if(lit <0x100) 
-						carry_info = 3;  /* Were adding only one byte and propogating the carry */
-					else
-						carry_info = 2;
+					emitpcode(POC_ADDLW, popGetLit(lit & 0xff));
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
+				}
+			} else {
+				/* left addend is in a register */
+				switch(lit & 0xff) {
+				case 0:
+					emitpcode(POC_MOVFW, popGet(AOP(left),0));
+					emitMOVWF(result, 0);
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
 					break;
+				case 1:
+					emitpcode(POC_INCFW, popGet(AOP(left),0));
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
+					break;
+				case 0xff:
+					emitpcode(POC_DECFW, popGet(AOP(left),0));
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
+					break;
+				default:
+					emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
+					emitpcode(POC_ADDFW, popGet(AOP(left),0));
+					//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+					emitMOVWF(result,0);
 				}
 			}
-			offset++;
-			lit >>= 8;
-		}
-		
-		/*
-		lo = BYTEofLONG(lit,0);
-
-		if(lit < 0x100) {
-			if(lo) {
-				if(lo == 1) {
-					emitpcode(POC_INCF, popGet(AOP(result),0,FALSE,FALSE));
-					emitSKPNZ;
-				} else {
-					emitpcode(POC_MOVLW,popGetLit(lo));
-					emitpcode(POC_ADDWF, popGet(AOP(result),0,FALSE,FALSE));
-					emitSKPNC;
-				}
-				emitpcode(POC_INCF, popGet(AOP(result),1,FALSE,FALSE));
-				emitSKPNZ;
-				emitpcode(POC_INCF, popGet(AOP(result),2,FALSE,FALSE));
-				emitSKPNZ;
-				emitpcode(POC_INCF, popGet(AOP(result),3,FALSE,FALSE));
-
-				} 
-			} 
-		}
 			
-		*/
+		} else {
+			int clear_carry=0;
+			
+			/* left is not the accumulator */
+			if(lit & 0xff) {
+				emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
+				emitpcode(POC_ADDFW, popGet(AOP(left),0));
+			} else {
+				emitpcode(POC_MOVFW, popGet(AOP(left),0));
+				/* We don't know the state of the carry bit at this point */
+				clear_carry = 1;
+			}
+			//emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
+			emitMOVWF(result,0);
+			while(--size) {
+				
+				lit >>= 8;
+				if(lit & 0xff) {
+					if(clear_carry) {
+					/* The ls byte of the lit must've been zero - that 
+						means we don't have to deal with carry */
+						
+						emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
+						emitpcode(POC_ADDFW,  popGet(AOP(left),offset));
+						emitpcode(POC_MOVWF, popGet(AOP(left),offset));
+						
+						clear_carry = 0;
+						
+					} else {
+						emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
+						//emitpcode(POC_MOVWF, popGet(AOP(result),offset,FALSE,FALSE));
+						emitMOVWF(result,offset);
+						emitpcode(POC_MOVFW, popGet(AOP(left),offset));
+						emitSKPNC;
+						emitpcode(POC_INCFSZW,popGet(AOP(left),offset));
+						emitpcode(POC_ADDWF,  popGet(AOP(result),offset));
+					}
+					
+				} else {
+					emitpcode(POC_CLRF,  popGet(AOP(result),offset));
+					emitpcode(POC_RLF,   popGet(AOP(result),offset));
+					emitpcode(POC_MOVFW, popGet(AOP(left),offset));
+					emitpcode(POC_ADDWF, popGet(AOP(result),offset));
+				}
+				offset++;
+			}
+		}
 	}
-  } else {
-	  int offset = 1;
-	  DEBUGpic14_emitcode (";  left and result aren't same","%s  %d",__FUNCTION__,__LINE__);
-	  
-	  if(size == 1) {
-		  
-		  if(AOP_TYPE(left) == AOP_ACC) {
-			  /* left addend is already in accumulator */
-			  switch(lit & 0xff) {
-			  case 0:
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-				  break;
-			  default:
-				  emitpcode(POC_ADDLW, popGetLit(lit & 0xff));
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-			  }
-		  } else {
-			  /* left addend is in a register */
-			  switch(lit & 0xff) {
-			  case 0:
-				  emitpcode(POC_MOVFW, popGet(AOP(left),0));
-				  emitMOVWF(result, 0);
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-				  break;
-			  case 1:
-				  emitpcode(POC_INCFW, popGet(AOP(left),0));
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-				  break;
-			  case 0xff:
-				  emitpcode(POC_DECFW, popGet(AOP(left),0));
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-				  break;
-			  default:
-				  emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
-				  emitpcode(POC_ADDFW, popGet(AOP(left),0));
-				  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-				  emitMOVWF(result,0);
-			  }
-		  }
-		  
-	  } else {
-		  int clear_carry=0;
-		  
-		  /* left is not the accumulator */
-		  if(lit & 0xff) {
-			  emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
-			  emitpcode(POC_ADDFW, popGet(AOP(left),0));
-		  } else {
-			  emitpcode(POC_MOVFW, popGet(AOP(left),0));
-			  /* We don't know the state of the carry bit at this point */
-			  clear_carry = 1;
-		  }
-		  //emitpcode(POC_MOVWF, popGet(AOP(result),0,FALSE,FALSE));
-		  emitMOVWF(result,0);
-		  while(--size) {
-			  
-			  lit >>= 8;
-			  if(lit & 0xff) {
-				  if(clear_carry) {
-				  /* The ls byte of the lit must've been zero - that 
-					  means we don't have to deal with carry */
-					  
-					  emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
-					  emitpcode(POC_ADDFW,  popGet(AOP(left),offset));
-					  emitpcode(POC_MOVWF, popGet(AOP(left),offset));
-					  
-					  clear_carry = 0;
-					  
-				  } else {
-					  emitpcode(POC_MOVLW, popGetLit(lit & 0xff));
-					  //emitpcode(POC_MOVWF, popGet(AOP(result),offset,FALSE,FALSE));
-					  emitMOVWF(result,offset);
-					  emitpcode(POC_MOVFW, popGet(AOP(left),offset));
-					  emitSKPNC;
-					  emitpcode(POC_INCFSZW,popGet(AOP(left),offset));
-					  emitpcode(POC_ADDWF,  popGet(AOP(result),offset));
-				  }
-				  
-			  } else {
-				  emitpcode(POC_CLRF,  popGet(AOP(result),offset));
-				  emitpcode(POC_RLF,   popGet(AOP(result),offset));
-				  emitpcode(POC_MOVFW, popGet(AOP(left),offset));
-				  emitpcode(POC_ADDWF, popGet(AOP(result),offset));
-			  }
-			  offset++;
-		  }
-	  }
-  }
 }
 
 /*-----------------------------------------------------------------*/
@@ -1166,8 +1221,8 @@ bool genMinusDec (iCode *ic)
 		AOP_SIZE(IC_LEFT(ic)) > 1   )
 		return FALSE ;
 	
-		/* we can if the aops of the left & result match or
-		if they are in registers and the registers are the
+	/* we can if the aops of the left & result match or
+	if they are in registers and the registers are the
 	same */
 	if (pic14_sameRegs(AOP(IC_LEFT(ic)), AOP(IC_RESULT(ic)))) {
 		
@@ -1549,26 +1604,19 @@ void genMinus (iCode *ic)
 		
 		if(size){
 			if (pic14_sameRegs(AOP(IC_RIGHT(ic)), AOP(IC_RESULT(ic)))) {
+				int lit = 0;
 				if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
 					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
 					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE))) {
-					while(size--){
-						emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
-						emitSKPC;
-						emitpcode(POC_INCFSZW, popGet(AOP(IC_RIGHT(ic)),offset));
-						emitpcode(POC_SUBLW,   popGet(AOP(IC_LEFT(ic)),offset));
-						emitpcode(POC_MOVWF,   popGet(AOP(IC_RESULT(ic)),offset));
-						offset++;
-					}
-				} else {
-					while(size--){
-						emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
-						emitSKPC;
-						emitpcode(POC_INCFSZW, popGet(AOP(IC_RIGHT(ic)),offset));
-						emitpcode(POC_SUBFW,   popGet(AOP(IC_LEFT(ic)),offset));
-						emitpcode(POC_MOVWF,   popGet(AOP(IC_RESULT(ic)),offset));
-						offset++;
-					}
+					lit = 1;
+				}
+				while(size--){
+					emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
+					emitSKPC;
+					emitpcode(POC_INCFW, popGet(AOP(IC_RIGHT(ic)),offset));
+					emitpcode(lit?POC_SUBLW:POC_SUBFW,   popGet(AOP(IC_LEFT(ic)),offset));
+					emitpcode(POC_MOVWF,   popGet(AOP(IC_RESULT(ic)),offset));
+					offset++;
 				}
 			} else {
 				PIC_OPCODE poc = POC_MOVFW;
@@ -1771,45 +1819,62 @@ void genUMult8XLit_16 (operand *left,
 			emitpcode(POC_RRF,    popGet(AOP(left),0));
 			return;
 			
+		}
+	} else {
+		
+		switch(lit) {
+		case 0:
+			emitpcode(POC_CLRF,  popGet(AOP(result),0));
+			emitpcode(POC_CLRF,  popCopyReg(result_hi));
+			return;
+		case 2:
+			if (AOP_TYPE(left) != AOP_ACC) /* Check if w is already loaded */
+				emitpcode(POC_MOVFW, popGet(AOP(left),0));
+			emitpcode(POC_MOVWF, popGet(AOP(result),0));
+			emitpcode(POC_ADDWF, popGet(AOP(result),0));
+			emitpcode(POC_CLRF,  popCopyReg(result_hi));
+			emitpcode(POC_RLF,   popCopyReg(result_hi));
+			return;
+		case 4:
+		case 8:
+			if (AOP_TYPE(left) != AOP_ACC) /* Check if w is already loaded */
+				emitpcode(POC_MOVFW, popGet(AOP(left),0));
+			emitpcode(POC_MOVWF, popGet(AOP(result),0));
+			emitpcode(POC_CLRF,  popCopyReg(result_hi));
+			emitpcode(POC_BCF,   popCopyReg(&pc_status));
+			emitpcode(POC_RLF,   popGet(AOP(result),0));
+			emitpcode(POC_RLF,   popCopyReg(result_hi));
+			emitpcode(POC_RLF,   popGet(AOP(result),0));
+			emitpcode(POC_RLF,   popCopyReg(result_hi));
+			if (lit >= 8) {
+				emitpcode(POC_RLF,   popGet(AOP(result),0));
+				emitpcode(POC_RLF,   popCopyReg(result_hi));
+			}
+			return;
+		}
+		
 	}
-  } else {
-	  
-	  switch(lit) {
-	  case 0:
-		  emitpcode(POC_CLRF,  popGet(AOP(result),0));
-		  emitpcode(POC_CLRF,  popCopyReg(result_hi));
-		  return;
-	  case 2:
-		  emitpcode(POC_MOVFW, popGet(AOP(left),0));
-		  emitpcode(POC_MOVWF, popGet(AOP(result),0));
-		  emitpcode(POC_ADDWF, popGet(AOP(result),0));
-		  emitpcode(POC_CLRF,  popCopyReg(result_hi));
-		  emitpcode(POC_RLF,   popCopyReg(result_hi));
-		  return;
-	  }
-	  
-  }
-  
-  emitpcode(POC_MOVFW, popGet(AOP(left),0));
-  emitpcode(POC_CLRF,  popGet(AOP(result),0));
-  emitpcode(POC_CLRF,  popCopyReg(result_hi));
-  
-  have_first_bit = 0;
-  for(i=0; i<8; i++) {
-	  
-	  if(lit & 1) {
-		  emitpcode(POC_ADDWF, popCopyReg(result_hi));
-		  have_first_bit = 1;
-	  }
-	  
-	  if(have_first_bit) {
-		  emitpcode(POC_RRF,   popCopyReg(result_hi));
-		  emitpcode(POC_RRF,   popGet(AOP(result),0));
-	  }
-	  
-	  lit >>= 1;
-  }
-  
+	
+	if (AOP_TYPE(left) != AOP_ACC) /* Check if w is already loaded */
+		emitpcode(POC_MOVFW, popGet(AOP(left),0));
+	emitpcode(POC_CLRF,  popGet(AOP(result),0));
+	emitpcode(POC_CLRF,  popCopyReg(result_hi));
+
+	have_first_bit = 0;
+	for(i=0; i<8; i++) {
+		
+		if(lit & 1) {
+			emitpcode(POC_ADDWF, popCopyReg(result_hi));
+			have_first_bit = 1;
+		}
+		
+		if(have_first_bit) {
+			emitpcode(POC_RRF,   popCopyReg(result_hi));
+			emitpcode(POC_RRF,   popGet(AOP(result),0));
+		}
+		
+		lit >>= 1;
+	}
 }
 
 /*-----------------------------------------------------------------*
@@ -1945,7 +2010,11 @@ void genMult8X8_8 (operand *left,
 				   operand *right,
 				   operand *result)
 {
-	pCodeOp *result_hi = popGetTempReg();
+	pCodeOp *result_hi;
+	if (result && result->aop && result->aop->type==2 && result->aop->size>=1) {
+		result->aop->aopu.aop_reg[0]->isFree = 0; /* Sometimes (ie part of last instruction in a blk) the result reg is pre marked as free, which mean on the next line popGetTempReg() will return this reg instead of allocating a new one. */
+	}
+	result_hi = popGetTempReg();
 	
 	if (AOP_TYPE(right) == AOP_LIT)
 		genUMult8XLit_16(left,right,result,PCOR(result_hi));

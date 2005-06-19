@@ -9,12 +9,12 @@ _isupper
 _isxdigit
 _itoa
 _ltoa
+_strcat
 _strchr
 _strcmp
 _strcpy
 _strcspn
 _strlen
-_strcat
 _strncat
 _strncmp
 _strncpy
@@ -25,6 +25,7 @@ _strstr
 _strtok
 _memcmp
 _memcpy
+_memmove
 _memset
 _gptrget
 _gptrgetc
@@ -32,9 +33,14 @@ _gptrput
 _decdptr
 _bp
 _spx
+abs
+labs
 _atoi
 _atol
+calloc
 malloc
+realloc
+free
 serial
 _autobaud
 _startup
@@ -44,6 +50,9 @@ gets
 printfl
 printf_large
 printf_fast
+printf_fast_f
+printf_tiny
+sprintf
 vprintf
 assert
 time

@@ -55,15 +55,7 @@ SetCompressor lzma
 
 !define SDCC_ROOT "."
 
-!define FROM_SNAPSHOT
-
-!ifdef FROM_SNAPSHOT
-!system "dir ${SDCC_ROOT}\device > NUL" <> 0
 !define DEV_ROOT "${SDCC_ROOT}"
-!else
-!system "dir ${SDCC_ROOT}\device > NUL" = 0
-!define DEV_ROOT "${SDCC_ROOT}\device"
-!endif
 
 !system "unix2dos ${SDCC_ROOT}\doc\ChangeLog_head.txt" = 0
 !system "unix2dos ${SDCC_ROOT}\doc\README.TXT" = 0
@@ -162,10 +154,24 @@ Section "SDCC include files"
   SectionIn 1 2
   SetOutPath "$INSTDIR\include\asm\default"
   File "${DEV_ROOT}\include\asm\default\features.h"
+  SetOutPath "$INSTDIR\include\asm\ds390"
+  File "${DEV_ROOT}\include\asm\ds390\features.h"
   SetOutPath "$INSTDIR\include\asm\gbz80"
   File "${DEV_ROOT}\include\asm\gbz80\features.h"
+  SetOutPath "$INSTDIR\include\asm\mcs51"
+  File "${DEV_ROOT}\include\asm\mcs51\features.h"
+  SetOutPath "$INSTDIR\include\asm\pic16"
+  File "${DEV_ROOT}\include\asm\pic16\features.h"
   SetOutPath "$INSTDIR\include\asm\z80"
   File "${DEV_ROOT}\include\asm\z80\features.h"
+  SetOutPath "$INSTDIR\include\hc08"
+  File "${DEV_ROOT}\include\hc08\*.h"
+  SetOutPath "$INSTDIR\include\mcs51"
+  File "${DEV_ROOT}\include\mcs51\*.h"
+  SetOutPath "$INSTDIR\include\pic16"
+  File "${DEV_ROOT}\include\pic16\*.h"
+  SetOutPath "$INSTDIR\include\z80"
+  File "${DEV_ROOT}\include\z80\*.h"
   SetOutPath "$INSTDIR\include"
   File "${DEV_ROOT}\include\*.h"
 SectionEnd
@@ -383,8 +389,15 @@ Section Uninstall
   Delete "$INSTDIR\lib\ds400\*.lib"
 
   Delete "$INSTDIR\include\asm\z80\*.h"
+  Delete "$INSTDIR\include\asm\pic16\*.h"
+  Delete "$INSTDIR\include\asm\mcs51\*.h"
   Delete "$INSTDIR\include\asm\gbz80\*.h"
+  Delete "$INSTDIR\include\asm\ds390\*.h"
   Delete "$INSTDIR\include\asm\default\*.h"
+  Delete "$INSTDIR\include\z80\*.h"
+  Delete "$INSTDIR\include\pic16\*.h"
+  Delete "$INSTDIR\include\mcs51\*.h"
+  Delete "$INSTDIR\include\hc08\*.h"
   Delete "$INSTDIR\include\*.h"
 
   Delete "$INSTDIR\doc\README.TXT"
@@ -415,9 +428,16 @@ Section Uninstall
   RMDir "$INSTDIR\lib"
 
   RMDir "$INSTDIR\include\asm\z80"
+  RMDir "$INSTDIR\include\asm\pic16"
+  RMDir "$INSTDIR\include\asm\mcs51"
   RMDir "$INSTDIR\include\asm\gbz80"
+  RMDir "$INSTDIR\include\asm\ds390"
   RMDir "$INSTDIR\include\asm\default"
   RMDir "$INSTDIR\include\asm"
+  RMDir "$INSTDIR\include\z80"
+  RMDir "$INSTDIR\include\pic16"
+  RMDir "$INSTDIR\include\mcs51"
+  RMDir "$INSTDIR\include\hc08"
   RMDir "$INSTDIR\include"
 
   RMDir "$INSTDIR\doc"
@@ -437,7 +457,7 @@ SectionEnd
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 !verbose 3
-!include "WinMessages.NSH"
+!include "WinMessages.nsh"
 !verbose 4
 
 ; AddToPath - Adds the given dir to the search path.

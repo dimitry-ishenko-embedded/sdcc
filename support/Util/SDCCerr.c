@@ -29,11 +29,7 @@
 #define DEFAULT_ERROR_OUT	stderr
 #endif
 
-static struct {
-    ERROR_LOG_LEVEL logLevel;
-    FILE *out;
-    int style; /* 1=MSVC */
-} _SDCCERRG;
+struct SDCCERRG _SDCCERRG; 
 
 extern char *filename ;
 extern int lineno ;
@@ -85,7 +81,7 @@ struct
 { W_INIT_IGNORED, ERROR_LEVEL_WARNING,
    "Variable in the storage class cannot be initialized.'%s'" },
 { E_AUTO_ASSUMED, ERROR_LEVEL_ERROR,
-   "storage class not allowed for automatic variable '%s' in reentrant function unless static" },
+   "variable '%s' must be static to have storage class in reentrant function" },
 { E_AUTO_ABSA, ERROR_LEVEL_ERROR,
    "absolute address not allowed for automatic var '%s' in reentrant function " },
 { W_INIT_WRONG, ERROR_LEVEL_WARNING,
@@ -350,7 +346,7 @@ struct
 { E_TWO_OR_MORE_STORAGE_CLASSES, ERROR_LEVEL_ERROR,
     "two or more storage classes in declaration for '%s'" },
 { W_EXCESS_INITIALIZERS, ERROR_LEVEL_WARNING,
-    "excess elements in %s initializer after `%s'" },
+    "excess elements in %s initializer after '%s'" },
 { E_ARGUMENT_MISSING, ERROR_LEVEL_ERROR,
    "Option %s requires an argument." },
 { W_STRAY_BACKSLASH, ERROR_LEVEL_WARNING,
@@ -409,6 +405,17 @@ struct
    "pragma %s is deprecated, please see documentation for details" },
 { E_SIZEOF_INCOMPLETE_TYPE, ERROR_LEVEL_ERROR,
    "sizeof applied to an incomplete type" },
+{ E_PREVIOUS_DEF, ERROR_LEVEL_ERROR,
+   "previously defined here" },
+{ W_SIZEOF_VOID, ERROR_LEVEL_WARNING,
+   "size of void is zero" },
+{ W_POSSBUG2, ERROR_LEVEL_WARNING,
+   "possible code generation error at %s line %d,\n"
+   " please report problem and send source code at SDCC-USER list on SF.Net"},
+{ W_COMPLEMENT, ERROR_LEVEL_WARNING,
+   "using ~ on bit/bool/unsigned char variables can give unexpected results due to promotion to int" },
+{ E_SHADOWREGS_NO_ISR, ERROR_LEVEL_ERROR,
+   "ISR function attribute 'shadowregs' following non-ISR function `%s'" },
 };
 
 /*
@@ -419,15 +426,13 @@ SetErrorOut - Set the error output file
 */
 
 FILE *SetErrorOut(FILE *NewErrorOut)
-
 {
     _SDCCERRG.out = NewErrorOut ;
 
-return NewErrorOut ;
+    return NewErrorOut ;
 }
 
-void
-setErrorLogLevel (ERROR_LOG_LEVEL level)
+void setErrorLogLevel (ERROR_LOG_LEVEL level)
 {
     _SDCCERRG.logLevel = level;
 }
@@ -445,39 +450,37 @@ void vwerror (int errNum, va_list marker)
         _SDCCERRG.out = DEFAULT_ERROR_OUT;
     }
 
-    if (ErrTab[errNum].errIndex != errNum)
-    {
+    if (ErrTab[errNum].errIndex != errNum) {
         fprintf(_SDCCERRG.out, 
-        	"Internal error: error table entry for %d inconsistent.", errNum);
+                "Internal error: error table entry for %d inconsistent.", errNum);
     }
 
-
-    if (ErrTab[errNum].errType >= _SDCCERRG.logLevel) {
+    if ((ErrTab[errNum].errType >= _SDCCERRG.logLevel) && (!_SDCCERRG.disabled[errNum])) {
         if ( ErrTab[errNum].errType == ERROR_LEVEL_ERROR )
             fatalError++ ;
   
         if ( filename && lineno ) {
-			if(_SDCCERRG.style)
-				fprintf(_SDCCERRG.out, "%s(%d) : ",filename,lineno);
-			else
-				fprintf(_SDCCERRG.out, "%s:%d: ",filename,lineno);
-         } else if (lineno) {
+            if(_SDCCERRG.style)
+                fprintf(_SDCCERRG.out, "%s(%d) : ",filename,lineno);
+            else
+                fprintf(_SDCCERRG.out, "%s:%d: ",filename,lineno);
+        } else if (lineno) {
             fprintf(_SDCCERRG.out, "at %d: ", lineno);
         } else {
             fprintf(_SDCCERRG.out, "-:0: ");
         }
-    
+
         switch(ErrTab[errNum].errType)
         {
             case ERROR_LEVEL_ERROR:
-            	fprintf(_SDCCERRG.out, "error: ");
+            	fprintf(_SDCCERRG.out, "error %d: ", errNum);
             	break;
             case ERROR_LEVEL_WARNING:
             case ERROR_LEVEL_PEDANTIC:
-            	fprintf(_SDCCERRG.out, "warning: ");
+                fprintf(_SDCCERRG.out, "warning %d: ", errNum);
             	break;
             case ERROR_LEVEL_INFO:
-            	fprintf(_SDCCERRG.out, "info: ");
+            	fprintf(_SDCCERRG.out, "info %d: ", errNum);
             	break;
 	    default:
 	    	break;            	
@@ -485,8 +488,7 @@ void vwerror (int errNum, va_list marker)
     
         vfprintf(_SDCCERRG.out, ErrTab[errNum].errText,marker);
         fprintf(_SDCCERRG.out, "\n");
-    }
-    else {
+    } else {
         /* Below the logging level, drop. */
     }
 }
@@ -553,7 +555,19 @@ style - Change the output error style to MSVC
 -------------------------------------------------------------------------------
 */
 
-void    MSVC_style (int style)
+void MSVC_style (int style)
 {
     _SDCCERRG.style = style;
+}
+
+/*
+-------------------------------------------------------------------------------
+disabled - Disable output of specified warning
+-------------------------------------------------------------------------------
+*/
+
+void setWarningDisabled (int errNum)
+{
+    if ((errNum < MAX_ERROR_WARNING) && (ErrTab[errNum].errType <= ERROR_LEVEL_WARNING))
+        _SDCCERRG.disabled[errNum] = 1;
 }

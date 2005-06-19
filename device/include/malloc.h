@@ -25,14 +25,14 @@
 #ifndef __SDCC51_MALLOC_H
 #define __SDCC51_MALLOC_H
 #include <sdcc-lib.h>
-
-#ifndef NULL
-# define NULL (void *)0
-#endif
+#include <stddef.h>
 
 #if _SDCC_MALLOC_TYPE_MLH
-void *malloc (unsigned int);
-void free(void *p);
+
+void * calloc (size_t nmemb, size_t size);
+void * malloc (size_t size);
+void * realloc (void * ptr, size_t size);
+void free (void * ptr);
 
 #else
 
@@ -40,25 +40,17 @@ void free(void *p);
 
 MEMHEADER
 {
-      MEMHEADER xdata *  next;
-      MEMHEADER xdata *  prev;
+      MEMHEADER __xdata *  next;
       unsigned int       len;
-      unsigned char      mem[1];
+      unsigned char      mem[];
 };
 
-#ifdef SDCC_STACK_AUTO
+extern void init_dynamic_memory(void xdata * heap, unsigned int size);
+extern void xdata * calloc (size_t nmemb, size_t size);
+extern void xdata * malloc (size_t size);
+extern void xdata * realloc (void * ptr, size_t size);
+extern void free (void * ptr);
 
-extern void init_dynamic_memory(MEMHEADER xdata *  , unsigned int ) reentrant;
-extern void xdata * malloc (unsigned int ) reentrant;
-extern void free (void xdata * p) reentrant;
-
-#else
-
-extern void init_dynamic_memory(MEMHEADER xdata *  , unsigned int );
-extern void xdata * malloc (unsigned int );
-extern void free (void xdata *  p);
-
-#endif
 #endif
 
 #endif

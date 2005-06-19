@@ -51,7 +51,7 @@ cl_avr::cpi_Rd_K(t_mem code)
   if (D & 0x80)
     D|= ~0xff;
   t_mem sreg= ram->get(SREG);
- result= (signed)D-(signed)K;
+  result= (signed)D-(signed)K;
   res= result & 0xff;
   
   sreg= sreg & ~(BIT_H|BIT_S|BIT_V|BIT_N|BIT_C|BIT_Z);

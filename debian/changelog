@@ -1,3 +1,14 @@
+sdcc (2.5.0-1) unstable; urgency=low
+
+  * New upstream version.
+    - Support for bool datatype and abs() function has been added (closes:
+      bug#300293).
+    - PIC files are now included (closes: bug#308623).
+  * Fixed the generation of PIC14 .asm file when a string constant contains 
+    "\r\n" (closes: bug#304015).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 19 Jun 2005 20:01:09 +0200
+
 sdcc (2.4.0-4) unstable; urgency=low
 
   * Also install sdcclib (closes: bug#298313). 

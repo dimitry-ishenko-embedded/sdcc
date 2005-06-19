@@ -228,6 +228,7 @@ typedef enum
   POC_INCFSZ,
   POC_INCFSZW,
   POC_INFSNZ,
+  POC_INFSNZW,
   POC_IORWF,
   POC_IORFW,
   POC_IORLW,
@@ -267,11 +268,20 @@ typedef enum
   POC_SUBFWB_D1,
   POC_SWAPF,
   POC_SWAPFW,
-//  POC_TRIS , // To be removed
+  POC_TBLRD,
+  POC_TBLRD_POSTINC,
+  POC_TBLRD_POSTDEC,
+  POC_TBLRD_PREINC,
+  POC_TBLWT,
+  POC_TBLWT_POSTINC,
+  POC_TBLWT_POSTDEC,
+  POC_TBLWT_PREINC,
   POC_TSTFSZ,
   POC_XORLW,
   POC_XORWF,
-  POC_XORFW
+  POC_XORFW,
+
+  POC_BANKSEL
 } PIC_OPCODE;
 
 
@@ -291,8 +301,47 @@ typedef enum
 		   * in the pCode peep hole optimizer */
   PC_CSOURCE,     /* C-Source Line  */
   PC_ASMDIR,	  /* Assembler directive */
-  PC_BAD          /* Mark the pCode object as being bad */
+  PC_BAD,         /* Mark the pCode object as being bad */
+  PC_INFO         /* pCode information node, used primarily in optimizing */
 } PC_TYPE;
+
+
+/***********************************************************************
+ *  INFO_TYPE  - information node types
+ ***********************************************************************/
+
+typedef enum
+{
+  INF_OPTIMIZATION,      /* structure contains optimization information */
+  INF_LOCALREGS          /* structure contains local register information */
+} INFO_TYPE;
+
+
+
+/***********************************************************************
+ *  OPT_TYPE  - optimization node types
+ ***********************************************************************/
+
+typedef enum
+{
+  OPT_BEGIN,             /* mark beginning of optimization block */
+  OPT_END,               /* mark ending of optimization block */
+  OPT_JUMPTABLE_BEGIN,   /* mark beginning of a jumptable */
+  OPT_JUMPTABLE_END      /* mark end of jumptable */
+} OPT_TYPE;
+
+/***********************************************************************
+ *  LR_TYPE  - optimization node types
+ ***********************************************************************/
+
+typedef enum
+{
+  LR_ENTRY_BEGIN,             /* mark beginning of optimization block */
+  LR_ENTRY_END,               /* mark ending of optimization block */
+  LR_EXIT_BEGIN,
+  LR_EXIT_END
+} LR_TYPE;
+
 
 /************************************************/
 /***************  Structures ********************/
@@ -357,6 +406,7 @@ typedef struct pCodeOpBit
 				 just a bit of a register */
 } pCodeOpBit;
 #endif
+
 typedef struct pCodeOpLit
 {
   pCodeOp pcop;
@@ -396,6 +446,8 @@ typedef struct pCodeOpReg
   struct regs *r;
   int instance;    // byte # of Multi-byte registers
   struct pBlock *pb;
+
+  pCodeOp *pcop2;	// second memory operand (NEEDED IN gen.c:pic16_popGet2p (pCodeOpReg casted into pCodeOpReg2) 
 } pCodeOpReg;
 
 typedef struct pCodeOpReg2
@@ -432,8 +484,26 @@ typedef struct pCodeOpWild
   pCodeOp *matched;       /* When a wild matches, we'll store a pointer to the
 			   * opcode we matched */
 
+  pCodeOp *pcop2;	  /* second operand if exists */
+
 } pCodeOpWild;
 
+
+typedef struct pCodeOpOpt
+{
+  pCodeOp pcop;
+  
+  OPT_TYPE type;          /* optimization node type */
+  
+  char *key;              /* key by which a block is identified */
+} pCodeOpOpt;
+
+typedef struct pCodeOpLocalReg
+{
+  pCodeOp pcop;
+
+  LR_TYPE type;
+} pCodeOpLocalReg;  
 
 /*************************************************
     pCode
@@ -501,17 +571,6 @@ typedef struct pCodeCSource
     pCodeAsmDir
 **************************************************/
 
-typedef struct pCodeAsmDir
-{
-  pCode pc;
-  
-  char *directive;
-  char *arg;
-
-  pBranch *label;
-} pCodeAsmDir;
-
-
 /*************************************************
     pCodeFlow
 
@@ -523,6 +582,7 @@ typedef struct pCodeAsmDir
  contiguous chunk.
 
 **************************************************/
+struct defmap_s; // defined in pcode.c
 
 typedef struct pCodeFlow
 {
@@ -554,6 +614,13 @@ typedef struct pCodeFlow
   int ToConflicts;
 
   set *registers;/* Registers used in this flow */
+
+  struct defmap_s *defmap;	/* chronologically ordered list of definitions performed
+			   in this flow (most recent at the front) */
+  struct defmap_s *in_vals;	/* definitions of all symbols reaching this flow
+  				 * symbols with multiple different definitions are stored
+				 * with an assigned value of 0. */
+  struct defmap_s *out_vals;	/* definitions valid AFTER thie flow */
 
 } pCodeFlow;
 
@@ -595,6 +662,8 @@ typedef struct pCodeInstruction
 
   char const * const mnemonic;       // Pointer to mnemonic string
 
+  char isize;          // pCode instruction size
+
   pBranch *from;       // pCodes that execute before this one
   pBranch *to;         // pCodes that execute after
   pBranch *label;      // pCode instructions that have labels
@@ -623,6 +692,20 @@ typedef struct pCodeInstruction
 } pCodeInstruction;
 
 
+
+/*************************************************
+    pCodeAsmDir
+**************************************************/
+
+typedef struct pCodeAsmDir
+{
+  pCodeInstruction pci;
+  
+  char *directive;
+  char *arg;
+} pCodeAsmDir;
+
+
 /*************************************************
     pCodeLabel
 **************************************************/
@@ -634,6 +717,7 @@ typedef struct pCodeLabel
 
   char *label;
   int key;
+  int force;		/* label cannot be optimized out */
 
 } pCodeLabel;
 
@@ -658,6 +742,10 @@ typedef struct pCodeFunction
 
   int  ncalled;    /* Number of times function is called */
 
+  int absblock;    /* hack to emulate a block pCodes in absolute position
+                      but not inside a function */
+  int stackusage;  /* stack positions used in function */
+  
 } pCodeFunction;
 
 
@@ -683,6 +771,22 @@ typedef struct pCodeWild
   pCodeOp *label;    // Optional label
 
 } pCodeWild;
+
+
+/*************************************************
+    pInfo
+    
+    Here are stored generic informaton
+*************************************************/
+typedef struct pCodeInfo
+{
+  pCodeInstruction pci;
+  
+  INFO_TYPE type;	/* info node type */
+  
+  pCodeOp *oper1;	/* info node arguments */
+} pCodeInfo;
+  
 
 /*************************************************
     pBlock
@@ -835,6 +939,7 @@ typedef struct peepCommand {
 #define PCW(x)    ((pCodeWild *)(x))
 #define PCCS(x)   ((pCodeCSource *)(x))
 #define PCAD(x)	  ((pCodeAsmDir *)(x))
+#define PCINF(x)  ((pCodeInfo *)(x))
 
 #define PCOP(x)   ((pCodeOp *)(x))
 //#define PCOB(x)   ((pCodeOpBit *)(x))
@@ -844,8 +949,10 @@ typedef struct peepCommand {
 #define PCOR(x)   ((pCodeOpReg *)(x))
 #define PCOR2(x)  ((pCodeOpReg2 *)(x))
 #define PCORB(x)  ((pCodeOpRegBit *)(x))
+#define PCOO(x)   ((pCodeOpOpt *)(x))
+#define PCOLR(x)  ((pCodeOpLocalReg *)(x))
 #define PCOW(x)   ((pCodeOpWild *)(x))
-
+#define PCOW2(x)  (PCOW(PCOW(x)->pcop2))
 #define PBR(x)    ((pBranch *)(x))
 
 #define PCWB(x)   ((pCodeWildBlock *)(x))
@@ -864,7 +971,8 @@ typedef struct peepCommand {
 #define isPCL(x)        ((PCODE(x)->type == PC_LABEL))
 #define isPCW(x)        ((PCODE(x)->type == PC_WILD))
 #define isPCCS(x)       ((PCODE(x)->type == PC_CSOURCE))
-#define isASMDIR(x)	((PCODE(x)->type == PC_ASMDIR))
+#define isPCAD(x)	((PCODE(x)->type == PC_ASMDIR))
+#define isPCINFO(x)     ((PCODE(x)->type == PC_INFO))
 
 #define isCALL(x)       ((isPCI(x)) && (PCI(x)->op == POC_CALL))
 #define isSTATUS_REG(r) ((r)->pc_type == PO_STATUS)
@@ -884,6 +992,7 @@ pCode *pic16_newpCodeCharP(char *cP);              // Create a new pCode given a
 pCode *pic16_newpCodeInlineP(char *cP);            // Create a new pCode given a char *
 pCode *pic16_newpCodeFunction(char *g, char *f);   // Create a new function
 pCode *pic16_newpCodeLabel(char *name,int key);    // Create a new label given a key
+pCode *pic16_newpCodeLabelFORCE(char *name, int key); // Same as newpCodeLabel but label cannot be optimized out
 pCode *pic16_newpCodeCSource(int ln, char *f, char *l); // Create a new symbol line 
 pBlock *pic16_newpCodeChain(memmap *cm,char c, pCode *pc); // Create a new pBlock
 void pic16_printpBlock(FILE *of, pBlock *pb);      // Write a pBlock to a file
@@ -892,29 +1001,62 @@ void pic16_addpBlock(pBlock *pb);                  // Add a pBlock to a pFile
 void pic16_copypCode(FILE *of, char dbName);       // Write all pBlocks with dbName to *of
 void pic16_movepBlock2Head(char dbName);           // move pBlocks around
 void pic16_AnalyzepCode(char dbName);
+void pic16_OptimizeLocalRegs(void);
 void pic16_AssignRegBanks(void);
 void pic16_printCallTree(FILE *of);
 void pCodePeepInit(void);
 void pic16_pBlockConvert2ISR(pBlock *pb);
 void pic16_pBlockConvert2Absolute(pBlock *pb);
+void pic16_initDB(void);
+void pic16_emitDB(char c, char ptype, void *p);		  // Add DB directives to a pBlock
+void pic16_emitDS(char *s, char ptype, void *p);
+void pic16_flushDB(char ptype, void *p);			  // Add pending DB data to a pBlock
+
+pCode *pic16_newpCodeAsmDir(char *asdir, char *argfmt, ...); 
 
 pCodeOp *pic16_newpCodeOpLabel(char *name, int key);
 pCodeOp *pic16_newpCodeOpImmd(char *name, int offset, int index, int code_space);
 pCodeOp *pic16_newpCodeOpLit(int lit);
 pCodeOp *pic16_newpCodeOpLit2(int lit, pCodeOp *arg2);
-pCodeOp *pic16_newpCodeOpBit(char *name, int bit,int inBitSpace);
+pCodeOp *pic16_newpCodeOpBit(char *name, int bit,int inBitSpace, PIC_OPTYPE subt);
 pCodeOp *pic16_newpCodeOpRegFromStr(char *name);
+pCodeOp *pic16_newpCodeOpReg(int rIdx);
 pCodeOp *pic16_newpCodeOp(char *name, PIC_OPTYPE p);
+pCodeOp *pic16_newpCodeOpRegNotVect(bitVect *bv);
 pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop);
+
+pCode *pic16_newpCodeInfo(INFO_TYPE type, pCodeOp *pcop);
+pCodeOp *pic16_newpCodeOpOpt(OPT_TYPE type, char *key);
+pCodeOp *pic16_newpCodeOpLocalRegs(LR_TYPE type);
+pCodeOp *pic16_newpCodeOpReg(int rIdx);
 
 pCode * pic16_findNextInstruction(pCode *pci);
 pCode * pic16_findNextpCode(pCode *pc, PC_TYPE pct);
 int pic16_isPCinFlow(pCode *pc, pCode *pcflow);
 struct regs * pic16_getRegFromInstruction(pCode *pc);
 struct regs * pic16_getRegFromInstruction2(pCode *pc);
+char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size);
+char *pic16_get_op2(pCodeOp *pcop,char *buffer, size_t size);
+char *dumpPicOptype(PIC_OPTYPE type);
 
 extern void pic16_pcode_test(void);
 extern int pic16_debug_verbose;
+extern int pic16_pcode_verbose;
+
+extern char *LR_TYPE_STR[];
+
+
+#ifndef debugf
+//#define debugf(frm, rest...)       _debugf(__FILE__, __LINE__, frm, rest)
+#define debugf(frm, rest)	_debugf(__FILE__, __LINE__, frm, rest)
+#define debugf2(frm, arg1, arg2)	_debugf(__FILE__, __LINE__, frm, arg1, arg2)
+#define debugf3(frm, arg1, arg2, arg3)	_debugf(__FILE__, __LINE__, frm, arg1, arg2, arg3)
+
+#endif
+
+extern void _debugf(char *f, int l, char *frm, ...);
+
+
 /*-----------------------------------------------------------------*
  * pCode objects.
  *-----------------------------------------------------------------*/
@@ -923,7 +1065,15 @@ extern pCodeOpReg pic16_pc_status;
 extern pCodeOpReg pic16_pc_intcon;
 extern pCodeOpReg pic16_pc_pcl;
 extern pCodeOpReg pic16_pc_pclath;
+extern pCodeOpReg pic16_pc_pclatu;
 extern pCodeOpReg pic16_pc_wreg;
+extern pCodeOpReg pic16_pc_tosl;
+extern pCodeOpReg pic16_pc_tosh;
+extern pCodeOpReg pic16_pc_tosu;
+extern pCodeOpReg pic16_pc_tblptrl;
+extern pCodeOpReg pic16_pc_tblptrh;
+extern pCodeOpReg pic16_pc_tblptru;
+extern pCodeOpReg pic16_pc_tablat;
 extern pCodeOpReg pic16_pc_bsr;
 extern pCodeOpReg pic16_pc_fsr0;
 extern pCodeOpReg pic16_pc_fsr0l;
@@ -950,9 +1100,30 @@ extern pCodeOpReg pic16_pc_plusw2;
 extern pCodeOpReg pic16_pc_prodl;
 extern pCodeOpReg pic16_pc_prodh;
 
+extern pCodeOpReg pic16_pc_eecon1;
+extern pCodeOpReg pic16_pc_eecon2;
+extern pCodeOpReg pic16_pc_eedata;
+extern pCodeOpReg pic16_pc_eeadr;
+
 extern pCodeOpReg pic16_pc_kzero;
 extern pCodeOpReg pic16_pc_wsave;     /* wsave and ssave are used to save W and the Status */
 extern pCodeOpReg pic16_pc_ssave;     /* registers during an interrupt */
 
+extern pCodeOpReg *pic16_stackpnt_lo;
+extern pCodeOpReg *pic16_stackpnt_hi;
+extern pCodeOpReg *pic16_stack_postinc;
+extern pCodeOpReg *pic16_stack_postdec;
+extern pCodeOpReg *pic16_stack_preinc;
+extern pCodeOpReg *pic16_stack_plusw;
+
+extern pCodeOpReg *pic16_framepnt_lo;
+extern pCodeOpReg *pic16_framepnt_hi;
+extern pCodeOpReg *pic16_frame_postinc;
+extern pCodeOpReg *pic16_frame_postdec;
+extern pCodeOpReg *pic16_frame_preinc;
+extern pCodeOpReg *pic16_frame_plusw;
+
+extern pCodeOpReg pic16_pc_gpsimio;
+extern pCodeOpReg pic16_pc_gpsimio2;
 
 #endif // __PCODE_H__

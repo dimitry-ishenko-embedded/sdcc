@@ -43,28 +43,32 @@ static char _defaultRules[] =
 static char *_pic16_keywords[] =
 {
   "at",
-  "bit",
   "code",
   "critical",
+  "register",
   "data",
   "far",
-  "idata",
   "interrupt",
   "near",
   "pdata",
   "reentrant",
   "sfr",
-  "sbit",
   "using",
-  "xdata",
   "_data",
   "_code",
   "_generic",
   "_near",
-  "_xdata",
   "_pdata",
-  "_idata",
   "_naked",
+  "shadowregs",
+  "wparam",
+  
+//  "bit",
+//  "idata",
+//  "sbit",
+//  "xdata",
+//  "_xdata",
+//  "_idata",
   NULL
 };
 
@@ -76,30 +80,36 @@ extern char *pic16_processor_base_name(void);
 
 void  pic16_pCodeInitRegisters(void);
 
-void pic16_assignRegisters (eBBlock ** ebbs, int count);
+void pic16_assignRegisters (ebbIndex *);
 
 static int regParmFlg = 0;	/* determine if we can register a parameter */
 
 pic16_options_t pic16_options;
 
+extern set *includeDirsSet;
+extern set *dataDirsSet;
+extern set *libFilesSet;
+
+/* Also defined in gen.h, but the #include is commented out */
+/* for an unknowned reason. - EEP */
+void pic16_emitDebuggerSymbol (char *);
+ 
+extern regs* newReg(short type, short pc_type, int rIdx, char *name, int size, int alias, operand *refop);
+extern void pic16_emitConfigRegs(FILE *of);
+extern void pic16_emitIDRegs(FILE *of);
+
+
+
 static void
 _pic16_init (void)
 {
-	asm_addTree (&asm_asxxxx_mapping);
-	pic16_pCodeInitRegisters();
-	maxInterrupts = 2;
-
-	/* set pic16 port options to defaults */
-	pic16_options.gen_banksel = 0;
-	pic16_options.opt_banksel = 0;
-	pic16_options.omit_configw = 0;
-	pic16_options.omit_ivt = 0;
-	pic16_options.leave_reset = 0;
-	pic16_options.stack_model = 0;			/* 0 for 'small', 1 for 'large' */
+  asm_addTree (&asm_asxxxx_mapping);
+  pic16_pCodeInitRegisters();
+  maxInterrupts = 2;
 }
 
 static void
-_pic16_reset_regparm ()
+_pic16_reset_regparm (void)
 {
   regParmFlg = 0;
 }
@@ -107,13 +117,18 @@ _pic16_reset_regparm ()
 static int
 _pic16_regparm (sym_link * l)
 {
-  /* for this processor it is simple
-     can pass only the first parameter in a register */
-  //if (regParmFlg)
-  //  return 0;
-
-  regParmFlg++;// = 1;
-  return 1;
+  /* force all parameters via SEND/RECEIVE */
+  if(0 /*pic16_options.ip_stack*/) {
+    /* for this processor it is simple
+     * can pass only the first parameter in a register */
+    if(regParmFlg)return 0;
+      regParmFlg++;
+      return 1;	//regParmFlg;
+  } else {
+    /* otherwise pass all arguments in registers via SEND/RECEIVE */
+    regParmFlg++;// = 1;
+    return regParmFlg;
+  }
 }
 
 
@@ -121,98 +136,281 @@ int initsfpnt=0;		/* set to 1 if source provides a pragma for stack
 				 * so glue() later emits code to initialize stack/frame pointers */
 set *absSymSet;
 
+set *sectNames=NULL;			/* list of section listed in pragma directives */
+set *sectSyms=NULL;			/* list of symbols set in a specific section */
+set *wparamList=NULL;
+
+#if 0
+/* This is an experimental code for #pragma inline
+   and is temporarily disabled for 2.5.0 release */
+set *asmInlineMap=NULL;
+#endif  /* 0 */
+
+struct {
+  unsigned ignore: 1;
+  unsigned want_libc: 1;
+  unsigned want_libm: 1;
+  unsigned want_libio: 1;
+  unsigned want_libdebug: 1;
+} libflags = { 0, 0, 0, 0, 0 };
+  
+
 static int
 _process_pragma(const char *sz)
 {
-  static const char *WHITE = " \t";
+  static const char *WHITE = " \t\n";
+  static const char *WHITECOMMA = " \t\n,";
+  char *ptr = strtok((char *)sz, WHITE);
+
+    /* #pragma maxram [maxram] */
+    if (startsWith (ptr, "maxram")) {
+      char *maxRAM = strtok((char *)NULL, WHITE);
+
+        if (maxRAM != (char *)NULL) {
+          int maxRAMaddress;
+          value *maxRAMVal;
+
+            maxRAMVal = constVal(maxRAM);
+            maxRAMaddress = (int)floatFromVal(maxRAMVal);
+            pic16_setMaxRAM(maxRAMaddress);
+        }
+
+        return 0;
+    }
   
-  char	*ptr = strtok((char *)sz, WHITE);
+  /* #pragma stack [stack-position] [stack-len] */
+  if(startsWith(ptr, "stack")) {
+    char *stackPosS = strtok((char *)NULL, WHITE);
+    char *stackLenS = strtok((char *)NULL, WHITE);
+    value *stackPosVal;
+    value *stackLenVal;
+    regs *reg;
+    symbol *sym;
 
-	if (startsWith (ptr, "maxram")) {
-	  char *maxRAM = strtok((char *)NULL, WHITE);
+      stackPosVal = constVal( stackPosS );
+      stackPos = (unsigned int)floatFromVal( stackPosVal );
 
-		if (maxRAM != (char *)NULL) {
-		  int maxRAMaddress;
-		  value *maxRAMVal;
+      if(stackLenS) {
+        stackLenVal = constVal( stackLenS );
+        stackLen = (unsigned int)floatFromVal( stackLenVal );
+      }
 
-			maxRAMVal = constVal(maxRAM);
-			maxRAMaddress = (int)floatFromVal(maxRAMVal);
-			pic16_setMaxRAM(maxRAMaddress);
-		}
-	}
-	
-	if(startsWith(ptr, "stack")) {
-	  char *stackPosS = strtok((char *)NULL, WHITE);
-	  value *stackPosVal;
-	  regs *reg;
+      if(stackLen < 1) {
+        stackLen = 64;
+        fprintf(stderr, "%s:%d: warning: setting stack to default size %d (0x%04x)\n",
+                filename, lineno-1, stackLen, stackLen);
+                        
+//      fprintf(stderr, "%s:%d setting stack to default size %d\n", __FILE__, __LINE__, stackLen);
+      }
 
-//	  	fprintf(stderr, "Initializing stack pointer to 0x%x\n", (int)floatFromVal(constVal(stackPos)));
-		stackPosVal = constVal( stackPosS );
-		stackPos = (unsigned int)floatFromVal( stackPosVal );
+//      fprintf(stderr, "Initializing stack pointer at 0x%x len 0x%x\n", stackPos, stackLen);
+        
+      reg=newReg(REG_SFR, PO_SFR_REGISTER, stackPos, "_stack", stackLen-1, 0, NULL);
+      addSet(&pic16_fix_udata, reg);
+    
+      reg = newReg(REG_SFR, PO_SFR_REGISTER, stackPos + stackLen-1, "_stack_end", 1, 0, NULL);
+      addSet(&pic16_fix_udata, reg);
+    
+      sym = newSymbol("stack", 0);
+      sprintf(sym->rname, "_%s", sym->name);
+      addSet(&publics, sym);
 
-		reg=newReg(REG_SFR, PO_SFR_REGISTER, stackPos, "stack", 1, 0, NULL);
-		addSet(&pic16_fix_udata, reg);
-		
-		initsfpnt = 1;		// force glue() to initialize stack/frame pointers */
+      sym = newSymbol("stack_end", 0);
+      sprintf(sym->rname, "_%s", sym->name);
+      addSet(&publics, sym);
+    
+      initsfpnt = 1;    // force glue() to initialize stack/frame pointers */
 
-	  return 0;
-	}
-	
-	if(startsWith(ptr, "code")) {
-	  char *symname = strtok((char *)NULL, WHITE);
-	  char *location = strtok((char *)NULL, WHITE);
-	  absSym *absS;
-	  value *addr;
+    return 0;
+  }
+  
+  /* #pragma code [symbol] [location] */
+  if(startsWith(ptr, "code")) {
+    char *symname = strtok((char *)NULL, WHITE);
+    char *location = strtok((char *)NULL, WHITE);
+    absSym *absS;
+    value *addr;
 
-		absS = Safe_calloc(1, sizeof(absSym));
-		absS->name = Safe_strdup( symname );
-		addr = constVal( location );
-		absS->address = (unsigned int)floatFromVal( addr );
+      absS = Safe_calloc(1, sizeof(absSym));
+      sprintf(absS->name, "_%s", symname);
+    
+      addr = constVal( location );
+      absS->address = (unsigned int)floatFromVal( addr );
 
-		addSet(&absSymSet, absS);
-		fprintf(stderr, "%s:%d symbol %s will be placed in location 0x%06x in code memory\n",
-			__FILE__, __LINE__, symname, absS->address);
+      if((absS->address % 2) != 0) {
+        absS->address--;
+        fprintf(stderr, "%s:%d: warning: code memory locations should be word aligned, will locate to 0x%06x instead\n",
+                filename, lineno-1, absS->address);
+      }
 
-	  return 0;
-	}	  
+      addSet(&absSymSet, absS);
+//    fprintf(stderr, "%s:%d symbol %s will be placed in location 0x%06x in code memory\n",
+//      __FILE__, __LINE__, symname, absS->address);
+
+    return 0;
+  }
+
+  /* #pragma udata [section-name] [symbol] */
+  if(startsWith(ptr, "udata")) {
+    char *sectname = strtok((char *)NULL, WHITE);
+    char *symname = strtok((char *)NULL, WHITE);
+    symbol *nsym;
+    sectSym *ssym;
+    sectName *snam;
+    int found=0;
+    
+      while(symname) {
+        ssym = Safe_calloc(1, sizeof(sectSym));
+        ssym->name = Safe_calloc(1, strlen(symname)+2);
+        sprintf(ssym->name, "%s%s", port->fun_prefix, symname);
+        ssym->reg = NULL;
+
+        addSet(&sectSyms, ssym);
+
+        nsym = newSymbol(symname, 0);
+        strcpy(nsym->rname, ssym->name);
+
+#if 0
+        checkAddSym(&publics, nsym);
+#endif
+
+        found = 0;
+        for(snam=setFirstItem(sectNames);snam;snam=setNextItem(sectNames)) {
+          if(!strcmp(sectname, snam->name)){ found=1; break; }
+        }
+      
+        if(!found) {
+          snam = Safe_calloc(1, sizeof(sectName));
+          snam->name = Safe_strdup( sectname );
+          snam->regsSet = NULL;
+        
+          addSet(&sectNames, snam);
+        }
+      
+        ssym->section = snam;
+        
+#if 0
+        fprintf(stderr, "%s:%d placing symbol %s at section %s (%p)\n", __FILE__, __LINE__,
+           ssym->name, snam->name, snam);
+#endif
+
+        symname = strtok((char *)NULL, WHITE);
+    }
+
+    return 0;
+  }
+  
+  /* #pragma wparam function1[, function2[,...]] */
+  if(startsWith(ptr, "wparam")) {
+    char *fname = strtok((char *)NULL, WHITECOMMA);
+
+      
+      while(fname) {
+        fprintf(stderr, "PIC16 Warning: `%s' wparam pragma is obsolete. use function attribute `wparam' instead.\n", fname);
+        addSet(&wparamList, Safe_strdup(fname));
+              
+//        debugf("passing with WREG to %s\n", fname);
+        fname = strtok((char *)NULL, WHITECOMMA);
+      }
+            
+      return 0;
+  }
+        
+  /* #pragma library library_module */
+  if(startsWith(ptr, "library")) {
+  char *lmodule = strtok((char *)NULL, WHITE);
+        
+    if(lmodule) {
+      /* lmodule can be:
+       * c	link the C library
+       * math	link the math library
+       * io	link the IO library
+       * debug	link the debug libary
+       * anything else, will link as-is */
+       
+      if(!strcmp(lmodule, "c"))libflags.want_libc = 1;
+      else if(!strcmp(lmodule, "math"))libflags.want_libm = 1;
+      else if(!strcmp(lmodule, "io"))libflags.want_libio = 1;
+      else if(!strcmp(lmodule, "debug"))libflags.want_libdebug = 1;
+      else if(!strcmp(lmodule, "ignore"))libflags.ignore = 1;
+      else {
+        if(!libflags.ignore) {
+          fprintf(stderr, "link library %s\n", lmodule);
+          addSetHead(&libFilesSet, lmodule);
+        }
+      }
+    }
+    
+    return 0;
+  }
+   
+#if 0
+  /* This is an experimental code for #pragma inline
+     and is temporarily disabled for 2.5.0 release */
+  if(startsWith(ptr, "inline")) {
+    char *tmp = strtok((char *)NULL, WHITECOMMA);
+
+      while(tmp) {
+        addSet(&asmInlineMap, Safe_strdup( tmp ));
+        tmp = strtok((char *)NULL, WHITECOMMA);
+      }
+
+      {
+        char *s;
+          
+          for(s = setFirstItem(asmInlineMap); s ; s = setNextItem(asmInlineMap)) {
+            debugf("inline asm: `%s'\n", s);
+          }
+      }
+      
+      return 0;
+  }
+#endif  /* 0 */
 
   return 1;
 }
 
 #define REP_UDATA	"--preplace-udata-with="
-#define REP_UDATAACS	"--preplace-udata-acs-with="
-#define REP_UDATAOVR	"--preplace-udata-ovr-with="
-#define REP_UDATASHR	"--preplace-udata-sht-with="
-
-#define NAME_CODE	"--psection-code-name="
-#define NAME_IDATA	"--psection-idata-name="
-#define NAME_UDATA	"--psection-udata-name="
-#define NAME_UDATAACS	"--psection-udata-acs-name="
-#define NAME_UDATAOVR	"--psection-udata-ovr-name="
-#define NAME_UDATASHR	"--psection-udata-shr-name="
-
-#define ADDR_CODE	"--psection-code-addr="
-#define ADDR_IDATA	"--psection-idata-addr="
-#define ADDR_UDATA	"--psection-udata-addr="
-#define ADDR_UDATAACS	"--psection-udata-acs-addr="
-#define ADDR_UDATAOVR	"--psection-udata-ovr-addr="
-#define ADDR_UDATASHR	"--psection-udata-shr-addr="
 
 #define STACK_MODEL	"--pstack-model="
 #define OPT_BANKSEL	"--obanksel="
 
+#define ALT_ASM		"--asm="
+#define ALT_LINK	"--link="
 
+#define IVT_LOC		"--ivt-loc="
+#define NO_DEFLIBS	"--nodefaultlibs"
+#define MPLAB_COMPAT	"--mplab-comp"
+
+#define NL_OPT		"--nl="
+#define USE_CRT		"--use-crt="
+
+#define	OFMSG_LRSUPPORT	"--flr-support"
+
+#define OPTIMIZE_GOTO   "--optimize-goto"
+#define	OPTIMIZE_CMP	"--optimize-cmp"
+#define	OPTIMIZE_DF	"--optimize-df"
+
+char *alt_asm=NULL;
+char *alt_link=NULL;
+
+int pic16_mplab_comp=0;
 extern int pic16_debug_verbose;
 extern int pic16_ralloc_debug;
 extern int pic16_pcode_verbose;
 
+int pic16_fstack=0;
+int pic16_enable_peeps=0;
+int pic16_nl=0;			/* 0 for LF, 1 for CRLF */
+
 OPTION pic16_optionsTable[]= {
-	{ 0,	"--pgen-banksel",	&pic16_options.gen_banksel,	"generate BANKSEL assembler directives"},
+	{ 0,	NO_DEFLIBS,		&pic16_options.nodefaultlibs,	"do not link default libraries when linking"},
+	{ 0,	"--pno-banksel",	&pic16_options.no_banksel,	"do not generate BANKSEL assembler directives"},
 	{ 0,	OPT_BANKSEL,		NULL,				"set banksel optimization level (default=0 no)"},
-	{ 0,	"--pomit-config-words",	&pic16_options.omit_configw,	"omit the generation of configuration words"},
-	{ 0,	"--pomit-ivt",		&pic16_options.omit_ivt,	"omit the generation of the Interrupt Vector Table"},
-	{ 0,	"--pleave-reset-vector",&pic16_options.leave_reset,	"when omitting IVT leave RESET vector"},
-	{ 0,	STACK_MODEL,	NULL,	"use stack model 'small' (default) or 'large'"},
+//	{ 0,	"--pomit-config-words",	&pic16_options.omit_configw,	"omit the generation of configuration words"},
+//	{ 0,	"--pomit-ivt",		&pic16_options.omit_ivt,	"omit the generation of the Interrupt Vector Table"},
+//	{ 0,	"--pleave-reset-vector",&pic16_options.leave_reset,	"when omitting IVT leave RESET vector"},
+	{ 0,	STACK_MODEL,		NULL,				"use stack model 'small' (default) or 'large'"},
 
 	{ 0,	"--debug-xtra",		&pic16_debug_verbose,	"show more debug info in assembly output"},
 	{ 0,	"--debug-ralloc",	&pic16_ralloc_debug,	"dump register allocator debug file *.d"},
@@ -220,30 +418,21 @@ OPTION pic16_optionsTable[]= {
 		
 	{ 0,	REP_UDATA,	NULL,	"Place udata variables at another section: udata_acs, udata_ovr, udata_shr"},
 
-#if 0
-	/* these may not be in any use -- VR */
-	{ 0,	AT_UDATAACS,	NULL,	"Emit udata_acs variables at another section"},
-	{ 0,	AT_UDATAOVR,	NULL,	"Emit udata_ovr variables at another section"},
-	{ 0,	AT_UDATASHR,	NULL,	"Emit udata_shr variables at another section"},
-#endif
+	{ 0,	ALT_ASM,	NULL,	"Use alternative assembler"},
+	{ 0,	ALT_LINK,	NULL,	"Use alternative linker"},
 
-#if 0
-	/* commented out for the time being -- VR */
-	{ 0,	NAME_CODE,	NULL,	"Set code section name[,address]"},
-	{ 0,	NAME_IDATA,	NULL,	"Set idata section name[,address]"},
-	{ 0,	NAME_UDATA,	NULL,	"Set udata section name[,address]"},
-	{ 0,	NAME_UDATAACS,	NULL,	"Set udata_acs section name[,address]"},
-	{ 0,	NAME_UDATAOVR,	NULL,	"Set udata_ovr section name[,address]"},
-	{ 0,	NAME_UDATASHR,	NULL,	"Set udata_shr section name[,address]"},
-	
-	{ 0,	ADDR_CODE,	NULL,	"Set code section address"},
-	{ 0,	ADDR_IDATA,	NULL,	"Set idata section address"},
-	{ 0,	ADDR_UDATA,	NULL,	"Set udata section address"},
-	{ 0,	ADDR_UDATAACS,	NULL,	"Set udata_acs section address"},
-	{ 0,	ADDR_UDATAOVR,	NULL,	"Set udata_ovr section address"},
-	{ 0,	ADDR_UDATASHR,	NULL,	"Set udata_shr section address"},
-#endif
-
+	{ 0,	"--denable-peeps",	&pic16_enable_peeps,	"explicit enable of peepholes"},
+	{ 0,	IVT_LOC,	NULL,	"<nnnn> interrupt vector table location"},
+	{ 0,	"--calltree",		&pic16_options.dumpcalltree,	"dump call tree in .calltree file"},
+	{ 0,	MPLAB_COMPAT,		&pic16_mplab_comp,	"enable compatibility mode for MPLAB utilities (MPASM/MPLINK)"},
+	{ 0,	"--fstack",		&pic16_fstack,		"enable stack optimizations"},
+	{ 0,	NL_OPT,		NULL,				"new line, \"lf\" or \"crlf\""},
+	{ 0,	USE_CRT,	NULL,	"use <crt-o> run-time initialization module"},
+	{ 0,	"--no-crt",	&pic16_options.no_crt,	"do not link any default run-time initialization module"},
+	{ 0,	"--gstack",	&pic16_options.gstack,	"trace stack pointer push/pop to overflow"},
+	{ 0,    OPTIMIZE_GOTO,  NULL,			"try to use (conditional) BRA instead of GOTO"},
+	{ 0,	OPTIMIZE_CMP,	NULL,			"try to optimize some compares"},
+	{ 0,	OPTIMIZE_DF,	NULL,			"thoroughly analyze data flow (memory and time intensive!)"},
 	{ 0,	NULL,		NULL,	NULL}
 	};
 
@@ -257,221 +446,285 @@ static bool
 _pic16_parseOptions (int *pargc, char **argv, int *i)
 {
   int j=0;
-//  set *tset;
   char *stkmodel;
   
   /* TODO: allow port-specific command line options to specify
    * segment names here.
    */
-	/* check for arguments that have associated an integer variable */
-	while(pic16_optionsTable[j].pparameter) {
-		if(ISOPT( pic16_optionsTable[j].longOpt )) {
-			(*pic16_optionsTable[j].pparameter)++;
-			return TRUE;
-		}
-		j++;
-	}
+  
+    /* check for arguments that have associated an integer variable */
+    while(pic16_optionsTable[j].pparameter) {
+      if(ISOPT( pic16_optionsTable[j].longOpt )) {
+        (*pic16_optionsTable[j].pparameter)++;
+        return TRUE;
+      }
+      j++;
+    }
 
+    if(ISOPT(STACK_MODEL)) {
+      stkmodel = getStringArg(STACK_MODEL, argv, i, *pargc);
+      if(!STRCASECMP(stkmodel, "small"))pic16_options.stack_model = 0;
+      else if(!STRCASECMP(stkmodel, "large"))pic16_options.stack_model = 1;
+      else {
+        fprintf(stderr, "Unknown stack model: %s", stkmodel);
+        exit(-1);
+      }
+      return TRUE;
+    }
 
-	if(ISOPT(STACK_MODEL)) {
-		stkmodel = getStringArg(STACK_MODEL, argv, i, *pargc);
-		if(STRCASECMP(stkmodel, "small"))pic16_options.stack_model = 0;
-		else if(STRCASECMP(stkmodel, "large"))pic16_options.stack_model = 1;
-		else {
-			fprintf(stderr, "Unknown stack model: %s", stkmodel);
-			exit(-1);
-		}
-		return TRUE;
-	}
+    if(ISOPT(OPT_BANKSEL)) {
+      pic16_options.opt_banksel = getIntArg(OPT_BANKSEL, argv, i, *pargc);
+      return TRUE;
+    }
 
-	if(ISOPT(OPT_BANKSEL)) {
-		pic16_options.opt_banksel = getIntArg(OPT_BANKSEL, argv, i, *pargc);
-		return TRUE;
-	}
-
-	if(ISOPT(REP_UDATA)) {
-		pic16_sectioninfo.at_udata = Safe_strdup(getStringArg(REP_UDATA, argv, i, *pargc));
-		return TRUE;
-	}
+    if(ISOPT(REP_UDATA)) {
+      pic16_sectioninfo.at_udata = Safe_strdup(getStringArg(REP_UDATA, argv, i, *pargc));
+      return TRUE;
+    }
 	
-/*
-	if(ISOPT(AT_UDATAACS)) {
-		pic16_sectioninfo.at_udataacs = Safe_strdup( getStringArg(AT_UDATAACS, argv, i, *pargc));
-		return TRUE;
-	}
-
-	if(ISOPT(AT_UDATAOVR)) {
-		pic16_sectioninfo.at_udataovr = Safe_strdup( getStringArg(AT_UDATAOVR, argv, i, *pargc));
-		return TRUE;
-	}
+    if(ISOPT(ALT_ASM)) {
+      alt_asm = Safe_strdup(getStringArg(ALT_ASM, argv, i, *pargc));
+      return TRUE;
+    }
 	
-	if(ISOPT(AT_UDATASHR)) {
-		pic16_sectioninfo.at_udatashr = Safe_strdup( getStringArg(AT_UDATASHR, argv, i, *pargc));
-		return TRUE;
-	}
-*/
+    if(ISOPT(ALT_LINK)) {
+      alt_link = Safe_strdup(getStringArg(ALT_LINK, argv, i, *pargc));
+      return TRUE;
+    }
+
+    if(ISOPT(IVT_LOC)) {
+      pic16_options.ivt_loc = getIntArg(IVT_LOC, argv, i, *pargc);
+      fprintf(stderr, "%s:%d setting interrupt vector addresses 0x%x\n", __FILE__, __LINE__, pic16_options.ivt_loc);
+      return TRUE;
+    }
+	
+    if(ISOPT(NL_OPT)) {
+      char *tmp;
+            
+        tmp = Safe_strdup( getStringArg(NL_OPT, argv, i, *pargc) );
+        if(!STRCASECMP(tmp, "lf"))pic16_nl = 0;
+        else if(!STRCASECMP(tmp, "crlf"))pic16_nl = 1;
+        else {
+          fprintf(stderr, "invalid termination character id\n");
+          exit(-1);
+        }
+        return TRUE;
+    }
+
+    if(ISOPT(USE_CRT)) {
+      pic16_options.no_crt = 0;
+      pic16_options.crt_name = Safe_strdup( getStringArg(USE_CRT, argv, i, *pargc) );
+
+      return TRUE;
+    }
 
 #if 0
-	if(ISOPT(ADDR_CODE)) {
-		pic16_sectioninfo.addr_code = getIntArg(ADDR_CODE, argv, i, *pargc);
-		return TRUE;
-	}
-	
-	if(ISOPT(ADDR_IDATA)) {
-		pic16_sectioninfo.addr_idata = getIntArg(ADDR_IDATA, argv, i, *pargc);
-		return TRUE;
-	}
-	
-	if(ISOPT(ADDR_UDATA)) {
-		pic16_sectioninfo.addr_udata = getIntArg(ADDR_UDATA, argv, i, *pargc);
-		return TRUE;
-	}
-	
-	if(ISOPT(ADDR_UDATAACS)) {
-		pic16_sectioninfo.addr_udataacs = getIntArg(ADDR_UDATAACS, argv, i, *pargc);
-		return TRUE;
-	}
-	
-	if(ISOPT(ADDR_UDATAOVR)) {
-		pic16_sectioninfo.addr_udataovr = getIntArg(ADDR_UDATAOVR, argv, i, *pargc);
-		return TRUE;
-	}
-	
-	if(ISOPT(ADDR_UDATASHR)) {
-		pic16_sectioninfo.addr_udatashr = getIntArg(ADDR_UDATASHR, argv, i, *pargc);
-		return TRUE;
-	}
-
-	tset = newSet();
-	
-	if(ISOPT(NAME_CODE)) {
-		setParseWithComma(&tset, getStringArg(NAME_CODE, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_code = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_code = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	if(ISOPT(NAME_IDATA)) {
-		setParseWithComma(&tset, getStringArg(NAME_IDATA, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_idata = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_idata = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	if(ISOPT(NAME_UDATA)) {
-		setParseWithComma(&tset, getStringArg(NAME_UDATA, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_udata = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_udata = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	if(ISOPT(NAME_UDATAACS)) {
-		setParseWithComma(&tset, getStringArg(NAME_UDATAACS, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_udataacs = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_udataacs = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	if(ISOPT(NAME_UDATAOVR)) {
-		setParseWithComma(&tset, getStringArg(NAME_UDATAOVR, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_udataovr = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_udataovr = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	if(ISOPT(NAME_UDATASHR)) {
-		setParseWithComma(&tset, getStringArg(NAME_UDATASHR, argv, i, *pargc));
-		if(elementsInSet(tset) > 0)
-			pic16_sectioninfo.name_udatashr = Safe_strdup( (char *)indexSet(tset, 0));
-		if(elementsInSet(tset) > 1)
-			pic16_sectioninfo.addr_udatashr = atoi( (char *)indexSet(tset, 1));
-		return TRUE;
-	}
-
-	deleteSet( &tset );
+    if(ISOPT(OFMSG_LRSUPPORT)) {
+      pic16_options.opt_flags |= OF_LR_SUPPORT;
+      return TRUE;
+    }
 #endif
+
+    if (ISOPT(OPTIMIZE_GOTO)) {
+      pic16_options.opt_flags |= OF_OPTIMIZE_GOTO;
+      return TRUE;
+    }
+
+    if(ISOPT(OPTIMIZE_CMP)) {
+      pic16_options.opt_flags |= OF_OPTIMIZE_CMP;
+      return TRUE;
+    }
+
+    if (ISOPT(OPTIMIZE_DF)) {
+      pic16_options.opt_flags |= OF_OPTIMIZE_DF;
+      return TRUE;
+    }
+    
 
   return FALSE;
 }
 
-extern set *includeDirsSet;
-extern set *dataDirsSet;
-extern set *libFilesSet;
+extern set *userIncDirsSet;
+
+static void _pic16_initPaths(void)
+{
+  char pic16incDir[512];
+  char pic16libDir[512];
+  set *pic16incDirsSet=NULL;
+  set *pic16libDirsSet=NULL;
+  char devlib[512];
+
+    setMainValue("mcu", pic16->name[2] );
+    addSet(&preArgvSet, Safe_strdup("-D{mcu}"));
+
+    setMainValue("mcu1", pic16->name[1] );
+    addSet(&preArgvSet, Safe_strdup("-D__{mcu1}"));
+
+    sprintf(pic16incDir, "%s%cpic16", INCLUDE_DIR_SUFFIX, DIR_SEPARATOR_CHAR);
+    sprintf(pic16libDir, "%s%cpic16", LIB_DIR_SUFFIX, DIR_SEPARATOR_CHAR);
+
+
+    if(!options.nostdinc) {
+      /* setup pic16 include directory */
+      pic16incDirsSet = appendStrSet(dataDirsSet, NULL, pic16incDir);
+      includeDirsSet = pic16incDirsSet;
+//      mergeSets(&includeDirsSet, pic16incDirsSet);
+    }
+    /* pic16 port should not search to the SDCC standard include directories,
+     * so add here the deleted include dirs that user has issued in command line */
+    mergeSets(&pic16incDirsSet, userIncDirsSet);
+
+    if(!options.nostdlib) {
+      /* setup pic16 library directory */
+      pic16libDirsSet = appendStrSet(dataDirsSet, NULL, pic16libDir);
+      libDirsSet = pic16libDirsSet;
+//      mergeSets(&libDirsSet, pic16libDirsSet);
+    }
+
+    if(!pic16_options.nodefaultlibs) {
+      /* now add the library for the device */
+      sprintf(devlib, "%s.lib", pic16->name[2]);
+      addSet(&libFilesSet, Safe_strdup(devlib));
+
+      /* add the internal SDCC library */
+      addSet(&libFilesSet, Safe_strdup( "libsdcc.lib" ));
+    }
+}
+
+extern set *linkOptionsSet;
+char *msprintf(hTab *pvals, const char *pformat, ...);
+int my_system(const char *cmd);
+
+/* custom function to link objects */
+static void _pic16_linkEdit(void)
+{
+  hTab *linkValues=NULL;
+  char lfrm[256];
+  char *lcmd;
+  char temp[128];
+  set *tSet=NULL;
+  int ret;
+  
+  	/*
+  	 * link command format:
+  	 * {linker} {incdirs} {lflags} -o {outfile} {spec_ofiles} {ofiles} {libs}
+  	 *
+  	 */
+  	 
+  	sprintf(lfrm, "{linker} {incdirs} {lflags} -o {outfile} {user_ofile} {spec_ofiles} {ofiles} {libs}");
+  	   	 
+  	shash_add(&linkValues, "linker", "gplink");
+
+  	mergeSets(&tSet, libDirsSet);
+  	mergeSets(&tSet, libPathsSet);
+  	
+  	shash_add(&linkValues, "incdirs", joinStrSet( appendStrSet(tSet, "-I\"", "\"")));
+  	shash_add(&linkValues, "lflags", joinStrSet(linkOptionsSet));
+  
+	shash_add(&linkValues, "outfile", dstFileName);
+
+  	if(fullSrcFileName) {
+		sprintf(temp, "%s.o", dstFileName);
+//		addSetHead(&relFilesSet, Safe_strdup(temp));
+                shash_add(&linkValues, "user_ofile", temp);
+	}
+
+	if(!pic16_options.no_crt)
+          shash_add(&linkValues, "spec_ofiles", pic16_options.crt_name);
+
+  	shash_add(&linkValues, "ofiles", joinStrSet(relFilesSet));
+
+  	if(!libflags.ignore) {
+  	  if(libflags.want_libc)
+  	    addSet(&libFilesSet, Safe_strdup("libc18f.lib"));
+        
+          if(libflags.want_libm)
+            addSet(&libFilesSet, Safe_strdup("libm18f.lib"));
+        
+          if(libflags.want_libio) {
+            sprintf(temp, "libio%s.lib", pic16->name[1]);	/* build libio18f452.lib name */
+            addSet(&libFilesSet, Safe_strdup(temp));
+          }
+        
+          if(libflags.want_libdebug)
+            addSet(&libFilesSet, Safe_strdup("libdebug.lib"));
+        }
+
+  	shash_add(&linkValues, "libs", joinStrSet(libFilesSet));
+  	
+  	lcmd = msprintf(linkValues, lfrm);
+  	 
+  	ret = my_system( lcmd );
+  	 
+  	Safe_free( lcmd );
+  	 
+  	if(ret)
+  		exit(1);
+}
+
+
+/* forward declarations */
+extern const char *pic16_linkCmd[];
+extern const char *pic16_asmCmd[];
+extern set *asmOptionsSet;
 
 static void
 _pic16_finaliseOptions (void)
 {
-  char pic16incDir[512];
-  char pic16libDir[512];
-  set *pic16incDirsSet;
-  set *pic16libDirsSet;
-  char devlib[512];
+    port->mem.default_local_map = data;
+    port->mem.default_globl_map = data;
 
-	port->mem.default_local_map = data;
-	port->mem.default_globl_map = data;
+    /* peepholes are disabled for the time being */
+    options.nopeep = 1;
 
-	options.all_callee_saves = 1;		// always callee saves
+    /* explicit enable peepholes for testing */
+    if(pic16_enable_peeps)
+      options.nopeep = 0;
 
-	setMainValue("mcu", pic16->name[2] );
-	addSet(&preArgvSet, Safe_strdup("-D{mcu}"));
+    options.all_callee_saves = 1;		// always callee saves
 
-	sprintf(pic16incDir, "%s/pic16", INCLUDE_DIR_SUFFIX);
-	sprintf(pic16libDir, "%s/pic16", LIB_DIR_SUFFIX);
-
-	if(!options.nostdinc) {
-		/* setup pic16 include directory */
-		pic16incDirsSet = appendStrSet(dataDirsSet, NULL, pic16incDir);
-		mergeSets(&includeDirsSet, pic16incDirsSet);
-	}
+#if 0
+    options.float_rent = 1;
+    options.intlong_rent = 1;
+#endif
 	
-	if(!options.nostdlib) {
-		/* setup pic16 library directory */
-		pic16libDirsSet = appendStrSet(dataDirsSet, NULL, pic16libDir);
-		mergeSets(&libDirsSet, pic16libDirsSet);
+
+    if(alt_asm && strlen(alt_asm))
+      pic16_asmCmd[0] = alt_asm;
 	
-		/* now add the library for the device */
-		sprintf(devlib, "%s.lib", pic16->name[2]);
-		addSet(&libFilesSet, Safe_strdup(devlib));
-	}
+    if(alt_link && strlen(alt_link))
+      pic16_linkCmd[0] = alt_link;
+        
+    if(!pic16_options.no_crt) {
+      pic16_options.omit_ivt = 1;
+      pic16_options.leave_reset = 0;
+    }
+    
+    if(options.model == MODEL_SMALL)
+      addSet(&asmOptionsSet, Safe_strdup("-DSDCC_MODEL_SMALL"));
+    else
+    if(options.model == MODEL_LARGE)
+      addSet(&asmOptionsSet, Safe_strdup("-DSDCC_MODEL_LARGE"));
+    
+    {
+      char buf[128];
+
+        sprintf(buf, "-D%s -D__%s", pic16->name[2], pic16->name[1]);
+        *(strrchr(buf, 'f')) = 'F';
+        addSet(&asmOptionsSet, Safe_strdup( buf ));
+    }
+    
+    if(STACK_MODEL_LARGE) {
+      addSet(&preArgvSet, Safe_strdup("-DSTACK_MODEL_LARGE"));
+      addSet(&asmOptionsSet, Safe_strdup("-DSTACK_MODEL_LARGE"));
+    } else {
+      addSet(&preArgvSet, Safe_strdup("-DSTACK_MODEL_SMALL"));
+      addSet(&asmOptionsSet, Safe_strdup("-DSTACK_MODEL_SMALL"));
+    }
 }
 
 
-/* all the rest is commented ifdef'd out */
 #if 0
-  /* Hack-o-matic: if we are using the flat24 model,
-   * adjust pointer sizes.
-   */
-  if (options.model == MODEL_FLAT24)
-    {
-
-      fprintf (stderr, "*** WARNING: you should use the '-mds390' option "
-	       "for DS80C390 support. This code generator is "
-	       "badly out of date and probably broken.\n");
-
-      port->s.fptr_size = 3;
-      port->s.gptr_size = 4;
-      port->stack.isr_overhead++;	/* Will save dpx on ISR entry. */
-#if 1
-      port->stack.call_overhead++;	/* This acounts for the extra byte 
-					 * of return addres on the stack.
-					 * but is ugly. There must be a 
-					 * better way.
-					 */
-#endif
-      fReturn = fReturn390;
-      fReturnSize = 5;
-    }
-
   if (options.model == MODEL_LARGE)
     {
       port->mem.default_local_map = xdata;
@@ -507,27 +760,28 @@ _pic16_finaliseOptions (void)
 static void
 _pic16_setDefaultOptions (void)
 {
-	/* initialize to defaults section locations, names and addresses */
-	pic16_sectioninfo.at_udata	= "udata";
-	pic16_sectioninfo.at_udataacs	= "udata_acs";
-	pic16_sectioninfo.at_udataovr	= "udata_ovr";
-	pic16_sectioninfo.at_udatashr	= "udata_shr";
+  options.stackAuto = 0;		/* implicit declaration */
+  /* port is not capable yet to allocate separate registers 
+   * dedicated for passing certain parameters */
+  
+  /* initialize to defaults section locations, names and addresses */
+  pic16_sectioninfo.at_udata	= "udata";
 
-	/* initialize to nothing, so let linker decide about their names */
-	pic16_sectioninfo.name_code	=
-	pic16_sectioninfo.name_idata	=
-	pic16_sectioninfo.name_udata	=
-	pic16_sectioninfo.name_udataacs =
-	pic16_sectioninfo.name_udataovr =
-	pic16_sectioninfo.name_udatashr = "";
-
-	/* initialize to -1, so let linker decide about their address */
-	pic16_sectioninfo.addr_code	=
-	pic16_sectioninfo.addr_idata	=
-	pic16_sectioninfo.addr_udata	=
-	pic16_sectioninfo.addr_udataacs =
-	pic16_sectioninfo.addr_udataovr =
-	pic16_sectioninfo.addr_udatashr = -1;
+  /* set pic16 port options to defaults */
+  pic16_options.no_banksel = 0;
+  pic16_options.opt_banksel = 0;
+  pic16_options.omit_configw = 0;
+  pic16_options.omit_ivt = 0;
+  pic16_options.leave_reset = 0;
+  pic16_options.stack_model = 0;			/* 0 for 'small', 1 for 'large' */
+  pic16_options.ivt_loc = 0x000000;
+  pic16_options.nodefaultlibs = 0;
+  pic16_options.dumpcalltree = 0;
+  pic16_options.crt_name = "crt0i.o";		/* the default crt to link */
+  pic16_options.no_crt = 0;			/* use crt by default */
+  pic16_options.ip_stack = 1;		/* set to 1 to enable ipop/ipush for stack */
+  pic16_options.gstack = 0;
+  pic16_options.debgen = 0;
 }
 
 static const char *
@@ -562,17 +816,9 @@ _pic16_genAssemblerPreamble (FILE * of)
 	fprintf (of, "\tlist\tp=%s\n",&name[1]);
 
 	if(!pic16_options.omit_configw) {
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300001, pic16_getConfigWord(0x300001));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300002, pic16_getConfigWord(0x300002));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300003, pic16_getConfigWord(0x300003));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300005, pic16_getConfigWord(0x300005));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300006, pic16_getConfigWord(0x300006));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300008, pic16_getConfigWord(0x300008));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x300009, pic16_getConfigWord(0x300009));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x30000a, pic16_getConfigWord(0x30000a));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x30000b, pic16_getConfigWord(0x30000b));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x30000c, pic16_getConfigWord(0x30000c));
-		fprintf (of, "\t__config 0x%x,0x%hhx\n", 0x30000d, pic16_getConfigWord(0x30000d));
+		pic16_emitConfigRegs(of);
+		fprintf(of, "\n");
+		pic16_emitIDRegs(of);
 	}
 	
   fprintf (of, "\tradix dec\n");
@@ -582,6 +828,7 @@ _pic16_genAssemblerPreamble (FILE * of)
 static int
 _pic16_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 {
+#if 1
 	/* PIC18F family has only two interrupts, the high and the low
 	 * priority interrupts, which reside at 0x0008 and 0x0018 respectively - VR */
 
@@ -610,53 +857,71 @@ _pic16_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 			fprintf(of, "\tretfie\n");
 		}
 	}
-
+#endif
   return TRUE;
 }
 
-static bool
-_hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
+/* return True if the port can handle the type,
+ * False to convert it to function call */
+static bool _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-  //  sym_link *test = NULL;
-  //  value *val;
+//	fprintf(stderr,"checking for native mult for %c (size: %d)\n", ic->op, getSize(OP_SYMBOL(IC_RESULT(ic))->type));
 
-//  fprintf(stderr,"checking for native mult\n");
+#if 1
+	/* multiplication is fixed */
+	/* support mul for char/int/long */
+	if((ic->op == '*')
+	  && (getSize(OP_SYMBOL(IC_LEFT(ic))->type ) < 2))return TRUE;
+#endif
 
-  if ( ic->op != '*')
-    {
-      return FALSE;
-    }
-
-  return TRUE;
-/*
-  if ( IS_LITERAL (left))
-    {
-      fprintf(stderr,"left is lit\n");
-      test = left;
-      val = OP_VALUE (IC_LEFT (ic));
-    }
-  else if ( IS_LITERAL (right))
-    {
-      fprintf(stderr,"right is lit\n");
-      test = left;
-      val = OP_VALUE (IC_RIGHT (ic));
-    }
-  else
-    {
-      fprintf(stderr,"oops, neither is lit so no\n");
-      return FALSE;
-    }
-
-  if ( getSize (test) <= 2)
-    {
-      fprintf(stderr,"yep\n");
-      return TRUE;
-    }
-  fprintf(stderr,"nope\n");
-
+#if 0
+	/* support div for char/int/long */
+	if((getSize(OP_SYMBOL(IC_LEFT(ic))->type ) < 0)
+		&& (ic->op == '/'))return TRUE;
+#endif
+	
   return FALSE;
-*/
 }
+
+
+#if 0
+/* Do CSE estimation */
+static bool cseCostEstimation (iCode *ic, iCode *pdic)
+{
+//    operand *result = IC_RESULT(ic);
+//    sym_link *result_type = operandType(result);
+
+
+	/* VR -- this is an adhoc. Put here after conversation
+	 * with Erik Epetrich */
+
+	if(ic->op == '<'
+		|| ic->op == '>'
+		|| ic->op == EQ_OP) {
+
+		fprintf(stderr, "%d %s\n", __LINE__, __FUNCTION__);
+	  return 0;
+	}
+
+#if 0
+    /* if it is a pointer then return ok for now */
+    if (IC_RESULT(ic) && IS_PTR(result_type)) return 1;
+
+    /* if bitwise | add & subtract then no since mcs51 is pretty good at it
+       so we will cse only if they are local (i.e. both ic & pdic belong to
+       the same basic block */
+    if (IS_BITWISE_OP(ic) || ic->op == '+' || ic->op == '-') {
+        /* then if they are the same Basic block then ok */
+        if (ic->eBBlockNum == pdic->eBBlockNum) return 1;
+        else return 0;
+    }
+#endif
+
+    /* for others it is cheaper to do the cse */
+    return 1;
+}
+#endif
+
 
 /* Indicate which extended bit operations this port supports */
 static bool
@@ -684,15 +949,15 @@ oclsExpense (struct memmap *oclass)
   return 0;
 }
 
-/** $1 is always the basename.
+/** $1 is the input object file (PIC16 specific)	// >>always the basename<<.
     $2 is always the output file.
     $3 -L path and -l libraries
     $l is the list of extra options that should be there somewhere...
     MUST be terminated with a NULL.
 */
-static const char *_linkCmd[] =
+const char *pic16_linkCmd[] =
 {
-  "gplink", "$3", "\"$1.o\"", "-o $1", "$l", NULL
+  "gplink", "$l", "-o \"$2\"", "\"$1\"","$3", NULL
 };
 
 
@@ -703,9 +968,9 @@ static const char *_linkCmd[] =
     $l is the list of extra options that should be there somewhere...
     MUST be terminated with a NULL.
 */
-static const char *_asmCmd[] =
+const char *pic16_asmCmd[] =
 {
-  "gpasm", "$l", "$3", "-c", "\"$1.asm\"", NULL
+  "gpasm", "$l", "$3", "-c", "\"$1.asm\"", "-o \"$2\"", NULL
 
 };
 
@@ -723,18 +988,18 @@ PORT pic16_port =
     MODEL_SMALL
   },
   {
-    _asmCmd,			/* assembler command and arguments */
+    pic16_asmCmd,		/* assembler command and arguments */
     NULL,			/* alternate macro based form */
-    NULL,			/* arguments for debug mode */
+    "-g",			/* arguments for debug mode */
     NULL,			/* arguments for normal mode */
     0,				/* print externs as global */
     ".asm",			/* assembler file extension */
     NULL			/* no do_assemble function */
   },
   {
-    _linkCmd,			/* linker command and arguments */
+    NULL,			//    pic16_linkCmd,		/* linker command and arguments */
     NULL,			/* alternate macro based form */
-    NULL,			/* no do_link function */
+    _pic16_linkEdit,		//NULL,			/* no do_link function */
     ".o",			/* extension for object files */
     0				/* no need for linker file */
   },
@@ -749,7 +1014,7 @@ PORT pic16_port =
     4,		/* long */
     2,		/* ptr */
     3,		/* fptr, far pointers (see Microchip) */
-    2,		/* gptr */
+    3,		/* gptr */
     1,		/* bit */
     4,		/* float */
     4		/* max */
@@ -760,13 +1025,14 @@ PORT pic16_port =
     "CSEG    (CODE)",		// code
     "DSEG    (DATA)",		// data
     "ISEG    (DATA)",		// idata
+    "PSEG    (DATA)",		// pdata
     "XSEG    (XDATA)",		// xdata
     "BSEG    (BIT)",		// bit
     "RSEG    (DATA)",		// reg
     "GSINIT  (CODE)",		// static
     "OSEG    (OVR,DATA)",	// overlay
     "GSFINAL (CODE)",		// post static
-    "HOME	 (CODE)",	// home
+    "HOME    (CODE)",	// home
     NULL,			// xidata
     NULL,			// xinit
     NULL,			// default location for auto vars
@@ -788,12 +1054,26 @@ PORT pic16_port =
   },
     /* pic16 has an 8 bit mul */
   {
-    1, -1
+     0, -1
+  },
+  {
+    pic16_emitDebuggerSymbol
+  },
+  {
+    255/3,      /* maxCount */
+    3,          /* sizeofElement */
+    /* The rest of these costs are bogus. They approximate */
+    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+    {4,4,4},    /* sizeofMatchJump[] */
+    {0,0,0},    /* sizeofRangeCompare[] */
+    0,          /* sizeofSubtract */
+    3,          /* sizeofDispatch */
   },
   "_",
   _pic16_init,
   _pic16_parseOptions,
   pic16_optionsTable,
+  _pic16_initPaths,
   _pic16_finaliseOptions,
   _pic16_setDefaultOptions,
   pic16_assignRegisters,
@@ -803,6 +1083,7 @@ PORT pic16_port =
   NULL,				/* no genAssemblerEnd */
   _pic16_genIVT,
   NULL, // _pic16_genXINIT
+  NULL, 			/* genInitStartup */
   _pic16_reset_regparm,
   _pic16_regparm,
   _process_pragma,				/* process a pragma */
@@ -819,7 +1100,7 @@ PORT pic16_port =
   1,				/* transform != to !(a == b) */
   0,				/* leave == */
   FALSE,                        /* No array initializer support. */
-  0,                            /* no CSE cost estimation yet */
+  0,	//cseCostEstimation,            /* !!!no CSE cost estimation yet */
   NULL, 			/* no builtin functions */
   GPOINTER,			/* treat unqualified pointers as "generic" pointers */
   1,				/* reset labelKey to 1 */

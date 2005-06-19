@@ -1,6 +1,6 @@
 
 /*
-** $Id: genutils.h,v 1.2 2004/02/20 00:48:07 vrokas Exp $
+** $Id: genutils.h,v 1.9 2005/03/31 16:25:09 vrokas Exp $
 */
 
 #ifndef __GENUTILS_H__
@@ -8,6 +8,26 @@
 
 
 #include "common.h"
+
+
+#if !defined(__BORLANDC__) && !defined(_MSC_VER)
+#define DEBUGpc(fmt,...)  DEBUGpic16_emitcode("; =:=", "%s:%s:%d: " fmt, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#else
+#define DEBUGpc           1 ? (void)0 : printf
+#endif
+#define isAOP_LIT(x)      (AOP_TYPE(x) == AOP_LIT)
+#define isAOP_REGlike(x)  (AOP_TYPE(x) == AOP_REG || AOP_TYPE(x) == AOP_DIR || AOP_TYPE(x) == AOP_PCODE || AOP_TYPE(x) == AOP_STA)
+
+
+/* Resolved ifx structure. This structure stores information
+ * about an iCode ifx that makes it easier to generate code.
+ */
+typedef struct resolvedIfx {
+  symbol *lbl;     /* pointer to a label */
+  int condition;   /* true or false ifx */
+  int generated;   /* set true when the code associated with the ifx
+		    * is generated */
+} resolvedIfx;
 
 
 /*
@@ -27,15 +47,28 @@ void pic16_genCpl(iCode *ic);
 /*
  * global function definitions
  */
-void DEBUGpic16_pic16_AopType(int line_no, operand *left, operand *right, operand *result);
-
-
 void pic16_DumpValue(char *prefix, value *val);
 void pic16_DumpPcodeOp(char *prefix, pCodeOp *pcop);
 void pic16_DumpAop(char *prefix, asmop *aop);
 void pic16_DumpSymbol(char *prefix, symbol *sym);
 void pic16_DumpOp(char *prefix, operand *op);
 
+pCodeOp *pic16_popGetWithString(char *str);
+void pic16_callGenericPointerRW(int rw, int size);
 
+
+
+void gpsimio2_pcop(pCodeOp *pcop);
+void gpsimio2_lit(unsigned char lit);
+
+void gpsimDebug_StackDump(char *fname, int line, char *info);
+
+int pic16_genCmp_special(operand *left, operand *right, operand *result,
+                    iCode *ifx, resolvedIfx *rIfx, int sign);
+
+#ifndef debugf
+#define debugf(frm, rest)       _debugf(__FILE__, __LINE__, frm, rest)
+#endif
+void _debugf(char *f, int l, char *frm, ...);
 
 #endif	/* __GENUTILS_H__ */

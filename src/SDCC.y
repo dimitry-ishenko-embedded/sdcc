@@ -89,6 +89,7 @@ bool uselessDecl = TRUE;
 %token <yyint> XOR_ASSIGN OR_ASSIGN
 %token TYPEDEF EXTERN STATIC AUTO REGISTER CODE EEPROM INTERRUPT SFR AT SBIT
 %token REENTRANT USING  XDATA DATA IDATA PDATA VAR_ARGS CRITICAL NONBANKED BANKED
+%token SHADOWREGS WPARAM
 %token CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID BIT
 %token STRUCT UNION ENUM ELIPSIS RANGE FAR
 %token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
@@ -98,7 +99,7 @@ bool uselessDecl = TRUE;
 %token BITWISEAND UNARYMINUS IPUSH IPOP PCALL  ENDFUNCTION JUMPTABLE
 %token RRC RLC 
 %token CAST CALL PARAM NULLOP BLOCK LABEL RECEIVE SEND ARRAYINIT
-%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP
+%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP INLINE RESTRICT
 
 %type <yyint>  Interrupt_storage
 %type <sym> identifier  declarator  declarator2 declarator3 enumerator_list enumerator
@@ -210,6 +211,12 @@ function_attributes
 			    werror(W_BANKED_WITH_NONBANKED);
 			}
                      }
+   |  SHADOWREGS     {$$ = newLink (SPECIFIER);
+                        FUNC_ISSHADOWREGS($$) = 1;
+                     }
+   |  WPARAM         {$$ = newLink (SPECIFIER);
+                        FUNC_ISWPARAM($$) = 1;
+                     }
    |  BANKED         {$$ = newLink (SPECIFIER);
                         FUNC_BANKED($$) = 1;
 			if (FUNC_NONBANKED($$)) {
@@ -256,18 +263,20 @@ postfix_expr
           { 	   
 	    $$ = newNode  (CALL,$1,$3) ; $$->left->funcName = 1;
 	  }
-   | postfix_expr '.' identifier       
+   | postfix_expr '.' { ignoreTypedefType = 1; } identifier       
 		      {    
-			$3 = newSymbol($3->name,NestLevel);
-			$3->implicit = 1;
-			$$ = newNode(PTR_OP,newNode('&',$1,NULL),newAst_VALUE(symbolVal($3)));
-/* 			$$ = newNode('.',$1,newAst(EX_VALUE,symbolVal($3))) ;		        */
+			ignoreTypedefType = 0;
+			$4 = newSymbol($4->name,NestLevel);
+			$4->implicit = 1;
+			$$ = newNode(PTR_OP,newNode('&',$1,NULL),newAst_VALUE(symbolVal($4)));
+/* 			$$ = newNode('.',$1,newAst(EX_VALUE,symbolVal($4))) ;		        */
 		      }
-   | postfix_expr PTR_OP identifier    
+   | postfix_expr PTR_OP { ignoreTypedefType = 1; } identifier    
                       { 
-			$3 = newSymbol($3->name,NestLevel);
-			$3->implicit = 1;			
-			$$ = newNode(PTR_OP,$1,newAst_VALUE(symbolVal($3)));
+			ignoreTypedefType = 0;
+			$4 = newSymbol($4->name,NestLevel);
+			$4->implicit = 1;			
+			$$ = newNode(PTR_OP,$1,newAst_VALUE(symbolVal($4)));
 		      }
    | postfix_expr INC_OP   
                       {	$$ = newNode(INC_OP,$1,NULL);}
@@ -399,7 +408,7 @@ conditional_expr
 
 assignment_expr
    : conditional_expr
-   | unary_expr assignment_operator assignment_expr   
+   | cast_expr assignment_operator assignment_expr   
                      { 
 				 
 			     switch ($2) {
@@ -702,6 +711,8 @@ sfr_reg_bit
                $$ = newLink(SPECIFIER) ;
                SPEC_NOUN($$) = V_SBIT;
                SPEC_SCLS($$) = S_SBIT;
+	       SPEC_BLEN($$) = 1;
+	       SPEC_BSTR($$) = 0;
 	       ignoreTypedefType = 1;
             }
    |  sfr_attributes
@@ -757,9 +768,10 @@ struct_or_union_specifier
 	       SPEC_SCLS(sym->etype) = 0;
 	     }
 	     for (dsym=sym->next; dsym; dsym=dsym->next) {
-	       if (strcmp(sym->name, dsym->name)==0) {
+	       if (*dsym->name && strcmp(sym->name, dsym->name)==0) {
 		 werrorfl(sym->fileDef, sym->lineDef, E_DUPLICATE_MEMBER, 
 			$1==STRUCT ? "struct" : "union", sym->name);
+		 werrorfl(dsym->fileDef, dsym->lineDef, E_PREVIOUS_DEF);
 	       }
 	     }
 	   }
@@ -768,7 +780,8 @@ struct_or_union_specifier
            sdef = $2 ;
            sdef->fields   = reverseSyms($5) ;   /* link the fields */
            sdef->size  = compStructSize($1,sdef);   /* update size of  */
-
+	   promoteAnonStructs ($1, sdef);
+	   
            /* Create the specifier */
            $$ = newLink (SPECIFIER) ;
            SPEC_NOUN($$) = V_STRUCT;
@@ -895,6 +908,8 @@ struct_declarator
 			  else
 			    $1->bitVar = bitsize;
                         }
+   | { $$ = newSymbol ("", NestLevel) ; }
+   
    ;
 
 enum_specifier
@@ -909,7 +924,10 @@ enum_specifier
 
      csym=findSym(enumTab,$2,$2->name);
      if ((csym && csym->level == $2->level))
-       werrorfl($2->fileDef, $2->lineDef, E_DUPLICATE_TYPEDEF,csym->name);
+       {
+         werrorfl($2->fileDef, $2->lineDef, E_DUPLICATE_TYPEDEF,csym->name);
+         werrorfl(csym->fileDef, csym->lineDef, E_PREVIOUS_DEF);
+       }
      
      enumtype = newEnumType ($4);	//copyLinkChain(cenum->type);
      SPEC_SCLS(getSpec(enumtype)) = 0;
@@ -944,7 +962,10 @@ enumerator_list
        for (dsym=$1; dsym; dsym=dsym->next)
          {
 	   if (strcmp($3->name, dsym->name)==0)
-	     werrorfl($3->fileDef, $3->lineDef, E_DUPLICATE_MEMBER, "enum", $3->name);
+	     {
+	       werrorfl($3->fileDef, $3->lineDef, E_DUPLICATE_MEMBER, "enum", $3->name);
+	       werrorfl(dsym->fileDef, dsym->lineDef, E_PREVIOUS_DEF);
+	     }
 	 }
        
        $3->next = $1 ;
@@ -1385,20 +1406,21 @@ critical_statement
       
 labeled_statement
 //   : identifier ':' statement          {  $$ = createLabel($1,$3);  }   
-   : identifier ':'                    {  $$ = createLabel($1,NULL);  }   
-   | CASE constant_expr ':' statement
+   : identifier ':'                    {  $$ = createLabel($1,NULL);
+					  $1->isitmp = 0;  }   
+   | CASE constant_expr ':'
      {
        if (STACK_EMPTY(swStk))
-         $$ = createCase(NULL,$2,$4);
+         $$ = createCase(NULL,$2,NULL);
        else
-         $$ = createCase(STACK_PEEK(swStk),$2,$4);
+         $$ = createCase(STACK_PEEK(swStk),$2,NULL);
      }
-   | DEFAULT { $<asts>$ = newNode(DEFAULT,NULL,NULL); } ':' statement
+   | DEFAULT { $<asts>$ = newNode(DEFAULT,NULL,NULL); } ':'
      {
        if (STACK_EMPTY(swStk))
-         $$ = createDefault(NULL,$<asts>2,$4);
+         $$ = createDefault(NULL,$<asts>2,NULL);
        else
-         $$ = createDefault(STACK_PEEK(swStk),$<asts>2,$4);
+         $$ = createDefault(STACK_PEEK(swStk),$<asts>2,NULL);
      }
    ;
 
