@@ -1,3 +1,9 @@
+sdcc (2.5.0-2) unstable; urgency=low
+
+  * Fix building for binary-only builds. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 20 Jun 2005 19:53:20 +0200
+
 sdcc (2.5.0-1) unstable; urgency=low
 
   * New upstream version.
