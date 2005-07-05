@@ -1,3 +1,9 @@
+sdcc (2.5.0-3) unstable; urgency=low
+
+  * C++ ABI transition. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed,  6 Jul 2005 01:02:20 +0200
+
 sdcc (2.5.0-2) unstable; urgency=low
 
   * Fix building for binary-only builds. 
