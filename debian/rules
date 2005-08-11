@@ -114,6 +114,11 @@ install-indep-stamp: build-indep install-arch
 	# Moving all other files in /usr/share/sdcc/doc to /usr/share/doc/sdcc-doc
 	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc $(CURDIR)/debian/tmp/usr/share/doc/sdcc-doc
 
+	# Install support scripts
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
+	install -m 755 $(CURDIR)/support/scripts/inc2h.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
+	install -m 755 $(CURDIR)/support/scripts/keil2sdcc.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
+
 	dh_install -psdcc-doc --sourcedir=debian/tmp 
 	dh_install -psdcc-libraries --sourcedir=debian/tmp 
 

@@ -1,3 +1,10 @@
+sdcc (2.5.0-4) unstable; urgency=low
+
+  * Added pic14 .h files (closes: bug#308623).
+  * Added inc2h.pl and keil2sdcc.pl to the sdcc-libraries package.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu, 11 Aug 2005 11:06:53 +0200
+
 sdcc (2.5.0-3) unstable; urgency=low
 
   * C++ ABI transition. 
