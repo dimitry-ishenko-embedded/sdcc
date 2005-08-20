@@ -3,8 +3,8 @@ Section: electronics
 Priority: optional
 Maintainer: Aurelien Jarno <aurel32@debian.org>
 Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev 
-Build-Depends-Indep: lyx-xforms (>> 1.3.1) | lyx (>> 1.3.1), tetex-bin, tetex-extra, gs-common, gs
-Standards-Version: 3.6.1
+Build-Depends-Indep: lyx-xforms (>> 1.3.1) | lyx (>> 1.3.1), tetex-bin, tetex-extra, gs-common, gs, gputils
+Standards-Version: 3.6.2
 
 Package: sdcc
 Section: electronics
@@ -24,6 +24,7 @@ Package: sdcc-libraries
 Section: electronics
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gputils
 Conflicts: sdcc (<< 2.3.8+cvs20040218-1)
 Description: Small Device C Compiler (libraries)
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC

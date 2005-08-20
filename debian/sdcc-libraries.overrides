@@ -1,0 +1,24 @@
+# These files are binary files, but are in an arch-independent package
+# because they are compiled for a non Debian target processor
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/libc18f.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/libdebug.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/libm18f.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/libsdcc.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f1220.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f2220.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f242.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f248.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f252.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f258.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f442.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f448.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f452.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f458.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f6520.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f6620.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f6680.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f6720.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f8520.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f8620.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f8680.lib
+sdcc-libraries: arch-independent-package-contains-binary-or-object ./usr/share/sdcc/lib/pic16/pic18f8720.lib

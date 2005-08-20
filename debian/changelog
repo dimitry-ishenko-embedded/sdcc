@@ -1,3 +1,9 @@
+sdcc (2.5.0-5) unstable; urgency=low
+
+  * Enabled pic16 support (closes: bug#324047).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 20 Aug 2005 10:37:53 +0200
+
 sdcc (2.5.0-4) unstable; urgency=low
 
   * Added pic14 .h files (closes: bug#308623).

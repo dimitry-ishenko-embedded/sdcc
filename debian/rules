@@ -46,7 +46,11 @@ clean:
 
 config.status: configure
 	dh_testdir
-	./configure \
+	cd $(CURDIR)/device/lib/pic16 && ./configure \
+		--host=$(DEB_HOST_GNU_TYPE) \
+		--build=$(DEB_BUILD_GNU_TYPE) \
+		--prefix=/usr
+	cd $(CURDIR) && ./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \
@@ -121,6 +125,9 @@ install-indep-stamp: build-indep install-arch
 
 	dh_install -psdcc-doc --sourcedir=debian/tmp 
 	dh_install -psdcc-libraries --sourcedir=debian/tmp 
+	
+	mkdir -p $(CURDIR)/debian/sdcc-libraries/usr/share/lintian/overrides/
+	install -p -o root -g root -m 644 $(CURDIR)/debian/sdcc-libraries.overrides $(CURDIR)/debian/sdcc-libraries/usr/share/lintian/overrides/sdcc-libraries
 
 	touch install-indep-stamp
 
