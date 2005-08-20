@@ -1,3 +1,9 @@
+sdcc (2.5.0-6) unstable; urgency=low
+
+  * Move gputils to Build-Depends-Indep to Build-Depends. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 20 Aug 2005 16:37:59 +0200
+
 sdcc (2.5.0-5) unstable; urgency=low
 
   * Enabled pic16 support (closes: bug#324047).

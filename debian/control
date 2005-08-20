@@ -2,8 +2,8 @@ Source: sdcc
 Section: electronics
 Priority: optional
 Maintainer: Aurelien Jarno <aurel32@debian.org>
-Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev 
-Build-Depends-Indep: lyx-xforms (>> 1.3.1) | lyx (>> 1.3.1), tetex-bin, tetex-extra, gs-common, gs, gputils
+Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev, gputils
+Build-Depends-Indep: lyx-xforms (>> 1.3.1) | lyx (>> 1.3.1), tetex-bin, tetex-extra, gs-common, gs
 Standards-Version: 3.6.2
 
 Package: sdcc
