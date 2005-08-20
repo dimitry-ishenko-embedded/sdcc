@@ -1,3 +1,10 @@
+sdcc (2.5.0-7) unstable; urgency=low
+
+  * Don't delete .o files, it seems they are need by at least the pic16 
+    target (closes: bug#324047).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 21 Aug 2005 01:25:34 +0200
+
 sdcc (2.5.0-6) unstable; urgency=low
 
   * Move gputils to Build-Depends-Indep to Build-Depends. 

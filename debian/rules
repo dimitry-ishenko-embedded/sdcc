@@ -109,7 +109,6 @@ install-indep-stamp: build-indep install-arch
 
 	# Remove not needed files
 	rm -f $(CURDIR)/debian/tmp/usr/share/sdcc/doc/INSTALL.txt
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/ -name *.o -exec rm {} \;
 	
 	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
