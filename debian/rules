@@ -93,6 +93,12 @@ install-arch-stamp: build-arch
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 	mv $(CURDIR)/debian/tmp/usr/bin/*.el $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 
+	# Remove useless files
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*.asm" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*Makefile*" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*README*" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*MOVED*" -exec rm {} \;
+
 	dh_install -psdcc --sourcedir=debian/tmp
 	dh_install -psdcc-ucsim --sourcedir=debian/tmp
 	

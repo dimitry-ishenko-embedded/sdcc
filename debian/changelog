@@ -1,3 +1,11 @@
+sdcc (2.5.0-8) unstable; urgency=low
+
+  * The "I hope I won't break everything" release.
+  * It's seems the .asm files are useless, at least from some targets
+    Let's try to remove them (closes: bug#325848).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu,  1 Sep 2005 15:32:50 +0200
+
 sdcc (2.5.0-7) unstable; urgency=low
 
   * Don't delete .o files, it seems they are need by at least the pic16 
