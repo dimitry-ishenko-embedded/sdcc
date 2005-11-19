@@ -50,7 +50,7 @@ config.status: configure
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr
-	cd $(CURDIR) && ./configure \
+	cd $(CURDIR) && LYX=/usr/bin/lyx-xforms ./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \

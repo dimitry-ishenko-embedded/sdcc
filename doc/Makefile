@@ -54,7 +54,7 @@ $(CDB).html/index.html: $(CDB).tex
 	mv `basename $< .tex`.orig.tex $<
 
 %.txt: %.lyx
-	lyx -e text $<
+	lyx-xforms -e text $<
 
 %.pdf: %.tex %.dvi %.ind
 	dvipdf $*
@@ -68,7 +68,7 @@ $(CDB).html/index.html: $(CDB).tex
 	latex $<
 
 %.tex: %.lyx
-	lyx -e latex $<
+	lyx-xforms -e latex $<
 
 %.ind: %.dvi
 	latex $*
