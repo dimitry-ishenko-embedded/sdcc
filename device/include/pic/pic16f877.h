@@ -860,7 +860,7 @@ static volatile adcon1_t at adcon1_addr adcon1_b;
 
 /* ---- ADC Registers   ---------------------------------------------------- */
 sfr at adresh_addr adresh;
-sfr at adresh_addr adresl;
+sfr at adresl_addr adresl;
 sfr at adcon0_addr adcon0;
 sfr at adcon1_addr adcon1;
 #define ADRESH adresh
