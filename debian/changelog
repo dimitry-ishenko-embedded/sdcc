@@ -1,3 +1,10 @@
+sdcc (2.5.0-11) unstable; urgency=low
+
+  * G++ 4.1 fixes. Thanks to Martin Michlmayr for the patch (closes:
+    bug#357476).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 18 Mar 2006 10:52:19 +0100
+
 sdcc (2.5.0-10) unstable; urgency=low
 
   * Fixed pic16f877.h (closes: bug#339993). 
