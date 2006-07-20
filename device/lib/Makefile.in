@@ -12,14 +12,23 @@ CPP		= @CPP@
 INSTALL		= @INSTALL@
 CP              = @CP@
 
-PRJDIR		= ../..
-INCDIR		= $(PRJDIR)/device/include
+ifeq ($(shell uname -s),Linux)
+CP_U	= $(CP) -u
+else
+CP_U	= $(CP)
+endif
+
+top_builddir	= @top_builddir@
+top_srcdir	= @top_srcdir@
+VPATH           = @srcdir@
+srcdir          = @srcdir@
+INCDIR		= $(top_srcdir)/device/include
 ifndef PORTINCDIR
 PORTINCDIR	= $(INCDIR)/mcs51
 endif
 
-CC		= $(PRJDIR)/bin/sdcc
-CPP		= $(PRJDIR)/bin/sdcpp
+CC		= $(top_builddir)bin/sdcc
+CPP		= $(top_builddir)bin/sdcpp
 
 prefix          = @prefix@
 exec_prefix     = @exec_prefix@
@@ -31,19 +40,31 @@ mandir          = @mandir@
 man1dir         = $(mandir)/man1
 man2dir         = $(mandir)/man2
 infodir         = @infodir@
-srcdir          = @srcdir@
 
 lib_dir_suffix  = @lib_dir_suffix@
 
 sdcc_libdir     = $(DESTDIR)$(datadir)/$(lib_dir_suffix)
 
 CPPFLAGS        = -I$(INCDIR) -I$(PORTINCDIR)
-CFLAGS		= $(MODELFLAGS) --nostdinc
+CFLAGS		= $(MODELFLAGS) --nostdinc --std-sdcc99
 
 BUILDDIR        = build
 # Default
 PORT            = z80
+ifndef PORTDIR
 PORTDIR         = $(BUILDDIR)/$(PORT)
+endif
+
+OPT_DISABLE_AVR   = @OPT_DISABLE_AVR@
+OPT_DISABLE_DS390 = @OPT_DISABLE_DS390@
+OPT_DISABLE_DS400 = @OPT_DISABLE_DS400@
+OPT_DISABLE_GBZ80 = @OPT_DISABLE_GBZ80@
+OPT_DISABLE_HC08  = @OPT_DISABLE_HC08@
+OPT_DISABLE_MCS51 = @OPT_DISABLE_MCS51@
+OPT_DISABLE_PIC   = @OPT_DISABLE_PIC@
+OPT_DISABLE_PIC16 = @OPT_DISABLE_PIC16@
+OPT_DISABLE_XA51  = @OPT_DISABLE_XA51@
+OPT_DISABLE_Z80   = @OPT_DISABLE_Z80@
 
 SOURCES		= _atof.c _atoi.c _atol.c _autobaud.c _bp.c _schar2fs.c \
 		  _decdptr.c _divsint.c _divslong.c _divuint.c \
@@ -166,50 +187,84 @@ HC08OBJECTS	= $(patsubst %.c,$(PORTDIR)/%.rel,$(HC08SOURCES))
 
 OEXT            = .rel
 
-include incl.mk
+include $(srcdir)/incl.mk
+
+ifeq ($(OPT_DISABLE_DS390), 0)
+TARGETS        += model-ds390
+endif
+
+ifeq ($(OPT_DISABLE_DS400), 0)
+TARGETS        += model-ds400
+endif
+
+ifeq ($(OPT_DISABLE_HC08), 0)
+TARGETS        += model-hc08
+endif
+
+ifeq ($(OPT_DISABLE_MCS51), 0)
+TARGETS        += models small-mcs51-stack-auto
+endif
+
+ifeq ($(OPT_DISABLE_PIC), 0)
+TARGETS        += model-pic14
+endif
+
+ifeq ($(OPT_DISABLE_PIC16), 0)
+TARGETS        += model-pic16
+endif
+
+ifeq ($(OPT_DISABLE_Z80), 0)
+TARGETS        += model-z80
+endif
+
+ifeq ($(OPT_DISABLE_GBZ80), 0)
+TARGETS        += model-gbz80
+endif
 
 # Compiling entire program or any subproject
 # ------------------------------------------
-all: checkconf models model-ds390 model-ds400 model-z80 model-gbz80 model-hc08 model-pic16
-
-# model-pic16
-# (needs gputils curently not available of sourceforge's compile farm)
+all: checkconf $(TARGETS)
 
 objects: build-dir $(OBJECTS) port-specific-objects lib-files clean_intermediate
 
 models:
-	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
+	if [ "`grep mcs51 $(top_builddir)ports.build`" = mcs51 ]; then \
 	  for model in $(MODELS); do \
 	    $(MAKE) MODELFLAGS="--model-$$model" PORT=$$model PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
+small-mcs51-stack-auto:
+	if [ "`grep mcs51 $(top_builddir)ports.build`" = mcs51 ]; then \
+	  $(MAKE) MODELFLAGS="--model-small --stack-auto" PORT=small PORTDIR=$(BUILDDIR)/small-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	fi
+
 model-mcs51-stack-auto:
-	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
+	if [ "`grep mcs51 $(top_builddir)ports.build`" = mcs51 ]; then \
 	  for model in $(MODELS); do \
-	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$$model-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$$model PORTDIR=$(BUILDDIR)/$$model-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
 model-mcs51-xstack-auto:
-	if [ "`grep mcs51 ../../ports.build`" = mcs51 ]; then \
+	if [ "`grep mcs51 $(top_builddir)ports.build`" = mcs51 ]; then \
 	  for model in $(MODELS); do \
-	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --xstack" PORT=$$model-xstack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --xstack" PORT=$$model PORTDIR=$(BUILDDIR)/$$model-xstack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
 model-ds390:
-	if [ "`grep ds390 ../../ports.build`" = ds390 ]; then \
+	if [ "`grep ds390 $(top_builddir)ports.build`" = ds390 ]; then \
 	  $(MAKE) MODELFLAGS="-mds390" PORT=ds390 PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	fi
 
 model-ds400:
-	if [ "`grep ds400 ../../ports.build`" = ds400 ]; then \
+	if [ "`grep ds400 $(top_builddir)ports.build`" = ds400 ]; then \
 	  $(MAKE) MODELFLAGS="-mds400" PORT=ds400 PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	fi
 
 model-xa51:
-	if [ "`grep xa51 ../../ports.build`" = xa51 ]; then \
+	if [ "`grep xa51 $(top_builddir)ports.build`" = xa51 ]; then \
 	  $(MAKE) MODELFLAGS="-mxa51" PORT=xa51 objects-xa51; \
 	fi
 
@@ -217,12 +272,12 @@ objects-xa51: build-dir $(XA51OBJECTS) port-specific-objects
 	cd $(PORTDIR); ls *$(OEXT) > lib$(PORT).lib
 
 model-z80:
-	if [ "`grep z80 ../../ports.build`" = z80 ]; then \
+	if [ "`grep z80 $(top_builddir)ports.build`" = z80 ]; then \
 	  $(MAKE) MODELFLAGS="-mz80" PORT=z80 objects-z80 OEXT=.o; \
 	fi
 
 model-gbz80:
-	if [ "`grep z80 ../../ports.build`" = z80 ]; then \
+	if [ "`grep z80 $(top_builddir)ports.build`" = z80 ]; then \
 	  $(MAKE) MODELFLAGS="-mgbz80" PORT=gbz80 objects-z80 OEXT=.o; \
 	fi
 
@@ -230,7 +285,7 @@ objects-z80: build-dir $(Z80OBJECTS) port-specific-objects clean_intermediate
 	cd $(PORTDIR); ls *$(OEXT) > $(PORT).lib
 
 model-hc08:
-	if [ "`grep hc08 ../../ports.build`" = hc08 ]; then \
+	if [ "`grep hc08 $(top_builddir)ports.build`" = hc08 ]; then \
 	  $(MAKE) MODELFLAGS="-mhc08" PORT=hc08 objects-hc08; \
 	fi
 
@@ -238,13 +293,18 @@ objects-hc08: build-dir $(HC08OBJECTS) port-specific-objects clean_intermediate
 	cd $(PORTDIR); ls *$(OEXT) > $(PORT).lib
 
 model-pic16:
-	if [ "`grep pic16 ../../ports.build`" = pic16 ]; then \
+	if [ "`grep pic16 $(top_builddir)ports.build`" = pic16 ]; then \
 	  $(MAKE) MODELFLAGS="-mpic16" PORT=pic16 OEXT=.lib objects-pic16; \
-	  fi
+	fi
 
 objects-pic16: build-dir port-specific-objects-pic16 clean_intermediate-pic16
-	cd $(PORTDIR); ls *$(OEXT) > $(PORT).lib
+	-cd $(PORTDIR); ls *$(OEXT) > $(PORT).lib
 
+# yes, we do reuse the *-pic16 rules for pic14
+model-pic14:
+	if [ "`grep pic $(top_builddir)ports.build | grep -v pic16`" = pic ]; then \
+	  $(MAKE) MODELFLAGS="-mpic14" PORT=pic OEXT=.lib objects-pic16; \
+	fi
 
 build-dir: $(PORTDIR)
 
@@ -252,19 +312,20 @@ $(PORTDIR):
 	mkdir -p $(PORTDIR)
 
 port-specific-objects:
-	if [ -d $(PORT) ]; then \
+	if [ -f $(PORT)/Makefile ]; then \
 	  $(MAKE) -C $(PORT); \
 	  cp -f $(PORT)/*.lib $(PORT)/*$(OEXT) $(PORTDIR); \
 	fi
 
 port-specific-objects-pic16:
-	if [ -d $(PORT) ]; then \
+	-if [ -f $(PORT)/Makefile ]; then \
+	  mkdir -p $(PORT)/bin; \
 	  $(MAKE) -C $(PORT); \
 	  cp -f $(PORT)/bin/*.* $(PORTDIR); \
 	fi
 
 lib-files:
-	cp *.lib $(PORTDIR)
+	cp $(srcdir)/*.lib $(PORTDIR)
 
 clean_intermediate:
 	rm -f $(PORTDIR)/*.lst $(PORTDIR)/*.sym
@@ -275,9 +336,24 @@ clean_intermediate-pic16:
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
-	cp -r -u $(BUILDDIR)/* $(sdcc_libdir)
-	cp -r -u ds390 ds400 gbz80 z80 hc08 *.c $(sdcc_libdir)/src
-	rm -r `find $(sdcc_libdir)/src -name '*.rel' -or -name '*.dump*' -or -name '*.sym' -or -name '*.o' -or -name '*.lst' -or -name '*.asm' -or -name 'CVS'`
+	$(CP_U) -r $(BUILDDIR)/* $(sdcc_libdir)
+	$(CP_U) -r $(MODELS) $(srcdir)/mcs51 $(srcdir)/ds390 $(srcdir)/ds400 \
+	                     $(srcdir)/gbz80 $(srcdir)/z80 $(srcdir)/hc08 \
+	                     $(srcdir)/pic $(srcdir)/pic16 $(srcdir)/*.c $(sdcc_libdir)/src
+	$(CP_U) -r $(MODELS) mcs51 ds390 ds400 gbz80 z80 hc08 $(sdcc_libdir)/src
+
+	for src in $(MODELS) ds390 ds400 gbz80 z80 hc08 pic pic16; do \
+	  find $(sdcc_libdir)/src/$$src -depth \
+	    \( -name '*.rel' -o -name '*.dump*' -o -name '*.sym' -o -name '*.o' -o -name '*.lib' -o \
+	    -name '*.lst' -o -name '*.asm' -o -name '.svn' -o -name 'build' -o -name 'bin' -o \
+	    -name 'Makefile*' \) \
+	    -exec rm -r {} \; ; \
+	done
+	find $(sdcc_libdir)/src/mcs51 -depth \
+	  \( -name '*.rel' -o -name '*.dump*' -o -name '*.sym' -o -name '*.o' -o -name '*.lib' -o \
+	  -name '*.lst' -o -name '.svn' -o -name 'build' -o -name 'bin' -o \
+	  -name 'Makefile*' \) \
+	  -exec rm -r {} \;
 
 # Deleting all the installed files
 # --------------------------------
@@ -299,13 +375,12 @@ installcheck:
 installdirs:
 	[ -d $(sdcc_libdir) ] || mkdir -p $(sdcc_libdir)
 	for model in $(MODELS); do \
-	 [ -d $(sdcc_libdir)/$$model ] || \
-	 mkdir -p $(sdcc_libdir)/$$model; \
+	  [ -d $(sdcc_libdir)/$$model ] || \
+	  mkdir -p $(sdcc_libdir)/$$model; \
 	done
-	[ -d $(sdcc_libdir)/ds390 ] || mkdir -p $(sdcc_libdir)/ds390
-	[ -d $(sdcc_libdir)/ds400 ] || mkdir -p $(sdcc_libdir)/ds400
-	[ -d $(sdcc_libdir)/hc08 ] || mkdir -p $(sdcc_libdir)/hc08
-	[ -d $(sdcc_libdir)/pic16 ] || mkdir -p $(sdcc_libdir)/pic16
+	for libdir in small-stack-auto ds390 ds400 hc08 pic16 pic; do \
+	  [ -d $(sdcc_libdir)/$$libdir ] || mkdir -p $(sdcc_libdir)/$$libdir; \
+	done
 	mkdir -p $(sdcc_libdir)/src
 
 # Creating dependencies
@@ -314,14 +389,17 @@ dep: Makefile.dep
 
 Makefile.dep: $(SOURCES) $(INCDIR)/*.h $(PORTINCDIR)/*.h
 	rm -f Makefile.dep
-	for i in $(SOURCES); do \
+	for i in $(filter %.c,$^); do \
 	  $(CPP) -std=c99 -M $(CPPFLAGS) $$i >$${i}.dep; \
 	  cat $${i}.dep >>Makefile.dep; \
 	  rm $${i}.dep; \
 	done
 
-include Makefile.dep
-include clean.mk
+ifeq "$(findstring $(MAKECMDGOALS),uninstall check installcheck installdirs checkconf \
+                                   clean distclean mostlyclean realclean)" ""
+  include Makefile.dep
+endif
+include $(srcdir)/clean.mk
 
 # My rules
 # --------
@@ -334,8 +412,8 @@ $(PORTDIR)/%$(OEXT): %.c
 # Remaking configuration
 # ----------------------
 checkconf:
-	@if [ -f $(PRJDIR)/devel ]; then\
-	  $(MAKE) -f $(srcdir)/conf.mk srcdir="$(srcdir)" PRJDIR="$(PRJDIR)" \
+	@if [ -f $(top_builddir)devel ]; then\
+	  $(MAKE) -f $(srcdir)/conf.mk srcdir="$(srcdir)" top_builddir="$(top_builddir)" \
 	  freshconf;\
 	fi
 

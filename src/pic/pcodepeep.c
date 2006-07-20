@@ -259,7 +259,7 @@ static int cvt_extract_destination(parsedPattern *pp)
 		
 		// just check first letter for now
 		
-		if(toupper(*pp->pct[0].tok.s) == 'F')
+		if(toupper((unsigned char)*pp->pct[0].tok.s) == 'F')
 			return 1;
 		
 	} else if (pp->pct[0].tt == PCT_NUMBER) {
@@ -290,14 +290,14 @@ static pCodeOp *cvt_extract_status(char *reg, char *bit)
 	
 	if(len == 1) {
 		// check C,Z
-		if(toupper(*bit) == 'C')
+		if(toupper((unsigned char)*bit) == 'C')
 			return PCOP(popCopyGPR2Bit(&pc_status,PIC_C_BIT));
-		if(toupper(*bit) == 'Z')
+		if(toupper((unsigned char)*bit) == 'Z')
 			return PCOP(popCopyGPR2Bit(&pc_status,PIC_Z_BIT));
 	}
 	
 	// Check DC
-	if(len ==2 && toupper(bit[0]) == 'D' && toupper(bit[1]) == 'C')
+	if(len ==2 && toupper((unsigned char)bit[0]) == 'D' && toupper((unsigned char)bit[1]) == 'C')
 		return PCOP(popCopyGPR2Bit(&pc_status,PIC_DC_BIT));
 	
 	return NULL;
@@ -745,15 +745,15 @@ static void tokenizeLineNode(char *ln)
 	
 	while(*ln) {
 		
-		if(isspace(*ln)) {
+		if(isspace((unsigned char)*ln)) {
 			// add a SPACE token and eat the extra spaces.
 			tokArr[tokIdx++].tt = PCT_SPACE;
-			while (isspace (*ln))
+			while (isspace ((unsigned char)*ln))
 				ln++;
 			continue;
 		}
 		
-		if(isdigit(*ln)) {
+		if(isdigit((unsigned char)*ln)) {
 			
 			tokArr[tokIdx].tt = PCT_NUMBER;
 			tokArr[tokIdx++].tok.n = strtol(ln, &ln, 0);
@@ -786,11 +786,11 @@ static void tokenizeLineNode(char *ln)
 			
 			
 		default:
-			if(isalpha(*ln) || (*ln == '_') ) {
+			if(isalpha((unsigned char)*ln) || (*ln == '_') ) {
 				char buffer[50];
 				int i=0;
 				
-				while( (isalpha(*ln)  ||  isdigit(*ln) || (*ln == '_')) && i<49)
+				while( (isalpha((unsigned char)*ln) || isdigit((unsigned char)*ln) || (*ln == '_')) && i<49)
 					buffer[i++] = *ln++;
 				
 				ln--;
@@ -1491,7 +1491,7 @@ int pCodeSearchCondition(pCode *pc, unsigned int cond, int contIfSkip)
 			if(PCI(pc)->inCond & cond) {
 				if (contIfSkip) {
 					/* If previous instruction is a skip then continue search as condiction is not certain */
-					pCode *pcp = findPrevInstruction(pc);
+					pCode *pcp = findPrevInstruction(pc->prev);
 					if (pcp && !isPCI_SKIP(pcp)) {
 						return 1;
 					}
@@ -1502,7 +1502,7 @@ int pCodeSearchCondition(pCode *pc, unsigned int cond, int contIfSkip)
 			if(PCI(pc)->outCond & cond) {
 				if (contIfSkip) {
 					/* If previous instruction is a skip then continue search as condiction is not certain */
-					pCode *pcp = findPrevInstruction(pc);
+					pCode *pcp = findPrevInstruction(pc->prev);
 					if (pcp && !isPCI_SKIP(pcp)) {
 						return -1;
 					}
@@ -2100,9 +2100,10 @@ int pCodePeepMatchRule(pCode *pc)
 			/* We have just replaced the inefficient code with the rule.
 			* Now, we need to re-add the C-source symbols if there are any */
 			pc = pcprev;
-			while(pc_cline ) {
+			while(pc && pc_cline ) {
 				
 				pc =  findNextInstruction(pc->next);
+				if (!pc) break;
 				PCI(pc)->cline = pc_cline;
 				pc_cline = PCCS(pc_cline->pc.next);
 				
@@ -2111,13 +2112,14 @@ int pCodePeepMatchRule(pCode *pc)
 			/* Copy C code comments to new code. */
 			pc = pcprev->next;
 			if (pc) {
-				for (; pcout!=pcin; pcout=pcout->next) {
+				for (; pc && pcout!=pcin; pcout=pcout->next) {
 					if (pcout->type==PC_OPCODE && PCI(pcout)->cline) {
 						while (pc->type!=PC_OPCODE || PCI(pc)->cline) {
 							pc = pc->next;
 							if (!pc)
 								break;
 						}
+						if (!pc) break;
 						PCI(pc)->cline = PCI(pcout)->cline;
 					}
 				}

@@ -86,6 +86,23 @@ struct regs;
 #endif
 
 
+#ifdef WORDS_BIGENDIAN
+  #define _ENDIAN(x)  (3-x)
+#else
+  #define _ENDIAN(x)  (x)
+#endif
+
+
+#define BYTE_IN_LONG(x,b) ((x>>(8*_ENDIAN(b)))&0xff)
+
+
+/***********************************************************************
+ * Extended Instruction Set/Indexed Literal Offset Mode                *
+ * Set this macro to enable code generation with the extended          *
+ * instruction set and the new Indexed Literal Offset Mode             *
+ ***********************************************************************/
+#define XINST   1
+
 /***********************************************************************
  *  PIC status bits - this will move into device dependent headers
  ***********************************************************************/
@@ -168,7 +185,8 @@ typedef enum
   PO_BIT,            // bit operand.
   PO_STR,            //  (8051 legacy)
   PO_LABEL,
-  PO_WILD            // Wild card operand in peep optimizer
+  PO_WILD,           // Wild card operand in peep optimizer
+  PO_TWO_OPS         // combine two operands
 } PIC_OPTYPE;
 
 
@@ -282,6 +300,8 @@ typedef enum
   POC_XORFW,
 
   POC_BANKSEL
+
+  /* pseudo-instructions */
 } PIC_OPCODE;
 
 
@@ -411,6 +431,7 @@ typedef struct pCodeOpLit
 {
   pCodeOp pcop;
   int lit;
+  pCodeOp *arg2;	/* needed as pCodeOpLit and pCodeOpLit2 are not separable via their type (PO_LITERAL) */
 } pCodeOpLit;
 
 typedef struct pCodeOpLit2
@@ -446,20 +467,14 @@ typedef struct pCodeOpReg
   struct regs *r;
   int instance;    // byte # of Multi-byte registers
   struct pBlock *pb;
-
-  pCodeOp *pcop2;	// second memory operand (NEEDED IN gen.c:pic16_popGet2p (pCodeOpReg casted into pCodeOpReg2) 
 } pCodeOpReg;
 
-typedef struct pCodeOpReg2
+typedef struct pCodeOp2
 {
-  pCodeOp pcop;		// used by default to all references
-  int rIdx;
-  struct regs *r;
-  int instance;		// assume same instance for both operands
-  struct pBlock *pb;
-
-  pCodeOp *pcop2;	// second memory operand
-} pCodeOpReg2;
+  pCodeOp pcop;		// describes this pCodeOp
+  pCodeOp *pcopL;	// reference to left pCodeOp (src)
+  pCodeOp *pcopR;	// reference to right pCodeOp (dest)
+} pCodeOp2;
 
 typedef struct pCodeOpRegBit
 {
@@ -942,12 +957,13 @@ typedef struct peepCommand {
 #define PCINF(x)  ((pCodeInfo *)(x))
 
 #define PCOP(x)   ((pCodeOp *)(x))
+#define PCOP2(x)  ((pCodeOp2 *)(x))
 //#define PCOB(x)   ((pCodeOpBit *)(x))
 #define PCOL(x)   ((pCodeOpLit *)(x))
 #define PCOI(x)   ((pCodeOpImmd *)(x))
 #define PCOLAB(x) ((pCodeOpLabel *)(x))
 #define PCOR(x)   ((pCodeOpReg *)(x))
-#define PCOR2(x)  ((pCodeOpReg2 *)(x))
+//#define PCOR2(x)  ((pCodeOpReg2 *)(x))
 #define PCORB(x)  ((pCodeOpRegBit *)(x))
 #define PCOO(x)   ((pCodeOpOpt *)(x))
 #define PCOLR(x)  ((pCodeOpLocalReg *)(x))
@@ -1008,7 +1024,7 @@ void pCodePeepInit(void);
 void pic16_pBlockConvert2ISR(pBlock *pb);
 void pic16_pBlockConvert2Absolute(pBlock *pb);
 void pic16_initDB(void);
-void pic16_emitDB(char c, char ptype, void *p);		  // Add DB directives to a pBlock
+void pic16_emitDB(int c, char ptype, void *p);		  // Add DB directives to a pBlock
 void pic16_emitDS(char *s, char ptype, void *p);
 void pic16_flushDB(char ptype, void *p);			  // Add pending DB data to a pBlock
 
@@ -1017,11 +1033,14 @@ pCode *pic16_newpCodeAsmDir(char *asdir, char *argfmt, ...);
 pCodeOp *pic16_newpCodeOpLabel(char *name, int key);
 pCodeOp *pic16_newpCodeOpImmd(char *name, int offset, int index, int code_space);
 pCodeOp *pic16_newpCodeOpLit(int lit);
+pCodeOp *pic16_newpCodeOpLit12(int lit);
 pCodeOp *pic16_newpCodeOpLit2(int lit, pCodeOp *arg2);
 pCodeOp *pic16_newpCodeOpBit(char *name, int bit,int inBitSpace, PIC_OPTYPE subt);
+pCodeOp *pic16_newpCodeOpBit_simple (struct asmop *op, int offs, int bit);
 pCodeOp *pic16_newpCodeOpRegFromStr(char *name);
 pCodeOp *pic16_newpCodeOpReg(int rIdx);
 pCodeOp *pic16_newpCodeOp(char *name, PIC_OPTYPE p);
+pCodeOp *pic16_newpCodeOp2(pCodeOp *src, pCodeOp *dst);
 pCodeOp *pic16_newpCodeOpRegNotVect(bitVect *bv);
 pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop);
 

@@ -1,27 +1,22 @@
-#define __16F873
-#include "p16f873.h"
+#include "gpsim_assert.h"
 //
 // compare3.c
 // regression testing program for comparing literals to variables
 //
 
 
-unsigned char success = 0;
 unsigned char failures = 0;
-unsigned char dummy = 0;
 
-bit bit0 = 0;
 unsigned int aint0 = 0;
 unsigned int aint1 = 0;
 unsigned char achar0 = 0;
 unsigned char achar1 = 0;
 
 void
-done ()
+done()
 {
-
-  dummy++;
-
+  ASSERT(MANGLE(failures) == 0);
+  PASSED();
 }
 
 // compare to 0
@@ -248,6 +243,5 @@ main (void)
   achar0 = 1;
   c_ifelse1();
 
-  success = failures;
   done ();
 }

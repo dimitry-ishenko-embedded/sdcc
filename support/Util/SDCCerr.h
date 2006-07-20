@@ -109,7 +109,7 @@ SDCCERR - SDCC Standard error handler
 #define E_EXTERN_MISMATCH              91 /* extern declaration mismatches */
 #define W_NONRENT_ARGS                 92 /* fptr non reentrant has args */
 #define W_DOUBLE_UNSUPPORTED           93 /* 'double' not supported yet */
-#define W_IF_NEVER_TRUE                94 /* if always false     */
+#define W_COMP_RANGE                   94 /* comparison is always %s due to limited range of data type */
 #define W_FUNC_NO_RETURN               95 /* no return statement found */
 #define W_PRE_PROC_WARNING             96 /* preprocessor generated warning */
 #define W_STRUCT_AS_ARG                97 /* structure passed as argument */
@@ -173,7 +173,7 @@ SDCCERR - SDCC Standard error handler
 #define W_PTR2INTEGRAL_NOCAST         155
 #define W_SYMBOL_NAME_TOO_LONG        156
 #define W_CAST_STRUCT_PTR             157 /* pointer to different structure types */
-#define W_IF_ALWAYS_TRUE              158
+#define W_LIT_OVERFLOW                158 /* overflow in implicit constant conversion */
 #define E_PARAM_NAME_OMITTED          159
 #define W_NO_FILE_ARG_IN_C1           160
 #define E_NEED_OPT_O_IN_C1            161
@@ -197,6 +197,14 @@ SDCCERR - SDCC Standard error handler
 #define W_POSSBUG2                    179 /* possible bug, new format */
 #define W_COMPLEMENT                  180 /* ~bit can give unexpected results */
 #define E_SHADOWREGS_NO_ISR           181 /* shadowregs keyword following non-ISR function */
+#define W_SFR_ABSRANGE                182 /* sfr at address out of range */
+#define E_BANKED_WITH_CALLEESAVES     183 /* banked and callee-saves mixed */
+#define W_INVALID_INT_CONST           184 /* invalid integer literal string */
+#define W_CMP_SU_CHAR                 185 /* comparison of 'signed char' with 'unsigned char' requires promotion to int */
+#define W_INVALID_FLEXARRAY           186 /* invalid use of structure with flexible array member */
+#define W_C89_NO_FLEXARRAY            187 /* ISO C90 does not support flexible array members */
+#define E_FLEXARRAY_NOTATEND          188 /* flexible array member not at end of struct */
+#define E_FLEXARRAY_INEMPTYSTRCT      189 /* flexible array in otherwise empty struct */
 
 #define MAX_ERROR_WARNING             256 /* size of disable warnings array */
 

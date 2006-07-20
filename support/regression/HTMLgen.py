@@ -1,4 +1,4 @@
-#'$Id: HTMLgen.py,v 1.2 2003/05/04 08:44:07 bernhardheld Exp $'
+#'$Id: HTMLgen.py 2583 2003-05-04 08:46:12Z bernhardheld $'
 
 # COPYRIGHT (C) 1996-9  ROBIN FRIEDRICH  email:Robin.Friedrich@pdq.net
 # Permission to use, copy, modify, and distribute this software and

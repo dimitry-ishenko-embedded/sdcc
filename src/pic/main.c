@@ -9,6 +9,8 @@
 #include "ralloc.h"
 #include "device.h"
 #include "SDCCutil.h"
+#include "SDCCmacro.h"
+#include "MySystem.h"
 #include "glue.h"
 //#include "gen.h"
 
@@ -19,11 +21,11 @@ static char _defaultRules[] =
 	""
 };
 
-/* list of key words used by msc51 */
+/* list of key words used by pic14 */
 static char *_pic14_keywords[] =
 {
 	"at",
-	"bit",
+	//"bit",
 	"code",
 	"critical",
 	"data",
@@ -34,7 +36,7 @@ static char *_pic14_keywords[] =
 	"pdata",
 	"reentrant",
 	"sfr",
-	"sbit",
+	//"sbit",
 	"using",
 	"xdata",
 	"_data",
@@ -45,6 +47,15 @@ static char *_pic14_keywords[] =
 	"_pdata",
 	"_idata",
 	NULL
+};
+
+pic14_options_t pic14_options;
+
+extern int debug_verbose;	/* from pcode.c */
+static OPTION _pic14_poptions[] = {
+	{ 0 , "--debug-xtra", &debug_verbose, "show more debug info in assembly output" },
+	{ 0 , "--no-pcode-opt", &pic14_options.disable_df, "disable (slightly faulty) optimization on pCode" },
+	{ 0 , NULL, NULL, NULL }
 };
 
 void  pCodeInitRegisters(void);
@@ -61,7 +72,7 @@ static void
 _pic14_init (void)
 {
 	asm_addTree (&asm_asxxxx_mapping);
-	pCodeInitRegisters();
+	memset (&pic14_options, 0, sizeof (pic14_options));
 }
 
 static void
@@ -71,7 +82,7 @@ _pic14_reset_regparm (void)
 }
 
 static int
-_pic14_regparm (sym_link * l)
+_pic14_regparm (sym_link * l, bool reentrant)
 {
 /* for this processor it is simple
 	can pass only the first parameter in a register */
@@ -130,17 +141,7 @@ _process_pragma(const char *sz)
 		
 		return 0;
 	} else if (startsWith (ptr, "maxram")) {
-		char *maxRAM = strtok((char *)NULL, WHITE);
-		
-		if (maxRAM != (char *)NULL) {
-			int	maxRAMaddress;
-			value 	*maxRAMVal;
-			
-			maxRAMVal = constVal(maxRAM);
-			maxRAMaddress = (int)floatFromVal(maxRAMVal);
-			setMaxRAM(maxRAMaddress);
-		}
-		
+		// not used any more - comes from device config file pic14devices.txt instead
 		return 0;
 	}
 	return 1;
@@ -165,19 +166,52 @@ _pic14_parseOptions (int *pargc, char **argv, int *i)
 	if(!strncmp(buf, argv[ *i ], strlen(buf))) {
 		if(strlen(argv[ *i ]) <= strlen(buf)+1) {
 			fprintf(stderr, "WARNING: no `%s' entered\n", buf+2);
-			exit(-1);
+			exit(EXIT_FAILURE);
 		} else {
 			udata_section_name = strdup( strchr(argv[*i], '=') + 1 );
 		}
 		return 1;
 	}
-	
+
 	return FALSE;
+}
+
+extern set *dataDirsSet;
+extern set *includeDirsSet;
+/* pic14 port uses include/pic and lib/pic instead of
+ * include/pic14 and lib/pic14 as indicated by SDCCmain.c's
+ * setIncludePaths routine. */
+static void
+_pic14_initPaths (void)
+{
+  char *p;
+  char *p2=NULL;
+  set *tempSet=NULL;
+
+  if (options.nostdinc)
+      return;
+
+  tempSet = appendStrSet(dataDirsSet, NULL, INCLUDE_DIR_SUFFIX DIR_SEPARATOR_STRING "pic");
+  mergeSets(&includeDirsSet, tempSet);
+
+  if ((p = getenv(SDCC_INCLUDE_NAME)) != NULL)
+  {
+    addSetHead(&includeDirsSet, p);
+    p2=Safe_alloc(strlen(p)+strlen(DIR_SEPARATOR_STRING)+strlen("pic")+1);
+    if(p2!=NULL)
+    {
+        strcpy(p2, p);
+        strcat(p2, DIR_SEPARATOR_STRING);
+        strcat(p2, "pic");
+        addSetHead(&includeDirsSet, p2);
+    }
+  }
 }
 
 static void
 _pic14_finaliseOptions (void)
 {
+	pCodeInitRegisters();
 	
 	port->mem.default_local_map = data;
 	port->mem.default_globl_map = data;
@@ -260,13 +294,13 @@ _pic14_genAssemblerPreamble (FILE * of)
 	
 	if(!name) {
 		
-		name = "p16f877";
+		name = "16f877";
 		fprintf(stderr,"WARNING: No Pic has been selected, defaulting to %s\n",name);
 	}
 	
-	fprintf (of, "\tlist\tp=%s\n",&name[1]);
+	fprintf (of, "\tlist\tp=%s\n",name);
 	fprintf (of, "\tradix dec\n");
-	fprintf (of, "\tinclude \"%s.inc\"\n",name);
+	fprintf (of, "\tinclude \"p%s.inc\"\n",name);
 }
 
 /* Generate interrupt vector table. */
@@ -307,14 +341,20 @@ sym_link *test = NULL;
 value *val;
 	*/
 	
-	fprintf(stderr,"checking for native mult\n");
+	//fprintf(stderr,"checking for native mult\n");
 	
 	if ( ic->op != '*')
 	{
 		return FALSE;
 	}
 	
-	return TRUE;
+	/* multiply chars in-place */
+	if (getSize(left) == 1 && getSize(right) == 1)
+		return TRUE;
+	
+	/* use library functions for more complex maths */
+	return FALSE;
+
 	/*
 	if ( IS_LITERAL (left))
 	{
@@ -379,7 +419,7 @@ MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] =
 {
-	"gplink", "-o $2", "\"$1.o\"", "$l", NULL
+	"gplink", "$l", "-o \"$2\"", "\"$1\"", "$3", NULL
 };
 
 static const char *_asmCmd[] =
@@ -387,6 +427,76 @@ static const char *_asmCmd[] =
 	"gpasm", "$l", "-c", "\"$1.asm\"", NULL
 		
 };
+
+extern set *libFilesSet;
+extern set *libDirsSet;
+extern set *libPathsSet;
+extern set *includeDirsSet;
+extern set *userIncDirsSet;
+extern set *dataDirsSetSet;
+extern set *relFilesSet;
+extern set *linkOptionsSet;
+
+static void _pic14_do_link (void)
+{
+  hTab *linkValues=NULL;
+  char lfrm[256];
+  char *lcmd;
+  char temp[128];
+  set *tSet=NULL;
+  int ret;
+  char * procName;
+  
+  /*
+   * link command format:
+   * {linker} {incdirs} {lflags} -o {outfile} {spec_ofiles} {ofiles} {libs}
+   *
+   */
+
+  sprintf(lfrm, "{linker} {incdirs} {sysincdirs} {lflags} -o {outfile} {user_ofile} {spec_ofiles} {ofiles} {libs}");
+
+  shash_add(&linkValues, "linker", "gplink");
+
+  /* LIBRARY SEARCH DIRS */
+  mergeSets(&tSet, libPathsSet);
+  mergeSets(&tSet, libDirsSet);
+  shash_add(&linkValues, "incdirs", joinStrSet(appendStrSet(tSet, "-I\"", "\"")));
+
+  SNPRINTF (&temp[0], 128, "%cpic\"", DIR_SEPARATOR_CHAR);
+  joinStrSet(appendStrSet(libDirsSet, "-I\"", &temp[0]));
+  shash_add(&linkValues, "sysincdirs", joinStrSet(appendStrSet(libDirsSet, "-I\"", &temp[0])));
+  
+  shash_add(&linkValues, "lflags", joinStrSet(linkOptionsSet));
+
+  shash_add(&linkValues, "outfile", fullDstFileName ? fullDstFileName : dstFileName);
+
+  if(fullSrcFileName) {
+    sprintf(temp, "%s.o", fullDstFileName ? fullDstFileName : dstFileName );
+    shash_add(&linkValues, "user_ofile", temp);
+  }
+
+  shash_add(&linkValues, "ofiles", joinStrSet(relFilesSet));
+
+  /* LIBRARIES */
+  procName = processor_base_name();
+  if (!procName) {
+     procName = "16f877";
+  }
+	
+  addSet(&libFilesSet, "libsdcc.lib");
+  SNPRINTF(&temp[0], 128, "pic%s.lib", procName);
+  addSet(&libFilesSet, temp);
+  shash_add(&linkValues, "libs", joinStrSet(libFilesSet));
+
+  lcmd = msprintf(linkValues, lfrm);
+
+  ret = my_system( lcmd );
+
+  Safe_free( lcmd );
+
+  if(ret)
+    exit(1);
+}
 
 /* Globals */
 PORT pic_port =
@@ -415,7 +525,7 @@ PORT pic_port =
 	{
 		_linkCmd,
 		NULL,
-		NULL,
+		_pic14_do_link,		/* own do link function */
 		".o",
 		0
 	},
@@ -424,12 +534,14 @@ PORT pic_port =
 	},
 	{
 		/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-		1, 2, 2, 4, 2, 2, 2, 1, 4, 4
+		1, 2, 2, 4, 2, 2, 3, 1, 4, 4
 		/* TSD - I changed the size of gptr from 3 to 1. However, it should be
 		   2 so that we can accomodate the PIC's with 4 register banks (like the
 		   16f877)
 		 */
 	},
+	/* tags for generic pointers */
+	{ 0x00, 0x00, 0x00, 0x80 },		/* far, near, xstack, code */
 	{
 		"XSEG    (XDATA)",
 		"STACK   (DATA)",
@@ -446,6 +558,7 @@ PORT pic_port =
 		"HOME	 (CODE)",
 		NULL, // xidata
 		NULL, // xinit
+		"CONST   (CODE)",		// const_name - const data (code or not)
 		NULL,
 		NULL,
 		1        // code is read only
@@ -474,8 +587,8 @@ PORT pic_port =
 	"_",
 	_pic14_init,
 	_pic14_parseOptions,
-	NULL,
-	NULL,
+	_pic14_poptions,
+	_pic14_initPaths,
 	_pic14_finaliseOptions,
 	_pic14_setDefaultOptions,
 	pic14_assignRegisters,

@@ -1,4 +1,0 @@
-divschar.o: divschar.c
-divuchar.o: divuchar.c
-modschar.o: modschar.c
-moduchar.o: moduchar.c

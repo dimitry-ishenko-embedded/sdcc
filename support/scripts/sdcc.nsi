@@ -1,6 +1,6 @@
 # sdcc.nsi - NSIS installer script for SDCC
 #
-# Copyright (c) 2003,2004 Borut Razem
+# Copyright (c) 2003-2006 Borut Razem
 #
 # This file is part of sdcc.
 #
@@ -29,8 +29,8 @@
 #   to a clean directory (the option to create directories should be enambled).
 #   A sub directory sdcc is created (referenced as PKGDIR in continuation).
 # - copy files sdcc/support/scripts/sdcc.ico and sdcc/support/scripts/sdcc.nsi
-#   (this file) from the sdcc CVS snapshot to the PKGDIR directory
-# - copy file COPYING from the sdcc CVS snapshot to the PKGDIR directory,
+#   (this file) from the sdcc Subversion snapshot to the PKGDIR directory
+# - copy file COPYING from the sdcc Subversion snapshot to the PKGDIR directory,
 #   rename it to COPYING.TXT and convert file COPYING to DOS format:
 #   unix2dos COPYING.TXT
 # - run NSIS installer from PKGDIR directory:
@@ -51,7 +51,7 @@
 
 !include "MUI.nsh"
 
-SetCompressor lzma
+SetCompressor /SOLID lzma
 
 !define SDCC_ROOT "."
 
@@ -160,6 +160,8 @@ Section "SDCC include files"
   File "${DEV_ROOT}\include\asm\gbz80\features.h"
   SetOutPath "$INSTDIR\include\asm\mcs51"
   File "${DEV_ROOT}\include\asm\mcs51\features.h"
+  SetOutPath "$INSTDIR\include\asm\pic"
+  File "${DEV_ROOT}\include\asm\pic\features.h"
   SetOutPath "$INSTDIR\include\asm\pic16"
   File "${DEV_ROOT}\include\asm\pic16\features.h"
   SetOutPath "$INSTDIR\include\asm\z80"
@@ -168,6 +170,10 @@ Section "SDCC include files"
   File "${DEV_ROOT}\include\hc08\*.h"
   SetOutPath "$INSTDIR\include\mcs51"
   File "${DEV_ROOT}\include\mcs51\*.h"
+  SetOutPath "$INSTDIR\include\pic"
+  File "${DEV_ROOT}\include\pic\*.h"
+  File "${DEV_ROOT}\include\pic\*.txt"
+  File "${DEV_ROOT}\include\pic\*.inc"
   SetOutPath "$INSTDIR\include\pic16"
   File "${DEV_ROOT}\include\pic16\*.h"
   SetOutPath "$INSTDIR\include\z80"
@@ -179,7 +185,6 @@ SectionEnd
 Section "SDCC DS390 library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\ds390"
-  File "${DEV_ROOT}\lib\ds390\*.asm"
   File "${DEV_ROOT}\lib\ds390\*.rel"
   File "${DEV_ROOT}\lib\ds390\*.lib"
 SectionEnd
@@ -187,7 +192,6 @@ SectionEnd
 Section "SDCC DS400 library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\ds400"
-  File "${DEV_ROOT}\lib\ds400\*.asm"
   File "${DEV_ROOT}\lib\ds400\*.rel"
   File "${DEV_ROOT}\lib\ds400\*.lib"
 SectionEnd
@@ -195,7 +199,6 @@ SectionEnd
 Section "SDCC GBZ80 library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\gbz80"
-  File "${DEV_ROOT}\lib\gbz80\*.asm"
   File "${DEV_ROOT}\lib\gbz80\*.o"
   File "${DEV_ROOT}\lib\gbz80\*.lib"
 SectionEnd
@@ -203,33 +206,56 @@ SectionEnd
 Section "SDCC Z80 library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\z80"
-  File "${DEV_ROOT}\lib\z80\*.asm"
   File "${DEV_ROOT}\lib\z80\*.o"
   File "${DEV_ROOT}\lib\z80\*.lib"
-SectionEnd
-
-Section "SDCC large model library"
-  SectionIn 1 2
-  SetOutPath "$INSTDIR\lib\large"
-  File "${DEV_ROOT}\lib\large\*.asm"
-  File "${DEV_ROOT}\lib\large\*.rel"
-  File "${DEV_ROOT}\lib\large\*.lib"
 SectionEnd
 
 Section "SDCC small model library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\small"
-  File "${DEV_ROOT}\lib\small\*.asm"
   File "${DEV_ROOT}\lib\small\*.rel"
   File "${DEV_ROOT}\lib\small\*.lib"
+SectionEnd
+
+Section "SDCC medium model library"
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\medium"
+  File "${DEV_ROOT}\lib\medium\*.rel"
+  File "${DEV_ROOT}\lib\medium\*.lib"
+SectionEnd
+
+Section "SDCC large model library"
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\large"
+  File "${DEV_ROOT}\lib\large\*.rel"
+  File "${DEV_ROOT}\lib\large\*.lib"
+SectionEnd
+
+Section "SDCC small-stack-auto model library"
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\small-stack-auto"
+  File "${DEV_ROOT}\lib\small-stack-auto\*.rel"
+  File "${DEV_ROOT}\lib\small-stack-auto\*.lib"
 SectionEnd
 
 Section "SDCC HC08 library"
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\hc08"
-  File "${DEV_ROOT}\lib\hc08\*.asm"
   File "${DEV_ROOT}\lib\hc08\*.rel"
   File "${DEV_ROOT}\lib\hc08\*.lib"
+SectionEnd
+
+Section "SDCC PIC16 library"
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\pic16"
+  File "${DEV_ROOT}\lib\pic16\*.o"
+  File "${DEV_ROOT}\lib\pic16\*.lib"
+SectionEnd
+
+Section "SDCC PIC library"
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\pic"
+  File "${DEV_ROOT}\lib\pic\*.lib"
 SectionEnd
 
 Section "SDCC library sources"
@@ -239,34 +265,178 @@ Section "SDCC library sources"
 
   SetOutPath "$INSTDIR\lib\src\ds390"
   File "${DEV_ROOT}\lib\src\ds390\*.c"
-  File "${DEV_ROOT}\lib\src\ds390\libds390.lib"
-  File "${DEV_ROOT}\lib\src\ds390\Makefile"
-  File "${DEV_ROOT}\lib\src\ds390\Makefile.dep"
+#  File "${DEV_ROOT}\lib\src\ds390\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\ds400"
   File "${DEV_ROOT}\lib\src\ds400\*.c"
-  File "${DEV_ROOT}\lib\src\ds400\libds400.lib"
-  File "${DEV_ROOT}\lib\src\ds400\Makefile"
-  File "${DEV_ROOT}\lib\src\ds400\Makefile.dep"
+#  File "${DEV_ROOT}\lib\src\ds400\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\gbz80"
   File "${DEV_ROOT}\lib\src\gbz80\*.c"
   File "${DEV_ROOT}\lib\src\gbz80\*.s"
-  File "${DEV_ROOT}\lib\src\gbz80\gbz80.lib"
-  File "${DEV_ROOT}\lib\src\gbz80\Makefile"
-  File "${DEV_ROOT}\lib\src\gbz80\README"
+#  File "${DEV_ROOT}\lib\src\gbz80\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\z80"
   File "${DEV_ROOT}\lib\src\z80\*.c"
   File "${DEV_ROOT}\lib\src\z80\*.s"
-  File "${DEV_ROOT}\lib\src\z80\Makefile"
-  File "${DEV_ROOT}\lib\src\z80\README"
-  File "${DEV_ROOT}\lib\src\z80\z80.lib"
+#  File "${DEV_ROOT}\lib\src\z80\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\hc08"
   File "${DEV_ROOT}\lib\src\hc08\*.c"
-  File "${DEV_ROOT}\lib\src\hc08\Makefile"
-  File "${DEV_ROOT}\lib\src\hc08\hc08.lib"
+#  File "${DEV_ROOT}\lib\src\hc08\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\mcs51"
+  File "${DEV_ROOT}\lib\src\mcs51\*.asm"
+#  File "${DEV_ROOT}\lib\src\mcs51\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\small"
+#  File "${DEV_ROOT}\lib\src\small\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\medium"
+#  File "${DEV_ROOT}\lib\src\medium\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\large"
+#  File "${DEV_ROOT}\lib\src\large\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic"
+#  File "${DEV_ROOT}\lib\src\pic\configure"
+#  File "${DEV_ROOT}\lib\src\pic\configure.in"
+#  File "${DEV_ROOT}\lib\src\pic\GPL"
+#  File "${DEV_ROOT}\lib\src\pic\LGPL"
+#  File "${DEV_ROOT}\lib\src\pic\Makefile"
+#  File "${DEV_ROOT}\lib\src\pic\Makefile.common"
+#  File "${DEV_ROOT}\lib\src\pic\Makefile.common.in"
+#  File "${DEV_ROOT}\lib\src\pic\Makefile.rules"
+#  File "${DEV_ROOT}\lib\src\pic\Makefile.subdir"
+#  File "${DEV_ROOT}\lib\src\pic\NEWS"
+#  File "${DEV_ROOT}\lib\src\pic\README"
+  File "${DEV_ROOT}\lib\src\pic\TEMPLATE.c"
+  File "${DEV_ROOT}\lib\src\pic\TEMPLATE.S"
+
+  SetOutPath "$INSTDIR\lib\src\pic\libsdcc"
+  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.c"
+  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.S"
+  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.inc"
+#  File "${DEV_ROOT}\lib\src\pic\libsdcc\Makefile"
+  
+  SetOutPath "$INSTDIR\lib\src\pic\libdev"
+  File "${DEV_ROOT}\lib\src\pic\libdev\*.c"
+#  File "${DEV_ROOT}\lib\src\pic\libdev\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic\libm"
+  File "${DEV_ROOT}\lib\src\pic\libm\*.c"
+
+  SetOutPath "$INSTDIR\lib\src\pic16"
+#  File "${DEV_ROOT}\lib\src\pic16\configure"
+#  File "${DEV_ROOT}\lib\src\pic16\configure.in"
+#  File "${DEV_ROOT}\lib\src\pic16\COPYING"
+#  File "${DEV_ROOT}\lib\src\pic16\Makefile"
+#  File "${DEV_ROOT}\lib\src\pic16\Makefile.common"
+#  File "${DEV_ROOT}\lib\src\pic16\Makefile.common.in"
+#  File "${DEV_ROOT}\lib\src\pic16\Makefile.rules"
+#  File "${DEV_ROOT}\lib\src\pic16\Makefile.subdir"
+#  File "${DEV_ROOT}\lib\src\pic16\pics.all"
+#  File "${DEV_ROOT}\lib\src\pic16\pics.build"
+#  File "${DEV_ROOT}\lib\src\pic16\README"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\debug"
+#  File "${DEV_ROOT}\lib\src\pic16\debug\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\debug\gstack"
+#  File "${DEV_ROOT}\lib\src\pic16\debug\gstack\Makefile"
+  File "${DEV_ROOT}\lib\src\pic16\debug\gstack\*.c"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\ctype"
+  File "${DEV_ROOT}\lib\src\pic16\libc\ctype\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\ctype\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\delay"
+  File "${DEV_ROOT}\lib\src\pic16\libc\delay\*.S"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\delay\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\stdio"
+  File "${DEV_ROOT}\lib\src\pic16\libc\stdio\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\stdio\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\stdlib"
+  File "${DEV_ROOT}\lib\src\pic16\libc\stdlib\*.c"
+  File "${DEV_ROOT}\lib\src\pic16\libc\stdlib\*.S"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\stdlib\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\string"
+  File "${DEV_ROOT}\lib\src\pic16\libc\string\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\string\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libc\utils"
+  File "${DEV_ROOT}\lib\src\pic16\libc\utils\*.S"
+#  File "${DEV_ROOT}\lib\src\pic16\libc\utils\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libdev"
+  File "${DEV_ROOT}\lib\src\pic16\libdev\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libdev\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libio"
+  File "${DEV_ROOT}\lib\src\pic16\libio\*.ignore"
+#  File "${DEV_ROOT}\lib\src\pic16\libio\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libio\adc"
+  File "${DEV_ROOT}\lib\src\pic16\libio\adc\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libio\adc\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libio\i2c"
+  File "${DEV_ROOT}\lib\src\pic16\libio\i2c\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libio\i2c\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libio\usart"
+  File "${DEV_ROOT}\lib\src\pic16\libio\usart\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libio\usart\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libm"
+  File "${DEV_ROOT}\lib\src\pic16\libm\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libm\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\char"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\char\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\char\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\fixed16x16"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\fixed16x16\*.c"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\fixed16x16\*.S"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\fixed16x16\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\float"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\float\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\float\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\gptr"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\gptr\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\gptr\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\int"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\int\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\int\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\long"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\long\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\long\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\lregs"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\lregs\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\libsdcc\lregs\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\libsdcc\stack"
+  File "${DEV_ROOT}\lib\src\pic16\libsdcc\stack\*.S"
+
+  SetOutPath "$INSTDIR\lib\src\pic16\startup"
+  File "${DEV_ROOT}\lib\src\pic16\startup\*.c"
+#  File "${DEV_ROOT}\lib\src\pic16\startup\Makefile"
+#  File "${DEV_ROOT}\lib\src\pic16\startup\README"
 
   SetOutPath "$INSTDIR\lib\src"
   File "${DEV_ROOT}\lib\src\*.c"
@@ -331,6 +501,16 @@ Section Uninstall
   Delete "$SMPROGRAMS\$MUI_STARTMENUPAGE_VARIABLE\Uninstall SDCC.lnk"
   Delete "$SMPROGRAMS\$MUI_STARTMENUPAGE_VARIABLE\SDCC on the Web.lnk"
 
+  Delete "$INSTDIR\lib\src\large\Makefile"
+
+  Delete "$INSTDIR\lib\src\medium\Makefile"
+
+  Delete "$INSTDIR\lib\src\small\Makefile"
+
+  Delete "$INSTDIR\lib\src\mcs51\*.asm"
+  Delete "$INSTDIR\lib\src\mcs51\Makefile"
+  Delete "$INSTDIR\lib\src\mcs51\README"
+
   Delete "$INSTDIR\lib\src\hc08\*.c"
   Delete "$INSTDIR\lib\src\hc08\hc08.lib"
   Delete "$INSTDIR\lib\src\hc08\Makefile"
@@ -360,31 +540,36 @@ Section Uninstall
 
   Delete "$INSTDIR\lib\src\*.c"
 
+  Delete "$INSTDIR\lib\pic\*.o"
+  Delete "$INSTDIR\lib\pic\*.lib"
+
+  Delete "$INSTDIR\lib\pic16\*.o"
+  Delete "$INSTDIR\lib\pic16\*.lib"
+
   Delete "$INSTDIR\lib\hc08\*.rel"
-  Delete "$INSTDIR\lib\hc08\*.asm"
   Delete "$INSTDIR\lib\hc08\*.lib"
 
   Delete "$INSTDIR\lib\z80\*.o"
-  Delete "$INSTDIR\lib\z80\*.asm"
   Delete "$INSTDIR\lib\z80\*.lib"
 
-  Delete "$INSTDIR\lib\small\*.asm"
   Delete "$INSTDIR\lib\small\*.rel"
   Delete "$INSTDIR\lib\small\*.lib"
 
-  Delete "$INSTDIR\lib\large\*.asm"
+  Delete "$INSTDIR\lib\medium\*.rel"
+  Delete "$INSTDIR\lib\medium\*.lib"
+
   Delete "$INSTDIR\lib\large\*.rel"
   Delete "$INSTDIR\lib\large\*.lib"
 
-  Delete "$INSTDIR\lib\gbz80\*.asm"
+  Delete "$INSTDIR\lib\small-stack-auto\*.rel"
+  Delete "$INSTDIR\lib\small-stack-auto\*.lib"
+
   Delete "$INSTDIR\lib\gbz80\*.o"
   Delete "$INSTDIR\lib\gbz80\*.lib"
 
-  Delete "$INSTDIR\lib\ds390\*.asm"
   Delete "$INSTDIR\lib\ds390\*.rel"
   Delete "$INSTDIR\lib\ds390\*.lib"
 
-  Delete "$INSTDIR\lib\ds400\*.asm"
   Delete "$INSTDIR\lib\ds400\*.rel"
   Delete "$INSTDIR\lib\ds400\*.lib"
 
@@ -395,6 +580,9 @@ Section Uninstall
   Delete "$INSTDIR\include\asm\ds390\*.h"
   Delete "$INSTDIR\include\asm\default\*.h"
   Delete "$INSTDIR\include\z80\*.h"
+  Delete "$INSTDIR\include\pic\*.h"
+  Delete "$INSTDIR\include\pic\*.txt"
+  Delete "$INSTDIR\include\pic\*.inc"
   Delete "$INSTDIR\include\pic16\*.h"
   Delete "$INSTDIR\include\mcs51\*.h"
   Delete "$INSTDIR\include\hc08\*.h"
@@ -410,6 +598,12 @@ Section Uninstall
 
   RMDir "$SMPROGRAMS\$MUI_STARTMENUPAGE_VARIABLE"
 
+  RMDir /r "$INSTDIR\lib\src\pic"
+  RMDir /r "$INSTDIR\lib\src\pic16"
+  RMDir "$INSTDIR\lib\src\small"
+  RMDir "$INSTDIR\lib\src\medium"
+  RMDir "$INSTDIR\lib\src\large"
+  RMDir "$INSTDIR\lib\src\mcs51"
   RMDir "$INSTDIR\lib\src\z80"
   RMDir "$INSTDIR\lib\src\gbz80"
   RMDir "$INSTDIR\lib\src\ds390\examples"
@@ -418,9 +612,13 @@ Section Uninstall
   RMDir "$INSTDIR\lib\src\hc08"
   RMDir "$INSTDIR\lib\src"
 
+  RMDir "$INSTDIR\lib\pic"
+  RMDir "$INSTDIR\lib\pic16"
   RMDir "$INSTDIR\lib\z80"
   RMDir "$INSTDIR\lib\small"
+  RMDir "$INSTDIR\lib\medium"
   RMDir "$INSTDIR\lib\large"
+  RMDir "$INSTDIR\lib\small-stack-auto"
   RMDir "$INSTDIR\lib\gbz80"
   RMDir "$INSTDIR\lib\ds390"
   RMDir "$INSTDIR\lib\ds400"
@@ -435,6 +633,7 @@ Section Uninstall
   RMDir "$INSTDIR\include\asm\default"
   RMDir "$INSTDIR\include\asm"
   RMDir "$INSTDIR\include\z80"
+  RMDir "$INSTDIR\include\pic"
   RMDir "$INSTDIR\include\pic16"
   RMDir "$INSTDIR\include\mcs51"
   RMDir "$INSTDIR\include\hc08"

@@ -10,12 +10,13 @@
 #pragma disable_warning 180 //no warning about using complement on bit/unsigned char
 #endif
 
-#if defined (SDCC_STACK_AUTO) || defined (SDCC_hc08) || defined (SDCC_z80)
+#if defined (SDCC_hc08) || defined (SDCC_z80) || defined (SDCC_gbz80) || defined (SDCC_pic14) || defined (SDCC_pic16)
+/* sdcc tagrets not supporting bit type */
 #define NO_BITS
 #endif
 
-#if defined (__GNUC__) && (__GNUC__ < 3)
-//since this fails on GCC 2.95.4 on alpha and I don't know how to detect alpha...
+#if defined (__GNUC__) && defined (__alpha__) && (__GNUC__ < 3)
+/* since this fails on GCC 2.95.4 on alpha... */
 #define NO_BITS
 #endif
 

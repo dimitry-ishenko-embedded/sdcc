@@ -64,6 +64,7 @@ char *moduleName;               /* module name is same as module name base, but 
                                 /* non-alphanumeric characters replaced with underscore */
 int currRegBank = 0;
 int RegBankUsed[4] = {1, 0, 0, 0}; /*JCF: Reg Bank 0 used by default*/
+int BitBankUsed;                /* MB: overlayable bit bank */
 struct optimize optimize;
 struct options options;
 int preProcOnly = 0;
@@ -76,7 +77,7 @@ set *libPathsSet = NULL;
 set *relFilesSet = NULL;
 set *dataDirsSet = NULL;        /* list of data search directories */
 set *includeDirsSet = NULL;     /* list of include search directories */
-set *userIncDirsSet = NULL;	/* list of user include directories */
+set *userIncDirsSet = NULL;     /* list of user include directories */
 set *libDirsSet = NULL;         /* list of lib search directories */
 
 /* uncomment JAMIN_DS390 to always override and use ds390 port
@@ -90,10 +91,9 @@ int ds390_jammed = 0;
 char scratchFileName[PATH_MAX];
 char buffer[PATH_MAX * 2];
 
-#define OPTION_HELP     "-help"
-
 #define LENGTH(_a)      (sizeof(_a)/sizeof(*(_a)))
 
+#define OPTION_HELP             "--help"
 #define OPTION_STACK_8BIT       "--stack-8bit"
 #define OPTION_OUT_FMT_IHX      "--out-fmt-ihx"
 #define OPTION_OUT_FMT_S19      "--out-fmt-s19"
@@ -139,11 +139,13 @@ char buffer[PATH_MAX * 2];
 #define OPTION_STD_C99          "--std-c99"
 #define OPTION_STD_SDCC89       "--std-sdcc89"
 #define OPTION_STD_SDCC99       "--std-sdcc99"
+#define OPTION_CODE_SEG         "--codeseg"
+#define OPTION_CONST_SEG        "--constseg"
 
 static const OPTION
 optionsTable[] = {
     { 0,    NULL,                   NULL, "General options" },
-    { 0,    "--help",               NULL, "Display this help" },
+    { 0,    OPTION_HELP,            NULL, "Display this help" },
     { 'v',  OPTION_VERSION,         NULL, "Display sdcc's version" },
     { 0,    "--verbose",            &options.verbose, "Trace calls to the preprocessor, assembler, and linker" },
     { 'V',  NULL,                   &options.verboseExec, "Execute verbosely.  Show sub commands as they are run" },
@@ -162,7 +164,7 @@ optionsTable[] = {
     { 'o',  NULL,                   NULL, "Place the output into the given path resp. file" },
     { 0,    OPTION_PRINT_SEARCH_DIRS, &options.printSearchDirs, "display the directories in the compiler's search path"},
     { 0,    OPTION_MSVC_ERROR_STYLE, &options.vc_err_style, "messages are compatible with Micro$oft visual studio"},
-    { 0,    OPTION_USE_STDOUT, &options.use_stdout, "send errors to stdout instead of stderr"},
+    { 0,    OPTION_USE_STDOUT,      NULL, "send errors to stdout instead of stderr"},
     { 0,    "--nostdlib",           &options.nostdlib, "Do not include the standard library directory in the search path" },
     { 0,    "--nostdinc",           &options.nostdinc, "Do not include the standard include directory in the search path" },
     { 0,    OPTION_LESS_PEDANTIC,   NULL, "Disable some of the more pedantic warnings" },
@@ -173,12 +175,12 @@ optionsTable[] = {
     { 0,    OPTION_STD_SDCC89,      NULL, "Use C89 standard with SDCC extensions (default)" },
     { 0,    OPTION_STD_C99,         NULL, "Use C99 standard only (incomplete)" },
     { 0,    OPTION_STD_SDCC99,      NULL, "Use C99 standard with SDCC extensions (incomplete)" },
-    
-    { 0,    NULL,                   NULL, "Code generation options"},    
+
+    { 0,    NULL,                   NULL, "Code generation options"},
     { 'm',  NULL,                   NULL, "Set the port to use e.g. -mz80." },
     { 'p',  NULL,                   NULL, "Select port specific processor e.g. -mpic14 -p16f84" },
     { 0,    OPTION_LARGE_MODEL,     NULL, "external data space is used" },
-    { 0,    OPTION_MEDIUM_MODEL,    NULL, "not supported" },
+    { 0,    OPTION_MEDIUM_MODEL,    NULL, "external paged data space is used" },
     { 0,    OPTION_SMALL_MODEL,     NULL, "internal data space is used (default)" },
 #if !OPT_DISABLE_DS390
     { 0,    OPTION_FLAT24_MODEL,    NULL, "use the flat24 model for the ds390 (default)" },
@@ -215,7 +217,9 @@ optionsTable[] = {
     { 0,    "--no-std-crt0", &options.no_std_crt0, "For the z80/gbz80 do not link default crt0.o"},
 #endif
     { 0,    OPTION_SHORT_IS_8BITS,  NULL, "Make short 8 bits (for old times sake)" },
-    
+    { 0,    OPTION_CODE_SEG,        NULL, "<name> use this name for the code segment" },
+    { 0,    OPTION_CONST_SEG,       NULL, "<name> use this name for the const segment" },
+
     { 0,    NULL,                   NULL, "Optimization options"},
     { 0,    "--nooverlay",          &options.noOverlay, "Disable overlaying leaf function auto variables" },
     { 0,    OPTION_NO_GCSE,         NULL, "Disable the GCSE optimisation" },
@@ -230,7 +234,7 @@ optionsTable[] = {
     { 0,    OPTION_PEEP_FILE,       NULL, "<file> use this extra peephole file" },
     { 0,    OPTION_OPT_CODE_SPEED,  NULL, "Optimize for code speed rather than size" },
     { 0,    OPTION_OPT_CODE_SIZE,   NULL, "Optimize for code size rather than speed" },
-        
+
     { 0,    NULL,                   NULL, "Internal debugging options"},
     { 0,    "--dumpraw",            &options.dump_raw, "Dump the internal structure after the initial parse" },
     { 0,    "--dumpgcse",           &options.dump_gcse, NULL },
@@ -242,7 +246,7 @@ optionsTable[] = {
     { 0,    "--dumptree",           &options.dump_tree, "dump front-end AST before generating iCode" },
     { 0,    OPTION_DUMP_ALL,        NULL, "Dump the internal structure at all stages" },
     { 0,    OPTION_ICODE_IN_ASM,    &options.iCodeInAsm, "include i-code as comments in the asm file"},
-    
+
     { 0,    NULL,                   NULL, "Linker options" },
     { 'l',  NULL,                   NULL, "Include the given library in the link" },
     { 'L',  NULL,                   NULL, "Add the next field to the library search path" },
@@ -263,7 +267,7 @@ optionsTable[] = {
     { 0,    OPTION_PACK_IRAM,       NULL,"MCS51/DS390 - Tells the linker to pack variables in internal ram (default)"},
     { 0,    OPTION_NO_PACK_IRAM,    &options.no_pack_iram,"MCS51/DS390 - Tells the linker not to pack variables in internal ram"},
 #endif
-    
+
     /* End of options */
     { 0,    NULL }
 };
@@ -301,7 +305,7 @@ static const char *_baseValues[] = {
   NULL
 };
 
-static const char *_preCmd = "{cpp} -nostdinc -Wall -std=c99 -DSDCC=1 {cppextraopts} \"{fullsrcfilename}\" \"{cppoutfilename}\"";
+static const char *_preCmd = "{cpp} -nostdinc -Wall -std=c99 {cppextraopts} \"{fullsrcfilename}\" \"{cppoutfilename}\"";
 
 PORT *port;
 
@@ -371,7 +375,6 @@ static void
 _setProcessor (char *_processor)
 {
   port->processor = _processor;
-  fprintf(stderr,"Processor: %s\n",_processor);
 }
 
 static void
@@ -408,7 +411,7 @@ _findPort (int argc, char **argv)
     }
 
   /* Use the first in the list */
-        port = _ports[0];
+  port = _ports[0];
 }
 
 /* search through the command line options for the processor */
@@ -432,16 +435,16 @@ _findProcessor (int argc, char **argv)
 /* printVersionInfo - prints the version info        */
 /*-----------------------------------------------------------------*/
 void
-printVersionInfo (void)
+printVersionInfo (FILE *stream)
 {
   int i;
 
-  fprintf (stderr,
+  fprintf (stream,
            "SDCC : ");
   for (i = 0; i < NUM_PORTS; i++)
-    fprintf (stderr, "%s%s", i == 0 ? "" : "/", _ports[i]->target);
+    fprintf (stream, "%s%s", i == 0 ? "" : "/", _ports[i]->target);
 
-  fprintf (stderr, " " SDCC_VERSION_STR
+  fprintf (stream, " " SDCC_VERSION_STR
 #ifdef SDCC_SUB_VERSION_STR
            "/" SDCC_SUB_VERSION_STR
 #endif
@@ -463,7 +466,7 @@ printVersionInfo (void)
 }
 
 static void
-printOptions(const OPTION *optionsTable)
+printOptions(const OPTION *optionsTable, FILE *stream)
 {
   int i;
   for (i = 0;
@@ -474,11 +477,11 @@ printOptions(const OPTION *optionsTable)
       if (!optionsTable[i].shortOpt && !optionsTable[i].longOpt
           && optionsTable[i].help)
         {
-          fprintf (stdout, "\n%s:\n", optionsTable[i].help);
+          fprintf (stream, "\n%s:\n", optionsTable[i].help);
         }
       else
         {
-          fprintf(stdout, "  %c%c  %-20s  %s\n",
+          fprintf(stream, "  %c%c  %-20s  %s\n",
                   optionsTable[i].shortOpt !=0 ? '-' : ' ',
                   optionsTable[i].shortOpt !=0 ? optionsTable[i].shortOpt : ' ',
                   optionsTable[i].longOpt != NULL ? optionsTable[i].longOpt : "",
@@ -491,28 +494,28 @@ printOptions(const OPTION *optionsTable)
 /*-----------------------------------------------------------------*/
 /* printUsage - prints command line syntax         */
 /*-----------------------------------------------------------------*/
-void
+static void
 printUsage (void)
 {
     int i;
-    printVersionInfo();
-    fprintf (stdout,
+    FILE *stream = stderr;
+
+    printVersionInfo (stream);
+    fprintf (stream,
              "Usage : sdcc [options] filename\n"
              "Options :-\n"
              );
 
-    printOptions(optionsTable);
+    printOptions (optionsTable, stream);
 
     for (i = 0; i < NUM_PORTS; i++)
       {
         if (_ports[i]->poptions != NULL)
           {
-            fprintf (stdout, "\nSpecial options for the %s port:\n", _ports[i]->target);
-            printOptions (_ports[i]->poptions);
+            fprintf (stream, "\nSpecial options for the %s port:\n", _ports[i]->target);
+            printOptions (_ports[i]->poptions, stream);
           }
       }
-
-    exit (0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -525,12 +528,12 @@ setParseWithComma (set **dest, char *src)
   int length;
 
   /* skip the initial white spaces */
-  while (isspace(*src))
+  while (isspace((unsigned char)*src))
     src++;
 
   /* skip the trailing white spaces */
   length = strlen(src);
-  while (length && isspace(src[length-1]))
+  while (length && isspace((unsigned char)src[length-1]))
     src[--length] = '\0';
 
   for (p = strtok(src, ","); p != NULL; p = strtok(NULL, ","))
@@ -544,10 +547,10 @@ static void
 setDefaultOptions (void)
 {
   /* first the options part */
-  options.stack_loc = 0;        /* stack pointer initialised to 0 */
-  options.xstack_loc = 0;       /* xternal stack starts at 0 */
-  options.code_loc = 0;         /* code starts at 0 */
-  options.data_loc = 0;         /* JCF: By default let the linker locate data */
+  options.stack_loc = 0;          /* stack pointer initialised to 0 */
+  options.xstack_loc = 0;         /* xternal stack starts at 0 */
+  options.code_loc = 0;           /* code starts at 0 */
+  options.data_loc = 0;           /* JCF: By default let the linker locate data */
   options.xdata_loc = 0;
   options.idata_loc = 0x80;
   options.nopeep = 0;
@@ -556,8 +559,10 @@ setDefaultOptions (void)
   options.nostdinc = 0;
   options.verbose = 0;
   options.shortis8bits = 0;
-  options.std_sdcc = 1;         /* enable SDCC language extensions */
-  options.std_c99 = 0;          /* default to C89 until more C99 support */
+  options.std_sdcc = 1;           /* enable SDCC language extensions */
+  options.std_c99 = 0;            /* default to C89 until more C99 support */
+  options.code_seg = CODE_NAME;   /* default to CSEG for generated code */
+  options.const_seg = CONST_NAME; /* default to CONST for generated code */
 
   options.stack10bit=0;
 
@@ -653,7 +658,7 @@ processFile (char *s)
       moduleName = Safe_strdup ( fext );
 
       for (fext = moduleName; *fext; fext++)
-        if (!isalnum (*fext))
+        if (!isalnum ((unsigned char)*fext))
           *fext = '_';
       return;
     }
@@ -705,7 +710,7 @@ getStringArg(const char *szStart, char **argv, int *pi, int argc)
         {
           werror (E_ARGUMENT_MISSING, szStart);
           /* Die here rather than checking for errors later. */
-          exit(-1);
+          exit(EXIT_FAILURE);
         }
       else
         {
@@ -875,10 +880,19 @@ parseCmdLine (int argc, char **argv)
       /* options */
       if (argv[i][0] == '-' && argv[i][1] == '-')
         {
+          if (strcmp (argv[i], OPTION_USE_STDOUT) == 0)
+            {
+              if (options.use_stdout == 0)
+                {
+                  options.use_stdout = 1;
+                  dup2(STDOUT_FILENO, STDERR_FILENO);
+                }
+              continue;
+            }
           if (strcmp (argv[i], OPTION_HELP) == 0)
             {
               printUsage ();
-              exit (0);
+              exit (EXIT_SUCCESS);
             }
 
           if (strcmp (argv[i], OPTION_STACK_8BIT) == 0)
@@ -949,8 +963,8 @@ parseCmdLine (int argc, char **argv)
 
           if (strcmp (argv[i], OPTION_VERSION) == 0)
             {
-              printVersionInfo ();
-              exit (0);
+              printVersionInfo (stdout);
+              exit (EXIT_SUCCESS);
               continue;
             }
 
@@ -992,14 +1006,14 @@ parseCmdLine (int argc, char **argv)
 
           if (strcmp (argv[i], OPTION_XRAM_SIZE) == 0)
             {
-              options.xram_size = getIntArg(OPTION_IRAM_SIZE, argv, &i, argc);
+              options.xram_size = getIntArg(OPTION_XRAM_SIZE, argv, &i, argc);
               options.xram_size_set = TRUE;
               continue;
             }
 
           if (strcmp (argv[i], OPTION_CODE_SIZE) == 0)
             {
-              options.code_size = getIntArg(OPTION_IRAM_SIZE, argv, &i, argc);
+              options.code_size = getIntArg(OPTION_CODE_SIZE, argv, &i, argc);
               continue;
             }
 
@@ -1094,7 +1108,7 @@ parseCmdLine (int argc, char **argv)
               options.std_sdcc = 0;
               continue;
             }
-          
+
           if (strcmp (argv[i], OPTION_STD_C99) == 0)
             {
               options.std_c99 = 1;
@@ -1108,11 +1122,23 @@ parseCmdLine (int argc, char **argv)
               options.std_sdcc = 1;
               continue;
             }
-          
+
           if (strcmp (argv[i], OPTION_STD_SDCC99) == 0)
             {
               options.std_c99 = 1;
               options.std_sdcc = 1;
+              continue;
+            }
+
+          if (strcmp (argv[i], OPTION_CODE_SEG) == 0)
+            {
+              options.code_seg = getStringArg(OPTION_CODE_SEG, argv, &i, argc);
+              continue;
+            }
+
+          if (strcmp (argv[i], OPTION_CONST_SEG) == 0)
+            {
+              options.const_seg = getStringArg(OPTION_CONST_SEG, argv, &i, argc);
               continue;
             }
 
@@ -1136,7 +1162,7 @@ parseCmdLine (int argc, char **argv)
               verifyShortOption(argv[i]);
 
               printUsage ();
-              exit (0);
+              exit (EXIT_SUCCESS);
               break;
 
             case 'm':
@@ -1228,7 +1254,7 @@ parseCmdLine (int argc, char **argv)
             case 'v':
               verifyShortOption(argv[i]);
 
-              printVersionInfo ();
+              printVersionInfo (stdout);
               exit (0);
               break;
 
@@ -1410,7 +1436,6 @@ parseCmdLine (int argc, char **argv)
         werror (E_FILE_OPEN_ERR, scratchFileName);
     }
   MSVC_style(options.vc_err_style);
-  if(options.use_stdout) dup2(STDOUT_FILENO, STDERR_FILENO);
 
   return 0;
 }
@@ -1425,7 +1450,9 @@ linkEdit (char **envp)
   char *segName, *c;
   int system_ret;
   const char *s;
+  char linkerScriptFileName[PATH_MAX];
 
+  linkerScriptFileName[0] = 0;
 
   if(port->linker.needLinkerScript)
     {
@@ -1447,11 +1474,11 @@ linkEdit (char **envp)
         }
 
       /* first we need to create the <filename>.lnk file */
-      SNPRINTF (scratchFileName, sizeof(scratchFileName),
+      SNPRINTF (linkerScriptFileName, sizeof(scratchFileName),
         "%s.lnk", dstFileName);
-      if (!(lnkfile = fopen (scratchFileName, "w")))
+      if (!(lnkfile = fopen (linkerScriptFileName, "w")))
         {
-          werror (E_FILE_OPEN_ERR, scratchFileName);
+          werror (E_FILE_OPEN_ERR, linkerScriptFileName);
           exit (1);
         }
 
@@ -1499,7 +1526,7 @@ linkEdit (char **envp)
         {
 
           /* code segment start */
-          WRITE_SEG_LOC (CODE_NAME, options.code_loc);
+          WRITE_SEG_LOC (HOME_NAME, options.code_loc);
 
           /* data segment start. If zero, the linker chooses
              the best place for data */
@@ -1558,10 +1585,22 @@ linkEdit (char **envp)
               switch (options.model)
                 {
                 case MODEL_SMALL:
-                  c = "small";
+                  if (options.stackAuto)
+                    c = "small-stack-auto";
+                  else
+                    c = "small";
+                  break;
+                case MODEL_MEDIUM:
+                  if (options.stackAuto)
+                    c = "medium-stack-auto";
+                  else
+                    c = "medium";
                   break;
                 case MODEL_LARGE:
-                  c = "large";
+                  if (options.stackAuto)
+                    c = "large-stack-auto";
+                  else
+                    c = "large";
                   break;
                 case MODEL_FLAT24:
                   /* c = "flat24"; */
@@ -1578,7 +1617,7 @@ linkEdit (char **envp)
                       fprintf(stderr,
                         "Add support for your FLAT24 target in %s @ line %d\n",
                         __FILE__, __LINE__);
-                      exit(-1);
+                      exit(EXIT_FAILURE);
                     }
                   break;
                 case MODEL_PAGE0:
@@ -1626,7 +1665,7 @@ linkEdit (char **envp)
                   fprintf(stderr,
                     "Add support for your FLAT24 target in %s @ line %d\n",
                     __FILE__, __LINE__);
-                  exit(-1);
+                  exit(EXIT_FAILURE);
                 }
               }
 #endif
@@ -1753,8 +1792,8 @@ linkEdit (char **envp)
       char buffer3[PATH_MAX];
       set *tempSet=NULL, *libSet=NULL;
 
-      strcpy(buffer3, dstFileName);
-      if(TARGET_IS_PIC16) {
+      strcpy(buffer3, linkerScriptFileName);
+      if(/*TARGET_IS_PIC16 ||*/ TARGET_IS_PIC) {
 
          /* use $l to set the linker include directories */
          tempSet = appendStrSet(libDirsSet, "-I\"", "\"");
@@ -1820,7 +1859,7 @@ linkEdit (char **envp)
         options.out_fmt ? ".S19" : ".ihx",
         sizeof(scratchFileName));
       if (strcmp (fullDstFileName, scratchFileName))
-        unlink (fullDstFileName);
+        remove (fullDstFileName);
       rename (scratchFileName, fullDstFileName);
 
       strncpyz (buffer, fullDstFileName, sizeof(buffer));
@@ -1836,14 +1875,14 @@ linkEdit (char **envp)
       *q = 0;
       strncatz(buffer, ".map", sizeof(buffer));
       if (strcmp (scratchFileName, buffer))
-        unlink (buffer);
+        remove (buffer);
       rename (scratchFileName, buffer);
       *p = 0;
       strncatz (scratchFileName, ".mem", sizeof(scratchFileName));
       *q = 0;
       strncatz(buffer, ".mem", sizeof(buffer));
       if (strcmp (scratchFileName, buffer))
-        unlink (buffer);
+        remove (buffer);
       rename (scratchFileName, buffer);
       if (options.debug)
         {
@@ -1852,13 +1891,13 @@ linkEdit (char **envp)
           *q = 0;
           strncatz(buffer, ".cdb", sizeof(buffer));
           if (strcmp (scratchFileName, buffer))
-            unlink (buffer);
+            remove (buffer);
           rename (scratchFileName, buffer);
           /* and the OMF file without extension: */
           *p = 0;
           *q = 0;
           if (strcmp (scratchFileName, buffer))
-            unlink (buffer);
+            remove (buffer);
           rename (scratchFileName, buffer);
         }
     }
@@ -1911,7 +1950,7 @@ assemble (char **envp)
                   port->linker.rel_ext,
                   sizeof(scratchFileName));
         if (strcmp (scratchFileName, fullDstFileName))
-          unlink (fullDstFileName);
+          remove (fullDstFileName);
         rename (scratchFileName, fullDstFileName);
     }
 }
@@ -1930,6 +1969,16 @@ preProcess (char **envp)
     {
       const char *s;
       set *inclList = NULL;
+
+      if (NULL != port->linker.rel_ext)
+        {
+#define OBJ_EXT_STR     "-obj-ext="
+#define OBJ_EXT_LEN     ((sizeof OBJ_EXT_STR) - 1)
+          char *buf = Safe_alloc(strlen(port->linker.rel_ext) + (OBJ_EXT_LEN + 1));
+          strcpy(buf, OBJ_EXT_STR);
+          strcpy(&buf[OBJ_EXT_LEN], port->linker.rel_ext);
+          addSet(&preArgvSet, buf);
+        }
 
       /* if using external stack define the macro */
       if (options.useXstack)
@@ -1973,9 +2022,23 @@ preProcess (char **envp)
           break;
         }
 
+      /* add SDCC version number */
+      {
+        char buf[20];
+        SNPRINTF(buf, sizeof(buf), "-DSDCC=%d%d%d",
+                 SDCC_VERSION_HI, SDCC_VERSION_LO, SDCC_VERSION_P);
+        addSet(&preArgvSet, Safe_strdup(buf));
+      }
+
       /* add port (processor information to processor */
       addSet(&preArgvSet, Safe_strdup("-DSDCC_{port}"));
       addSet(&preArgvSet, Safe_strdup("-D__{port}"));
+
+      if (port && port->processor && TARGET_IS_PIC) {
+        char proc[512];
+	SNPRINTF(&proc[0], 512, "-DSDCC_PROCESSOR=\"%s\"", port->processor);
+	addSet(&preArgvSet, Safe_strdup(proc));
+      }
 
       /* standard include path */
       if (!options.nostdinc) {
@@ -2001,7 +2064,6 @@ preProcess (char **envp)
 
       if (options.verbose)
         printf ("sdcc: Calling preprocessor...\n");
-
       buildCmdLine2 (buffer, sizeof(buffer), _preCmd);
 
       if (preProcOnly) {
@@ -2048,13 +2110,6 @@ setBinPaths(const char *argv0)
     SNPRINTF(buf, sizeof buf, "%s" PREFIX2BIN_DIR, p);
     addSetHead(&binPathSet, Safe_strdup(buf));
   }
-
-#if 0
-  if (options.printSearchDirs) {
-    printf("programs:\n");
-    fputStrSet(stdout, binPathSet);
-  }
-#endif
 }
 
 /* Set system include path */
@@ -2098,13 +2153,6 @@ setIncludePath(void)
         addSetHead(&includeDirsSet, p2);
     }
   }
-
-#if 0
-  if (options.printSearchDirs) {
-    printf("includedir:\n");
-    fputStrSet(stdout, includeDirsSet);
-  }
-#endif
 }
 
 /* Set system lib path */
@@ -2129,13 +2177,6 @@ setLibPath(void)
 
   if ((p = getenv(SDCC_LIB_NAME)) != NULL)
     addSetHead(&libDirsSet, p);
-
-#if 0
-  if (options.printSearchDirs) {
-    printf("libdir:\n");
-    fputStrSet(stdout, libDirsSet);
-  }
-#endif
 }
 
 /* Set data path */
@@ -2170,13 +2211,6 @@ setDataPaths(const char *argv0)
   }
 #else
   addSet(&dataDirsSet, Safe_strdup(DATADIR));
-#endif
-
-#if 0
-  if (options.printSearchDirs) {
-    printf("datadir:\n");
-    fputStrSet(stdout, dataDirsSet);
-  }
 #endif
 
   setIncludePath();
@@ -2270,8 +2304,6 @@ main (int argc, char **argv, char **envp)
   /* turn all optimizations off by default */
   memset (&optimize, 0, sizeof (struct optimize));
 
-  /*printVersionInfo (); */
-
   if (NUM_PORTS==0) {
     fprintf (stderr, "Build error: no ports are enabled.\n");
     exit (1);
@@ -2281,7 +2313,7 @@ main (int argc, char **argv, char **envp)
   atexit(rm_tmpfiles);
 
   /* install signal handler;
-     it's only purpuse is to call exit() to remove temp files */
+     it's only purpose is to call exit() to remove temp files */
   if (!getenv("SDCC_LEAVE_SIGNALS"))
     {
       signal (SIGABRT, sig_handler);
@@ -2301,7 +2333,7 @@ main (int argc, char **argv, char **envp)
 #ifdef JAMIN_DS390
   if (strcmp(port->target, "mcs51") == 0) {
     printf("DS390 jammed in A\n");
-          _setPort ("ds390");
+    _setPort ("ds390");
     ds390_jammed = 1;
   }
 #endif
@@ -2319,7 +2351,11 @@ main (int argc, char **argv, char **envp)
     options.stack10bit=0;
   }
 #endif
+
   parseCmdLine (argc, argv);
+
+  if (options.verbose && NULL != port->processor)
+    printf("Processor: %s\n", port->processor);
 
   initValues ();
 
@@ -2333,12 +2369,13 @@ main (int argc, char **argv, char **envp)
         doPrintSearchDirs();
 
   /* if no input then printUsage & exit */
-  if (!options.c1mode && !fullSrcFileName && peekSet(relFilesSet) == NULL) {
-    if (!options.printSearchDirs)
+  if (!options.c1mode && !fullSrcFileName && peekSet(relFilesSet) == NULL)
+    {
+      if (options.printSearchDirs)
+        exit (EXIT_SUCCESS);
       printUsage();
-
-    exit(0);
-  }
+      exit (EXIT_FAILURE);
+    }
 
   /* initMem() is expensive, but
      initMem() must called before port->finaliseOptions ().
@@ -2402,6 +2439,9 @@ main (int argc, char **argv, char **envp)
       !options.c1mode &&
       (fullSrcFileName || peekSet(relFilesSet) != NULL))
     {
+      if (options.verbose)
+        printf ("sdcc: Calling linker...\n");
+
       if (port->linker.do_link)
         port->linker.do_link ();
       else

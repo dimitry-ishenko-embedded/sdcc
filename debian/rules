@@ -24,48 +24,30 @@ endif
 clean:
 	dh_testdir
 	dh_testroot
-	-$(MAKE) -C sim/ucsim distclean
-	-$(MAKE) -C device/lib/ds400/ clean
+	-$(MAKE) distclean
 	-$(MAKE) -C doc/z80 clean
-	-$(MAKE) -C doc clean
-	-$(MAKE) clean
-	-$(MAKE) realclean
-	-find $(CURDIR)/ -name *.o -exec rm {} \;
-	-find $(CURDIR)/ -name *.a -exec rm {} \;
-	-find $(CURDIR)/ -name Makefile.dep -exec rm {} \;
-	rm -f as/hc08/Makefile
-	rm -f as/mcs51/Makefile
-	rm -f device/lib/Makefile
-	rm -f sim/ucsim/xa.src/Makefile
-	rm -f sim/ucsim/z80.src/Makefile
-	rm -f sim/ucsim/libtool
-	rm -f sim/ucsim/packages.mk
-	rm -f src/hc08/peeph.rul
+	-find $(CURDIR)/device/lib -name Makefile -exec rm {} \;
+	-find $(CURDIR)/device/lib -name config.log -exec rm {} \;
+	-find $(CURDIR)/device/lib -name config.status -exec rm {} \;
+	-rm device/lib/pic/Makefile.common
+	-rm device/lib/pic16/Makefile.common
+	-rm device/lib/pic16/pics.build
+	-rm support/valdiag/Makefile
+	-rm src/SDCCy.c src/SDCCy.h src/SDCClex.c
 	rm -f *-stamp
 	dh_clean
 
 config.status: configure
 	dh_testdir
-	cd $(CURDIR)/device/lib/pic16 && ./configure \
-		--host=$(DEB_HOST_GNU_TYPE) \
-		--build=$(DEB_BUILD_GNU_TYPE) \
-		--prefix=/usr
+	#cd $(CURDIR)/device/lib/pic16 && ./configure \
+	#	--host=$(DEB_HOST_GNU_TYPE) \
+	#	--build=$(DEB_BUILD_GNU_TYPE) \
+	#	--prefix=/usr
 	cd $(CURDIR) && LYX=/usr/bin/lyx-xforms ./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \
-		--enable-ucsim \
-		--enable-mcs51-port \
-		--enable-gbz80-port \
-		--enable-z80-port \
-		--enable-avr-port \
-		--enable-ds390-port \
-		--enable-ds400-port \
-		--enable-packihx \
-		--enable-pic-port \
-		--enable-pic16-port \
-		--enable-xa51-port \
-		--enable-hc08-port
+		--enable-doc
 
 build-arch: build-arch-stamp
 build-arch-stamp: config.status
@@ -80,6 +62,8 @@ build-indep-stamp: config.status build-arch
 	cd doc/z80 && PRJDIR="$(CURDIR)" $(MAKE)
 	touch build-stamp
 
+build: build-arch build-indep
+
 install-arch: install-arch-stamp
 install-arch-stamp: build-arch
 	dh_testdir
@@ -93,13 +77,12 @@ install-arch-stamp: build-arch
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 	mv $(CURDIR)/debian/tmp/usr/bin/*.el $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
 
-	# Remove useless files
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*.asm" -exec rm {} \;
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*Makefile*" -exec rm {} \;
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*README*" -exec rm {} \;
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*MOVED*" -exec rm {} \;
-
 	dh_install -psdcc --sourcedir=debian/tmp
+
+	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
+	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc/ucsim/* $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
+	
 	dh_install -psdcc-ucsim --sourcedir=debian/tmp
 	
 	touch install-arch-stamp
@@ -110,25 +93,31 @@ install-indep-stamp: build-indep install-arch
 	dh_testroot
 	dh_installdirs -i
 
-	# Removing execute permission on some text files.
-	find $(CURDIR)/debian/tmp/usr/share/sdcc/ -type f -exec chmod -x {} \;
-
 	# Remove not needed files
 	rm -f $(CURDIR)/debian/tmp/usr/share/sdcc/doc/INSTALL.txt
 	
-	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
-	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc/ucsim/* $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
-	
 	# Moving all other files in /usr/share/sdcc/doc to /usr/share/doc/sdcc-doc
 	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc $(CURDIR)/debian/tmp/usr/share/doc/sdcc-doc
+
+	dh_install -psdcc-doc --sourcedir=debian/tmp 
 
 	# Install support scripts
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
 	install -m 755 $(CURDIR)/support/scripts/inc2h.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
 	install -m 755 $(CURDIR)/support/scripts/keil2sdcc.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
 
-	dh_install -psdcc-doc --sourcedir=debian/tmp 
+
+	# Removing execute permission on some text files.
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -type f -exec chmod -x {} \;
+
+	# Remove useless files
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*.asm" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*README*" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*COPYING*" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "*MOVED*" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "configure" -exec rm {} \;
+	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "config.status" -exec rm {} \;
+
 	dh_install -psdcc-libraries --sourcedir=debian/tmp 
 	
 	mkdir -p $(CURDIR)/debian/sdcc-libraries/usr/share/lintian/overrides/

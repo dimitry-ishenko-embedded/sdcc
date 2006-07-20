@@ -4,7 +4,7 @@
 ;	Author:	George Gallant
 ;	Date:	19OCT04
 ;	
-;       $Id: cvtdec.S,v 1.1 2005/04/06 06:06:20 vrokas Exp $
+;       $Id: cvtdec.S 3718 2005-04-06 06:06:20Z vrokas $
 ;
 ;	This routine is based on the code and algorithm by
 ;	Nikolai Golovchenko and Scott Dattalo presented in

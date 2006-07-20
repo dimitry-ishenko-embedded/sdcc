@@ -56,6 +56,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "simcl.h"
 #include "itsrccl.h"
 
+static class cl_uc_error_registry uc_error_registry;
 
 /*
  * Clock counter
@@ -1855,13 +1856,10 @@ cl_uc::check_events(void)
  *----------------------------------------------------------------------------
  */
 
-ERROR_CLASS_DEF_PARENT_ON(err_error, unknown_code, "unknown_code",
-			  error_class_base, ERROR_ON);
-
 cl_error_unknown_code::cl_error_unknown_code(class cl_uc *the_uc)
 {
   uc= the_uc;
-  classification= &error_unknown_code_class;
+  classification= uc_error_registry.find("unknown_code");
 }
 
 void
@@ -1879,6 +1877,12 @@ cl_error_unknown_code::print(class cl_commander *c)
   else
     cmd_fprintf(f, "0x%06x", PC);
   cmd_fprintf(f, "\n");
+}
+
+cl_uc_error_registry::cl_uc_error_registry(void)
+{
+  class cl_error_class *prev = uc_error_registry.find("non-classified");
+  prev = register_error(new cl_error_class(err_error, "unknown_code", prev, ERROR_OFF));
 }
 
 

@@ -19,7 +19,7 @@
 * COMPILE TIME OPTIONS: -
 * DEBUG OPTIONS: -
 ******************************************************************KE*/
-/*      $Id: ser.h,v 1.2 2001/07/30 19:22:59 kbongers Exp $    */
+/*      $Id: ser.h 1112 2001-07-30 19:22:59Z kbongers $    */
 
 #ifndef _SER_H_
 #define _SER_H_

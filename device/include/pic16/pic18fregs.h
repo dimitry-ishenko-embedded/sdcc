@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18fregs.h,v 1.6 2005/03/31 16:24:44 vrokas Exp $
+ * $Id: pic18fregs.h 4255 2006-07-02 10:13:24Z tecodev $
  *
  */
 
@@ -43,8 +43,37 @@
 #elif defined(pic18f1220)
 #  include <pic18f1220.h>
 
+#elif defined(pic18f1320)
+# include <pic18f1220.h>	/* Yes, it's 1220.h */
+
 #elif defined(pic18f2220)
 #  include <pic18f2220.h>
+#elif defined(pic18f2320)
+#  include <pic18f2220.h>	/* Yes, it's 2220.h */
+
+#elif defined(pic18f2455)
+#  include <pic18f2455.h>
+
+#elif defined(pic18f2550)
+#  include <pic18f2550.h>
+
+#elif defined(pic18f4220)
+#  include <pic18f4220.h>
+
+#elif defined(pic18f4320)
+#  include <pic18f4220.h>	/* Yes, it's 4220.h */
+
+#elif defined(pic18f4331)
+#  include <pic18f4331.h>
+
+#elif defined(pic18f4455)
+#  include <pic18f4455.h>
+
+#elif defined(pic18f4520)
+#  include <pic18f4520.h>
+
+#elif defined(pic18f4550)
+#  include <pic18f4550.h>	/* Might use 2550.h */
 
 #elif defined(pic18f6520)
 #  include <pic18f6520.h>
@@ -76,10 +105,10 @@
 #endif
 
 
-#define Nop()           { _asm nop _endasm; }
-#define ClrWdt()        { _asm clrwdt _endasm; }
-#define Sleep()         { _asm sleep _endasm; }
-#define Reset()         { _asm reset _endasm; }
+#define Nop()           do { _asm nop _endasm; } while(0)
+#define ClrWdt()        do { _asm clrwdt _endasm; } while(0)
+#define Sleep()         do { _asm sleep _endasm; } while(0)
+#define Reset()         do { _asm reset _endasm; } while(0)
 
 
 #endif /* __PIC18FREGS_H__ */

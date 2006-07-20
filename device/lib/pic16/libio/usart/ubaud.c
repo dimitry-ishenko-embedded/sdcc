@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  *
- * $Id: ubaud.c,v 1.2 2005/04/02 13:13:51 vrokas Exp $
+ * $Id: ubaud.c 3835 2005-08-07 20:09:11Z tecodev $
  */
 
 #include <pic18fregs.h>
@@ -32,5 +32,5 @@
 
 void usart_baud(unsigned char baudconfig) __wparam
 {
-    BAUDREG = baudconfig;
+    SPBRG = baudconfig;
 }

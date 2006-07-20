@@ -68,7 +68,7 @@ _hc08_reset_regparm (void)
 }
 
 static int
-_hc08_regparm (sym_link * l)
+_hc08_regparm (sym_link * l, bool reentrant)
 {
   int size = getSize(l);
     
@@ -164,11 +164,13 @@ _hc08_genAssemblerPreamble (FILE * of)
   symbol *mainExists=newSymbol("main", 0);
   mainExists->block=0;
 
-  fprintf (of, "\t.area %s\n",port->mem.code_name);
+  fprintf (of, "\t.area %s\n",HOME_NAME);
   fprintf (of, "\t.area GSINIT0 (CODE)\n");
   fprintf (of, "\t.area %s\n",port->mem.static_name);
   fprintf (of, "\t.area %s\n",port->mem.post_static_name);
+  fprintf (of, "\t.area %s\n",CODE_NAME);
   fprintf (of, "\t.area %s\n",port->mem.xinit_name);
+  fprintf (of, "\t.area %s\n",port->mem.const_name);
   fprintf (of, "\t.area %s\n",port->mem.data_name);
   fprintf (of, "\t.area %s\n",port->mem.overlay_name);
   fprintf (of, "\t.area %s\n",port->mem.bit_name);
@@ -417,6 +419,9 @@ PORT hc08_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 2, 2, 2, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
+  
   {
     "XSEG",
     "STACK",
@@ -433,6 +438,7 @@ PORT hc08_port =
     "HOME (CODE)",
     "XISEG", // initialized xdata
     "XINIT", // a code copy of xiseg
+    "CONST   (CODE)", // const_name - const data (code or not)
     NULL,
     NULL,
     1

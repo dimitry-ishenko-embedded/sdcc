@@ -22,6 +22,6 @@
 
 float modff(float x, float * y)
 {
-    *y=((int)x);
+    *y=(long)x;
     return (x-*y);
 }

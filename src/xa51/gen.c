@@ -112,7 +112,7 @@ static void emitcode (char *inst, char *fmt,...) {
   else
     vsprintf (lb, fmt, ap);
 
-  while (isspace ((int)*lbp))
+  while (isspace (*lbp))
     lbp++;
 
   if (lbp && *lbp)

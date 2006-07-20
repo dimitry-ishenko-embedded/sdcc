@@ -89,7 +89,7 @@ initMem ()
      PAGED          -   YES
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'A'
      POINTER-TYPE   -   FPOINTER
    */
@@ -101,7 +101,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'B'
      POINTER-TYPE   -   POINTER
    */
@@ -118,7 +118,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   YES
+     CODE-ACCESS    -   YES
      DEBUG-NAME     -   'C'
      POINTER-TYPE   -   CPOINTER
    */
@@ -130,7 +130,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   YES
+     CODE-ACCESS    -   YES
      DEBUG-NAME     -   'C'
      POINTER-TYPE   -   CPOINTER
    */
@@ -142,7 +142,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   YES
+     CODE-ACCESS    -   YES
      DEBUG-NAME     -   'D'
      POINTER-TYPE   -   CPOINTER
    */
@@ -154,7 +154,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   YES
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'E'
      POINTER-TYPE   -   POINTER
    */
@@ -166,7 +166,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   YES
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'E'
      POINTER-TYPE   -   POINTER
    */
@@ -178,16 +178,16 @@ initMem ()
 
   /* Xternal paged segment ;   
      SFRSPACE       -   NO
-     FAR-SPACE      -   YES
+     FAR-SPACE      -   NO
      PAGED          -   YES
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO 
+     CODE-ACCESS    -   NO 
      DEBUG-NAME     -   'P'
      POINTER-TYPE   -   PPOINTER
    */
   if (PDATA_NAME) {
-    pdata = allocMap (0, 1, 1, 0, 0, 0, options.xstack_loc, PDATA_NAME, 'P', PPOINTER);
+    pdata = allocMap (0, 0, 1, 0, 0, 0, options.xstack_loc, PDATA_NAME, 'P', PPOINTER);
   } else {
     pdata = NULL;
   }
@@ -198,7 +198,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'F'
      POINTER-TYPE   -   FPOINTER
    */
@@ -212,7 +212,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'G'
      POINTER-TYPE   -   IPOINTER
    */
@@ -223,13 +223,13 @@ initMem ()
     idata=NULL;
   }
 
-  /* Static segment (code for variables );
+  /* Bit space ;
      SFRSPACE       -   NO
      FAR-SPACE      -   NO
      PAGED          -   NO
      DIRECT-ACCESS  -   YES
      BIT-ACCESS     -   YES
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'H'
      POINTER-TYPE   -  _NONE_
    */
@@ -241,7 +241,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   YES
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'I'
      POINTER-TYPE   -   _NONE_
    */
@@ -253,7 +253,7 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   ' '
      POINTER-TYPE   -   _NONE_
    */
@@ -265,19 +265,19 @@ initMem ()
      PAGED          -   NO
      DIRECT-ACCESS  -   YES
      BIT-ACCESS     -   YES
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'J'
      POINTER-TYPE   -   _NONE_
    */
   sfrbit = allocMap (1, 0, 0, 1, 1, 0, 0, REG_NAME, 'J', 0);
 
-  /* EEPROM bit space
+  /* EEPROM space
      SFRSPACE       -   NO
      FAR-SPACE      -   YES
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
-     CODE-ACESS     -   NO
+     CODE-ACCESS    -   NO
      DEBUG-NAME     -   'K'
      POINTER-TYPE   -   EEPPOINTER
    */
@@ -296,6 +296,8 @@ allocIntoSeg (symbol * sym)
 {
   memmap *segment = SPEC_OCLS (sym->etype);
   addSet (&segment->syms, sym);
+  if (segment == pdata)
+    sym->iaccess = 1;
 }
 
 /*-----------------------------------------------------------------*/
@@ -310,6 +312,58 @@ void deleteFromSeg(symbol *sym)
     }
 }
 
+/*-----------------------------------------------------------------*/
+/* allocDefault - assigns the output segment based on SCLASS       */
+/*-----------------------------------------------------------------*/
+bool
+allocDefault (symbol * sym)
+{
+  switch (SPEC_SCLS (sym->etype))
+    {
+    case S_SFR:
+      SPEC_OCLS (sym->etype) = sfr;
+      break;
+    case S_SBIT:
+      SPEC_OCLS (sym->etype) = sfrbit;
+      break;
+    case S_CODE:
+      if (sym->_isparm)
+        return FALSE;
+      /* if code change to constant */
+      SPEC_OCLS (sym->etype) = statsg;
+      break;
+    case S_XDATA:
+      // should we move this to the initialized data segment?
+      if (port->genXINIT &&
+          sym->ival && (sym->level==0) && !SPEC_ABSA(sym->etype)) {
+        SPEC_OCLS(sym->etype) = xidata;
+      } else {
+        SPEC_OCLS (sym->etype) = xdata;
+      }
+      break;
+    case S_DATA:
+      SPEC_OCLS (sym->etype) = data;
+      break;
+    case S_IDATA:
+      SPEC_OCLS (sym->etype) = idata;
+      sym->iaccess = 1;
+      break;
+    case S_PDATA:
+      SPEC_OCLS (sym->etype) = pdata;
+      sym->iaccess = 1;
+      break;
+    case S_BIT:
+      SPEC_OCLS (sym->etype) = bit;
+      break;
+    case S_EEPROM:
+      SPEC_OCLS (sym->etype) = eeprom;
+      break;
+    default:
+      return FALSE;
+    }
+  allocIntoSeg (sym);
+  return TRUE;
+}
 
 /*-----------------------------------------------------------------*/
 /* allocGlobal - assigns the output segment to a global var       */
@@ -363,31 +417,11 @@ allocGlobal (symbol * sym)
       return;
     }
 
-  /* if this is a  SFR or SBIT */
-  if (SPEC_SCLS (sym->etype) == S_SFR ||
-      SPEC_SCLS (sym->etype) == S_SBIT)
-    {
-
-      SPEC_OCLS (sym->etype) =
-        (SPEC_SCLS (sym->etype) == S_SFR ? sfr : sfrbit);
-
-      allocIntoSeg (sym);
-      return;
-    }
-
   /* if this is a bit variable and no storage class */
-  if (SPEC_NOUN (sym->etype) == V_BIT
-      && SPEC_SCLS (sym->etype) == S_BIT)
+  if (IS_SPEC(sym->type) && SPEC_NOUN (sym->type) == V_BIT)
+      /*&& SPEC_SCLS (sym->etype) == S_BIT*/
     {
-      SPEC_OCLS (sym->etype) = bit;
-      allocIntoSeg (sym);
-      return;
-    }
-
-  /* if bit storage class */
-  if (SPEC_SCLS (sym->etype) == S_SBIT)
-    {
-      SPEC_OCLS (sym->etype) = bit;
+      SPEC_OCLS (sym->type) = bit;
       allocIntoSeg (sym);
       return;
     }
@@ -396,16 +430,6 @@ allocGlobal (symbol * sym)
   /* register storage class ignored changed to FIXED */
   if (SPEC_SCLS (sym->etype) == S_REGISTER)
     SPEC_SCLS (sym->etype) = S_FIXED;
-
-  /* if data specified then  */
-  if (SPEC_SCLS (sym->etype) == S_DATA)
-    {
-      /* set the output class */
-      SPEC_OCLS (sym->etype) = data;
-      /* generate the symbol  */
-      allocIntoSeg (sym);
-      return;
-    }
 
   /* if it is fixed, then allocate depending on the  */
   /* current memory model, same for automatics        */
@@ -423,49 +447,7 @@ allocGlobal (symbol * sym)
     }
   }
 
-  /* if code change to constant */
-  if (SPEC_SCLS (sym->etype) == S_CODE) {
-    SPEC_OCLS (sym->etype) = statsg;
-    allocIntoSeg (sym);
-    return;
-  }
-
-  if (SPEC_SCLS (sym->etype) == S_XDATA)
-    {
-      // should we move this to the initialized data segment?
-      if (port->genXINIT &&
-          sym->ival && (sym->level==0) && !SPEC_ABSA(sym->etype)) {
-        SPEC_OCLS(sym->etype)=xidata;
-      } else {
-        SPEC_OCLS (sym->etype) = xdata;
-      }
-      allocIntoSeg (sym);
-      return;
-    }
-
-  if (SPEC_SCLS (sym->etype) == S_IDATA)
-    {
-      SPEC_OCLS (sym->etype) = idata;
-      sym->iaccess = 1;
-      allocIntoSeg (sym);
-      return;
-    }
-
-  if (SPEC_SCLS (sym->etype) == S_PDATA)
-    {
-      SPEC_OCLS (sym->etype) = pdata;
-      sym->iaccess = 1;
-      allocIntoSeg (sym);
-      return;
-    }
-
-  if (SPEC_SCLS (sym->etype) == S_EEPROM)
-    {
-      SPEC_OCLS (sym->etype) = eeprom;
-      allocIntoSeg (sym);
-      return;
-    }
-
+  allocDefault (sym);
   return;
 }
 
@@ -480,7 +462,6 @@ allocParms (value * val)
 
   for (lval = val; lval; lval = lval->next, pNum++)
     {
-
       /* check the declaration */
       checkDecl (lval->sym, 0);
 
@@ -494,11 +475,9 @@ allocParms (value * val)
       lval->sym->ismyparm = 1;
       lval->sym->localof = currFunc;
 
-
       /* if automatic variables r 2b stacked */
       if (options.stackAuto || IFFUNC_ISREENT (currFunc->type))
         {
-
           if (lval->sym)
             lval->sym->onStack = 1;
 
@@ -544,31 +523,38 @@ allocParms (value * val)
                     "%s%s_PARM_%d", port->fun_prefix, currFunc->name, pNum);
           strncpyz (lval->name, lval->sym->rname, sizeof(lval->name));
 
-          /* if declared in external storage */
-          if (SPEC_SCLS (lval->etype) == S_XDATA)
-            SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) = xdata;
-          else if (SPEC_SCLS (lval->etype) == S_BIT)
-            SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) = bit;
+          /* if declared in specific storage */
+          if (allocDefault (lval->sym))
+            {
+              SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype);
+              continue;
+            }
+
+          /* otherwise depending on the memory model */
+          SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) =
+              port->mem.default_local_map;
+          if (options.model == MODEL_SMALL)
+            {
+              /* note here that we put it into the overlay segment
+                 first, we will remove it from the overlay segment
+                 after the overlay determination has been done */
+              if (!options.noOverlay)
+                {
+                  SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) =
+                    overlay;
+                }
+            }
+          else if (options.model == MODEL_MEDIUM)
+            {
+              SPEC_SCLS (lval->etype) = S_PDATA;
+            }
           else
-            /* otherwise depending on the memory model
-               note here that we put it into the overlay segment
-               first, we will remove it from the overlay segment
-               after the overlay determination has been done */
-            if (options.model == MODEL_SMALL)
-              {
-                SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) =
-                  (options.noOverlay ? port->mem.default_local_map
-                   : overlay);
-              }
-            else
-              {
-                SPEC_SCLS (lval->etype) = S_XDATA;
-                SPEC_OCLS (lval->etype) = SPEC_OCLS (lval->sym->etype) = xdata;
-              }
+            {
+              SPEC_SCLS (lval->etype) = S_XDATA;
+            }
           allocIntoSeg (lval->sym);
         }
     }
-
   return;
 }
 
@@ -582,7 +568,6 @@ deallocParms (value * val)
 
   for (lval = val; lval; lval = lval->next)
     {
-
       /* unmark is myparm */
       lval->sym->ismyparm = 0;
 
@@ -610,13 +595,12 @@ deallocParms (value * val)
           addSym (SymbolTab, lval->sym, lval->sym->name,
                   lval->sym->level, lval->sym->block, 1);
           lval->sym->_isparm = 1;
-          if (!isinSet (operKeyReset, lval->sym)) {
-            addSet(&operKeyReset, lval->sym);
-          }
+          if (!isinSet (operKeyReset, lval->sym))
+            {
+              addSet(&operKeyReset, lval->sym);
+            }
         }
-
     }
-
   return;
 }
 
@@ -626,7 +610,6 @@ deallocParms (value * val)
 void
 allocLocal (symbol * sym)
 {
-
   /* generate an unique name */
   SNPRINTF (sym->rname, sizeof(sym->rname),
             "%s%s_%s_%d_%d",
@@ -673,26 +656,6 @@ allocLocal (symbol * sym)
   }
 
   /* else depending on the storage class specified */
-  if (SPEC_SCLS (sym->etype) == S_XDATA)
-    {
-      SPEC_OCLS (sym->etype) = xdata;
-      allocIntoSeg (sym);
-      return;
-    }
-
-  if (SPEC_SCLS (sym->etype) == S_CODE && !sym->_isparm) {
-    SPEC_OCLS (sym->etype) = statsg;
-    allocIntoSeg (sym);
-    return;
-  }
-
-  if (SPEC_SCLS (sym->etype) == S_IDATA)
-    {
-      SPEC_OCLS (sym->etype) = idata;
-      sym->iaccess = 1;
-      allocIntoSeg (sym);
-      return;
-    }
 
   /* if this is a function then assign code space    */
   if (IS_FUNC (sym->type))
@@ -701,37 +664,24 @@ allocLocal (symbol * sym)
       return;
     }
 
-  /* if this is a  SFR or SBIT */
-  if (SPEC_SCLS (sym->etype) == S_SFR ||
-      SPEC_SCLS (sym->etype) == S_SBIT)
-    {
-      SPEC_OCLS (sym->etype) =
-        (SPEC_SCLS (sym->etype) == S_SFR ? sfr : sfrbit);
-
-      allocIntoSeg (sym);
-      return;
-    }
-
   /* if this is a bit variable and no storage class */
-  if (SPEC_NOUN (sym->etype) == V_BIT
-      && (SPEC_SCLS (sym->etype) == S_BIT))
+  if (IS_SPEC(sym->type) && SPEC_NOUN (sym->type) == V_BIT)
     {
-      SPEC_OCLS (sym->etype) = bit;
+      SPEC_SCLS (sym->type) = S_BIT;
+      SPEC_OCLS (sym->type) = bit;
       allocIntoSeg (sym);
       return;
     }
 
-  if (SPEC_SCLS (sym->etype) == S_DATA)
+  if ((SPEC_SCLS (sym->etype) == S_DATA) || (SPEC_SCLS (sym->etype) == S_REGISTER))
     {
       SPEC_OCLS (sym->etype) = (options.noOverlay ? data : overlay);
       allocIntoSeg (sym);
       return;
     }
 
-  if (SPEC_SCLS (sym->etype) == S_EEPROM)
+  if (allocDefault (sym))
     {
-      SPEC_OCLS (sym->etype) = eeprom;
-      allocIntoSeg (sym);
       return;
     }
 
@@ -740,8 +690,7 @@ allocLocal (symbol * sym)
      overlay  analysis has been done */
   if (options.model == MODEL_SMALL) {
       SPEC_OCLS (sym->etype) =
-        (options.noOverlay ? port->mem.default_local_map
-         : overlay);
+        (options.noOverlay ? port->mem.default_local_map : overlay);
   } else {
       SPEC_OCLS (sym->etype) = port->mem.default_local_map;
   }

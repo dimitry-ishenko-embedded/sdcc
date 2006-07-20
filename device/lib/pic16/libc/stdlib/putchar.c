@@ -19,7 +19,7 @@
  */
 
 /*
-** $Id: putchar.c,v 1.3 2005/04/02 13:13:51 vrokas Exp $
+** $Id: putchar.c 3714 2005-04-02 13:13:53Z vrokas $
  */
 
 #include <stdio.h>

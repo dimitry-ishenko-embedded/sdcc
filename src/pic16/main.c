@@ -53,6 +53,7 @@ static char *_pic16_keywords[] =
   "pdata",
   "reentrant",
   "sfr",
+  "sfr16",
   "using",
   "_data",
   "_code",
@@ -62,6 +63,10 @@ static char *_pic16_keywords[] =
   "_naked",
   "shadowregs",
   "wparam",
+  "prodlp",
+  "prodhp",
+  "fsr0lp",
+  "fixed16x16",
   
 //  "bit",
 //  "idata",
@@ -74,6 +79,8 @@ static char *_pic16_keywords[] =
 
 
 pic16_sectioninfo_t pic16_sectioninfo;
+
+int xinst=0;
 
 
 extern char *pic16_processor_base_name(void);
@@ -94,7 +101,6 @@ extern set *libFilesSet;
 /* for an unknowned reason. - EEP */
 void pic16_emitDebuggerSymbol (char *);
  
-extern regs* newReg(short type, short pc_type, int rIdx, char *name, int size, int alias, operand *refop);
 extern void pic16_emitConfigRegs(FILE *of);
 extern void pic16_emitIDRegs(FILE *of);
 
@@ -115,7 +121,7 @@ _pic16_reset_regparm (void)
 }
 
 static int
-_pic16_regparm (sym_link * l)
+_pic16_regparm (sym_link * l, bool reentrant)
 {
   /* force all parameters via SEND/RECEIVE */
   if(0 /*pic16_options.ip_stack*/) {
@@ -187,6 +193,12 @@ _process_pragma(const char *sz)
     regs *reg;
     symbol *sym;
 
+      if (!stackPosS) {
+        fprintf (stderr, "%s:%d: #pragma stack [stack-pos] [stack-length] -- stack-position missing\n", filename, lineno-1);
+
+        return 0; /* considered an error */
+      }
+
       stackPosVal = constVal( stackPosS );
       stackPos = (unsigned int)floatFromVal( stackPosVal );
 
@@ -199,12 +211,33 @@ _process_pragma(const char *sz)
         stackLen = 64;
         fprintf(stderr, "%s:%d: warning: setting stack to default size %d (0x%04x)\n",
                 filename, lineno-1, stackLen, stackLen);
-                        
-//      fprintf(stderr, "%s:%d setting stack to default size %d\n", __FILE__, __LINE__, stackLen);
       }
 
-//      fprintf(stderr, "Initializing stack pointer at 0x%x len 0x%x\n", stackPos, stackLen);
-        
+      /* check sanity of stack */
+      if ((stackPos >> 8) != ((stackPos+stackLen-1) >> 8)) {
+        fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] crosses memory bank boundaries (not fully tested)\n",
+		filename,lineno-1, stackPos, stackPos+stackLen-1);
+      }
+
+      if (pic16) {
+        if (stackPos < pic16->acsSplitOfs) {
+          fprintf (stderr, "%s:%u: warning: stack [0x%03X, 0x%03X] intersects with the access bank [0x000,0x%03x] -- this is highly discouraged!\n",
+		filename, lineno-1, stackPos, stackPos+stackLen-1, pic16->acsSplitOfs);
+        }
+
+        if (stackPos+stackLen > 0xF00 + pic16->acsSplitOfs) {
+          fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] intersects with special function registers [0x%03X,0xFFF]-- this is highly discouraged!\n",
+		filename, lineno-1, stackPos, stackPos+stackLen-1, 0xF00 + pic16->acsSplitOfs);
+        }
+
+        if (stackPos+stackLen > pic16->RAMsize) {
+          fprintf (stderr, "%s:%u: error: stack [0x%03X,0x%03X] is placed outside available memory [0x000,0x%03X]!\n",
+		filename, lineno-1, stackPos, stackPos+stackLen-1, pic16->RAMsize-1);
+          exit(EXIT_FAILURE);
+          return 1;	/* considered an error, but this reports "invalid pragma stack"... */
+        }
+      }
+
       reg=newReg(REG_SFR, PO_SFR_REGISTER, stackPos, "_stack", stackLen-1, 0, NULL);
       addSet(&pic16_fix_udata, reg);
     
@@ -230,6 +263,12 @@ _process_pragma(const char *sz)
     char *location = strtok((char *)NULL, WHITE);
     absSym *absS;
     value *addr;
+
+      if (!symname || !location) {
+        fprintf (stderr, "%s:%d: #pragma code [symbol] [location] -- symbol or location missing\n", filename, lineno-1);
+	exit (EXIT_FAILURE);
+        return 1; /* considered an error, but this reports "invalid pragma code"... */
+      }
 
       absS = Safe_calloc(1, sizeof(absSym));
       sprintf(absS->name, "_%s", symname);
@@ -258,6 +297,12 @@ _process_pragma(const char *sz)
     sectSym *ssym;
     sectName *snam;
     int found=0;
+    
+      if (!symname || !sectname) {
+        fprintf (stderr, "%s:%d: #pragma udata [section-name] [symbol] -- section-name or symbol missing!\n", filename, lineno-1);
+	exit (EXIT_FAILURE);
+        return 1; /* considered an error, but this reports "invalid pragma code"... */
+      }
     
       while(symname) {
         ssym = Safe_calloc(1, sizeof(sectSym));
@@ -433,6 +478,10 @@ OPTION pic16_optionsTable[]= {
 	{ 0,    OPTIMIZE_GOTO,  NULL,			"try to use (conditional) BRA instead of GOTO"},
 	{ 0,	OPTIMIZE_CMP,	NULL,			"try to optimize some compares"},
 	{ 0,	OPTIMIZE_DF,	NULL,			"thoroughly analyze data flow (memory and time intensive!)"},
+	{ 0,    "--num-func-alloc-regs", &pic16_options.CATregs, "dump number of temporary registers allocated for each function"},
+#if XINST
+	{ 'y',  "--extended",   &xinst, "enable Extended Instruction Set/Literal Offset Addressing mode"},
+#endif
 	{ 0,	NULL,		NULL,	NULL}
 	};
 
@@ -467,7 +516,7 @@ _pic16_parseOptions (int *pargc, char **argv, int *i)
       else if(!STRCASECMP(stkmodel, "large"))pic16_options.stack_model = 1;
       else {
         fprintf(stderr, "Unknown stack model: %s", stkmodel);
-        exit(-1);
+        exit(EXIT_FAILURE);
       }
       return TRUE;
     }
@@ -506,7 +555,7 @@ _pic16_parseOptions (int *pargc, char **argv, int *i)
         else if(!STRCASECMP(tmp, "crlf"))pic16_nl = 1;
         else {
           fprintf(stderr, "invalid termination character id\n");
-          exit(-1);
+          exit(EXIT_FAILURE);
         }
         return TRUE;
     }
@@ -595,13 +644,18 @@ extern set *linkOptionsSet;
 char *msprintf(hTab *pvals, const char *pformat, ...);
 int my_system(const char *cmd);
 
+/* forward declarations */   
+extern const char *pic16_linkCmd[];
+extern const char *pic16_asmCmd[];
+extern set *asmOptionsSet;
+  
 /* custom function to link objects */
 static void _pic16_linkEdit(void)
 {
   hTab *linkValues=NULL;
-  char lfrm[256];
+  char lfrm[1024];
   char *lcmd;
-  char temp[128];
+  char temp[1024];
   set *tSet=NULL;
   int ret;
   
@@ -610,10 +664,9 @@ static void _pic16_linkEdit(void)
   	 * {linker} {incdirs} {lflags} -o {outfile} {spec_ofiles} {ofiles} {libs}
   	 *
   	 */
-  	 
-  	sprintf(lfrm, "{linker} {incdirs} {lflags} -o {outfile} {user_ofile} {spec_ofiles} {ofiles} {libs}");
-  	   	 
-  	shash_add(&linkValues, "linker", "gplink");
+  	sprintf(lfrm, "{linker} {incdirs} {lflags} -o {outfile} {user_ofile} {ofiles} {spec_ofiles} {libs}");
+
+  	shash_add(&linkValues, "linker", pic16_linkCmd[0]);
 
   	mergeSets(&tSet, libDirsSet);
   	mergeSets(&tSet, libPathsSet);
@@ -621,10 +674,10 @@ static void _pic16_linkEdit(void)
   	shash_add(&linkValues, "incdirs", joinStrSet( appendStrSet(tSet, "-I\"", "\"")));
   	shash_add(&linkValues, "lflags", joinStrSet(linkOptionsSet));
   
-	shash_add(&linkValues, "outfile", dstFileName);
+	shash_add(&linkValues, "outfile", fullDstFileName ? fullDstFileName : dstFileName);
 
   	if(fullSrcFileName) {
-		sprintf(temp, "%s.o", dstFileName);
+		sprintf(temp, "%s.o", fullDstFileName ? fullDstFileName : dstFileName);
 //		addSetHead(&relFilesSet, Safe_strdup(temp));
                 shash_add(&linkValues, "user_ofile", temp);
 	}
@@ -662,11 +715,6 @@ static void _pic16_linkEdit(void)
   		exit(1);
 }
 
-
-/* forward declarations */
-extern const char *pic16_linkCmd[];
-extern const char *pic16_asmCmd[];
-extern set *asmOptionsSet;
 
 static void
 _pic16_finaliseOptions (void)
@@ -782,6 +830,7 @@ _pic16_setDefaultOptions (void)
   pic16_options.ip_stack = 1;		/* set to 1 to enable ipop/ipush for stack */
   pic16_options.gstack = 0;
   pic16_options.debgen = 0;
+  pic16_options.CATregs = 0;
 }
 
 static const char *
@@ -865,21 +914,114 @@ _pic16_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
  * False to convert it to function call */
 static bool _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-//	fprintf(stderr,"checking for native mult for %c (size: %d)\n", ic->op, getSize(OP_SYMBOL(IC_RESULT(ic))->type));
+  //fprintf(stderr,"checking for native mult for %c (size: %d)\n", ic->op, getSize(OP_SYMBOL(IC_RESULT(ic))->type));
+  int symL, symR, symRes, sizeL = 0, sizeR = 0, sizeRes = 0;
 
-#if 1
-	/* multiplication is fixed */
-	/* support mul for char/int/long */
-	if((ic->op == '*')
-	  && (getSize(OP_SYMBOL(IC_LEFT(ic))->type ) < 2))return TRUE;
-#endif
+  /* left/right are symbols? */
+  symL = IS_SYMOP(IC_LEFT(ic));
+  symR = IS_SYMOP(IC_RIGHT(ic));
+  symRes = IS_SYMOP(IC_RESULT(ic));
 
-#if 0
-	/* support div for char/int/long */
-	if((getSize(OP_SYMBOL(IC_LEFT(ic))->type ) < 0)
-		&& (ic->op == '/'))return TRUE;
-#endif
-	
+  /* --> then determine their sizes */
+  sizeL = symL ? getSize(OP_SYM_TYPE(IC_LEFT(ic))) : 4;
+  sizeR = symR ? getSize(OP_SYM_TYPE(IC_RIGHT(ic))) : 4;
+  sizeRes = symRes ? getSize(OP_SYM_TYPE(IC_RESULT(ic))) : 4;
+
+  /* Checks to enable native multiplication.
+   * PICs do not offer native division at all...
+   *
+   * Ideas:
+   * (  i) if result is just one byte, use native MUL
+   *       (regardless of the operands)
+   * ( ii) if left and right are unsigned 8-bit operands,
+   *       use native MUL
+   * (iii) if left or right is a literal in the range of [-128..256)
+   *       and the other is an unsigned byte, use native MUL
+   */
+  if (ic->op == '*')
+  {
+    /* use native mult for `*: <?> x <?> --> {u8_t, s8_t}' */
+    if (sizeRes == 1) { return TRUE; }
+
+    /* use native mult for `u8_t x u8_t --> { u16_t, s16_t }' */
+    if (sizeL == 1 && symL /*&& SPEC_USIGN(OP_SYM_TYPE(IC_LEFT(ic)))*/) {
+      sizeL = 1;
+    } else {
+      //printf( "%s: left too large (%u) / signed (%u)\n", __FUNCTION__, sizeL, symL && !SPEC_USIGN(OP_SYM_TYPE(IC_LEFT(ic))));
+      sizeL = 4;
+    }
+    if (sizeR == 1 && symR /*&& SPEC_USIGN(OP_SYM_TYPE(IC_RIGHT(ic)))*/) {
+      sizeR = 1;
+    } else {
+      //printf( "%s: right too large (%u) / signed (%u)\n", __FUNCTION__, sizeR, symR && !SPEC_USIGN(OP_SYM_TYPE(IC_RIGHT(ic))));
+      sizeR = 4;
+    }
+
+    /* also allow literals [-128..256) for left/right operands */
+    if (IS_VALOP(IC_LEFT(ic)))
+    {
+      long l = (long)floatFromVal( OP_VALUE( IC_LEFT(ic) ) );
+      sizeL = 4;
+      //printf( "%s: val(left) = %ld\n", __FUNCTION__, l );
+      if (l >= -128 && l < 256)
+      {
+	sizeL = 1;
+      } else {
+	//printf( "%s: left value %ld outside [-128..256)\n", __FUNCTION__, l );
+      }
+    }
+    if (IS_VALOP( IC_RIGHT(ic) ))
+    {
+      long l = (long)floatFromVal( OP_VALUE( IC_RIGHT(ic) ) );
+      sizeR = 4;
+      //printf( "%s: val(right) = %ld\n", __FUNCTION__, l );
+      if (l >= -128 && l < 256)
+      {
+	sizeR = 1;
+      } else {
+	//printf( "%s: right value %ld outside [-128..256)\n", __FUNCTION__, l );
+      }
+    }
+
+    /* use native mult iff left and right are (unsigned) 8-bit operands */
+    if (sizeL == 1 && sizeR == 1) { return TRUE; }
+  }
+
+  if (ic->op == '/' || ic->op == '%')
+  {
+    /* We must catch /: {u8_t,s8_t} x {u8_t,s8_t} --> {u8_t,s8_t},
+     * because SDCC will call 'divuchar' even for u8_t / s8_t.
+     * Example: 128 / -2 becomes 128 / 254 = 0 != -64... */
+    if (sizeL == 1 && sizeR == 1) return TRUE;
+
+    /* What about literals? */
+    if (IS_VALOP( IC_LEFT(ic) ))
+    {
+      long l = (long)floatFromVal( OP_VALUE( IC_LEFT(ic) ) );
+      sizeL = 4;
+      //printf( "%s: val(left) = %ld\n", __FUNCTION__, l );
+      if (l >= -128 && l < 256)
+      {
+	sizeL = 1;
+      } else {
+	//printf( "%s: left value %ld outside [-128..256)\n", __FUNCTION__, l );
+      }
+    }
+    if (IS_VALOP( IC_RIGHT(ic) ))
+    {
+      long l = (long)floatFromVal( OP_VALUE( IC_RIGHT(ic) ) );
+      sizeR = 4;
+      //printf( "%s: val(right) = %ld\n", __FUNCTION__, l );
+      if (l >= -128 && l < 256)
+      {
+	sizeR = 1;
+      } else {
+	//printf( "%s: right value %ld outside [-128..256)\n", __FUNCTION__, l );
+      }
+    }
+    if (sizeL == 1 && sizeR == 1) { return TRUE; }
+  }
+
   return FALSE;
 }
 
@@ -1019,6 +1161,15 @@ PORT pic16_port =
     4,		/* float */
     4		/* max */
   },
+
+    /* generic pointer tags */
+  {
+    0x00,	/* far */
+    0x80,	/* near */
+    0x00,	/* xstack */
+    0x00	/* code */
+  },
+  
   {
     "XSEG    (XDATA)",		// xstack
     "STACK   (DATA)",		// istack
@@ -1035,6 +1186,7 @@ PORT pic16_port =
     "HOME    (CODE)",	// home
     NULL,			// xidata
     NULL,			// xinit
+    "CONST   (CODE)",		// const_name - const data (code or not)
     NULL,			// default location for auto vars
     NULL,			// default location for global vars
     1				// code is read only 1=yes

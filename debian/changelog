@@ -1,3 +1,15 @@
+sdcc (2.5.99+2.6.0rc1-1) experimental; urgency=low
+
+  * New upstream release candidate:
+    - bool datatype support for z80 target (closes: bug#325846)
+    - support for code segments in memory for pic target (closes: bug#359675)
+    - support for almost all PIC (closes: bug#361229)
+    - support for tables for pic target (closes: bug#304320)
+    - support for main() to be in any object when linking (closes: bug#335711)
+  * Bumped Standards-Version to 3.7.2 (no changes). 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Thu, 20 Jul 2006 11:53:34 +0200
+
 sdcc (2.5.0-11) unstable; urgency=low
 
   * G++ 4.1 fixes. Thanks to Martin Michlmayr for the patch (closes:

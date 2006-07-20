@@ -45,7 +45,7 @@ VOID gb(int in)
     for(i = 0; i < NBSEG; i++) {
       if((cart[i] = malloc(SEGSIZE)) == NULL) {
 	fprintf(stderr, "ERROR: can't allocate %dth segment of memory (%d bytes)\n", i, (int)SEGSIZE);
-	exit(-1);
+	exit(EXIT_FAILURE);
       }
       memset(cart[i], FILLVALUE, SEGSIZE);
     }
@@ -61,19 +61,19 @@ VOID gb(int in)
       /* Perform some validity checks */
       if(pos >= ROMSIZE) {
 	fprintf(stderr, "ERROR: address overflow (addr %lx >= %lx)\n", pos, ROMSIZE);
-	exit(-1);
+	exit(EXIT_FAILURE);
       }
       if(current_rom_bank >= nb_rom_banks) {
 	fprintf(stderr, "ERROR: bank overflow (addr %x > %x)\n", current_rom_bank, nb_rom_banks);
-	exit(-1);
+	exit(EXIT_FAILURE);
       }
       if(current_rom_bank > 0 && pos < BANKSTART) {
 	fprintf(stderr, "ERROR: address underflow (addr %lx < %lx)\n", pos, BANKSTART);
-	exit(-1);
+	exit(EXIT_FAILURE);
       }
       if(nb_rom_banks == 2 && current_rom_bank > 0) {
 	fprintf(stderr, "ERROR: only 1 32kB segment with 2 bank\n");
-	exit(-1);
+	exit(EXIT_FAILURE);
       }
       if(current_rom_bank > 1)
 	pos += (current_rom_bank-1)*BANKSIZE;
@@ -85,7 +85,7 @@ VOID gb(int in)
 	    cart[pos/SEGSIZE][pos%SEGSIZE] = rtval[i];
 	  } else {
 	    fprintf(stderr, "ERROR: cartridge size overflow (addr %lx >= %lx)\n", pos, CARTSIZE);
-	    exit(-1);
+	    exit(EXIT_FAILURE);
 	  }
 	  pos++;
 	}
@@ -95,11 +95,11 @@ VOID gb(int in)
     /* EOF */
     if(cart_name[0] == 0 && linkp->f_idp != NULL) {
       for(i = strlen(linkp->f_idp);
-	  i > 0 && (isalnum(linkp->f_idp[i-1]) || linkp->f_idp[i-1] == '.');
+	  i > 0 && (isalnum((unsigned char)linkp->f_idp[i-1]) || linkp->f_idp[i-1] == '.');
 	  i--)
 	;
       for(pos = 0; pos < 16 && linkp->f_idp[i] != '.'; pos++, i++)
-	cart_name[pos] = toupper(linkp->f_idp[i]);
+	cart_name[pos] = toupper((unsigned char)linkp->f_idp[i]);
       if(pos < 16)
 	cart_name[pos] = 0;
     }

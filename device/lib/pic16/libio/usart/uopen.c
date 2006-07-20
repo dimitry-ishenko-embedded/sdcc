@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  *
- * $Id: uopen.c,v 1.2 2005/04/02 13:13:52 vrokas Exp $
+ * $Id: uopen.c 3714 2005-04-02 13:13:53Z vrokas $
  */
 
 

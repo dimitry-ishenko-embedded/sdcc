@@ -31,7 +31,7 @@
  *	Each contributing author retains all rights to their own work.
  *
  *
- * $Id: crc16.c,v 1.2 2005/04/06 20:09:07 maartenbrock Exp $
+ * $Id: crc16.c 3721 2005-04-06 20:09:07Z maartenbrock $
  */
 
 #include <stdint.h>

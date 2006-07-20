@@ -1,5 +1,0 @@
-divslong.o: divslong.c
-divulong.o: divulong.c
-modslong.o: modslong.c
-modulong.o: modulong.c
-mullong.o: mullong.c

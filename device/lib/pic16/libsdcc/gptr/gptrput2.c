@@ -26,7 +26,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: gptrput2.c,v 1.6 2005/04/02 13:13:52 vrokas Exp $
+** $Id: gptrput2.c 3714 2005-04-02 13:13:53Z vrokas $
 */
 
 /* write address is expected to be in WREG:PRODL:FSR0L while

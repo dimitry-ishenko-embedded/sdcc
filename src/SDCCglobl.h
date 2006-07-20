@@ -146,18 +146,18 @@ typedef int bool;
  */
 struct optimize
   {
-    unsigned global_cse;
-    unsigned ptrArithmetic;
-    unsigned label1;
-    unsigned label2;
-    unsigned label3;
-    unsigned label4;
-    unsigned loopInvariant;
-    unsigned loopInduction;
-    unsigned noJTabBoundary;
-    unsigned noLoopReverse;
-    unsigned codeSpeed;
-    unsigned codeSize;
+    int global_cse;
+    int ptrArithmetic;
+    int label1;
+    int label2;
+    int label3;
+    int label4;
+    int loopInvariant;
+    int loopInduction;
+    int noJTabBoundary;
+    int noLoopReverse;
+    int codeSpeed;
+    int codeSize;
   };
 
 /** Build model.
@@ -171,7 +171,8 @@ enum
     MODEL_MEDIUM = 4,
     MODEL_LARGE = 8,
     MODEL_FLAT24 = 16,
-    MODEL_PAGE0 = 32 /* for the xa51 port */
+    MODEL_PAGE0 = 32, /* for the xa51 port */
+    MODEL_HUGE = 64 /* for banked support */
   };
 
 /* overlay segment name and the functions
@@ -250,9 +251,11 @@ struct options
     int printSearchDirs;        /* display the directories in the compiler's search path */
     int vc_err_style;           /* errors and warnings are compatible with Micro$oft visual studio */
     int use_stdout;             /* send errors to stdout instead of stderr */
-    int no_std_crt0;            /*For the z80/gbz80 do not link default crt0.o*/
-    int std_c99;		/* enable C99 keywords/constructs */
-    int std_sdcc;		/* enable SDCC extensions to C */
+    int no_std_crt0;            /* for the z80/gbz80 do not link default crt0.o*/
+    int std_c99;                /* enable C99 keywords/constructs */
+    int std_sdcc;               /* enable SDCC extensions to C */
+    const char *code_seg;       /* segment name to use instead of CSEG */
+    const char *const_seg;      /* segment name to use instead of CONST */
     /* sets */
     set *calleeSavesSet;        /* list of functions using callee save */
     set *excludeRegsSet;        /* registers excluded from saving */
@@ -260,7 +263,7 @@ struct options
   };
 
 /* forward definition for variables accessed globally */
-extern int noAssemble;         /* no assembly, stop after code generation */
+extern int noAssemble;          /* no assembly, stop after code generation */
 extern char *yytext;
 extern char *currFname;
 extern char *fullSrcFileName;   /* full name for the source file; */
@@ -285,6 +288,7 @@ extern int reentrant;           /* /X flag has been sent     SDCC.y */
 extern char buffer[PATH_MAX * 2];/* general buffer           SDCCmain.c   */
 extern int currRegBank;         /* register bank being used  SDCCgens.c   */
 extern int RegBankUsed[4];      /* JCF: register banks used  SDCCmain.c   */
+extern int BitBankUsed;         /* MB: overlayable bit bank  SDCCmain.c   */
 extern struct symbol *currFunc; /* current function    SDCCgens.c */
 extern int cNestLevel;          /* block nest level  SDCCval.c      */
 extern int currBlockno;         /* sequentail block number */

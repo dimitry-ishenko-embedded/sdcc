@@ -21,7 +21,7 @@
  */
 
 /*
- * $Id: x_ftoa.c,v 1.2 2005/04/02 13:13:51 vrokas Exp $
+ * $Id: x_ftoa.c 3835 2005-08-07 20:09:11Z tecodev $
  */
 
 #include <float.h>
@@ -47,11 +47,13 @@ extern FSR2H;
 #define _vv0x03	0x03
 #define _vv0x04	0x04
 
+/* do not warn about unreferenced arguments/missing return values */
+#pragma save
+#pragma disable_warning 59
+#pragma disable_warning 85
+
 char x_cnvint_wrap(unsigned long num, __data char *buffer)
 {
-  num;
-  buffer;
-  
   __asm
     movff	_vv0x00, _POSTDEC1
     movff	_vv0x01, _POSTDEC1
@@ -124,7 +126,7 @@ char x_cnvfrac_wrap(unsigned long num, __data char *buffer, unsigned char prec)
     movff	_PREINC1, _vv0x00
   __endasm ;
 }
-
+#pragma restore
 
 
 union float_long {

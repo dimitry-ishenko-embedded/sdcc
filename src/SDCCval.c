@@ -27,6 +27,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <errno.h>
 #include "newalloc.h"
 
 int cNestLevel;
@@ -103,28 +104,28 @@ convertIListToConstList(initList *src, literalList **lList)
 {
     initList    *iLoop;
     literalList *head, *last, *newL;
-    
+
     head = last = NULL;
-    
+
     if (!src || src->type != INIT_DEEP)
     {
-	return FALSE;
+        return FALSE;
     }
-    
+
     iLoop =  src->init.deep;
-    
+
     while (iLoop)
     {
-	if (iLoop->type != INIT_NODE)
-	{
-	    return FALSE;
-	}
+        if (iLoop->type != INIT_NODE)
+        {
+            return FALSE;
+        }
 
-	if (!IS_AST_LIT_VALUE(decorateType(resolveSymbols(iLoop->init.node), RESULT_TYPE_NONE)))
-	{
-	    return FALSE;
-	}
-	iLoop = iLoop->next;
+        if (!IS_AST_LIT_VALUE(decorateType(resolveSymbols(iLoop->init.node), RESULT_TYPE_NONE)))
+        {
+            return FALSE;
+        }
+        iLoop = iLoop->next;
     }
 
     // We've now established that the initializer list contains only literal values.
@@ -132,37 +133,37 @@ convertIListToConstList(initList *src, literalList **lList)
     iLoop = src->init.deep;
     while (iLoop)
     {
-	double val = AST_LIT_VALUE(iLoop->init.node);
+        double val = AST_LIT_VALUE(iLoop->init.node);
 
-	if (last && last->literalValue == val)
-	{
-	    last->count++;
-	}
-	else
-	{
-	    newL = Safe_alloc(sizeof(literalList));
-	    newL->literalValue = val;
-	    newL->count = 1;
-	    newL->next = NULL;
-	    
-	    if (last)
-	    {
-		last->next = newL;
-	    }
-	    else
-	    {
-		head = newL;
-	    }
-	    last = newL;
-	}
-	iLoop = iLoop->next;
+        if (last && last->literalValue == val)
+        {
+            last->count++;
+        }
+        else
+        {
+            newL = Safe_alloc(sizeof(literalList));
+            newL->literalValue = val;
+            newL->count = 1;
+            newL->next = NULL;
+
+            if (last)
+            {
+                last->next = newL;
+            }
+            else
+            {
+                head = newL;
+            }
+            last = newL;
+        }
+        iLoop = iLoop->next;
     }
-    
-    if (!head)    
+
+    if (!head)
     {
-	return FALSE;
+        return FALSE;
     }
-    
+
     *lList = head;
     return TRUE;
 }
@@ -171,29 +172,29 @@ literalList *
 copyLiteralList(literalList *src)
 {
     literalList *head, *prev, *newL;
-    
+
     head = prev = NULL;
-    
+
     while (src)
     {
-	newL = Safe_alloc(sizeof(literalList));
-	
-	newL->literalValue = src->literalValue;
-	newL->count = src->count;
-	newL->next = NULL;
-	
-	if (prev)
-	{
-	    prev->next = newL;
-	}
-	else
-	{
-	    head = newL;
-	}
-	prev = newL;
-	src = src->next;
+        newL = Safe_alloc(sizeof(literalList));
+
+        newL->literalValue = src->literalValue;
+        newL->count = src->count;
+        newL->next = NULL;
+
+        if (prev)
+        {
+            prev->next = newL;
+        }
+        else
+        {
+            head = newL;
+        }
+        prev = newL;
+        src = src->next;
     }
-    
+
     return head;
 }
 
@@ -284,7 +285,7 @@ resolveIvalSym (initList * ilist, sym_link * type)
       else
         resultType = getResultTypeFromType (getSpec (type));
       ilist->init.node = decorateType (resolveSymbols (ilist->init.node),
-				       resultType);
+                                       resultType);
     }
 
   if (ilist->type == INIT_DEEP)
@@ -315,110 +316,308 @@ symbolVal (symbol * sym)
 
   if (*sym->rname)
     {
-	SNPRINTF (val->name, sizeof(val->name), "%s", sym->rname);
+        SNPRINTF (val->name, sizeof(val->name), "%s", sym->rname);
     }
   else
     {
-	SNPRINTF (val->name, sizeof(val->name), "_%s", sym->name);
+        SNPRINTF (val->name, sizeof(val->name), "_%s", sym->name);
     }
 
   return val;
 }
 
-#if defined(REDUCE_LITERALS)
 /*--------------------------------------------------------------------*/
-/* cheapestVal - convert a val to the cheapest as possible value      */
+/* cheapestVal - try to reduce 'signed int' to 'char'                 */
 /*--------------------------------------------------------------------*/
-static value *cheapestVal (value *val) {
-  TYPE_DWORD  sval=0;
-  TYPE_UDWORD uval=0;
-
-  if (IS_FLOAT(val->type) || IS_CHAR(val->type))
-    return val;
-
-  if (SPEC_LONG(val->type)) {
-    if (SPEC_USIGN(val->type)) {
-      uval=SPEC_CVAL(val->type).v_ulong;
-    } else {
-      sval=SPEC_CVAL(val->type).v_long;
-    }
-  } else {
-    if (SPEC_USIGN(val->type)) {
-      uval=SPEC_CVAL(val->type).v_uint;
-    } else {
-      sval=SPEC_CVAL(val->type).v_int;
-    }
-  }
-
-  if (SPEC_USIGN(val->type)) {
-    if (uval<=0xffff) {
-      SPEC_LONG(val->type)=0;
-      SPEC_CVAL(val->type).v_uint = (TYPE_UWORD)uval;
-      if (uval<=0xff) {
-	SPEC_NOUN(val->type)=V_CHAR;
-      }
-    }
-  } else { // not unsigned
-    if (sval<0) {
-      if (sval>=-32768) {
-	SPEC_LONG(val->type)=0;
-	SPEC_CVAL(val->type).v_int = (TYPE_WORD)sval;
-	if (sval>=-128) {
-	  SPEC_NOUN(val->type)=V_CHAR;
-	}
-      }
-    } else { // sval>=0
-      if (sval<=32767) {
-	SPEC_LONG(val->type)=0;
-	SPEC_CVAL(val->type).v_int = (TYPE_WORD)sval;
-	if (sval<=127) {
-	  SPEC_NOUN(val->type)=V_CHAR;
-	}
-      }
-    }
-  }
-  return val;
-}
-
-#else
-
-static value *cheapestVal (value *val)
+static value *
+cheapestVal (value *val)
 {
-  if (IS_FLOAT (val->type) || IS_CHAR (val->type))
+  /* only int can be reduced */
+  if (!IS_INT(val->type))
     return val;
 
-  /* - signed/unsigned must not be changed.
-     - long must not be changed.
+  /* long must not be changed */
+  if (SPEC_LONG(val->type))
+    return val;
 
-     the only possible reduction is from signed int to signed char,
+  /* unsigned must not be changed */
+  if (SPEC_USIGN(val->type))
+    return val;
+
+  /* the only possible reduction is from signed int to (un)signed char,
      because it's automatically promoted back to signed int.
 
      a reduction from unsigned int to unsigned char is a bug,
      because an _unsigned_ char is promoted to _signed_ int! */
-  if (IS_INT(val->type) &&
-      !SPEC_USIGN(val->type) &&
-      !SPEC_LONG(val->type) &&
-      SPEC_CVAL(val->type).v_int >= -128 &&
-      SPEC_CVAL(val->type).v_int <     0)
-
+  if (SPEC_CVAL(val->type).v_int < -128 ||
+      SPEC_CVAL(val->type).v_int >  255)
     {
-      SPEC_NOUN(val->type) = V_CHAR;
+      /* not in the range of (un)signed char */
+      return val;
     }
+
+  SPEC_NOUN(val->type) = V_CHAR;
+
   /* 'unsigned char' promotes to 'signed int', so that we can
      reduce it the other way */
-  if (IS_INT(val->type) &&
-      !SPEC_USIGN(val->type) &&
-      !SPEC_LONG(val->type) &&
-      SPEC_CVAL(val->type).v_int >=   0 &&
-      SPEC_CVAL(val->type).v_int <= 255)
-
+  if (SPEC_CVAL(val->type).v_int >= 0)
     {
-      SPEC_NOUN(val->type) = V_CHAR;
       SPEC_USIGN(val->type) = 1;
     }
   return (val);
 }
-#endif
+
+/*--------------------------------------------------------------------*/
+/* checkConstantRange - check if constant fits in numeric range of    */
+/* var type in comparisons and assignments                            */
+/*--------------------------------------------------------------------*/
+CCR_RESULT
+checkConstantRange (sym_link *var, sym_link *lit, int op, bool exchangeLeftRight)
+{
+  sym_link *reType;
+  double litVal;
+  int varBits;
+
+  litVal = floatFromVal (valFromType (lit));
+  varBits = bitsForType (var);
+
+  /* sanity checks */
+  if (   IS_FLOAT (var)
+      || IS_FIXED (var))
+    return CCR_OK;
+  if (varBits < 1)
+    return CCR_ALWAYS_FALSE;
+  if (varBits > 32)
+    return CCR_ALWAYS_TRUE;
+
+  /* special: assignment */
+  if (op == '=')
+    {
+      if (IS_BIT (var))
+        return CCR_OK;
+
+      if (getenv ("SDCC_VERY_PEDANTIC"))
+        {
+          if (SPEC_USIGN (var))
+            {
+              TYPE_TARGET_ULONG maxVal = 0xffffffffu >> (32 - varBits);
+
+              if (   litVal < 0
+                  || litVal > maxVal)
+                return CCR_OVL;
+              return CCR_OK;
+            }
+          else
+            {
+              TYPE_TARGET_LONG minVal = 0xffffffff << (varBits - 1);
+              TYPE_TARGET_LONG maxVal = 0x7fffffff >> (32 - varBits);
+
+              if (   litVal < minVal
+                  || litVal > maxVal)
+                return CCR_OVL;
+              return CCR_OK;
+            }
+        }
+      else
+        {
+          /* ignore signedness, e.g. allow everything
+             from -127...+255 for (unsigned) char */
+          TYPE_TARGET_LONG  minVal = 0xffffffff  << (varBits - 1);
+          TYPE_TARGET_ULONG maxVal = 0xffffffffu >> (32 - varBits);
+
+          if (   litVal < minVal
+              || litVal > maxVal)
+            return CCR_OVL;
+          return CCR_OK;
+        }
+    }
+
+  if (exchangeLeftRight)
+    switch (op)
+      {
+        case EQ_OP:             break;
+        case NE_OP:             break;
+        case '>':   op = '<';   break;
+        case GE_OP: op = LE_OP; break;
+        case '<':   op = '>';   break;
+        case LE_OP: op = GE_OP; break;
+        default:                return CCR_ALWAYS_FALSE;
+      }
+
+  reType = computeType (var, lit, RESULT_TYPE_NONE, op);
+
+  if (SPEC_USIGN (reType))
+    {
+      /* unsigned operation */
+      TYPE_TARGET_ULONG minValP, maxValP, minValM, maxValM;
+      TYPE_TARGET_ULONG opBitsMask = 0xffffffffu >> (32 - bitsForType (reType));
+
+      if (SPEC_USIGN (lit) && SPEC_USIGN (var))
+        {
+          /* both operands are unsigned, this is easy */
+          minValP = 0;
+          maxValP = 0xffffffffu >> (32 - varBits);
+          /* there's only range, just copy it to 2nd set */
+          minValM = minValP;
+          maxValM = maxValP;
+        }
+      else if (SPEC_USIGN (var))
+        {
+          /* lit is casted from signed to unsigned, e.g.:
+               unsigned u;
+                 u == (char) -17
+              -> u == 0xffef'
+          */
+          minValP = 0;
+          maxValP = 0xffffffffu >> (32 - varBits);
+          /* there's only one range, just copy it to 2nd set */
+          minValM = minValP;
+          maxValM = maxValP;
+
+          /* it's an unsigned operation */
+          if (   IS_CHAR (reType)
+              || IS_INT (reType))
+            {
+              /* make signed literal unsigned and
+                 limit no of bits to size of return type */
+              litVal = (TYPE_TARGET_ULONG) litVal & opBitsMask;
+            }
+        }
+      else /* SPEC_USIGN (lit) */
+        {
+          /* var is casted from signed to unsigned, e.g.:
+               signed char c;
+                 c == (unsigned) -17
+              -> c == 0xffef'
+
+             The possible values after casting var
+             split up in two, nonconsecutive ranges:
+
+             minValP =      0;  positive range: 0...127
+             maxValP =   0x7f;
+             minValM = 0xff80;  negative range: -128...-1
+             maxValM = 0xffff;
+          */
+
+          /* positive range */
+          minValP = 0;
+          maxValP = 0x7fffffffu >> (32 - varBits);
+
+          /* negative range */
+          minValM = 0xffffffff  << (varBits - 1);
+          maxValM = 0xffffffffu; /* -1 */
+          /* limit no of bits to size of return type */
+          minValM &= opBitsMask;
+          maxValM &= opBitsMask;
+        }
+
+      switch (op)
+        {
+          case EQ_OP:                   /* var == lit */
+            if (   litVal <= maxValP
+                && litVal >= minValP) /* 0 */
+              return CCR_OK;
+            if (   litVal <= maxValM
+                && litVal >= minValM)
+              return CCR_OK;
+            return CCR_ALWAYS_FALSE;
+          case NE_OP:                   /* var != lit */
+            if (   litVal <= maxValP
+                && litVal >= minValP) /* 0 */
+              return CCR_OK;
+            if (   litVal <= maxValM
+                && litVal >= minValM)
+              return CCR_OK;
+            return CCR_ALWAYS_TRUE;
+          case '>':                     /* var >  lit */
+            if (litVal >= maxValM)
+              return CCR_ALWAYS_FALSE;
+            if (litVal <  minValP) /* 0 */
+              return CCR_ALWAYS_TRUE;
+            return CCR_OK;
+          case GE_OP:                   /* var >= lit */
+            if (litVal >  maxValM)
+              return CCR_ALWAYS_FALSE;
+            if (litVal <= minValP) /* 0 */
+              return CCR_ALWAYS_TRUE;
+            return CCR_OK;
+          case '<':                     /* var <  lit */
+            if (litVal >  maxValM)
+              return CCR_ALWAYS_TRUE;
+            if (litVal <= minValP) /* 0 */
+              return CCR_ALWAYS_FALSE;
+            return CCR_OK;
+          case LE_OP:                   /* var <= lit */
+            if (litVal >= maxValM)
+              return CCR_ALWAYS_TRUE;
+            if (litVal <  minValP) /* 0 */
+              return CCR_ALWAYS_FALSE;
+            return CCR_OK;
+          default:
+            return CCR_ALWAYS_FALSE;
+        }
+    }
+  else
+    {
+      /* signed operation */
+      TYPE_TARGET_LONG minVal, maxVal;
+
+      if (SPEC_USIGN (var))
+        {
+          /* unsigned var, but signed operation. This happens
+             when var is promoted to signed int.
+             Set actual min/max values of var. */
+          minVal = 0;
+          maxVal = 0xffffffff >> (32 - varBits);
+        }
+      else
+        {
+          /* signed var */
+          minVal = 0xffffffff << (varBits - 1);
+          maxVal = 0x7fffffff >> (32 - varBits);
+        }
+
+      switch (op)
+        {
+          case EQ_OP:                   /* var == lit */
+            if (   litVal > maxVal
+                || litVal < minVal)
+              return CCR_ALWAYS_FALSE;
+            return CCR_OK;
+          case NE_OP:                   /* var != lit */
+            if (   litVal > maxVal
+                || litVal < minVal)
+              return CCR_ALWAYS_TRUE;
+            return CCR_OK;
+          case '>':                     /* var >  lit */
+            if (litVal >= maxVal)
+              return CCR_ALWAYS_FALSE;
+            if (litVal <  minVal)
+              return CCR_ALWAYS_TRUE;
+            return CCR_OK;
+          case GE_OP:                   /* var >= lit */
+            if (litVal >  maxVal)
+              return CCR_ALWAYS_FALSE;
+            if (litVal <= minVal)
+              return CCR_ALWAYS_TRUE;
+            return CCR_OK;
+          case '<':                     /* var <  lit */
+            if (litVal >  maxVal)
+              return CCR_ALWAYS_TRUE;
+            if (litVal <= minVal)
+              return CCR_ALWAYS_FALSE;
+            return CCR_OK;
+          case LE_OP:                   /* var <= lit */
+            if (litVal >= maxVal)
+              return CCR_ALWAYS_TRUE;
+            if (litVal <  minVal)
+              return CCR_ALWAYS_FALSE;
+            return CCR_OK;
+          default:
+            return CCR_ALWAYS_FALSE;
+        }
+    }
+}
 
 /*-----------------------------------------------------------------*/
 /* valueFromLit - creates a value from a literal                   */
@@ -428,9 +627,9 @@ valueFromLit (double lit)
 {
   char buffer[50];
 
-  if ((((TYPE_DWORD) lit) - lit) == 0)
+  if ((((TYPE_TARGET_LONG) lit) - lit) == 0)
     {
-      SNPRINTF (buffer, sizeof(buffer), "%d", (TYPE_DWORD) lit);
+      SNPRINTF (buffer, sizeof(buffer), "%d", (TYPE_TARGET_LONG) lit);
       return constVal (buffer);
     }
 
@@ -462,19 +661,40 @@ constFloatVal (char *s)
 }
 
 /*-----------------------------------------------------------------*/
+/* constFixed16x16Val - converts a FIXED16X16 constant to value    */
+/*-----------------------------------------------------------------*/
+value *
+constFixed16x16Val (char *s)
+{
+  value *val = newValue ();
+  double sval;
+
+  if (sscanf (s, "%lf", &sval) != 1)
+    {
+      werror (E_INVALID_FLOAT_CONST, s);
+      return constVal ("0");
+    }
+
+  val->type = val->etype = newLink (SPECIFIER);
+  SPEC_NOUN (val->type) = V_FLOAT;
+  SPEC_SCLS (val->type) = S_LITERAL;
+  SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble ( sval );
+
+  return val;
+}
+
+/*-----------------------------------------------------------------*/
 /* constVal - converts an INTEGER constant into a cheapest value   */
 /*-----------------------------------------------------------------*/
 value *constVal (char *s)
 {
   value *val;
   short hex = 0, octal = 0;
-  char scanFmt[10];
-  int scI = 0;
   double dval;
 
-  val = newValue ();		/* alloc space for value   */
+  val = newValue ();            /* alloc space for value   */
 
-  val->type = val->etype = newLink (SPECIFIER);	/* create the spcifier */
+  val->type = val->etype = newLink (SPECIFIER); /* create the spcifier */
   SPEC_SCLS (val->type) = S_LITERAL;
   // let's start with a signed char
   SPEC_NOUN (val->type) = V_CHAR;
@@ -486,94 +706,99 @@ value *constVal (char *s)
   if (!hex && *s == '0' && *(s + 1))
     octal = 1;
 
-  /* create the scan string */
-  scanFmt[scI++] = '%';
-
-  scanFmt[scI++] = 'l';
-
-  if (octal)
-    scanFmt[scI++] = 'o';
-  else if (hex)
-    scanFmt[scI++] = 'x';
-  else
-    scanFmt[scI++] = 'f';
-
-  scanFmt[scI++] = '\0';
-
-  if (octal || hex) {
+  errno = 0;
+  if (hex || octal) {
     unsigned long sval;
-    sscanf (s, scanFmt, &sval);
+    sval = strtoul (s, NULL, 0);
     dval=sval;
+    if (errno) {
+      dval = 4294967295.0;
+      werror (W_INVALID_INT_CONST, s, dval);
+    }
   } else {
-    sscanf (s, scanFmt, &dval);
+    sscanf (s, "%lf", &dval);
   }
 
   /* Setup the flags first */
-  /* set the _long flag if 'lL' is found */
-  if (strchr (s, 'l') || strchr (s, 'L')) {
-    SPEC_NOUN (val->type) = V_INT;
-    SPEC_LONG (val->type) = 1;
-  }
-
   /* set the unsigned flag if 'uU' is found */
   if (strchr (s, 'u') || strchr (s, 'U')) {
     SPEC_USIGN (val->type) = 1;
   }
 
-  if (dval<0) { // "-28u" will still be signed and negative
-    if (dval<-128) { // check if we have to promote to int
-      SPEC_NOUN (val->type) = V_INT;
-    }
-    if (dval<-32768) { // check if we have to promote to long int
-      SPEC_LONG (val->type) = 1;
-    }
-  } else { // >=0
-    if (dval>0xff ||	/* check if we have to promote to int */
-        SPEC_USIGN (val->type)) { /* if it's unsigned, we can't use unsigned
-				     char. After an integral promotion it will
-				     be a signed int; this certainly isn't what
-				     the programer wants */
-      SPEC_NOUN (val->type) = V_INT;
-    }
-    else { /* store char's always as unsigned; this helps other optimizations */
-      SPEC_USIGN (val->type) = 1;
-    }
-    if (dval>0xffff && SPEC_USIGN (val->type)) { // check if we have to promote to long
-      SPEC_LONG (val->type) = 1;
-    }
-    else if (dval>0x7fff && !SPEC_USIGN (val->type)) { // check if we have to promote to long int
-      if ((hex || octal) && /* hex or octal constants may be stored in unsigned type */
-          dval<=0xffff) {
-        SPEC_USIGN (val->type) = 1;
-      } else {
+  /* set the b_long flag if 'lL' is found */
+  if (strchr (s, 'l') || strchr (s, 'L')) {
+    SPEC_NOUN (val->type) = V_INT;
+    SPEC_LONG (val->type) = 1;
+  } else {
+    if (dval<0) { // "-28u" will still be signed and negative
+      if (dval<-128) { // check if we have to promote to int
+        SPEC_NOUN (val->type) = V_INT;
+      }
+      if (dval<-32768) { // check if we have to promote to long int
         SPEC_LONG (val->type) = 1;
-        if (dval>0x7fffffff) {
+      }
+    } else { // >=0
+      if (dval>0xff ||  /* check if we have to promote to int */
+          SPEC_USIGN (val->type)) { /* if it's unsigned, we can't use unsigned
+                                     char. After an integral promotion it will
+                                     be a signed int; this certainly isn't what
+                                     the programer wants */
+        SPEC_NOUN (val->type) = V_INT;
+      }
+      else { /* store char's always as unsigned; this helps other optimizations */
+        SPEC_USIGN (val->type) = 1;
+      }
+      if (dval>0xffff && SPEC_USIGN (val->type)) { // check if we have to promote to long
+        SPEC_LONG (val->type) = 1;
+      }
+      else if (dval>0x7fff && !SPEC_USIGN (val->type)) { // check if we have to promote to long int
+        if ((hex || octal) && /* hex or octal constants may be stored in unsigned type */
+            dval<=0xffff) {
           SPEC_USIGN (val->type) = 1;
-	}
+        } else {
+          SPEC_LONG (val->type) = 1;
+          if (dval>0x7fffffff) {
+            SPEC_USIGN (val->type) = 1;
+          }
+        }
       }
     }
+  }
+
+  /* check for out of range */
+  if (dval<-2147483648.0) {
+    dval = -2147483648.0;
+    werror (W_INVALID_INT_CONST, s, dval);
+  }
+  if (dval>2147483647.0 && !SPEC_USIGN (val->type)) {
+    dval = 2147483647.0;
+    werror (W_INVALID_INT_CONST, s, dval);
+  }
+  if (dval>4294967295.0) {
+    dval = 4294967295.0;
+    werror (W_INVALID_INT_CONST, s, dval);
   }
 
   if (SPEC_LONG (val->type))
     {
       if (SPEC_USIGN (val->type))
         {
-          SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD)dval;
+          SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG)dval;
         }
       else
         {
-          SPEC_CVAL (val->type).v_long = (TYPE_DWORD)dval;
+          SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG)dval;
         }
     }
   else
     {
       if (SPEC_USIGN (val->type))
         {
-          SPEC_CVAL (val->type).v_uint = (TYPE_UWORD)dval;
+          SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT)dval;
         }
       else
         {
-          SPEC_CVAL (val->type).v_int = (TYPE_WORD)dval;
+          SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT)dval;
         }
     }
 
@@ -590,11 +815,11 @@ unsigned char hexEscape(char **src)
   char *s ;
   unsigned long value ;
 
-  (*src)++ ;	/* Skip over the 'x' */
-  s = *src ;	/* Save for error detection */
-  
+  (*src)++ ;    /* Skip over the 'x' */
+  s = *src ;    /* Save for error detection */
+
   value = strtol (*src, src, 16);
-  
+
   if (s == *src) {
       // no valid hex found
       werror(E_INVALID_HEX);
@@ -632,9 +857,9 @@ unsigned char octalEscape (char **str) {
   return value;
 }
 
-/*! 
+/*!
   /fn int copyStr (char *dest, char *src)
-  
+
   Copies a source string to a dest buffer interpreting escape sequences
   and special characters
 
@@ -644,7 +869,7 @@ unsigned char octalEscape (char **str) {
 
 */
 
-int 
+int
 copyStr (char *dest, char *src)
 
 {
@@ -653,70 +878,70 @@ copyStr (char *dest, char *src)
   while (*src)
     {
       if (*src == '\"')
-	src++;
+        src++;
       else if (*src == '\\')
-	{
-	  src++;
-	  switch (*src)
-	    {
-	    case 'n':
-	      *dest++ = '\n';
-	      break;
-	    case 't':
-	      *dest++ = '\t';
-	      break;
-	    case 'v':
-	      *dest++ = '\v';
-	      break;
-	    case 'b':
-	      *dest++ = '\b';
-	      break;
-	    case 'r':
-	      *dest++ = '\r';
-	      break;
-	    case 'f':
-	      *dest++ = '\f';
-	      break;
-	    case 'a':
-	      *dest++ = '\a';
-	      break;
+        {
+          src++;
+          switch (*src)
+            {
+            case 'n':
+              *dest++ = '\n';
+              break;
+            case 't':
+              *dest++ = '\t';
+              break;
+            case 'v':
+              *dest++ = '\v';
+              break;
+            case 'b':
+              *dest++ = '\b';
+              break;
+            case 'r':
+              *dest++ = '\r';
+              break;
+            case 'f':
+              *dest++ = '\f';
+              break;
+            case 'a':
+              *dest++ = '\a';
+              break;
 
-	    case '0':
-	    case '1':
-	    case '2':
-	    case '3':
-	    case '4':
-	    case '5':
-	    case '6':
-	    case '7':
-	      *dest++ = octalEscape(&src);
-	      src-- ;
-	      break;
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+              *dest++ = octalEscape(&src);
+              src-- ;
+              break;
 
-	    case 'x': 
-	      *dest++ = hexEscape(&src) ;
-	      src-- ;
-	      break ;
+            case 'x':
+              *dest++ = hexEscape(&src) ;
+              src-- ;
+              break ;
 
-	    case '\\':
-	      *dest++ = '\\';
-	      break;
-	    case '\?':
-	      *dest++ = '\?';
-	      break;
-	    case '\'':
-	      *dest++ = '\'';
-	      break;
-	    case '\"':
-	      *dest++ = '\"';
-	      break;
-	    default:
-	      *dest++ = *src;
-	    }
-	  src++;
-	}
+            case '\\':
+              *dest++ = '\\';
+              break;
+            case '\?':
+              *dest++ = '\?';
+              break;
+            case '\'':
+              *dest++ = '\'';
+              break;
+            case '\"':
+              *dest++ = '\"';
+              break;
+            default:
+              *dest++ = *src;
+            }
+          src++;
+        }
       else
-	*dest++ = *src++;
+        *dest++ = *src++;
     }
 
   *dest++ = '\0';
@@ -732,7 +957,7 @@ strVal (char *s)
 {
   value *val;
 
-  val = newValue ();		/* get a new one */
+  val = newValue ();            /* get a new one */
 
   /* get a declarator */
   val->type = newLink (DECLARATOR);
@@ -849,68 +1074,68 @@ charVal (char *s)
   SPEC_USIGN(val->type) = 1;
   SPEC_SCLS (val->type) = S_LITERAL;
 
-  s++;				/* get rid of quotation */
+  s++;                          /* get rid of quotation */
   /* if \ then special processing */
   if (*s == '\\')
     {
-      s++;			/* go beyond the backslash  */
+      s++;                      /* go beyond the backslash  */
       switch (*s)
-	{
-	case 'n':
-	  SPEC_CVAL (val->type).v_uint = '\n';
-	  break;
-	case 't':
-	  SPEC_CVAL (val->type).v_uint = '\t';
-	  break;
-	case 'v':
-	  SPEC_CVAL (val->type).v_uint = '\v';
-	  break;
-	case 'b':
-	  SPEC_CVAL (val->type).v_uint = '\b';
-	  break;
-	case 'r':
-	  SPEC_CVAL (val->type).v_uint = '\r';
-	  break;
-	case 'f':
-	  SPEC_CVAL (val->type).v_uint = '\f';
-	  break;
-	case 'a':
-	  SPEC_CVAL (val->type).v_uint = '\a';
-	  break;
-	case '\\':
-	  SPEC_CVAL (val->type).v_uint = '\\';
-	  break;
-	case '\?':
-	  SPEC_CVAL (val->type).v_uint = '\?';
-	  break;
-	case '\'':
-	  SPEC_CVAL (val->type).v_uint = '\'';
-	  break;
-	case '\"':
-	  SPEC_CVAL (val->type).v_uint = '\"';
-	  break;
+        {
+        case 'n':
+          SPEC_CVAL (val->type).v_uint = '\n';
+          break;
+        case 't':
+          SPEC_CVAL (val->type).v_uint = '\t';
+          break;
+        case 'v':
+          SPEC_CVAL (val->type).v_uint = '\v';
+          break;
+        case 'b':
+          SPEC_CVAL (val->type).v_uint = '\b';
+          break;
+        case 'r':
+          SPEC_CVAL (val->type).v_uint = '\r';
+          break;
+        case 'f':
+          SPEC_CVAL (val->type).v_uint = '\f';
+          break;
+        case 'a':
+          SPEC_CVAL (val->type).v_uint = '\a';
+          break;
+        case '\\':
+          SPEC_CVAL (val->type).v_uint = '\\';
+          break;
+        case '\?':
+          SPEC_CVAL (val->type).v_uint = '\?';
+          break;
+        case '\'':
+          SPEC_CVAL (val->type).v_uint = '\'';
+          break;
+        case '\"':
+          SPEC_CVAL (val->type).v_uint = '\"';
+          break;
 
-	case '0' :
-	case '1' :
-	case '2' :
-	case '3' :
-	case '4' :
-	case '5' :
-	case '6' :
-	case '7' :
-	  SPEC_CVAL (val->type).v_uint = octalEscape(&s);
-	  break;
+        case '0' :
+        case '1' :
+        case '2' :
+        case '3' :
+        case '4' :
+        case '5' :
+        case '6' :
+        case '7' :
+          SPEC_CVAL (val->type).v_uint = octalEscape(&s);
+          break;
 
-	case 'x':
-	  SPEC_CVAL (val->type).v_uint = hexEscape(&s) ;
-	  break;
+        case 'x':
+          SPEC_CVAL (val->type).v_uint = hexEscape(&s) ;
+          break;
 
-	default:
-	  SPEC_CVAL (val->type).v_uint = (unsigned char)*s;
-	  break;
-	}
+        default:
+          SPEC_CVAL (val->type).v_uint = (unsigned char)*s;
+          break;
+        }
     }
-  else				/* not a backslash */
+  else                          /* not a backslash */
     SPEC_CVAL (val->type).v_uint = (unsigned char)*s;
 
   return val;
@@ -951,12 +1176,15 @@ floatFromVal (value * val)
   if (SPEC_NOUN (val->etype) == V_FLOAT)
     return (double) SPEC_CVAL (val->etype).v_float;
 
+  if (SPEC_NOUN (val->etype) == V_FIXED16X16)
+    return (double) doubleFromFixed16x16( SPEC_CVAL (val->etype).v_fixed16x16 );
+
   if (SPEC_LONG (val->etype))
     {
       if (SPEC_USIGN (val->etype))
-	return (double) SPEC_CVAL (val->etype).v_ulong;
+        return (double) SPEC_CVAL (val->etype).v_ulong;
       else
-	return (double) SPEC_CVAL (val->etype).v_long;
+        return (double) SPEC_CVAL (val->etype).v_long;
     }
 
   if (SPEC_NOUN (val->etype) == V_INT) {
@@ -983,8 +1211,58 @@ floatFromVal (value * val)
 
   // we are lost !
   werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
-	  "floatFromVal: unknown value");
+          "floatFromVal: unknown value");
   return 0;
+}
+
+/*-----------------------------------------------------------------*/
+/* doubleFromFixed16x16 - convert a fixed16x16 to double           */
+/*-----------------------------------------------------------------*/
+double doubleFromFixed16x16(TYPE_TARGET_ULONG value)
+{
+#if 0
+  /* This version is incorrect negative values. */
+  double tmp=0, exp=2;
+
+    tmp = (value & 0xffff0000) >> 16;
+    
+    while(value) {
+      value &= 0xffff;
+      if(value & 0x8000)tmp += 1/exp;
+      exp *= 2;
+      value <<= 1;
+    }
+  
+  return (tmp);
+#else
+  return ((double)(value * 1.0) / (double)(1UL << 16));
+#endif
+}
+
+TYPE_TARGET_ULONG fixed16x16FromDouble(double value)
+{
+#if 0
+  /* This version is incorrect negative values. */
+  unsigned int tmp=0, pos=16;
+  TYPE_TARGET_ULONG res;
+
+    tmp = floor( value );
+    res = tmp << 16;
+    value -= tmp;
+    
+    tmp = 0;
+    while(pos--) {
+      value *= 2;
+      if(value >= 1.0)tmp |= (1 << pos);
+      value -= floor( value );
+    }
+  
+    res |= tmp;
+
+  return (res);
+#else
+  return  (TYPE_TARGET_ULONG)(value * (double)(1UL << 16));
+#endif
 }
 
 /*------------------------------------------------------------------*/
@@ -996,31 +1274,33 @@ valUnaryPM (value * val)
   /* depending on type */
   if (SPEC_NOUN (val->etype) == V_FLOAT)
     SPEC_CVAL (val->etype).v_float = -1.0 * SPEC_CVAL (val->etype).v_float;
+  else if (SPEC_NOUN (val->etype) == V_FIXED16X16)
+    SPEC_CVAL (val->etype).v_fixed16x16 = -SPEC_CVAL (val->etype).v_fixed16x16;
   else
     {
       if (SPEC_LONG (val->etype))
-	{
-	  if (SPEC_USIGN (val->etype))
-	    SPEC_CVAL (val->etype).v_ulong = 0-SPEC_CVAL (val->etype).v_ulong;
-	  else
-	    SPEC_CVAL (val->etype).v_long = -SPEC_CVAL (val->etype).v_long;
-	}
+        {
+          if (SPEC_USIGN (val->etype))
+            SPEC_CVAL (val->etype).v_ulong = 0-SPEC_CVAL (val->etype).v_ulong;
+          else
+            SPEC_CVAL (val->etype).v_long = -SPEC_CVAL (val->etype).v_long;
+        }
       else
-	{
-	  if (SPEC_USIGN (val->etype))
-	    SPEC_CVAL (val->etype).v_uint = 0-SPEC_CVAL (val->etype).v_uint;
-	  else
-	    SPEC_CVAL (val->etype).v_int = -SPEC_CVAL (val->etype).v_int;
-	}
+        {
+          if (SPEC_USIGN (val->etype))
+            SPEC_CVAL (val->etype).v_uint = 0-SPEC_CVAL (val->etype).v_uint;
+          else
+            SPEC_CVAL (val->etype).v_int = -SPEC_CVAL (val->etype).v_int;
+
+          if (SPEC_NOUN(val->etype) == V_CHAR)
+            {
+              /* promote to 'signed int', cheapestVal() might reduce it again */
+              SPEC_USIGN(val->etype) = 0;
+              SPEC_NOUN(val->etype) = V_INT;
+            }
+          return cheapestVal (val);
+        }
     }
-  // -(unsigned 3) now really is signed
-  SPEC_USIGN(val->etype)=0;
-  // -(unsigned char)135 now really is an int
-  if (SPEC_NOUN(val->etype) == V_CHAR) {
-    if (SPEC_CVAL(val->etype).v_int < -128) {
-      SPEC_NOUN(val->etype) = V_INT;
-    }
-  }
   return val;
 }
 
@@ -1034,23 +1314,25 @@ valComplement (value * val)
   if (SPEC_LONG (val->etype))
     {
       if (SPEC_USIGN (val->etype))
-	SPEC_CVAL (val->etype).v_ulong = ~SPEC_CVAL (val->etype).v_ulong;
+        SPEC_CVAL (val->etype).v_ulong = ~SPEC_CVAL (val->etype).v_ulong;
       else
-	SPEC_CVAL (val->etype).v_long = ~SPEC_CVAL (val->etype).v_long;
+        SPEC_CVAL (val->etype).v_long = ~SPEC_CVAL (val->etype).v_long;
     }
   else
     {
       if (SPEC_USIGN (val->etype))
-	SPEC_CVAL (val->etype).v_uint = ~SPEC_CVAL (val->etype).v_uint;
+        SPEC_CVAL (val->etype).v_uint = ~SPEC_CVAL (val->etype).v_uint;
       else
-	SPEC_CVAL (val->etype).v_int = ~SPEC_CVAL (val->etype).v_int;
+        SPEC_CVAL (val->etype).v_int = ~SPEC_CVAL (val->etype).v_int;
+
       if (SPEC_NOUN(val->etype) == V_CHAR)
-        if (   SPEC_CVAL(val->etype).v_int < -128
-            || SPEC_CVAL(val->etype).v_int >  127)
+        {
+          /* promote to 'signed int', cheapestVal() might reduce it again */
+          SPEC_USIGN(val->etype) = 0;
           SPEC_NOUN(val->etype) = V_INT;
+        }
+      return cheapestVal (val);
     }
-  // ~(unsigned 3) now really is signed
-  SPEC_USIGN(val->etype)=0;
   return val;
 }
 
@@ -1064,17 +1346,23 @@ valNot (value * val)
   if (SPEC_LONG (val->etype))
     {
       if (SPEC_USIGN (val->etype))
-	SPEC_CVAL (val->etype).v_ulong = !SPEC_CVAL (val->etype).v_ulong;
+        SPEC_CVAL (val->etype).v_int = !SPEC_CVAL (val->etype).v_ulong;
       else
-	SPEC_CVAL (val->etype).v_long = !SPEC_CVAL (val->etype).v_long;
+        SPEC_CVAL (val->etype).v_int = !SPEC_CVAL (val->etype).v_long;
     }
   else
     {
       if (SPEC_USIGN (val->etype))
-	SPEC_CVAL (val->etype).v_uint = !SPEC_CVAL (val->etype).v_uint;
+        SPEC_CVAL (val->etype).v_int = !SPEC_CVAL (val->etype).v_uint;
       else
-	SPEC_CVAL (val->etype).v_int = !SPEC_CVAL (val->etype).v_int;
+        SPEC_CVAL (val->etype).v_int = !SPEC_CVAL (val->etype).v_int;
+
     }
+  /* ANSI: result type is int, value is 0 or 1 */
+  /* sdcc will hold this in an 'unsigned char' */
+  SPEC_USIGN(val->etype) = 1;
+  SPEC_LONG (val->etype) = 0;
+  SPEC_NOUN(val->etype) = V_CHAR;
   return val;
 }
 
@@ -1089,34 +1377,37 @@ valMult (value * lval, value * rval)
   /* create a new value */
   val = newValue ();
   val->type = val->etype = computeType (lval->etype,
-					rval->etype,
-					RESULT_TYPE_INT,
-					'*');
+                                        rval->etype,
+                                        RESULT_TYPE_INT,
+                                        '*');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
 
   if (IS_FLOAT (val->type))
     SPEC_CVAL (val->type).v_float = floatFromVal (lval) * floatFromVal (rval);
+  else
+  if (IS_FIXED16X16 (val->type))
+    SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble(floatFromVal (lval) * floatFromVal (rval));
       /* signed and unsigned mul are the same, as long as the precision of the
          result isn't bigger than the precision of the operands. */
   else if (SPEC_LONG (val->type))
-    SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) *
-	                            (TYPE_UDWORD) floatFromVal (rval);
+    SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) *
+                                    (TYPE_TARGET_ULONG) floatFromVal (rval);
   else if (SPEC_USIGN (val->type)) /* unsigned int */
     {
-      TYPE_UDWORD ul = (TYPE_UWORD) floatFromVal (lval) *
-                       (TYPE_UWORD) floatFromVal (rval);
+      TYPE_TARGET_ULONG ul = (TYPE_TARGET_UINT) floatFromVal (lval) *
+                             (TYPE_TARGET_UINT) floatFromVal (rval);
 
-      SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) ul;
-      if (ul != (TYPE_UWORD) ul)
+      SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) ul;
+      if (ul != (TYPE_TARGET_UINT) ul)
         werror (W_INT_OVL);
     }
   else /* signed int */
     {
-      TYPE_DWORD l = (TYPE_WORD) floatFromVal (lval) *
-                     (TYPE_WORD) floatFromVal (rval);
+      TYPE_TARGET_LONG l = (TYPE_TARGET_INT) floatFromVal (lval) *
+                           (TYPE_TARGET_INT) floatFromVal (rval);
 
-      SPEC_CVAL (val->type).v_int = (TYPE_WORD) l;
-      if (l != (TYPE_WORD) l)
+      SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) l;
+      if (l != (TYPE_TARGET_INT) l)
         werror (W_INT_OVL);
     }
   return cheapestVal (val);
@@ -1139,30 +1430,33 @@ valDiv (value * lval, value * rval)
   /* create a new value */
   val = newValue ();
   val->type = val->etype = computeType (lval->etype,
-					rval->etype,
-					RESULT_TYPE_INT,
-					'/');
+                                        rval->etype,
+                                        RESULT_TYPE_INT,
+                                        '/');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
 
   if (IS_FLOAT (val->type))
     SPEC_CVAL (val->type).v_float = floatFromVal (lval) / floatFromVal (rval);
+  else
+  if (IS_FIXED16X16 (val->type))
+    SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble( floatFromVal (lval) / floatFromVal (rval) );
   else if (SPEC_LONG (val->type))
     {
       if (SPEC_USIGN (val->type))
-	SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) /
-	  (TYPE_UDWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) /
+          (TYPE_TARGET_ULONG) floatFromVal (rval);
       else
-	SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) /
-	  (TYPE_DWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) /
+          (TYPE_TARGET_LONG) floatFromVal (rval);
     }
   else
     {
       if (SPEC_USIGN (val->type))
-        SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) /
-          (TYPE_UWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) /
+          (TYPE_TARGET_UINT) floatFromVal (rval);
       else
-        SPEC_CVAL (val->type).v_int = (TYPE_WORD) floatFromVal (lval) /
-          (TYPE_WORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) floatFromVal (lval) /
+          (TYPE_TARGET_INT) floatFromVal (rval);
     }
   return cheapestVal (val);
 }
@@ -1178,28 +1472,28 @@ valMod (value * lval, value * rval)
   /* create a new value */
   val = newValue();
   val->type = val->etype = computeType (lval->etype,
-					rval->etype,
-					RESULT_TYPE_INT,
-					'%');
+                                        rval->etype,
+                                        RESULT_TYPE_INT,
+                                        '%');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
 
   if (SPEC_LONG (val->type))
     {
       if (SPEC_USIGN (val->type))
-	SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) %
-	  (TYPE_UDWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) %
+          (TYPE_TARGET_ULONG) floatFromVal (rval);
       else
-	SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) %
-	  (TYPE_DWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) %
+          (TYPE_TARGET_LONG) floatFromVal (rval);
     }
   else
     {
       if (SPEC_USIGN (val->type))
-        SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) %
-          (TYPE_UWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) %
+          (TYPE_TARGET_UINT) floatFromVal (rval);
       else
-        SPEC_CVAL (val->type).v_int = (TYPE_WORD) floatFromVal (lval) %
-          (TYPE_WORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) floatFromVal (lval) %
+          (TYPE_TARGET_INT) floatFromVal (rval);
     }
   return cheapestVal (val);
 }
@@ -1215,30 +1509,33 @@ valPlus (value * lval, value * rval)
   /* create a new value */
   val = newValue();
   val->type = val->etype = computeType (lval->etype,
-					rval->etype,
-					RESULT_TYPE_INT,
-					'+');
+                                        rval->etype,
+                                        RESULT_TYPE_INT,
+                                        '+');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
-  
+
   if (IS_FLOAT (val->type))
     SPEC_CVAL (val->type).v_float = floatFromVal (lval) + floatFromVal (rval);
+  else
+  if (IS_FIXED16X16 (val->type))
+    SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble( floatFromVal (lval) + floatFromVal (rval) );
   else  if (SPEC_LONG (val->type))
     {
       if (SPEC_USIGN (val->type))
-        SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) +
-         (TYPE_UDWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) +
+         (TYPE_TARGET_ULONG) floatFromVal (rval);
       else
-        SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) +
-          (TYPE_DWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) +
+          (TYPE_TARGET_LONG) floatFromVal (rval);
     }
   else
     {
       if (SPEC_USIGN (val->type))
-        SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) +
-          (TYPE_UWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) +
+          (TYPE_TARGET_UINT) floatFromVal (rval);
       else
-        SPEC_CVAL (val->type).v_int = (TYPE_WORD) floatFromVal (lval) +
-          (TYPE_WORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) floatFromVal (lval) +
+          (TYPE_TARGET_INT) floatFromVal (rval);
     }
   return cheapestVal (val);
 }
@@ -1254,30 +1551,33 @@ valMinus (value * lval, value * rval)
   /* create a new value */
   val = newValue();
   val->type = val->etype = computeType (lval->etype,
-					rval->etype,
-					RESULT_TYPE_INT,
-					'-');
+                                        rval->etype,
+                                        RESULT_TYPE_INT,
+                                        '-');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
-  
+
   if (IS_FLOAT (val->type))
     SPEC_CVAL (val->type).v_float = floatFromVal (lval) - floatFromVal (rval);
+  else
+  if (IS_FIXED16X16 (val->type))
+    SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble( floatFromVal (lval) - floatFromVal (rval) );
   else  if (SPEC_LONG (val->type))
     {
       if (SPEC_USIGN (val->type))
-        SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) -
-          (TYPE_UDWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) -
+          (TYPE_TARGET_ULONG) floatFromVal (rval);
       else
-        SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) -
-          (TYPE_DWORD) floatFromVal (rval);
+        SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) -
+          (TYPE_TARGET_LONG) floatFromVal (rval);
     }
   else
    {
      if (SPEC_USIGN (val->type))
-       SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) -
-         (TYPE_UWORD) floatFromVal (rval);
+       SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) -
+         (TYPE_TARGET_UINT) floatFromVal (rval);
      else
-       SPEC_CVAL (val->type).v_int = (TYPE_WORD) floatFromVal (lval) -
-         (TYPE_WORD) floatFromVal (rval);
+       SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) floatFromVal (lval) -
+         (TYPE_TARGET_INT) floatFromVal (rval);
     }
   return cheapestVal (val);
 }
@@ -1293,15 +1593,15 @@ valShift (value * lval, value * rval, int lr)
   /* create a new value */
   val = newValue();
   val->type = val->etype = computeType (lval->etype,
-					NULL,
-					RESULT_TYPE_INT,
-					'S');
+                                        NULL,
+                                        RESULT_TYPE_INT,
+                                        'S');
   SPEC_SCLS (val->etype) = S_LITERAL; /* will remain literal */
 
-  if (getSize (val->type) * 8 <= (TYPE_UDWORD) floatFromVal (rval) &&
+  if (getSize (val->type) * 8 <= (TYPE_TARGET_ULONG) floatFromVal (rval) &&
        /* left shift */
       (lr ||
-	/* right shift and unsigned */
+        /* right shift and unsigned */
        (!lr && SPEC_USIGN (rval->type))))
     {
       werror (W_SHIFT_CHANGED, (lr ? "left" : "right"));
@@ -1312,14 +1612,14 @@ valShift (value * lval, value * rval, int lr)
       if (SPEC_USIGN (val->type))
         {
           SPEC_CVAL (val->type).v_ulong = lr ?
-	    (TYPE_UDWORD) floatFromVal (lval) << (TYPE_UDWORD) floatFromVal (rval) : \
-	    (TYPE_UDWORD) floatFromVal (lval) >> (TYPE_UDWORD) floatFromVal (rval);
+            (TYPE_TARGET_ULONG) floatFromVal (lval) << (TYPE_TARGET_ULONG) floatFromVal (rval) : \
+            (TYPE_TARGET_ULONG) floatFromVal (lval) >> (TYPE_TARGET_ULONG) floatFromVal (rval);
         }
       else
         {
           SPEC_CVAL (val->type).v_long = lr ?
-	    (TYPE_DWORD) floatFromVal (lval) << (TYPE_UDWORD) floatFromVal (rval) : \
-	    (TYPE_DWORD) floatFromVal (lval) >> (TYPE_UDWORD) floatFromVal (rval);
+            (TYPE_TARGET_LONG) floatFromVal (lval) << (TYPE_TARGET_ULONG) floatFromVal (rval) : \
+            (TYPE_TARGET_LONG) floatFromVal (lval) >> (TYPE_TARGET_ULONG) floatFromVal (rval);
         }
     }
   else
@@ -1327,14 +1627,14 @@ valShift (value * lval, value * rval, int lr)
       if (SPEC_USIGN (val->type))
         {
           SPEC_CVAL (val->type).v_uint = lr ?
-	    (TYPE_UWORD) floatFromVal (lval) << (TYPE_UDWORD) floatFromVal (rval) : \
-	    (TYPE_UWORD) floatFromVal (lval) >> (TYPE_UDWORD) floatFromVal (rval);
+            (TYPE_TARGET_UINT) floatFromVal (lval) << (TYPE_TARGET_ULONG) floatFromVal (rval) : \
+            (TYPE_TARGET_UINT) floatFromVal (lval) >> (TYPE_TARGET_ULONG) floatFromVal (rval);
         }
       else
         {
           SPEC_CVAL (val->type).v_int = lr ?
-	    (TYPE_WORD) floatFromVal (lval) << (TYPE_UDWORD) floatFromVal (rval) : \
-	    (TYPE_WORD) floatFromVal (lval) >> (TYPE_UDWORD) floatFromVal (rval);
+            (TYPE_TARGET_INT) floatFromVal (lval) << (TYPE_TARGET_ULONG) floatFromVal (rval) : \
+            (TYPE_TARGET_INT) floatFromVal (lval) >> (TYPE_TARGET_ULONG) floatFromVal (rval);
         }
     }
   return cheapestVal (val);
@@ -1352,9 +1652,9 @@ valCompare (value * lval, value * rval, int ctype)
   val = newValue ();
   val->type = val->etype = newCharLink ();
   val->type->class = SPECIFIER;
-  SPEC_NOUN (val->type) = V_CHAR;	/* type is char */
+  SPEC_NOUN (val->type) = V_CHAR;       /* type is char */
   SPEC_USIGN (val->type) = 1;
-  SPEC_SCLS (val->type) = S_LITERAL;	/* will remain literal */
+  SPEC_SCLS (val->type) = S_LITERAL;    /* will remain literal */
 
   switch (ctype)
     {
@@ -1376,57 +1676,69 @@ valCompare (value * lval, value * rval, int ctype)
 
     case EQ_OP:
       if (SPEC_NOUN(lval->type) == V_FLOAT ||
-	  SPEC_NOUN(rval->type) == V_FLOAT)
-	{
-	  SPEC_CVAL (val->type).v_int = floatFromVal (lval) == floatFromVal (rval);
-	}
+          SPEC_NOUN(rval->type) == V_FLOAT)
+        {
+          SPEC_CVAL (val->type).v_int = floatFromVal (lval) == floatFromVal (rval);
+        }
       else
-	{
-	  /* integrals: ignore signedness */
-	  TYPE_UDWORD l, r;
+      if (SPEC_NOUN(lval->type) == V_FIXED16X16 ||
+          SPEC_NOUN(rval->type) == V_FIXED16X16)
+        {
+          SPEC_CVAL (val->type).v_int = floatFromVal (lval) == floatFromVal (rval);
+        }
+      else
+        {
+          /* integrals: ignore signedness */
+          TYPE_TARGET_ULONG l, r;
 
-	  l = (TYPE_UDWORD) floatFromVal (lval);
-	  r = (TYPE_UDWORD) floatFromVal (rval);
-	  /* In order to correctly compare 'signed int' and 'unsigned int' it's
-	     neccessary to strip them to 16 bit.
-	     Literals are reduced to their cheapest type, therefore left and
-	     right might have different types. It's neccessary to find a
-	     common type: int (used for char too) or long */
-	  if (!IS_LONG (lval->etype) &&
-	      !IS_LONG (rval->etype))
-	    {
-	      r = (TYPE_UWORD) r;
-	      l = (TYPE_UWORD) l;
-	    }
-	  SPEC_CVAL (val->type).v_int = l == r;
-	}
+          l = (TYPE_TARGET_ULONG) floatFromVal (lval);
+          r = (TYPE_TARGET_ULONG) floatFromVal (rval);
+          /* In order to correctly compare 'signed int' and 'unsigned int' it's
+             neccessary to strip them to 16 bit.
+             Literals are reduced to their cheapest type, therefore left and
+             right might have different types. It's neccessary to find a
+             common type: int (used for char too) or long */
+          if (!IS_LONG (lval->etype) &&
+              !IS_LONG (rval->etype))
+            {
+              r = (TYPE_TARGET_UINT) r;
+              l = (TYPE_TARGET_UINT) l;
+            }
+          SPEC_CVAL (val->type).v_int = l == r;
+        }
       break;
     case NE_OP:
       if (SPEC_NOUN(lval->type) == V_FLOAT ||
-	  SPEC_NOUN(rval->type) == V_FLOAT)
-	{
-	  SPEC_CVAL (val->type).v_int = floatFromVal (lval) != floatFromVal (rval);
-	}
+          SPEC_NOUN(rval->type) == V_FLOAT)
+        {
+          SPEC_CVAL (val->type).v_int = floatFromVal (lval) != floatFromVal (rval);
+        }
       else
-	{
-	  /* integrals: ignore signedness */
-	  TYPE_UDWORD l, r;
+      if (SPEC_NOUN(lval->type) == V_FIXED16X16 ||
+          SPEC_NOUN(rval->type) == V_FIXED16X16)
+        {
+          SPEC_CVAL (val->type).v_int = floatFromVal (lval) != floatFromVal (rval);
+        }
+      else
+        {
+          /* integrals: ignore signedness */
+          TYPE_TARGET_ULONG l, r;
 
-	  l = (TYPE_UDWORD) floatFromVal (lval);
-	  r = (TYPE_UDWORD) floatFromVal (rval);
-	  /* In order to correctly compare 'signed int' and 'unsigned int' it's
-	     neccessary to strip them to 16 bit.
-	     Literals are reduced to their cheapest type, therefore left and
-	     right might have different types. It's neccessary to find a
-	     common type: int (used for char too) or long */
-	  if (!IS_LONG (lval->etype) &&
-	      !IS_LONG (rval->etype))
-	    {
-	      r = (TYPE_UWORD) r;
-	      l = (TYPE_UWORD) l;
-	    }
-	  SPEC_CVAL (val->type).v_int = l != r;
-	}
+          l = (TYPE_TARGET_ULONG) floatFromVal (lval);
+          r = (TYPE_TARGET_ULONG) floatFromVal (rval);
+          /* In order to correctly compare 'signed int' and 'unsigned int' it's
+             neccessary to strip them to 16 bit.
+             Literals are reduced to their cheapest type, therefore left and
+             right might have different types. It's neccessary to find a
+             common type: int (used for char too) or long */
+          if (!IS_LONG (lval->etype) &&
+              !IS_LONG (rval->etype))
+            {
+              r = (TYPE_TARGET_UINT) r;
+              l = (TYPE_TARGET_UINT) l;
+            }
+          SPEC_CVAL (val->type).v_int = l != r;
+        }
       break;
 
     }
@@ -1452,68 +1764,69 @@ valBitwise (value * lval, value * rval, int op)
     {
     case '&':
       if (SPEC_LONG (val->type))
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) &
-	      (TYPE_UDWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) &
-	      (TYPE_DWORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) &
+              (TYPE_TARGET_ULONG) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) &
+              (TYPE_TARGET_LONG) floatFromVal (rval);
+        }
       else
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) &
-	      (TYPE_UWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_int = (TYPE_WORD) floatFromVal (lval) & (TYPE_WORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) &
+              (TYPE_TARGET_UINT) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_int = (TYPE_TARGET_INT) floatFromVal (lval) &
+              (TYPE_TARGET_INT) floatFromVal (rval);
+        }
       break;
 
     case '|':
       if (SPEC_LONG (val->type))
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) |
-	      (TYPE_UDWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) |
-	      (TYPE_DWORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) |
+              (TYPE_TARGET_ULONG) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) |
+              (TYPE_TARGET_LONG) floatFromVal (rval);
+        }
       else
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) |
-	      (TYPE_UWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_int =
-	      (TYPE_WORD) floatFromVal (lval) | (TYPE_WORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) |
+              (TYPE_TARGET_UINT) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_int =
+              (TYPE_TARGET_INT) floatFromVal (lval) | (TYPE_TARGET_INT) floatFromVal (rval);
+        }
 
       break;
 
     case '^':
       if (SPEC_LONG (val->type))
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) floatFromVal (lval) ^
-	      (TYPE_UDWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_long = (TYPE_DWORD) floatFromVal (lval) ^
-	      (TYPE_DWORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_ulong = (TYPE_TARGET_ULONG) floatFromVal (lval) ^
+              (TYPE_TARGET_ULONG) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_long = (TYPE_TARGET_LONG) floatFromVal (lval) ^
+              (TYPE_TARGET_LONG) floatFromVal (rval);
+        }
       else
-	{
-	  if (SPEC_USIGN (val->type))
-	    SPEC_CVAL (val->type).v_uint = (TYPE_UWORD) floatFromVal (lval) ^
-	      (TYPE_UWORD) floatFromVal (rval);
-	  else
-	    SPEC_CVAL (val->type).v_int =
-	      (TYPE_WORD) floatFromVal (lval) ^ (TYPE_WORD) floatFromVal (rval);
-	}
+        {
+          if (SPEC_USIGN (val->type))
+            SPEC_CVAL (val->type).v_uint = (TYPE_TARGET_UINT) floatFromVal (lval) ^
+              (TYPE_TARGET_UINT) floatFromVal (rval);
+          else
+            SPEC_CVAL (val->type).v_int =
+              (TYPE_TARGET_INT) floatFromVal (lval) ^ (TYPE_TARGET_INT) floatFromVal (rval);
+        }
       break;
     }
-    
+
   return cheapestVal(val);
 }
 
@@ -1529,7 +1842,7 @@ valLogicAndOr (value * lval, value * rval, int op)
   val = newValue ();
   val->type = val->etype = newCharLink ();
   val->type->class = SPECIFIER;
-  SPEC_SCLS (val->type) = S_LITERAL;	/* will remain literal */
+  SPEC_SCLS (val->type) = S_LITERAL;    /* will remain literal */
   SPEC_USIGN (val->type) = 1;
 
   switch (op)
@@ -1554,7 +1867,7 @@ value *
 valCastLiteral (sym_link * dtype, double fval)
 {
   value *val;
-  TYPE_UDWORD l = (TYPE_UDWORD)fval;
+  TYPE_TARGET_ULONG l = (TYPE_TARGET_ULONG)fval;
 
   if (!dtype)
     return NULL;
@@ -1578,28 +1891,30 @@ valCastLiteral (sym_link * dtype, double fval)
 
   if (SPEC_NOUN (val->etype) == V_FLOAT)
       SPEC_CVAL (val->etype).v_float = fval;
+  else if (SPEC_NOUN (val->etype) == V_FIXED16X16)
+      SPEC_CVAL (val->etype).v_fixed16x16 = fixed16x16FromDouble( fval );
   else if (SPEC_NOUN (val->etype) == V_BIT ||
            SPEC_NOUN (val->etype) == V_SBIT)
     SPEC_CVAL (val->etype).v_uint = l ? 1 : 0;
   else if (SPEC_NOUN (val->etype) == V_BITFIELD)
     SPEC_CVAL (val->etype).v_uint = l &
-				    (0xffffu >> (16 - SPEC_BLEN (val->etype)));
+                                    (0xffffu >> (16 - SPEC_BLEN (val->etype)));
   else if (SPEC_NOUN (val->etype) == V_CHAR) {
       if (SPEC_USIGN (val->etype))
-	  SPEC_CVAL (val->etype).v_uint= (TYPE_UBYTE) l;
+          SPEC_CVAL (val->etype).v_uint= (TYPE_UBYTE) l;
       else
-	  SPEC_CVAL (val->etype).v_int = (TYPE_BYTE) l;
+          SPEC_CVAL (val->etype).v_int = (TYPE_BYTE) l;
   } else {
       if (SPEC_LONG (val->etype)) {
-	  if (SPEC_USIGN (val->etype))
-	      SPEC_CVAL (val->etype).v_ulong = (TYPE_UDWORD) l;
-	  else
-	      SPEC_CVAL (val->etype).v_long = (TYPE_DWORD) l;
+          if (SPEC_USIGN (val->etype))
+              SPEC_CVAL (val->etype).v_ulong = (TYPE_TARGET_ULONG) l;
+          else
+              SPEC_CVAL (val->etype).v_long = (TYPE_TARGET_LONG) l;
       } else {
-	  if (SPEC_USIGN (val->etype))
-	      SPEC_CVAL (val->etype).v_uint = (TYPE_UWORD)l;
-	  else
-	      SPEC_CVAL (val->etype).v_int = (TYPE_WORD)l;
+          if (SPEC_USIGN (val->etype))
+              SPEC_CVAL (val->etype).v_uint = (TYPE_TARGET_UINT)l;
+          else
+              SPEC_CVAL (val->etype).v_int = (TYPE_TARGET_INT)l;
       }
   }
   return val;
@@ -1626,16 +1941,16 @@ getNelements (sym_link * type, initList * ilist)
       ast *iast = ilist->init.node;
       value *v = (iast->type == EX_VALUE ? iast->opval.val : NULL);
       if (!v)
-	{
-	  werror (E_CONST_EXPECTED);
-	  return 0;
-	}
+        {
+          werror (E_CONST_EXPECTED);
+          return 0;
+        }
 
       if (IS_ARRAY (v->type) && IS_CHAR (v->etype))
-	// yep, it's a string
-	{
-	  return DCL_ELEM (v->type);
-	}
+        // yep, it's a string
+        {
+          return DCL_ELEM (v->type);
+        }
     }
 
   i = 0;
@@ -1661,16 +1976,16 @@ valForArray (ast * arrExpr)
   if (IS_AST_OP (arrExpr->left))
     {
       if (arrExpr->left->opval.op == '[')
-	lval = valForArray (arrExpr->left);
+        lval = valForArray (arrExpr->left);
       else if (arrExpr->left->opval.op == '.')
-	lval = valForStructElem (arrExpr->left->left,
-				 arrExpr->left->right);
+        lval = valForStructElem (arrExpr->left->left,
+                                 arrExpr->left->right);
       else if (arrExpr->left->opval.op == PTR_OP &&
-	       IS_ADDRESS_OF_OP (arrExpr->left->left))
-	lval = valForStructElem (arrExpr->left->left->left,
-				 arrExpr->left->right);
+               IS_ADDRESS_OF_OP (arrExpr->left->left))
+        lval = valForStructElem (arrExpr->left->left->left,
+                                 arrExpr->left->right);
       else
-	return NULL;
+        return NULL;
 
     }
   else if (!IS_AST_SYM_VALUE (arrExpr->left))
@@ -1682,15 +1997,15 @@ valForArray (ast * arrExpr)
   val = newValue ();
   if (!lval)
     {
-	SNPRINTF (buffer, sizeof(buffer), "%s", AST_SYMBOL (arrExpr->left)->rname);
+        SNPRINTF (buffer, sizeof(buffer), "%s", AST_SYMBOL (arrExpr->left)->rname);
     }
   else
     {
-	SNPRINTF (buffer, sizeof(buffer), "%s", lval->name);
+        SNPRINTF (buffer, sizeof(buffer), "%s", lval->name);
     }
 
   SNPRINTF (val->name, sizeof(val->name), "(%s + %d)", buffer,
-	   (int) AST_LIT_VALUE (arrExpr->right) * size);
+           (int) AST_LIT_VALUE (arrExpr->right) * size);
 
   val->type = newLink (DECLARATOR);
   if (SPEC_SCLS (arrExpr->left->etype) == S_CODE)
@@ -1724,15 +2039,15 @@ valForStructElem (ast * structT, ast * elemT)
   if (IS_AST_OP (structT))
     {
       if (structT->opval.op == '[')
-	lval = valForArray (structT);
+        lval = valForArray (structT);
       else if (structT->opval.op == '.')
-	lval = valForStructElem (structT->left, structT->right);
+        lval = valForStructElem (structT->left, structT->right);
       else if (structT->opval.op == PTR_OP &&
-	       IS_ADDRESS_OF_OP (structT->left))
-	lval = valForStructElem (structT->left->left,
-				 structT->right);
+               IS_ADDRESS_OF_OP (structT->left))
+        lval = valForStructElem (structT->left->left,
+                                 structT->right);
       else
-	return NULL;
+        return NULL;
     }
 
   if (!IS_AST_SYM_VALUE (elemT))
@@ -1742,7 +2057,7 @@ valForStructElem (ast * structT, ast * elemT)
     return NULL;
 
   if ((sym = getStructElement (SPEC_STRUCT (structT->etype),
-			       AST_SYMBOL (elemT))) == NULL)
+                               AST_SYMBOL (elemT))) == NULL)
     {
       return NULL;
     }
@@ -1750,15 +2065,15 @@ valForStructElem (ast * structT, ast * elemT)
   val = newValue ();
   if (!lval)
     {
-	SNPRINTF(buffer, sizeof(buffer), "%s", AST_SYMBOL (structT)->rname);
+        SNPRINTF(buffer, sizeof(buffer), "%s", AST_SYMBOL (structT)->rname);
     }
   else
     {
-	SNPRINTF (buffer, sizeof(buffer), "%s", lval->name);
+        SNPRINTF (buffer, sizeof(buffer), "%s", lval->name);
     }
 
   SNPRINTF (val->name, sizeof(val->name), "(%s + %d)", buffer,
-	   (int) sym->offset);
+           (int) sym->offset);
 
   val->type = newLink (DECLARATOR);
   if (SPEC_SCLS (structT->etype) == S_CODE)
@@ -1795,8 +2110,8 @@ valForCastAggr (ast * aexpr, sym_link * type, ast * cnst, int op)
   val = newValue ();
 
   SNPRINTF (val->name, sizeof(val->name), "(%s %c %d)",
-	   AST_SYMBOL (aexpr)->rname, op,
-	   getSize (type->next) * (int) AST_LIT_VALUE (cnst));
+           AST_SYMBOL (aexpr)->rname, op,
+           getSize (type->next) * (int) AST_LIT_VALUE (cnst));
 
   val->type = type;
   val->etype = getSpec (val->type);
@@ -1818,7 +2133,7 @@ valForCastArr (ast * aexpr, sym_link * type)
   val = newValue ();
 
   SNPRINTF (val->name, sizeof(val->name), "(%s)",
-	   AST_SYMBOL (aexpr)->rname);
+           AST_SYMBOL (aexpr)->rname);
 
   val->type = type;
   val->etype = getSpec (val->type);

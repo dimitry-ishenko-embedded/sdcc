@@ -24,13 +24,15 @@
    what you give them.   Help stamp out software-hoarding!  
 -------------------------------------------------------------------------*/
 /*
-** $Id: string.h,v 1.5 2005/04/02 13:13:50 vrokas Exp $
+** $Id: string.h 3912 2005-10-26 11:08:11Z tecodev $
 */
 
 #ifndef __STRING_H	/* { */
 #define __STRING_H 1
 
 #define _STRING_SPEC	__data
+
+#pragma library c
 
 #ifndef NULL
 # define NULL (void *)0

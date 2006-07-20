@@ -112,6 +112,10 @@ SOURCE=..\support\Util\NewAlloc.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\support\scripts\resource.rc
+# End Source File
+# Begin Source File
+
 SOURCE=.\SDCC.lex
 
 !IF  "$(CFG)" == "src - Win32 Debug"
@@ -173,7 +177,7 @@ SOURCE=.\SDCCdwarf2.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\support\Util\sdccerr.c
+SOURCE=..\support\Util\SDCCerr.c
 # End Source File
 # Begin Source File
 
@@ -449,5 +453,9 @@ SOURCE=.\regression\while.c
 # PROP Exclude_From_Build 1
 # End Source File
 # End Group
+# Begin Source File
+
+SOURCE=..\support\scripts\sdcc.ico
+# End Source File
 # End Target
 # End Project

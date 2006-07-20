@@ -61,7 +61,7 @@ OPTYPE;
 #define LRTYPE        LRFTYPE LRETYPE
 #define IS_ITEMP(op)       (IS_SYMOP(op) && op->operand.symOperand->isitmp == 1)
 #define IS_PARM(op)        (IS_SYMOP(op) && op->operand.symOperand->_isparm)
-#define IS_ITEMPLBL(op)    (IS_ITEMP(op) && op->operand.symOperand->isilbl == 1);
+#define IS_ITEMPLBL(op)    (IS_ITEMP(op) && op->operand.symOperand->isilbl == 1)
 #define IS_OP_VOLATILE(op) (IS_SYMOP(op) && op->isvolatile)
 #define IS_OP_LITERAL(op)  (op && op->isLiteral)
 #define IS_OP_GLOBAL(op)   (IS_SYMOP(op) && op->isGlobal)
@@ -256,6 +256,14 @@ iCodeTable;
                                 x->op == '|'        || \
                                 x->op == '^'))
 
+#define IS_ASSOCIATIVE(x) (x && (x->op == EQ_OP      || \
+                                 x->op == NE_OP      || \
+                                 x->op == '+'        || \
+                                 x->op == '*'        || \
+                                 x->op == BITWISEAND || \
+                                 x->op == '|'        || \
+                                 x->op == '^'))
+
 #define ASSIGNMENT(ic) ( ic && ic->op == '=')
 
 #define ASSIGN_SYM_TO_ITEMP(ic) (ic && ic->op == '=' && \
@@ -310,7 +318,8 @@ int isParameterToCall (value *, operand *);
 iCode *newiCodeLabelGoto (int, symbol *);
 symbol *newiTemp (char *);
 symbol *newiTempLabel (char *);
-symbol *newiTempPreheaderLabel ();
+#define LOOPEXITLBL "loopExitLbl"
+symbol *newiTempLoopHeaderLabel (bool);
 iCode *newiCode (int, operand *, operand *);
 sym_link *operandType (operand *);
 operand *operandFromValue (value *);
@@ -322,6 +331,7 @@ int piCode (void *, FILE *);
 int printOperand (operand *, FILE *);
 void setOperandType (operand *, sym_link *);
 bool isOperandInFarSpace (operand *);
+bool isOperandInPagedSpace (operand *);
 bool isOperandInDirSpace (operand *);
 bool isOperandInCodeSpace (operand *);
 operand *opFromOpWithDU (operand *, bitVect *, bitVect *);

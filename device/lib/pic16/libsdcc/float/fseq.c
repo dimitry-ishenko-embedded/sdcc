@@ -15,7 +15,7 @@
 */
 
 /*
-** $Id: fseq.c,v 1.3 2004/10/01 14:48:28 vrokas Exp $
+** $Id: fseq.c 3513 2004-10-01 14:49:51Z vrokas $
 */
 
 /* (c)2000/2001: hacked a little by johan.knol@iduna.nl for sdcc */

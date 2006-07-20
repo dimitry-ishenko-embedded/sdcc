@@ -1,8 +1,8 @@
 /*
   dbuf.c - Dynamic buffer implementation
-  version 1.1.1, April 11th, 2003
+  version 1.1.2, May 22th, 2006
 
-  Copyright (c) 2002-2003 Borut Razem
+  Copyright (c) 2002-2006 Borut Razem
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -44,8 +44,10 @@ static int dbuf_expand(struct dbuf_s *dbuf, size_t size)
   if (dbuf->len + size > dbuf->alloc) {
     /* new_allocated_size = current_allocated_size * 2^n */
     /* can this be optimized? */
-    while (dbuf->len + size >= dbuf->alloc)
+    do {
       dbuf->alloc += dbuf->alloc;
+    }
+    while (dbuf->len + size > dbuf->alloc);
 
     if ((dbuf->buf = realloc(dbuf->buf, dbuf->alloc)) == NULL)
       return 0;
@@ -145,11 +147,8 @@ const char *dbuf_c_str(struct dbuf_s *dbuf)
   assert(dbuf->alloc != 0);
   assert(dbuf->buf != NULL);
 
-  /* only if not already null terminated */
-  if (((char *)dbuf->buf)[dbuf->len] != '\0') {
-    dbuf_expand(dbuf, 1);
-    ((char *)dbuf->buf)[dbuf->len] = '\0';
-  }
+  dbuf_expand(dbuf, 1);
+  ((char *)dbuf->buf)[dbuf->len] = '\0';
 
   return dbuf->buf;
 }

@@ -6,10 +6,10 @@
 #define STORAGE {storage}
 #endif
 
-#if defined __GNUC__
-  #define FLEXARRAY (__GNUC__ >= 3)
-  //since g fails on GCC 2.95.4 on alpha and I don't know how to detect alpha...
-  #define TEST_G    (__GNUC__ >= 3)
+#if defined (__GNUC__) && defined (__alpha__) && (__GNUC__ < 3)
+  /* since g fails on GCC 2.95.4 on alpha... */
+  #define FLEXARRAY 0
+  #define TEST_G    0
 #else
   #define FLEXARRAY 1
   #define TEST_G    1
@@ -19,18 +19,6 @@
 
 typedef unsigned int size_t;
 #define offsetof(s,m)   (size_t)&(((s *)0)->m)
-
-#if defined(PORT_HOST) || defined(SDCC_z80) || defined(SDCC_gbz80)
-# define idata
-# define pdata
-# define xdata
-# define code
-#endif
-
-#if defined(SDCC_hc08)
-# define idata data
-# define pdata data
-#endif
 
 const char *string1 = "\x00\x01";
 const char string2[] = "\x00\x01";

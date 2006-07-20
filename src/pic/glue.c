@@ -27,6 +27,9 @@
 #include "ralloc.h"
 #include "pcode.h"
 #include "newalloc.h"
+#include "gen.h"
+#include "main.h"
+#include "device.h"
 
 
 #ifdef WORDS_BIGENDIAN
@@ -52,6 +55,7 @@ extern set *tmpfileNameSet;
 extern char *iComments1;
 extern char *iComments2;
 //extern void emitStaticSeg (memmap * map);
+set *pic14_localFunctions = NULL;
 
 extern DEFSETFUNC (closeTmpFiles);
 extern DEFSETFUNC (rmTmpFiles);
@@ -68,13 +72,17 @@ extern void printPublics (FILE * afile);
 extern void printChar (FILE * ofile, char *s, int plen);
 void  pCodeInitRegisters(void);
 int getConfigWord(int address);
+int getHasSecondConfigReg(void);
+int pic14_getSharebankSize(void);
+int pic14_getSharebankAddress(void);
 
 char *udata_section_name=0;		// FIXME Temporary fix to change udata section name -- VR
+int pic14_hasInterrupt = 0;		// Indicates whether to emit interrupt handler or not
 
 /*-----------------------------------------------------------------*/
 /* aopLiteral - string from a literal value                        */
 /*-----------------------------------------------------------------*/
-int pic14aopLiteral (value *val, int offset)
+unsigned int pic14aopLiteral (value *val, int offset)
 {
 	union {
 		float f;
@@ -99,6 +107,239 @@ int pic14aopLiteral (value *val, int offset)
 	
 }
 
+/* Check whether the given reg is shared amongst all .o files of a project.
+ * This is true for the pseudo stack and WSAVE, SSAVE and PSAVE. */
+static int
+is_shared_address (int addr)
+{
+  return ((addr > Gstack_base_addr - 18)
+  	&& (addr <= Gstack_base_addr));
+}
+
+int
+pic14_is_shared (regs *reg)
+{
+	if (!reg) return 0;
+	return is_shared_address (reg->address);
+}
+
+static int
+is_valid_identifier( const char *name )
+{
+  char a;
+  if (!name) return 0;
+  a = *name;
+  
+  /* only accept [a-zA-Z_][a-zA-Z0-9_] */
+  if (!((a >= 'a' && a <= 'z')
+  	|| (a >= 'A' && a <= 'z')
+	|| (a == '_')))
+    return 0;
+
+  name++;
+  while ((a = *name++))
+  {
+    if (!((a >= 'a' && a <= 'z')
+    	|| (a >= 'A' && a <= 'Z')
+	|| (a >= '0' && a <= '9')
+	|| (a == '_')))
+      return 0;
+  } // while
+
+  /* valid identifier */
+  return 1;
+}
+
+/* set of already emitted symbols; we store only pointers to the emitted
+ * symbol names so these MUST NO BE CHANGED afterwards... */
+static set *symbolsEmitted = NULL;
+
+/*-------------------------------------------------------------------*/
+/* emitSymbolToFile - write a symbol definition only if it is not    */
+/*                    already present                                */
+/*-------------------------------------------------------------------*/
+void
+emitSymbolToFile (FILE *of, const char *name, const char *section_type, int size, int addr, int useEQU, int globalize)
+{
+	const char *sym;
+	static unsigned int sec_idx = 0;
+
+	/* workaround: variables declared via `sbit' result in a numeric
+	 * identifier (0xHH), EQU'ing them is invalid, so just ignore it.
+	 * sbit is heavily used in the inc2h-generated header files!
+	 */
+	if (!is_valid_identifier(name))
+	{
+	  //fprintf( stderr, "%s:%s:%u: ignored symbol: %s\n", __FILE__, __FUNCTION__, __LINE__, name );
+	  return;
+	}
+	
+	/* check whether the symbol is already defined */
+	for (sym = (const char *) setFirstItem (symbolsEmitted);
+		sym;
+		sym = (const char *) setNextItem (symbolsEmitted))
+	{
+		if (!strcmp (sym, name))
+		{
+			//fprintf (stderr, "%s: already emitted: %s\n", __FUNCTION__, name);
+			return;
+		}
+	} // for
+	
+	/* new symbol -- define it */
+	//fprintf (stderr, "%s: emitting %s (%d)\n", __FUNCTION__, name, size);
+	if (useEQU)
+	  fprintf (of, "%s\tEQU\t0x%04x\n", name, addr);
+	else
+	{
+	  /* we place each symbol into a section of its own to allow the linker
+	   * to distribute the data into all available memory banks */
+	  if (!section_type) section_type = "udata";
+	  if (addr != -1)
+	  {
+	    /* absolute symbols are handled in pic14_constructAbsMap */
+	    /* do nothing */
+#if 0
+	    /* workaround gpasm bug with symbols being EQUated and placed in absolute sections */
+	    if (1 || !is_shared_address (addr))
+	    {
+	      if (globalize) fprintf (of, "\tglobal\t%s\n", name);
+	      fprintf (of, "udata_%s_%u\t%s\t0x%04x\n", moduleName,
+	          sec_idx++, "udata_ovr", addr);
+	      fprintf (of, "%s\tres\t%d\n", name, size);
+	    }
+	    else
+	    {
+	      /* EQUs cannot be exported... */
+	      fprintf (of, "%s\tEQU\t0x%04x\n", name, addr);
+	    }
+#endif
+	  } else {
+	    if (globalize) fprintf (of, "\tglobal\t%s\n", name);
+	    fprintf (of, "udata_%s_%u\t%s\n", moduleName,
+	          sec_idx++, section_type);
+	    fprintf (of, "%s\tres\t%d\n", name, size);
+	  }
+	}
+
+	//if (options.verbose) fprintf (stderr, "%s: emitted %s\n", __FUNCTION__, name);
+	addSet (&symbolsEmitted, (void *) name);
+}
+
+#define IS_DEFINED_HERE(sym)	(!IS_EXTERN(sym->etype))
+extern int IS_CONFIG_ADDRESS( int addr );
+static void
+pic14_constructAbsMap (FILE *ofile)
+{
+  memmap *maps[] = { data, sfr, NULL };
+  int i;
+  hTab *ht = NULL;
+  symbol *sym;
+  set *aliases;
+  int addr, min=-1, max=-1;
+  int size;
+
+  for (i=0; maps[i] != NULL; i++)
+  {
+    for (sym = (symbol *)setFirstItem (maps[i]->syms);
+	sym; sym = setNextItem (maps[i]->syms))
+    {
+      if (IS_DEFINED_HERE(sym) && SPEC_ABSA(sym->etype))
+      {
+	addr = SPEC_ADDR(sym->etype);
+
+	/* handle CONFIG words here */
+	if (IS_CONFIG_ADDRESS( addr ))
+	{
+	  //fprintf( stderr, "%s: assignment to CONFIG@0x%x found\n", __FUNCTION__, addr );
+	  //fprintf( stderr, "ival: %p (0x%x)\n", sym->ival, (int)list2int( sym->ival ) );
+	  if (sym->ival) {
+	    pic14_assignConfigWordValue( addr, (int)list2int( sym->ival ) );
+	  } else {
+	    fprintf( stderr, "ERROR: Symbol %s, which is covering a __CONFIG word must be initialized!\n", sym->name );
+	  }
+	  continue;
+	}
+	
+	if (max == -1 || addr > max) max = addr;
+	if (min == -1 || addr < min) min = addr;
+	//fprintf (stderr, "%s: sym %s @ 0x%x\n", __FUNCTION__, sym->name, addr);
+	aliases = hTabItemWithKey (ht, addr);
+	if (aliases) {
+	  /* May not use addSetHead, as we cannot update the
+	   * list's head in the hastable `ht'. */
+	  addSet (&aliases, sym);
+#if 0
+	  fprintf( stderr, "%s: now %d aliases for %s @ 0x%x\n",
+	      __FUNCTION__, elementsInSet(aliases), sym->name, addr);
+#endif
+	} else {
+	  addSet (&aliases, sym);
+	  hTabAddItem (&ht, addr, aliases);
+	} // if
+      } // if
+    } // for sym
+  } // for i
+
+  /* now emit definitions for all absolute symbols */
+  fprintf (ofile, "%s", iComments2);
+  fprintf (ofile, "; absolute symbol definitions\n");
+  fprintf (ofile, "%s", iComments2);
+  for (addr=min; addr <= max; addr++)
+  {
+    size = 1;
+    aliases = hTabItemWithKey (ht, addr);
+    if (aliases && elementsInSet(aliases)) {
+      fprintf (ofile, "udata_abs_%s_%x\tudata_ovr\t0x%04x",
+	  moduleName, addr, addr);
+      for (sym = setFirstItem (aliases); sym;
+	  sym = setNextItem (aliases))
+      {
+        /* emit STATUS as well as _STATUS, required for SFRs only */
+	fprintf (ofile, "\n%s", sym->name);
+	fprintf (ofile, "\n%s", sym->rname);
+	if (getSize(sym->type) > size) {
+	  size = getSize(sym->type);
+	}
+      } // for
+      fprintf (ofile, "\tres\t%d\n", size);
+    } // if
+  } // for i
+
+  /* also emit STK symbols
+   * XXX: This is ugly and fails as soon as devices start to get
+   *      differently sized sharebanks, since STK12 will be
+   *      required by larger devices but only up to STK03 might
+   *      be defined using smaller devices. */
+  fprintf (ofile, "\n");
+  if (!pic14_options.isLibrarySource)
+  {
+    fprintf (ofile, "\tglobal PSAVE\n");
+    fprintf (ofile, "\tglobal SSAVE\n");
+    fprintf (ofile, "\tglobal WSAVE\n");
+    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
+      fprintf (ofile, "\tglobal STK%02d\n", i);
+    } // for i
+    fprintf (ofile, "sharebank udata_ovr 0x%04x\n",
+	  pic14_getSharebankAddress() - pic14_getSharebankSize() + 1);
+    fprintf (ofile, "PSAVE\tres 1\n");
+    fprintf (ofile, "SSAVE\tres 1\n");
+    fprintf (ofile, "WSAVE\tres 1\n");
+    /* fill rest of sharebank with stack STKxx .. STK00 */
+    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
+      fprintf (ofile, "STK%02d\tres 1\n", i);
+    } // for i
+  } else {
+    /* declare STKxx as extern for all files
+     * except the one containing main() */
+    fprintf (ofile, "\textern PSAVE\n");
+    fprintf (ofile, "\textern SSAVE\n");
+    fprintf (ofile, "\textern WSAVE\n");
+    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
+      fprintf (ofile, "\textern STK%02d\n", i);
+    } // for i
+  }
+}
 
 /*-----------------------------------------------------------------*/
 /* emitRegularMap - emit code for maps with no special cases       */
@@ -117,6 +358,11 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 	sym = setNextItem (map->syms)) {
 		
 		//printf("%s\n",sym->name);
+
+		/* ignore if config word */
+		if (SPEC_ABSA(sym->etype)
+		    && IS_CONFIG_ADDRESS(SPEC_ADDR(sym->etype)))
+			continue;
 		
 		/* if extern then add it into the extern list */
 		if (IS_EXTERN (sym->etype)) {
@@ -132,13 +378,16 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 			!sym->allocreq && sym->level)
 			continue;
 		
-			/* if global variable & not static or extern
+		/* if global variable & not static or extern
 		and addPublics allowed then add it to the public set */
 		if ((sym->level == 0 ||
 			(sym->_isparm && !IS_REGPARM (sym->etype))) &&
 			addPublics &&
 			!IS_STATIC (sym->etype))
+		{
+			//fprintf( stderr, "%s: made public %s\n", __FUNCTION__, sym->name );
 			addSetHead (&publics, sym);
+		}
 		
 		// PIC code allocates its own registers - so ignore parameter variable generated by processFuncArgs()
 		if (sym->_isparm)
@@ -162,10 +411,13 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 				fprintf (map->oFile, "%s_%d_%d", sym->name, sym->level, sym->block);
 		}
 #endif
+		/* absolute symbols are handled in pic14_constructAbsMap */
+		if (SPEC_ABSA(sym->etype) && IS_DEFINED_HERE(sym))
+			continue;
 		
 		/* if it has an absolute address then generate
 		an equate for this no need to allocate space */
-		if (SPEC_ABSA (sym->etype))
+		if (0 && SPEC_ABSA (sym->etype))
 		{
 			//if (options.debug || sym->level == 0)
 			//fprintf (map->oFile,"; == 0x%04x\n",SPEC_ADDR (sym->etype));
@@ -187,7 +439,15 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 			}
 			else
 			{
-				fprintf (map->oFile, "%s\tres\t%d\n", sym->rname,getSize (sym->type) & 0xffff);
+				emitSymbolToFile (map->oFile,
+					sym->rname, 
+					NULL,
+					getSize (sym->type) & 0xffff,
+					SPEC_ABSA(sym->etype)
+						? SPEC_ADDR(sym->etype)
+						: -1,
+					0,
+					0);
 				/*
 				{
 				int i, size;
@@ -207,7 +467,7 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 		it is a global variable */
 		if (sym->ival && sym->level == 0) {
 			ast *ival = NULL;
-			
+		
 			if (IS_AGGREGATE (sym->type))
 				ival = initAggregates (sym, sym->ival, NULL);
 			else
@@ -369,7 +629,7 @@ static int
 printIvalChar (sym_link * type, initList * ilist, pBlock *pb, char *s)
 {
 	value *val;
-	int remain;
+	int remain, ilen;
 	
 	if(!pb)
 		return 0;
@@ -379,17 +639,22 @@ printIvalChar (sym_link * type, initList * ilist, pBlock *pb, char *s)
 	{
 		
 		val = list2val (ilist);
+
 		/* if the value is a character string  */
 		if (IS_ARRAY (val->type) && IS_CHAR (val->etype))
 		{
+			ilen = DCL_ELEM(val->type);
+
 			if (!DCL_ELEM (type))
-				DCL_ELEM (type) = strlen (SPEC_CVAL (val->etype).v_char) + 1;
+				DCL_ELEM (type) = ilen;
+		
+			/* emit string constant */
+			for (remain = 0; remain < ilen; remain++) {
+				addpCode2pBlock(pb,newpCode(POC_RETLW,newpCodeOpLit(SPEC_CVAL(val->etype).v_char[remain])));
+			}
 			
-			//printChar (oFile, SPEC_CVAL (val->etype).v_char, DCL_ELEM (type));
-			//fprintf(stderr, "%s omitting call to printChar\n",__FUNCTION__);
-			addpCode2pBlock(pb,newpCodeCharP(";omitting call to printChar"));
-			
-			if ((remain = (DCL_ELEM (type) - strlen (SPEC_CVAL (val->etype).v_char) - 1)) > 0)
+			/* fill array up to desired size */
+			if ((remain = (DCL_ELEM (type) - ilen)) > 0)
 				while (remain--)
 					//tfprintf (oFile, "\t!db !constbyte\n", 0);
 					addpCode2pBlock(pb,newpCode(POC_RETLW,newpCodeOpLit(0)));
@@ -419,7 +684,7 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist,
 {
 	initList *iloop;
 	unsigned size = 0;
-	
+
 	if(!pb)
 		return;
 	if (ilist) {
@@ -470,6 +735,89 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist,
 }
 
 /*-----------------------------------------------------------------*/
+/* printIvalPtr - generates code for initial value of pointers     */
+/*-----------------------------------------------------------------*/
+extern value *initPointer (initList *, sym_link *toType);
+
+static void 
+printIvalPtr (symbol * sym, sym_link * type, initList * ilist, pBlock *pb)
+{
+	value *val;
+	
+	if (!ilist || !pb)
+		return;
+	
+	fprintf (stderr, "FIXME: initializers for pointers...\n");
+	printTypeChain (type, stderr);
+	
+	fprintf (stderr, "symbol: %s, DCL_TYPE():%d, DCL_ELEM():%d, IS_ARRAY():%d", sym->rname, DCL_TYPE(type), DCL_ELEM(type), IS_ARRAY(type));
+	fprintf (stderr, "ilist: type=%d (INIT_DEEP=%d, INIT_NODE=%d)\n", ilist->type, INIT_DEEP, INIT_NODE);
+
+	if (ilist && (ilist->type == INIT_DEEP))
+	  ilist = ilist->init.deep;
+	
+	/* function pointers */
+	if (IS_FUNC (type->next))
+	{
+		assert ( !"function pointers not yet handled" );
+		//printIvalFuncPtr (type, ilist, pb);
+	}
+
+	if (!(val = initPointer (ilist, type)))
+		return;
+	
+	if (IS_CHAR (type->next))
+	{
+		if (printIvalChar (type, ilist, pb, NULL)) return;
+	}
+
+	/* check the type */
+	if (compareType (type, val->type) == 0)
+	{
+		werrorfl (ilist->filename, ilist->lineno, W_INIT_WRONG);
+		printFromToType (val->type, type);
+	}
+
+	if (IS_LITERAL (val->etype))
+	{
+		switch (getSize (type))
+		{
+		case 1:
+			fprintf (stderr, "BYTE: %i\n", (unsigned char)floatFromVal (val) & 0x00FF);
+			break;
+		case 2:
+			fprintf (stderr, "WORD: %i\n", (unsigned int)floatFromVal (val) & 0x00FFFF);
+			break;
+		case 3: /* gneric pointers */
+			assert ( !"generic pointers not yet handled" );
+		case 4:
+			fprintf (stderr, "LONG: %i\n", (unsigned int)floatFromVal (val) & 0x0000FFFFFFFF);
+			break;
+		default:
+			assert ( !"invaild size of value -- aborting" );
+		} // switch
+
+		return;
+	} // if (IS_LITERAL)
+
+	/* now handle symbolic values */
+	switch (getSize (type))
+	{
+	case 1:
+		fprintf (stderr, "BYTE: %s", val->name);
+		break;
+	case 2:
+		fprintf (stderr, "WORD: %s", val->name);
+		break;
+	case 4:
+		fprintf (stderr, "LONG: %s", val->name);
+		break;
+	default:
+		assert ( !"invalid size of (symbolic) value -- aborting" );
+	} // switch
+}
+
+/*-----------------------------------------------------------------*/
 /* printIval - generates code for initial value                    */
 /*-----------------------------------------------------------------*/
 static void 
@@ -481,31 +829,31 @@ printIval (symbol * sym, sym_link * type, initList * ilist, pBlock *pb)
 	/* if structure then    */
 	if (IS_STRUCT (type))
 	{
-		//fprintf(stderr,"%s struct\n",__FUNCTION__);
+		//fprintf(stderr,"%s struct: %s\n",__FUNCTION__, sym->rname);
 		printIvalStruct (sym, type, ilist, pb);
-		return;
-	}
-	
-	/* if this is a pointer */
-	if (IS_PTR (type))
-	{
-		//fprintf(stderr,"%s pointer\n",__FUNCTION__);
-		//printIvalPtr (sym, type, ilist, oFile);
 		return;
 	}
 	
 	/* if this is an array   */
 	if (IS_ARRAY (type))
 	{
-		//fprintf(stderr,"%s array\n",__FUNCTION__);
+		//fprintf(stderr,"%s array: %s\n",__FUNCTION__, sym->rname);
 		printIvalArray (sym, type, ilist, pb);
+		return;
+	}
+	
+	/* if this is a pointer */
+	if (IS_PTR (type))
+	{
+		//fprintf(stderr,"%s pointer: %s\n",__FUNCTION__, sym->rname);
+		printIvalPtr (sym, type, ilist, pb);
 		return;
 	}
 	
 	/* if type is SPECIFIER */
 	if (IS_SPEC (type))
 	{
-		//fprintf(stderr,"%s spec\n",__FUNCTION__);
+		//fprintf(stderr,"%s spec %s\n",__FUNCTION__, sym->rname);
 		printIvalType (sym, type, ilist, pb);
 		return;
 	}
@@ -615,13 +963,14 @@ pic14emitStaticSeg (memmap * map)
 static void
 pic14emitMaps ()
 {
+	pic14_constructAbsMap (sfr->oFile);
 /* no special considerations for the following
 	data, idata & bit & xdata */
 	pic14emitRegularMap (data, TRUE, TRUE);
 	pic14emitRegularMap (idata, TRUE, TRUE);
 	pic14emitRegularMap (bit, TRUE, FALSE);
 	pic14emitRegularMap (xdata, TRUE, TRUE);
-	pic14emitRegularMap (sfr, FALSE, FALSE);
+	pic14emitRegularMap (sfr, TRUE, FALSE);
 	pic14emitRegularMap (sfrbit, FALSE, FALSE);
 	pic14emitRegularMap (code, TRUE, FALSE);
 	pic14emitStaticSeg (statsg);
@@ -657,15 +1006,11 @@ pic14createInterruptVect (FILE * vFile)
 	}
 	
 	fprintf (vFile, "%s", iComments2);
-	fprintf (vFile, "; config word \n");
-	fprintf (vFile, "%s", iComments2);
-	fprintf (vFile, "\t__config 0x%x\n", getConfigWord(0x2007));
-	
-	fprintf (vFile, "%s", iComments2);
 	fprintf (vFile, "; reset vector \n");
 	fprintf (vFile, "%s", iComments2);
 	fprintf (vFile, "STARTUP\t%s\n", CODE_NAME); // Lkr file should place section STARTUP at address 0x0
 	fprintf (vFile, "\tnop\n"); /* first location for used by incircuit debugger */
+	fprintf( vFile, "\tpagesel __sdcc_gsinit_startup\n");
 	fprintf (vFile, "\tgoto\t__sdcc_gsinit_startup\n");
 }
 
@@ -682,6 +1027,41 @@ pic14initialComments (FILE * afile)
 	
 }
 
+int
+pic14_stringInSet(const char *str, set **world, int autoAdd)
+{
+  char *s;
+
+  if (!str) return 1;
+  assert(world);
+
+  for (s = setFirstItem(*world); s; s = setNextItem(*world))
+  {
+    /* found in set */
+    if (0 == strcmp(s, str)) return 1;
+  }
+
+  /* not found */
+  if (autoAdd) addSet(world, Safe_strdup(str));
+  return 0;
+}
+
+static int
+pic14_emitSymbolIfNew(FILE *file, const char *fmt, const char *sym, int checkLocals)
+{
+  static set *emitted = NULL;
+
+  if (!pic14_stringInSet(sym, &emitted, 1)) {
+    /* sym was not in emittedSymbols */
+    if (!checkLocals || !pic14_stringInSet(sym, &pic14_localFunctions, 0)) {
+      /* sym is not a locally defined function---avoid bug #1443651 */
+      fprintf( file, fmt, sym );
+      return 0;
+    }
+  }
+  return 1;
+}
+
 /*-----------------------------------------------------------------*/
 /* printExterns - generates extern for external variables          */
 /*-----------------------------------------------------------------*/
@@ -694,9 +1074,8 @@ pic14printExterns (FILE * afile)
 	fprintf (afile, "; extern variables in this module\n");
 	fprintf (afile, "%s", iComments2);
 	
-	for (sym = setFirstItem (externs); sym;
-	sym = setNextItem (externs))
-		fprintf (afile, "\textern %s\n", sym->rname);
+	for (sym = setFirstItem (externs); sym; sym = setNextItem (externs))
+		pic14_emitSymbolIfNew(afile, "\textern %s\n", sym->rname, 1);
 }
 
 /*-----------------------------------------------------------------*/
@@ -705,24 +1084,25 @@ pic14printExterns (FILE * afile)
 static void
 pic14printPublics (FILE * afile)
 {
-	symbol *sym;
-	
-	fprintf (afile, "%s", iComments2);
-	fprintf (afile, "; publics variables in this module\n");
-	fprintf (afile, "%s", iComments2);
-	
-	for (sym = setFirstItem (publics); sym;
-	sym = setNextItem (publics)) {
-		
-		if(!IS_BITFIELD(sym->type) && ((IS_FUNC(sym->type) || sym->allocreq))) {
-			if (!IS_BITVAR(sym->type))
-				fprintf (afile, "\tglobal %s\n", sym->rname);
-		} else {
-			/* Absolute variables are defines in the asm file as equates and thus can not be made global. */
-			if (!SPEC_ABSA (sym->etype))
-				fprintf (afile, "\tglobal %s\n", sym->rname);
-		}
-	}
+  symbol *sym;
+
+  fprintf (afile, "%s", iComments2);
+  fprintf (afile, "; publics variables in this module\n");
+  fprintf (afile, "%s", iComments2);
+
+  for (sym = setFirstItem (publics); sym;
+      sym = setNextItem (publics)) {
+
+    if(!IS_BITFIELD(sym->type) && ((IS_FUNC(sym->type) || sym->allocreq))) {
+      if (!IS_BITVAR(sym->type))
+	pic14_emitSymbolIfNew(afile, "\tglobal %s\n", sym->rname, 0);
+    } else {
+      /* Absolute variables are defines in the asm file as equates and thus can not be made global. */
+      /* Not any longer! */
+      //if (!SPEC_ABSA (sym->etype))
+      pic14_emitSymbolIfNew(afile, "\tglobal %s\n", sym->rname, 0);
+    }
+  }
 }
 
 /*-----------------------------------------------------------------*/
@@ -833,6 +1213,26 @@ pic14emitOverlay (FILE * afile)
 }
 
 
+void
+pic14_emitInterruptHandler (FILE * asmFile)
+{
+	if (pic14_hasInterrupt)
+	{
+
+		fprintf (asmFile, "%s", iComments2);
+		fprintf (asmFile, "; interrupt and initialization code\n");
+		fprintf (asmFile, "%s", iComments2);
+		// Note - for mplink may have to enlarge section vectors in .lnk file
+		// Note: Do NOT name this code_interrupt to avoid nameclashes with
+		//       source files's code segment (interrupt.c -> code_interrupt)
+		fprintf (asmFile, "c_interrupt\t%s\t0x4\n", CODE_NAME);
+		
+		/* interrupt service routine */
+		fprintf (asmFile, "__sdcc_interrupt\n");
+		copypCode(asmFile, 'I');
+	}	
+}
+
 /*-----------------------------------------------------------------*/
 /* glue - the final glue that hold the whole thing together        */
 /*-----------------------------------------------------------------*/
@@ -846,7 +1246,20 @@ picglue ()
 	
 	addSetHead(&tmpfileSet,ovrFile);
 	pCodeInitRegisters();
-	
+
+	/* check for main() */
+	mainf = newSymbol ("main", 0);
+	mainf->block = 0;
+	mainf = findSymWithLevel (SymbolTab, mainf);
+
+	if (!mainf || !IFFUNC_HASBODY(mainf->type))
+	{
+		/* main missing -- import stack from main module */
+		//fprintf (stderr, "main() missing -- assuming we are NOT the main module\n");
+		pic14_options.isLibrarySource = 1;
+	}
+
+#if 0
 	if (mainf && IFFUNC_HASBODY(mainf->type)) {
 		
 		pBlock *pb = newpCodeChain(NULL,'X',newpCodeCharP("; Starting pCode block"));
@@ -869,7 +1282,7 @@ picglue ()
 			
 		}
 	}
-	
+#endif	
 	
 	/* At this point we've got all the code in the form of pCode structures */
 	/* Now it needs to be rearranged into the order it should be placed in the */
@@ -928,6 +1341,9 @@ picglue ()
 		werror (E_FILE_OPEN_ERR, buffer);
 		exit (1);
 	}
+
+	/* prepare statistics */
+	resetpCodeStatistics ();
 	
 	/* initial comments */
 	pic14initialComments (asmFile);
@@ -940,12 +1356,15 @@ picglue ()
 	{
 		port->genAssemblerPreamble(asmFile);
 	}
-	
-	/* print the extern variables in this module */
-	pic14printExterns (asmFile);
+
+	/* Emit the __config directive */
+	pic14_emitConfigWord (asmFile);
 	
 	/* print the global variables in this module */
 	pic14printPublics (asmFile);
+	
+	/* print the extern variables in this module */
+	pic14printExterns (asmFile);
 	
 	/* copy the sfr segment */
 	fprintf (asmFile, "%s", iComments2);
@@ -1014,22 +1433,19 @@ picglue ()
 	fprintf (asmFile, "; bit data\n");
 	fprintf (asmFile, "%s", iComments2);
 	copyFile (asmFile, bit->oFile);
-	
+
 	/* copy the interrupt vector table */
 	if (mainf && IFFUNC_HASBODY(mainf->type)) {
 		copyFile (asmFile, vFile);
-		
-		fprintf (asmFile, "%s", iComments2);
-		fprintf (asmFile, "; interrupt and initialization code\n");
-		fprintf (asmFile, "%s", iComments2);
-		fprintf (asmFile, "code_init\t%s\t0x4\n", CODE_NAME); // Note - for mplink may have to enlarge section vectors in .lnk file
-		
-		/* interrupt service routine */
-		fprintf (asmFile, "__sdcc_interrupt:\n");
-		copypCode(asmFile, 'I');
-		
+	}
+	
+	/* create interupt ventor handler */
+	pic14_emitInterruptHandler (asmFile);
+	
+	if (mainf && IFFUNC_HASBODY(mainf->type)) {
 		/* initialize data memory */
-		fprintf (asmFile,"__sdcc_gsinit_startup:\n");
+		fprintf (asmFile, "code_init\t%s\n", CODE_NAME); // Note - for mplink may have to enlarge section vectors in .lnk file
+		fprintf (asmFile,"__sdcc_gsinit_startup\n");
 		/* FIXME: This is temporary.  The idata section should be used.  If 
 		not, we could add a special feature to the linker.  This will 
 		work in the mean time.  Put all initalized data in main.c */
@@ -1065,6 +1481,8 @@ picglue ()
 	
 	/* unknown */
 	copypCode(asmFile, 'P');
+
+	dumppCodeStatistics (asmFile);
 	
 	fprintf (asmFile,"\tend\n");
 	

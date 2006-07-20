@@ -32,6 +32,8 @@ static char *_ds390_keywords[] =
   "pdata",
   "reentrant",
   "sfr",
+  "sfr16",
+  "sfr32",
   "sbit",
   "using",
   "xdata",
@@ -76,7 +78,7 @@ _ds390_reset_regparm (void)
 }
 
 static int
-_ds390_regparm (sym_link * l)
+_ds390_regparm (sym_link * l, bool reentrant)
 {
     if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
         return 0;
@@ -859,6 +861,10 @@ PORT ds390_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 1, 2, 3, 1, 4, 4
   },
+  
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
+
   {
     "XSEG    (XDATA)",
     "STACK   (DATA)",
@@ -875,6 +881,7 @@ PORT ds390_port =
     "HOME    (CODE)",
     "XISEG   (XDATA)", // initialized xdata
     "XINIT   (CODE)", // a code copy of xiseg
+    "CONST   (CODE)",		// const_name - const data (code or not)
     NULL,
     NULL,
     1
@@ -1171,6 +1178,9 @@ PORT tininative_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 1, 3, 3, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
+
   {
     "XSEG    (XDATA)",
     "STACK   (DATA)",
@@ -1187,6 +1197,7 @@ PORT tininative_port =
     "HOME    (CODE)",
     NULL,
     NULL,
+    "CONST   (CODE)",		// const_name - const data (code or not)
     NULL,
     NULL,
     1
@@ -1398,6 +1409,10 @@ PORT ds400_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 1, 2, 3, 1, 4, 4
   },
+
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
+
   {
     "XSEG    (XDATA)",
     "STACK   (DATA)",
@@ -1414,6 +1429,7 @@ PORT ds400_port =
     "HOME    (CODE)",
     "XISEG   (XDATA)", // initialized xdata
     "XINIT   (CODE)", // a code copy of xiseg
+    "CONST   (CODE)",		// const_name - const data (code or not)
     NULL,
     NULL,
     1

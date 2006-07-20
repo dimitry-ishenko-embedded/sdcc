@@ -92,7 +92,7 @@ typedef struct
 	/* assembler file extension */
 	const char *file_ext;
         /** If non-null will be used to execute the assembler. */
-	void (*do_assemble) (set *);	
+	void (*do_assemble) (set *);
       }
     assembler;
 
@@ -107,7 +107,7 @@ typedef struct
 	void (*do_link) (void);
         /** Extension for object files (.rel, .obj, ...) */
 	const char *rel_ext;
-	/** 1 if port needs the .lnk file, 0 otherwise */
+        /** 1 if port needs the .lnk file, 0 otherwise */
 	const int needLinkerScript;
       }
     linker;
@@ -127,17 +127,27 @@ typedef struct
       {
 	int char_size;
 	int short_size;
-	int int_size;
+        unsigned int int_size;
 	int long_size;
-	int ptr_size;
-	int fptr_size;
-	int gptr_size;
+	int ptr_size;       //near
+	int fptr_size;      //far
+	int gptr_size;      //generic
 	int bit_size;
 	int float_size;
 	int max_base_size;
       }
     s;
 
+/** tags for far, near, xstack, code generic pointers */
+    struct
+      {
+        int tag_far;
+        int tag_near;
+        int tag_xstack;
+        int tag_code;
+      }
+    gp_tags;
+      
 /** memory regions related stuff */
     struct
       {
@@ -156,6 +166,7 @@ typedef struct
 	const char *home_name;
 	const char *xidata_name; // initialized xdata
 	const char *xinit_name; // a code copy of xidata
+	const char *const_name; // const data (code or not)
 	struct memmap *default_local_map; // default location for auto vars
 	struct memmap *default_globl_map; // default location for globl vars
 	int code_ro;		/* code space read-only 1=yes */
@@ -168,7 +179,7 @@ typedef struct
 	  void (*genExtraAreaLinkOptions)(FILE *);
       }
     extraAreas;
-      
+
     /* stack related information */
     struct
       {
@@ -190,8 +201,8 @@ typedef struct
 
     struct
       {
-	/** One more than the smallest 
-	    mul/div operation the processor can do nativley 
+	/** One more than the smallest
+	    mul/div operation the processor can do nativley
 	    Eg if the processor has an 8 bit mul, nativebelow is 2 */
 	unsigned muldiv;
         unsigned shift;
@@ -226,7 +237,7 @@ typedef struct
         int sizeofDispatch;
       }
     jumptableCost;
-        
+
 /** Prefix to add to a C function (eg "_") */
     const char *fun_prefix;
 
@@ -260,30 +271,30 @@ typedef struct
 
     /* Write any port specific assembler output. */
     void (*genAssemblerPreamble) (FILE * of);
-      /* invoked at end assembler file */  
+      /* invoked at end assembler file */
     void (*genAssemblerEnd) (FILE * of);
 
     /* Write the port specific IVT. If genIVT is NULL or if
      * it returns zero, default (8051) IVT generation code
-     * will be used. 
+     * will be used.
      */
     int (*genIVT) (FILE * of, symbol ** intTable, int intCount);
 
     void (*genXINIT) (FILE * of);
-    
+
     /* Write port specific startup code */
     void (*genInitStartup) (FILE * of);
 
     /* parameter passing in register related functions */
     void (*reset_regparms) (void);	/* reset the register count */
-    int (*reg_parm) (struct sym_link *);	/* will return 1 if can be passed in register */
+    int (*reg_parm) (struct sym_link *, bool reentrant);	/* will return 1 if can be passed in register */
 
     /** Process the pragma string 'sz'.  Returns 0 if recognised and
 	processed, 1 otherwise.  May be NULL.
     */
     int (*process_pragma) (const char *sz);
 
-    /** Mangles a support function name to reflect the calling model. 
+    /** Mangles a support function name to reflect the calling model.
      */
     char *(*getMangledFunctionName) (char *szOrginial);
 
@@ -293,15 +304,15 @@ typedef struct
     bool (*hasNativeMulFor) (iCode *ic, sym_link *left, sym_link *right);
 
     /** Returns true if the port has implemented certain bit
-        manipulation iCodes (RRC, RLC, SWAP, GETHBIT)
+        manipulation iCodes (RRC, RLC, SWAP, GETHBIT, GETABIT, GETBYTE, GETWORD)
     */
     bool (*hasExtBitOp) (int op, int size);
-    
+
     /** Returns the relative expense of accessing a particular output
         storage class. Larger values indicate higher expense.
     */
     int (*oclsExpense) (struct memmap *oclass);
-    
+
     /** If TRUE, then tprintf and !dw will be used for some initalisers
      */
     bool use_dw_for_init;
@@ -319,10 +330,10 @@ typedef struct
     bool ne_neq;		/* transform a != b --> ! (a == b)  */
     bool eq_nne;		/* transform a == b --> ! (a != b)  */
 
-    bool arrayInitializerSuppported;  
+    bool arrayInitializerSuppported;
     bool (*cseOk) (iCode *ic, iCode *pdic);
     builtins *builtintable;     /* table of builtin functions */
-    int unqualified_pointer;	/* unqualified pointers type is  */    
+    int unqualified_pointer;	/* unqualified pointers type is  */
     int reset_labelKey  ;	/* reset Label no 1 at the start of a function */
     int globals_allowed ;       /* global & static locals not allowed ?  0 ONLY TININative*/
 #define PORT_MAGIC 0xAC32

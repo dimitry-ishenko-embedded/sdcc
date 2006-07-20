@@ -1,5 +1,0 @@
-divsint.o: divsint.c
-divuint.o: divuint.c
-modsint.o: modsint.c
-moduint.o: moduint.c
-mulint.o: mulint.c

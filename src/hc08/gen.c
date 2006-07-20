@@ -162,7 +162,7 @@ emitcode (char *inst, char *fmt,...)
   else
     vsprintf (lb, fmt, ap);
 
-  while (isspace (*lbp))
+  while (isspace ((unsigned char)*lbp))
     lbp++;
 
   if (lbp && *lbp)
@@ -839,7 +839,10 @@ storeRegToAop (regs *reg, asmop *aop, int loffset)
 
   if (aop->type == AOP_DUMMY)
     return;
-    
+
+  if (aop->type == AOP_CRY) /* This can only happen if IFX was optimized */
+    return;                 /* away, so just toss the result */
+
   switch (regidx)
     {
       case A_IDX:
@@ -1144,7 +1147,8 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
   /* ignore transfers at the same byte, unless its volatile */
   if (srcaop->op && !isOperandVolatile (srcaop->op, FALSE)
       && dstaop->op && !isOperandVolatile (dstaop->op, FALSE)
-      && operandsEqu(srcaop->op, dstaop->op) && srcofs == dstofs)
+      && operandsEqu(srcaop->op, dstaop->op) && srcofs == dstofs
+      && dstaop->type == srcaop->type)
     return;
       
   if (srcaop->stacked && srcaop->stk_aop[srcofs])
@@ -1173,7 +1177,7 @@ transferAopAop (asmop *srcaop, int srcofs, asmop *dstaop, int dstofs)
       if (srcaop->type == AOP_LIT)
         {
           unsigned long lit;
-          unsigned char bytemask;
+          unsigned long bytemask;
           
           lit = (unsigned long) floatFromVal (srcaop->aopu.aop_lit);
           bytemask = (lit >> (srcofs*8)) & 0xff;
@@ -1798,14 +1802,22 @@ aopOp (operand * op, iCode * ic, bool result)
       /* else spill location  */
       if (sym->usl.spillLoc)
         {
+          asmop *oldAsmOp = NULL;
+
           if (sym->usl.spillLoc->aop
               && sym->usl.spillLoc->aop->size != getSize (sym->type))
             {
 	      /* force a new aop if sizes differ */
+              oldAsmOp = sym->usl.spillLoc->aop;
 	      sym->usl.spillLoc->aop = NULL;
 	      //printf ("forcing new aop\n");
             }
 	  sym->aop = op->aop = aop = aopForSym (ic, sym->usl.spillLoc, result);
+          if (sym->usl.spillLoc->aop->size != getSize (sym->type))
+            {
+              /* Don't reuse the new aop, go with the last one */
+              sym->usl.spillLoc->aop = oldAsmOp;
+            }
 	  aop->size = getSize (sym->type);
 	  aop->op = op;
 	  aop->isaddr = op->isaddr;
@@ -2085,67 +2097,6 @@ getDataSize (operand * op)
   return size;
 }
 
-/*-----------------------------------------------------------------*/
-/* outAcc - output Acc                                             */
-/*-----------------------------------------------------------------*/
-static void
-outAcc (operand * result)
-{
-  int size, offset;
-  size = getDataSize (result);
-  if (size)
-    {
-      storeRegToAop (hc08_reg_a, AOP (result), 0);
-      size--;
-      offset = 1;
-      /* unsigned or positive */
-      while (size--)
-	{
-	  storeConstToAop (zero, AOP (result), offset++);
-	}
-    }
-}
-
-/*-----------------------------------------------------------------*/
-/* outBitC - output a bit C                                        */
-/*-----------------------------------------------------------------*/
-static void
-outBitC (operand * result)
-{
-
-#if 0
-  /* if the result is bit */
-  if (AOP_TYPE (result) == AOP_CRY)
-    aopPut (AOP (result), "c", 0);
-  else
-#endif
-    {
-      emitcode ("clra", "");
-      emitcode ("rola", "");
-      outAcc (result);
-    }
-}
-
-/*-----------------------------------------------------------------*/
-/* outBitNV - output a bit N^V                                     */
-/*-----------------------------------------------------------------*/
-static void
-outBitNV (operand * result)
-{
-  symbol *tlbl, *tlbl1;
-
-  tlbl = newiTempLabel (NULL);
-  tlbl1 = newiTempLabel (NULL);
-
-  emitBranch ("blt", tlbl);
-  loadRegFromConst (hc08_reg_a, zero);
-  emitBranch ("bra", tlbl1);
-  emitLabel (tlbl);
-  loadRegFromConst (hc08_reg_a, one);
-  emitLabel (tlbl1);
-  outAcc (result);
-}
-
 
 /*-----------------------------------------------------------------*/
 /* asmopToBool - Emit code to convert an asmop to a boolean.       */
@@ -2229,6 +2180,14 @@ asmopToBool (asmop *aop, bool resultInA)
             hc08_freeReg (hc08_reg_a);
             flagsonly = FALSE;
           }
+        break;
+      case AOP_LIT:
+        /* Higher levels should optimize this case away but let's be safe */
+        if ((unsigned long) floatFromVal (aop->aopu.aop_lit))
+          loadRegFromConst (hc08_reg_a, one);
+        else
+          loadRegFromConst (hc08_reg_a, zero);
+        hc08_freeReg(hc08_reg_a);
         break;
       default:
         if (size==1)
@@ -3386,7 +3345,7 @@ release:
 }
 
 /*-----------------------------------------------------------------*/
-/* genMinusDec :- does subtraction with deccrement if possible     */
+/* genMinusDec :- does subtraction with decrement if possible      */
 /*-----------------------------------------------------------------*/
 static bool
 genMinusDec (iCode * ic)
@@ -3501,13 +3460,22 @@ genMinus (iCode * ic)
 
   leftOp = AOP(IC_LEFT(ic));
   rightOp = AOP(IC_RIGHT(ic));
-
   sub = "sub";
   offset = 0;
+
+  if (IS_AOP_A (rightOp))
+    {
+      loadRegFromAop ( hc08_reg_a, rightOp, offset);
+      accopWithAop (sub, leftOp, offset);
+      accopWithMisc ("nega", "");
+      storeRegToAop (hc08_reg_a, AOP (IC_RESULT (ic)), offset++);
+      goto release;
+    }
+
   while (size--)
     {
       loadRegFromAop ( hc08_reg_a, leftOp, offset);
-      accopWithAop(sub, rightOp, offset);
+      accopWithAop (sub, rightOp, offset);
       storeRegToAop (hc08_reg_a, AOP (IC_RESULT (ic)), offset++);
       sub = "sbc";
     }
@@ -3598,7 +3566,7 @@ genMultOneByte (operand * left,
   /* left unsigned, right signed literal -- literal determines sign handling */
   if (AOP_TYPE(right)==AOP_LIT && lUnsigned && !rUnsigned)
     {
-      signed char val=floatFromVal (AOP (right)->aopu.aop_lit);
+      signed char val=(signed char)floatFromVal (AOP (right)->aopu.aop_lit);
       
       loadRegFromAop (hc08_reg_a, AOP (left), 0);
       if (val < 0)
@@ -3642,7 +3610,7 @@ genMultOneByte (operand * left,
 
   if (AOP_TYPE(right)==AOP_LIT && !rUnsigned)
     {
-      signed char val=floatFromVal (AOP (right)->aopu.aop_lit);
+      signed char val=(signed char)floatFromVal (AOP (right)->aopu.aop_lit);
       /* AND literal negative */
       if (val < 0) {
         emitcode ("ldx", "#0x%02x", -val);
@@ -3974,11 +3942,10 @@ genModOneByte (operand * left,
       loadRegFromAop (hc08_reg_h, AOP (left), 1);
       loadRegFromAop (hc08_reg_a, AOP (left), 0);
       emitcode ("div", "");
-      hc08_dirtyReg (hc08_reg_a, FALSE);
-      hc08_dirtyReg (hc08_reg_h, FALSE);
-      storeRegToFullAop (hc08_reg_h, AOP (result), FALSE);
       hc08_freeReg (hc08_reg_a);
       hc08_freeReg (hc08_reg_x);
+      hc08_dirtyReg (hc08_reg_h, FALSE);
+      storeRegToFullAop (hc08_reg_h, AOP (result), FALSE);
       hc08_freeReg (hc08_reg_h);
       return;
     }
@@ -4048,8 +4015,8 @@ genModOneByte (operand * left,
   
   loadRegFromConst (hc08_reg_h, zero);
   emitcode ("div", "");
-  hc08_dirtyReg (hc08_reg_x, FALSE);
-  hc08_dirtyReg (hc08_reg_a, FALSE);
+  hc08_freeReg (hc08_reg_a);
+  hc08_freeReg (hc08_reg_x);
   hc08_dirtyReg (hc08_reg_h, FALSE);
 
   if (runtimeSign || compiletimeSign)
@@ -4174,47 +4141,186 @@ genIfxJump (iCode * ic, char *jval)
   ic->generated = 1;
 }
 
+
 /*-----------------------------------------------------------------*/
-/* genCmp :- greater or less than comparison                       */
+/* exchangedCmp : returns the opcode need if the two operands are  */
+/*                exchanged in a comparison                        */
 /*-----------------------------------------------------------------*/
-static void
-genCmp (operand * left, operand * right,
-	operand * result, iCode * ifx, int sign, iCode *ic)
+static int
+exchangedCmp (int opcode)
 {
+  switch (opcode)
+    {
+    case '<':
+      return '>';
+    case '>':
+      return '<';
+    case LE_OP:
+      return GE_OP;
+    case GE_OP:
+      return LE_OP;
+    case NE_OP:
+      return NE_OP;
+    case EQ_OP:
+      return EQ_OP;
+    default:
+      werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
+		  "opcode not a comparison");
+    }
+  return EQ_OP; /* shouldn't happen, but need to return something */
+}
+
+/*------------------------------------------------------------------*/
+/* negatedCmp : returns the equivalent opcode for when a comparison */
+/*              if not true                                         */
+/*------------------------------------------------------------------*/
+static int
+negatedCmp (int opcode)
+{
+  switch (opcode)
+    {
+    case '<':
+      return GE_OP;
+    case '>':
+      return LE_OP;
+    case LE_OP:
+      return '>';
+    case GE_OP:
+      return '<';
+    case NE_OP:
+      return EQ_OP;
+    case EQ_OP:
+      return NE_OP;
+    default:
+      werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
+		  "opcode not a comparison");
+    }
+  return EQ_OP; /* shouldn't happen, but need to return something */
+}
+
+/* compile only if the debugging macro D is enabled */
+#if (D(1) -0)
+static char *
+nameCmp (int opcode)
+{
+  switch (opcode)
+    {
+    case '<':
+      return "<";
+    case '>':
+      return ">";
+    case LE_OP:
+      return "<=";
+    case GE_OP:
+      return ">=";
+    case NE_OP:
+      return "!=";
+    case EQ_OP:
+      return "==";
+    default:
+      return "invalid";
+    }
+}
+#endif
+
+/*------------------------------------------------------------------*/
+/* branchInstCmp : returns the conditional branch instruction that  */
+/*                 will branch if the comparison is true            */
+/*------------------------------------------------------------------*/
+static char *
+branchInstCmp (int opcode, int sign)
+{
+  switch (opcode)
+    {
+    case '<':
+      if (sign)
+        return "blt";
+      else
+        return "bcs";	/* same as blo */
+    case '>':
+      if (sign)
+        return "bgt";
+      else
+        return "bhi";
+    case LE_OP:
+      if (sign)
+        return "ble";
+      else
+        return "bls";
+    case GE_OP:
+      if (sign)
+        return "bge";
+      else
+        return "bcc";	/* same as bhs */
+    case NE_OP:
+      return "bne";
+    case EQ_OP:
+      return "beq";
+    default:
+      werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
+		  "opcode not a comparison");
+    }
+  return "brn";
+}
+
+
+/*------------------------------------------------------------------*/
+/* genCmp :- greater or less than (and maybe with equal) comparison */
+/*------------------------------------------------------------------*/
+static void
+genCmp (iCode * ic, iCode * ifx)
+{  
+  operand *left, *right, *result;
+  sym_link *letype, *retype;
+  int sign, opcode;
   int size, offset = 0;
   unsigned long lit = 0L;
   char *sub;
-  bool needpula = FALSE;
+  symbol *jlbl = NULL;
 
-  D(emitcode (";     genCmp",""));
+  opcode = ic->op;
 
-  /* subtract right from left if at the
-     end the carry flag is set then we know that
-     left is greater than right */
-  size = max (AOP_SIZE (left), AOP_SIZE (right));
+  D(emitcode (";     genCmp", "(%s)",nameCmp (opcode)));
 
-  if (AOP_TYPE (right) == AOP_LIT)
+  result = IC_RESULT (ic);
+  left = IC_LEFT (ic);
+  right = IC_RIGHT (ic);
+
+  letype = getSpec (operandType (left));
+  retype = getSpec (operandType (right));
+  sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
+  /* assign the amsops */
+  aopOp (left, ic, FALSE);
+  aopOp (right, ic, FALSE);
+  aopOp (result, ic, TRUE);
+
+  /* need register operand on left, prefer literal operand on right */
+  if ((AOP_TYPE (right) == AOP_REG) || AOP_TYPE (left) == AOP_LIT)
     {
-      lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
-      /* optimize if(x < 0) or if(x >= 0) */
-      if (lit == 0L)
-	{
-	  if (!sign)
-	    {
-	      CLRC;
-	    }
-	  else
-	    {
-  	      loadRegFromAop (hc08_reg_a, AOP (left), AOP_SIZE (left) -1);
-	      emitcode ("rola", "");
-	      hc08_useReg (hc08_reg_a);
-  	    }
-	  sign = 0;
-          goto release;
-	}
+      operand *temp = left;
+      left = right;
+      right = temp;
+      opcode = exchangedCmp (opcode);
     }
 
-  if ((size==2)
+  if (ifx)
+    {
+      if (IC_TRUE (ifx))
+        {
+          jlbl = IC_TRUE (ifx);
+          opcode = negatedCmp (opcode);
+        }
+      else
+        {
+          /* false label is present */
+          jlbl = IC_FALSE (ifx);
+        }
+    }
+      
+  size = max (AOP_SIZE (left), AOP_SIZE (right));
+  
+  if ((size == 2)
+      && ((AOP_TYPE (left) == AOP_DIR) && (AOP_SIZE (left) == 2))
       && ((AOP_TYPE (right) == AOP_LIT) || 
           ((AOP_TYPE (right) == AOP_DIR) && (AOP_SIZE (right) == 2)) )
       && hc08_reg_hx->isFree)
@@ -4222,231 +4328,231 @@ genCmp (operand * left, operand * right,
       loadRegFromAop (hc08_reg_hx, AOP (left), 0);
       emitcode ("cphx","%s", aopAdrStr (AOP (right), 1, TRUE));
       hc08_freeReg (hc08_reg_hx);
-      goto release;
-    }
-
-  offset = 0;
-  if (size==1)
-    sub="cmp";
-  else
-    sub="sub";
-  while (size--)
-    {
-      loadRegFromAop (hc08_reg_a, AOP (left), offset);
-      accopWithAop (sub, AOP (right), offset);
-      hc08_freeReg (hc08_reg_a);
-      offset++;
-      sub="sbc";
-    }
-
-release:
-  freeAsmop (right, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
-  if (AOP_TYPE (result) == AOP_CRY && AOP_SIZE (result))
-    {
-      outBitC (result);
     }
   else
     {
-      /* if the result is used in the next
-         ifx conditional branch then generate
-         code a little differently */
-      if (ifx)
-        {
-          pullOrFreeReg(hc08_reg_a,needpula);
-	  genIfxJump (ifx, sign ? "s" : "c");
-        }
+      offset = 0;
+      if (size == 1)
+        sub = "cmp";
       else
-        if (!sign)
-	  outBitC (result);
-	else
-	  outBitNV (result);
-        pullOrFreeReg(hc08_reg_a,needpula);
-    }
-}
-
-/*-----------------------------------------------------------------*/
-/* genCmpGt :- greater than comparison                             */
-/*-----------------------------------------------------------------*/
-static void
-genCmpGt (iCode * ic, iCode * ifx)
-{
-  operand *left, *right, *result;
-  sym_link *letype, *retype;
-  int sign;
-
-  D(emitcode (";     genCmpGt",""));
-
-  result = IC_RESULT (ic);
-  left = IC_LEFT (ic);
-  right = IC_RIGHT (ic);
-
-  letype = getSpec (operandType (left));
-  retype = getSpec (operandType (right));
-  sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
-  /* assign the amsops */
-  aopOp (left, ic, FALSE);
-  aopOp (right, ic, FALSE);
-  aopOp (result, ic, TRUE);
-
-  genCmp (right, left, result, ifx, sign,ic);
-
-  freeAsmop (result, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
-/* genCmpLt - less than comparisons                                */
-/*-----------------------------------------------------------------*/
-static void
-genCmpLt (iCode * ic, iCode * ifx)
-{
-  operand *left, *right, *result;
-  sym_link *letype, *retype;
-  int sign;
-
-  D(emitcode (";     genCmpLt",""));
-
-  result = IC_RESULT (ic);
-  left = IC_LEFT (ic);
-  right = IC_RIGHT (ic);
-
-  letype = getSpec (operandType (left));
-  retype = getSpec (operandType (right));
-  sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
-
-  /* assign the amsops */
-  aopOp (left, ic, FALSE);
-  aopOp (right, ic, FALSE);
-  aopOp (result, ic, TRUE);
-
-  genCmp (left, right, result, ifx, sign,ic);
-
-  freeAsmop (result, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
-/*  - compare and branch if not equal                    */
-/*-----------------------------------------------------------------*/
-static void
-gencbneshort (operand * left, operand * right, symbol * lbl)
-{
-  int size = max (AOP_SIZE (left), AOP_SIZE (right));
-  int offset = 0;
-  unsigned long lit = 0L;
-
-  /* if the left side is a literal or
-     if the right is in a pointer register and left
-     is not */
-  if (AOP_TYPE (left) == AOP_LIT)
-    {
-      operand *t = right;
-      right = left;
-      left = t;
-    }
-  if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
-
-  while (size--)
-    {
-      loadRegFromAop (hc08_reg_a, AOP (left), offset);
-      accopWithAop ("cmp", AOP (right), offset);
-      hc08_useReg (hc08_reg_a);
-      hc08_freeReg (hc08_reg_a);
-      emitBranch ("bne", lbl);
-      offset++;
-    }
-
-}
-
-/*-----------------------------------------------------------------*/
-/* gencjne - compare and jump if not equal                         */
-/*-----------------------------------------------------------------*/
-static void
-gencjne (operand * left, operand * right, symbol * lbl)
-{
-  symbol *tlbl = newiTempLabel (NULL);
-
-  gencbneshort (left, right, lbl);
-
-  loadRegFromConst (hc08_reg_a, one);
-  emitBranch ("bra", tlbl);
-  emitLabel (lbl);
-  loadRegFromConst (hc08_reg_a, zero);
-  emitLabel (tlbl);
-
-  hc08_useReg(hc08_reg_a);
-  hc08_freeReg(hc08_reg_a);
-}
-
-/*-----------------------------------------------------------------*/
-/* genCmpEq - generates code for equal to                          */
-/*-----------------------------------------------------------------*/
-static void
-genCmpEq (iCode * ic, iCode * ifx)
-{
-  operand *left, *right, *result;
-
-  D(emitcode (";     genCmpEq",""));
-
-  aopOp ((left = IC_LEFT (ic)), ic, FALSE);
-  aopOp ((right = IC_RIGHT (ic)), ic, FALSE);
-  aopOp ((result = IC_RESULT (ic)), ic, TRUE);
-
-  /* if literal, literal on the right or
-     if the right is in a pointer register and left
-     is not */
-  if (AOP_TYPE (IC_LEFT (ic)) == AOP_LIT)
-    {
-      operand *t = IC_RIGHT (ic);
-      IC_RIGHT (ic) = IC_LEFT (ic);
-      IC_LEFT (ic) = t;
-    }
-
-  if (ifx && !AOP_SIZE (result))
-    {
-      symbol *tlbl;
-      tlbl = newiTempLabel (NULL);
-      gencbneshort (left, right, tlbl);
-      if (IC_TRUE (ifx))
         {
-          emitBranch ("jmp", IC_TRUE (ifx));
-          emitLabel (tlbl);
+          sub = "sub";
+        
+          /* These conditions depend on the Z flag bit, but Z is */
+          /* only valid for the last byte of the comparison, not */
+          /* the whole value. So exchange the operands to get a  */
+          /* comparison that doesn't depend on Z. (This is safe  */
+          /* to do here since ralloc won't assign multi-byte     */
+          /* operands to registers for comparisons)              */
+          if ((opcode == '>') || (opcode == LE_OP))
+            {
+              operand *temp = left;
+              left = right;
+              right = temp;
+              opcode = exchangedCmp (opcode);
+            }
+          
+          if ((AOP_TYPE (right) == AOP_LIT) && !isOperandVolatile (left, FALSE))
+            {
+              lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+              while ((size > 1) && (((lit >> (8*offset)) & 0xff) == 0))
+                {
+                  offset++;
+                  size--;
+                }
+            }
         }
-      else
-	{
-	  symbol *lbl = newiTempLabel (NULL);
-          emitBranch ("bra", lbl);
-          emitLabel (tlbl);
-          emitBranch ("jmp", IC_FALSE (ifx));
-          emitLabel (lbl);
-	}
-      
-      /* mark the icode as generated */
-      ifx->generated = 1;
-      goto release;
+      while (size--)
+        {
+          loadRegFromAop (hc08_reg_a, AOP (left), offset);
+          accopWithAop (sub, AOP (right), offset);
+          hc08_freeReg (hc08_reg_a);
+          offset++;
+          sub = "sbc";
+        }
     }
+  freeAsmop (right, NULL, ic, FALSE);
+  freeAsmop (left, NULL, ic, FALSE);
 
-  gencjne (left, right, newiTempLabel (NULL));
-  if (AOP_TYPE (result) == AOP_CRY && AOP_SIZE (result))
-    {
-      storeRegToAop (hc08_reg_a, AOP (result), 0);
-      goto release;
-    }
   if (ifx)
     {
-      genIfxJump (ifx, "a");
-      goto release;
-    }
-  /* if the result is used in an arithmetic operation
-     then put the result in place */
-  if (AOP_TYPE (result) != AOP_CRY)
-    outAcc (result);
+      symbol *tlbl = newiTempLabel (NULL);
+      char *inst;
 
-release:
-  freeAsmop (left, NULL, ic, (RESULTONSTACK (ic) ? FALSE : TRUE));
-  freeAsmop (right, NULL, ic, (RESULTONSTACK (ic) ? FALSE : TRUE));
-  freeAsmop (result, NULL, ic, TRUE);
+      freeAsmop (result, NULL, ic, TRUE);      
+      
+      inst = branchInstCmp (opcode, sign);
+      emitBranch (inst, tlbl);
+      emitBranch ("jmp", jlbl);
+      emitLabel (tlbl);
+
+      /* mark the icode as generated */
+      ifx->generated = 1;
+    }
+  else
+    {
+      symbol *tlbl1 = newiTempLabel (NULL);
+      symbol *tlbl2 = newiTempLabel (NULL);
+      
+      emitBranch (branchInstCmp (opcode, sign), tlbl1);
+      loadRegFromConst (hc08_reg_a, zero);
+      emitBranch ("bra", tlbl2);
+      emitLabel (tlbl1);
+      loadRegFromConst (hc08_reg_a, one);
+      emitLabel (tlbl2);
+      storeRegToFullAop (hc08_reg_a, AOP(result), FALSE);
+      freeAsmop (result, NULL, ic, TRUE);      
+    }
+        
 }
+
+/*-----------------------------------------------------------------*/
+/* genCmpEQorNE - equal or not equal comparison                    */
+/*-----------------------------------------------------------------*/
+static void
+genCmpEQorNE (iCode * ic, iCode * ifx)
+{  
+  operand *left, *right, *result;
+  sym_link *letype, *retype;
+  int sign, opcode;
+  int size, offset = 0;
+  char *sub;
+  symbol *jlbl = NULL;
+  symbol *tlbl_NE = NULL;
+  symbol *tlbl_EQ = NULL;
+ 
+  opcode = ic->op;
+
+  D(emitcode (";     genCmpEQorNE", "(%s)",nameCmp (opcode)));
+
+  result = IC_RESULT (ic);
+  left = IC_LEFT (ic);
+  right = IC_RIGHT (ic);
+
+  letype = getSpec (operandType (left));
+  retype = getSpec (operandType (right));
+  sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
+  /* assign the amsops */
+  aopOp (left, ic, FALSE);
+  aopOp (right, ic, FALSE);
+  aopOp (result, ic, TRUE);
+  
+  /* need register operand on left, prefer literal operand on right */
+  if ((AOP_TYPE (right) == AOP_REG) || AOP_TYPE (left) == AOP_LIT)
+    {
+      operand *temp = left;
+      left = right;
+      right = temp;
+      opcode = exchangedCmp (opcode);
+    }
+
+  if (ifx)
+    {
+      if (IC_TRUE (ifx))
+        {
+          jlbl = IC_TRUE (ifx);
+          opcode = negatedCmp (opcode);
+        }
+      else
+        {
+          /* false label is present */
+          jlbl = IC_FALSE (ifx);
+        }
+    }
+      
+  size = max (AOP_SIZE (left), AOP_SIZE (right));
+  
+  if ((size == 2)
+      && ((AOP_TYPE (left) == AOP_DIR) && (AOP_SIZE (left) == 2))
+      && ((AOP_TYPE (right) == AOP_LIT) || 
+          ((AOP_TYPE (right) == AOP_DIR) && (AOP_SIZE (right) == 2)) )
+      && hc08_reg_hx->isFree)
+    {
+      loadRegFromAop (hc08_reg_hx, AOP (left), 0);
+      emitcode ("cphx","%s", aopAdrStr (AOP (right), 1, TRUE));
+      hc08_freeReg (hc08_reg_hx);
+    }
+  else
+    {
+      offset = 0;
+      sub = "cmp";
+      while (size--)
+        {
+          loadRegFromAop (hc08_reg_a, AOP (left), offset);
+          accopWithAop (sub, AOP (right), offset);
+          if (size)
+            {
+              if (!tlbl_NE)
+                tlbl_NE = newiTempLabel (NULL);
+              emitBranch ("bne", tlbl_NE);
+            }
+          hc08_freeReg (hc08_reg_a);
+          offset++;
+        }
+    }
+  freeAsmop (right, NULL, ic, FALSE);
+  freeAsmop (left, NULL, ic, FALSE);
+
+  if (ifx)
+    {
+      freeAsmop (result, NULL, ic, TRUE);      
+      
+      if (opcode == EQ_OP)
+        {
+          if (!tlbl_EQ)
+            tlbl_EQ = newiTempLabel (NULL);
+          emitBranch ("beq", tlbl_EQ);
+          if (tlbl_NE)
+            emitLabel (tlbl_NE);
+          emitBranch ("jmp", jlbl);
+          emitLabel (tlbl_EQ);
+        }
+      else
+        {
+          if (!tlbl_NE)
+            tlbl_NE = newiTempLabel (NULL);
+          emitBranch ("bne", tlbl_NE);
+          emitBranch ("jmp", jlbl);
+          emitLabel (tlbl_NE);
+        }
+
+      /* mark the icode as generated */
+      ifx->generated = 1;
+    }
+  else
+    {
+      symbol *tlbl = newiTempLabel (NULL);
+      
+      if (opcode == EQ_OP)
+        {
+          if (!tlbl_EQ)
+            tlbl_EQ = newiTempLabel (NULL);
+          emitBranch ("beq", tlbl_EQ);
+          if (tlbl_NE)
+            emitLabel (tlbl_NE);
+          loadRegFromConst (hc08_reg_a, zero);
+          emitBranch ("bra", tlbl);
+          emitLabel (tlbl_EQ);
+          loadRegFromConst (hc08_reg_a, one);
+        }
+      else
+        {
+          if (!tlbl_NE)
+            tlbl_NE = newiTempLabel (NULL);
+          emitBranch ("bne", tlbl_NE);
+          loadRegFromConst (hc08_reg_a, zero);
+          emitBranch ("bra", tlbl);
+          emitLabel (tlbl_NE);
+          loadRegFromConst (hc08_reg_a, one);
+        }
+      
+      emitLabel (tlbl);
+      storeRegToFullAop (hc08_reg_a, AOP(result), FALSE);
+      freeAsmop (result, NULL, ic, TRUE);      
+    }
+        
+}
+
 
 /*-----------------------------------------------------------------*/
 /* ifxForOp - returns the icode containing the ifx for operand     */
@@ -5254,7 +5360,7 @@ emitinline (iCode * ic, char *inlin)
       if (*inlin == '_')
         {
           symname = ++inlin;
-          while (isalnum(*inlin) || (*inlin == '_'))
+          while (isalnum((unsigned char)*inlin) || (*inlin == '_'))
             inlin++;
           c = *inlin;
           *inlin = '\0';
@@ -6409,9 +6515,7 @@ genLeftShift (iCode * ic)
   operand *left, *right, *result;
   int size, offset;
   symbol *tlbl, *tlbl1;
-//  int i;
   char *shift;
-  regs *reg;
 
   D(emitcode (";     genLeftShift",""));
 
@@ -6435,14 +6539,16 @@ genLeftShift (iCode * ic)
      more that 32 bits make no sense anyway, ( the
      largest size of an object can be only 32 bits ) */
 
-  aopOp (left, ic, FALSE);
   aopOp (result, ic, FALSE);
+  aopOp (left, ic, FALSE);
+
+  if (sameRegs(AOP (right), AOP (result)) || IS_AOP_XA (AOP (result)))
+    AOP (result) = forceStackedAop (AOP (result));
 
   /* now move the left to the result if they are not the
      same */
   if (!sameRegs (AOP (left), AOP (result)))
     {
-
       size = AOP_SIZE (result);
       offset = 0;
       while (size--)
@@ -6458,10 +6564,8 @@ genLeftShift (iCode * ic)
   offset = 0;
   tlbl1 = newiTempLabel (NULL);
 
-  reg = hc08_reg_a;
-
-  loadRegFromAop (reg, AOP (right), 0);
-  freeAsmop (right, NULL, ic, TRUE);
+  loadRegFromAop (hc08_reg_x, AOP (right), 0);
+  emitcode ("tstx", "");
   emitBranch ("beq", tlbl1);
   emitLabel (tlbl);
   
@@ -6471,12 +6575,13 @@ genLeftShift (iCode * ic)
       rmwWithAop (shift, AOP (result), offset);  
       shift="rol";
     }
-  rmwWithReg ("dec", reg);
+  rmwWithReg ("dec", hc08_reg_x);
   emitBranch ("bne", tlbl);
   emitLabel (tlbl1);
-  hc08_freeReg (reg);
+  hc08_freeReg (hc08_reg_x);
   
   freeAsmop (result, NULL, ic, TRUE);
+  freeAsmop (right, NULL, ic, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -6728,7 +6833,6 @@ genRightShift (iCode * ic)
   operand *right, *left, *result;
   sym_link *retype;
   int size, offset;
-//  char *l;
   symbol *tlbl, *tlbl1;
   char *shift;
   bool sign;
@@ -6767,19 +6871,25 @@ genRightShift (iCode * ic)
      more that 32 bits make no sense anyway, ( the
      largest size of an object can be only 32 bits ) */
 
-  aopOp (left, ic, FALSE);
   aopOp (result, ic, FALSE);
+  aopOp (left, ic, FALSE);
 
   if (sameRegs(AOP (right), AOP (result)) || IS_AOP_XA (AOP (result)))
     AOP (result) = forceStackedAop (AOP (result));
   
-  size = AOP_SIZE (result); 
-  offset = size-1;
-  while (size--)
+  /* now move the left to the result if they are not the
+     same */
+  if (!sameRegs (AOP (left), AOP (result)))
     {
-      transferAopAop (AOP (left), offset, AOP (result), offset);
-      offset--;
+      size = AOP_SIZE (result); 
+      offset = 0;
+      while (size--)
+        {
+          transferAopAop (AOP (left), offset, AOP (result), offset);
+          offset++;
+        }
     }
+  freeAsmop (left, NULL, ic, TRUE);
   
   tlbl = newiTempLabel (NULL);
   size = AOP_SIZE (result);
@@ -6788,8 +6898,9 @@ genRightShift (iCode * ic)
 
   loadRegFromAop (hc08_reg_x, AOP (right), 0);
   emitcode ("tstx", "");
-  emitcode ("beq", "%05d$", tlbl1->key + 100);
-  emitcode ("", "%05d$:", tlbl->key + 100);
+  emitBranch ("beq", tlbl1);
+  emitLabel (tlbl);
+
   shift= sign ? "asr" : "lsr";
   for (offset=size-1;offset>=0;offset--)
     {
@@ -6797,11 +6908,11 @@ genRightShift (iCode * ic)
       shift="ror";
     }
   rmwWithReg ("dec", hc08_reg_x);
-  emitcode ("bne","%05d$", tlbl->key + 100);
-  emitcode ("", "%05d$:", tlbl1->key + 100);
+  emitBranch ("bne", tlbl);
+  emitLabel (tlbl1);
+  hc08_freeReg (hc08_reg_x);
   
   freeAsmop (result, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
   freeAsmop (right, NULL, ic, TRUE);
 }
 
@@ -6826,22 +6937,38 @@ genUnpackBits (operand * result, iCode *ifx)
   blen = SPEC_BLEN (etype);
   bstr = SPEC_BSTR (etype);
 
+  if (ifx && blen <= 8)
+    {
+      emitcode ("lda", ",x");
+      hc08_dirtyReg (hc08_reg_a, FALSE);
+      if (blen < 8)
+        {
+          emitcode ("and", "#0x%02x",
+                    (((unsigned char) -1) >> (8 - blen)) << bstr);
+        }
+      genIfxJump (ifx, "a");
+      return;
+    }
+  wassert (!ifx);
+
   /* If the bitfield length is less than a byte */
   if (blen < 8)
     {
       emitcode ("lda", ",x");
       hc08_dirtyReg (hc08_reg_a, FALSE);
-      if (!ifx)
+      AccRsh (bstr, FALSE);
+      emitcode ("and", "#0x%02x", ((unsigned char) -1) >> (8 - blen));
+      if (!SPEC_USIGN (etype))
         {
-          AccRsh (bstr, FALSE);
-          emitcode ("and", "#0x%02x", ((unsigned char) -1) >> (8 - blen));
-          storeRegToAop (hc08_reg_a, AOP (result), offset++);
+          /* signed bitfield */
+          symbol *tlbl = newiTempLabel (NULL);
+
+          emitcode ("bit", "#0x%02x", 1<<(blen - 1));
+          emitcode ("beq", "%05d$", tlbl->key + 100);
+          emitcode ("ora", "#0x%02x", (unsigned char) (0xff << blen));
+          emitLabel (tlbl);
         }
-      else
-        {
-          emitcode ("and", "#0x%02x",
-                    (((unsigned char) -1) >> (8 - blen)) << bstr);
-        }
+      storeRegToAop (hc08_reg_a, AOP (result), offset++);
       goto finish;
     }
 
@@ -6851,8 +6978,7 @@ genUnpackBits (operand * result, iCode *ifx)
     {
       emitcode ("lda", ",x");
       hc08_dirtyReg (hc08_reg_a, FALSE);
-      if (!ifx)
-        storeRegToAop (hc08_reg_a, AOP (result), offset);
+      storeRegToAop (hc08_reg_a, AOP (result), offset);
       offset++;
       if (rlen>8)
         emitcode ("aix", "#1");
@@ -6863,6 +6989,16 @@ genUnpackBits (operand * result, iCode *ifx)
     {
       emitcode ("lda", ",x");
       emitcode ("and", "#0x%02x", ((unsigned char) -1) >> (8-rlen));
+      if (!SPEC_USIGN (etype))
+        {
+          /* signed bitfield */
+          symbol *tlbl = newiTempLabel (NULL);
+
+          emitcode ("bit", "#0x%02x", 1<<(rlen - 1));
+          emitcode ("beq", "%05d$", tlbl->key + 100);
+          emitcode ("ora", "#0x%02x", (unsigned char) (0xff << rlen));
+          emitLabel (tlbl);
+        }
       storeRegToAop (hc08_reg_a, AOP (result), offset++);
     }
 
@@ -6870,13 +7006,21 @@ finish:
   if (offset < rsize)
     {
       rsize -= offset;
-      while (rsize--)
-        storeConstToAop (zero, AOP (result), offset++);
-    }
+      if (SPEC_USIGN (etype))
+        {
+          while (rsize--)
+            storeConstToAop (zero, AOP (result), offset++);
+        }
+      else
+        {
+          /* signed bitfield: sign extension with 0x00 or 0xff */
+          emitcode ("rola", "");
+          emitcode ("clra", "");
+          emitcode ("sbc", zero);
   
-  if (ifx && !ifx->generated)
-    {
-      genIfxJump (ifx, "a");
+          while (rsize--)
+            storeRegToAop (hc08_reg_a, AOP (result), offset++);
+        }
     }
 }
 
@@ -6924,7 +7068,10 @@ genUnpackBitsImmed (operand * left,
           emitcode ("brclr", "#%d,%s,%05d$",
                     bstr, aopAdrStr (derefaop, 0, FALSE),
                     (tlbl->key + 100));
-          rmwWithReg ("inc", hc08_reg_a);
+          if (SPEC_USIGN (etype))
+            rmwWithReg ("inc", hc08_reg_a);
+          else
+            rmwWithReg ("dec", hc08_reg_a);
           emitLabel (tlbl);
           storeRegToAop (hc08_reg_a, AOP (result), offset);
           hc08_freeReg (hc08_reg_a);
@@ -6967,6 +7114,16 @@ genUnpackBitsImmed (operand * left,
           AccRsh (bstr, FALSE);
           emitcode ("and", "#0x%02x", ((unsigned char) -1) >> (8 - blen));
           hc08_dirtyReg (hc08_reg_a, FALSE);
+          if (!SPEC_USIGN (etype))
+            {
+              /* signed bitfield */
+              symbol *tlbl = newiTempLabel (NULL);
+
+              emitcode ("bit", "#0x%02x", 1<<(blen - 1));
+              emitcode ("beq", "%05d$", tlbl->key + 100);
+              emitcode ("ora", "#0x%02x", (unsigned char) (0xff << blen));
+              emitLabel (tlbl);
+            }
           storeRegToAop (hc08_reg_a, AOP (result), offset);
         }
       else
@@ -6996,6 +7153,16 @@ genUnpackBitsImmed (operand * left,
     {
       loadRegFromAop (hc08_reg_a, derefaop, size-offset-1);
       emitcode ("and", "#0x%02x", ((unsigned char) -1) >> (8-rlen));
+      if (!SPEC_USIGN (etype))
+        {
+          /* signed bitfield */
+          symbol *tlbl = newiTempLabel (NULL);
+
+          emitcode ("bit", "#0x%02x", 1<<(rlen - 1));
+          emitcode ("beq", "%05d$", tlbl->key + 100);
+          emitcode ("ora", "#0x%02x", (unsigned char) (0xff << rlen));
+          emitLabel (tlbl);
+        }
       storeRegToAop (hc08_reg_a, AOP (result), offset++);
     }
 
@@ -7003,8 +7170,21 @@ finish:
   if (offset < rsize)
     {
       rsize -= offset;
-      while (rsize--)
-        storeConstToAop (zero, AOP (result), offset++);
+      if (SPEC_USIGN (etype))
+        {
+          while (rsize--)
+            storeConstToAop (zero, AOP (result), offset++);
+        }
+      else
+        {
+          /* signed bitfield: sign extension with 0x00 or 0xff */
+          emitcode ("rola", "");
+          emitcode ("clra", "");
+          emitcode ("sbc", zero);
+
+          while (rsize--)
+            storeRegToAop (hc08_reg_a, AOP (result), offset++);
+        }
     }
   
   freeAsmop (NULL, derefaop, ic, TRUE);
@@ -7540,6 +7720,30 @@ genIfx (iCode * ic, iCode * popIc)
 
   aopOp (cond, ic, FALSE);
 
+  /* If the condition is a literal, we can just do an unconditional */
+  /* branch or no branch */
+  if (AOP_TYPE (cond) == AOP_LIT)
+    {
+      unsigned long lit = (unsigned long) floatFromVal (AOP (cond)->aopu.aop_lit);
+      freeAsmop (cond, NULL, ic, TRUE);
+
+      /* if there was something to be popped then do it */
+      if (popIc)
+        genIpop (popIc);
+      if (lit)
+        {
+          if (IC_TRUE (ic))
+            emitBranch ("jmp", IC_TRUE (ic));
+        }
+      else
+        {
+          if (IC_FALSE (ic))
+            emitBranch ("jmp", IC_FALSE (ic));
+        }
+      ic->generated = 1;
+      return;
+    }
+
   /* get the value into acc */
   if (AOP_TYPE (cond) != AOP_CRY)
     asmopToBool (AOP (cond), FALSE);
@@ -7582,11 +7786,21 @@ genAddrOf (iCode * ic)
      variable */
   if (sym->onStack)
     {
-      /* if it has an offset then we need to compute
-         it */
+      /* if it has an offset then we need to compute it */
+      offset = _G.stackOfs + _G.stackPushes + sym->stack;
       hc08_useReg (hc08_reg_hx);
       emitcode ("tsx", "");
-      emitcode ("aix", "#%d", _G.stackOfs + _G.stackPushes +sym->stack);
+      while (offset > 127)
+        {
+          emitcode ("aix", "#127");
+          offset -= 127;
+        }
+      while (offset < -128)
+        {
+          emitcode ("aix", "#-128");
+          offset += 128;
+        }
+      emitcode ("aix", "#%d", offset);
       storeRegToFullAop (hc08_reg_hx, AOP (IC_RESULT (ic)), FALSE);
       hc08_freeReg (hc08_reg_hx);
 
@@ -7667,7 +7881,7 @@ release:
 }
 
 /*-----------------------------------------------------------------*/
-/* genJumpTab - genrates code for jump table                       */
+/* genJumpTab - generates code for jump table                       */
 /*-----------------------------------------------------------------*/
 static void
 genJumpTab (iCode * ic)
@@ -7816,7 +8030,7 @@ genCast (iCode * ic)
 		    exit(1);
 		}
 	    
-		sprintf(gpValStr, "#0x%d", gpVal);
+		sprintf(gpValStr, "#0x%x", gpVal);
 		aopPut (AOP (result), gpValStr, GPTRSIZE - 1);
 	    }	    
 #endif
@@ -8289,26 +8503,16 @@ genhc08Code (iCode * lic)
 	  break;
 
 	case '>':
-	  genCmpGt (ic, ifxForOp (IC_RESULT (ic), ic));
-	  break;
-
 	case '<':
-	  genCmpLt (ic, ifxForOp (IC_RESULT (ic), ic));
-	  break;
-
 	case LE_OP:
 	case GE_OP:
-	case NE_OP:
+          genCmp (ic, ifxForOp (IC_RESULT (ic), ic));
+          break;
 
-	  /* note these two are xlated by algebraic equivalence
-	     during parsing SDCC.y */
-	  werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
-		  "got '>=' or '<=' shouldn't have come here");
-	  break;
-
+        case NE_OP:
 	case EQ_OP:
-	  genCmpEq (ic, ifxForOp (IC_RESULT (ic), ic));
-	  break;
+          genCmpEQorNE (ic, ifxForOp (IC_RESULT (ic), ic));
+          break;
 
 	case AND_OP:
 	  genAndOp (ic);

@@ -48,6 +48,8 @@
 #include "hwcl.h"
 
 
+static class cl_mem_error_registry mem_error_registry;
+
 /*
  *                                                3rd version of memory system
  */
@@ -430,6 +432,7 @@ cl_memory_cell::cl_memory_cell(void):
   flags= CELL_NON_DECODED;
   width= 8;
   *data= 0;
+  operators= NULL;
 
 #ifdef STATISTIC
   nuof_writes= nuof_reads= 0;
@@ -699,13 +702,8 @@ cl_address_space::cl_address_space(char *id,
 {
   start_address= astart;
   decoders= new cl_decoder_list(2, 2, DD_FALSE);
-  cells= (class cl_memory_cell **)malloc(size * sizeof(class cl_memory_cell*));
-  int i;
-  for (i= 0; i < size; i++)
-    {
-      cells[i]= new cl_memory_cell();
-      cells[i]->init();
-    }
+  cells= (class cl_memory_cell **)calloc(size, sizeof(class cl_memory_cell*));
+
   dummy= new cl_dummy_cell();
 }
 
@@ -723,79 +721,42 @@ cl_address_space::~cl_address_space(void)
 t_mem
 cl_address_space::read(t_addr addr)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      err_inv_addr(addr);
-      return(dummy->read());
-    }
-  return(cells[idx]->read());
+  return get_cell(addr)->read();
 }
 
 t_mem
 cl_address_space::read(t_addr addr, enum hw_cath skip)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
     {
-      err_inv_addr(addr);
-      return(dummy->read());
+      return dummy->read();
     }
-  return(cells[idx]->read(skip));
+  return cell->read(skip);
 }
 
 t_mem
 cl_address_space::get(t_addr addr)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      err_inv_addr(addr);
-      return(dummy->get());
-    }
-  return(cells[idx]->get());
+  return get_cell(addr)->get();
 }
 
 t_mem
 cl_address_space::write(t_addr addr, t_mem val)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      err_inv_addr(addr);
-      return(dummy->write(val));
-    }
-  return(cells[idx]->write(val));
+  return get_cell(addr)->write(val);
 }
 
 void
 cl_address_space::set(t_addr addr, t_mem val)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      err_inv_addr(addr);
-      dummy->set(val);
-      return;
-    }
-  cells[idx]->set(val);
+  get_cell(addr)->set(val);
 }
 
 t_mem
 cl_address_space::wadd(t_addr addr, long what)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      err_inv_addr(addr);
-    }
-  return(cells[idx]->wadd(what));
+  return get_cell(addr)->wadd(what);
 }
 
 /* Set or clear bits, without callbacks */
@@ -803,25 +764,42 @@ cl_address_space::wadd(t_addr addr, long what)
 void
 cl_address_space::set_bit1(t_addr addr, t_mem bits)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
     return;
-  class cl_memory_cell *cell= cells[idx];
+    }
   cell->set_bit1(bits);
 }
 
 void
 cl_address_space::set_bit0(t_addr addr, t_mem bits)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    return;
-  class cl_memory_cell *cell= cells[idx];
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
+      return;
+    }
   cell->set_bit0(bits);
 }
 
+class cl_address_decoder *
+cl_address_space::get_decoder(t_addr addr)
+{
+  int i;
+  for (i= 0; i < decoders->count; i++)
+    {
+      class cl_address_decoder *d=
+	dynamic_cast<class cl_address_decoder *>(decoders->object_at(i));
+      if (!d)
+	continue;
+      if (d->covers(addr, addr))
+	{
+	  return d;
+	}
+    }
+    return NULL;
+}
 
 class cl_memory_cell *
 cl_address_space::get_cell(t_addr addr)
@@ -833,6 +811,18 @@ cl_address_space::get_cell(t_addr addr)
       err_inv_addr(addr);
       return(dummy);
     }
+  if (cells[idx] == NULL)
+    {
+      cells[idx]= new cl_memory_cell();
+      cells[idx]->init();
+      class cl_address_decoder *decoder;
+      decoder = get_decoder(addr);
+      if (decoder && decoder->activated)
+        {
+          decode_cell(addr, decoder->memchip,
+                      addr - decoder->as_begin + decoder->chip_begin);
+        }
+    }
   return(cells[idx]);
 }
 
@@ -840,41 +830,19 @@ cl_address_space::get_cell(t_addr addr)
 int
 cl_address_space::get_cell_flag(t_addr addr)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      return(dummy->get_flags());
-    }
-  return(cells[addr]->get_flags());
+  return get_cell(addr)->get_flags();
 }
 
 bool
 cl_address_space::get_cell_flag(t_addr addr, enum cell_flag flag)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    {
-      return(dummy->get_flag(flag));
-    }
-  return(cells[addr]->get_flag(flag));
+  return get_cell(addr)->get_flag(flag);
 }
 
 void
 cl_address_space::set_cell_flag(t_addr addr, bool set_to, enum cell_flag flag)
 {
-  t_addr idx= addr-start_address;
-  class cl_memory_cell *cell;
-  
-  if (idx >= size ||
-      addr < start_address)
-    {
-      cell= dummy;
-    }
-  else
-    cell= cells[addr];
-  cell->set_flag(flag, set_to);
+  get_cell(addr)->set_flag(flag, set_to);
 }
 
 
@@ -882,11 +850,11 @@ bool
 cl_address_space::decode_cell(t_addr addr,
 			      class cl_memory_chip *chip, t_addr chipaddr)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    return(DD_FALSE);
-  class cl_memory_cell *cell= cells[idx];
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
+      return(DD_FALSE);
+    }
 
   if (!cell->get_flag(CELL_NON_DECODED))
     {
@@ -904,10 +872,15 @@ cl_address_space::undecode_cell(t_addr addr)
   t_addr idx= addr-start_address;
   if (idx >= size ||
       addr < start_address)
-    return;
-  class cl_memory_cell *cell= cells[idx];
-
-  cell->un_decode();
+    {
+      err_inv_addr(addr);
+      return;
+    }
+  if (cells[idx] == NULL)
+    {
+      return;
+    }
+  cells[idx]->un_decode();
 }
 
 void
@@ -981,11 +954,11 @@ cl_address_space::register_hw(t_addr addr, class cl_hw *hw,
 			      int *ith,
 			      bool announce)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    return(0);
-  class cl_memory_cell *cell= cells[idx];
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
+      return(NULL);
+    }
   cell->add_hw(hw, ith, addr);
   //printf("adding hw %s to cell 0x%x(%d) of %s\n", hw->id_string, addr, idx, get_name("as"));
   if (announce)
@@ -997,11 +970,12 @@ cl_address_space::register_hw(t_addr addr, class cl_hw *hw,
 void
 cl_address_space::set_brk(t_addr addr, class cl_brk *brk)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    return;
-  class cl_memory_cell *cell= cells[idx];
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
+      return;
+    }
+
   class cl_memory_operator *op;
 
   switch (brk->get_event())
@@ -1032,11 +1006,11 @@ cl_address_space::set_brk(t_addr addr, class cl_brk *brk)
 void
 cl_address_space::del_brk(t_addr addr, class cl_brk *brk)
 {
-  t_addr idx= addr-start_address;
-  if (idx >= size ||
-      addr < start_address)
-    return;
-  class cl_memory_cell *cell= cells[idx];
+  cl_memory_cell *cell = get_cell(addr);
+  if (cell == dummy)
+    {
+      return;
+    }
 
   switch (brk->get_event())
     {
@@ -1237,16 +1211,6 @@ cl_address_decoder::activate(class cl_console *con)
 
   address_space->undecode_area(this, as_begin, as_end, con);
 
-  t_addr asa, ca;
-  for (asa= as_begin, ca= chip_begin;
-       asa <= as_end;
-       asa++, ca++)
-    {
-      if (!address_space->decode_cell(asa, memchip, ca))
-	{
-	  D("Decoding 0x%06x->0x%06x failed\n", asa, ca);
-	}
-    }
   activated= DD_TRUE;
 
 #undef D
@@ -1376,27 +1340,21 @@ cl_decoder_list::compare(void *key1, void *key2)
  */
 
 /* All of memory errors */
-ERROR_CLASS_DEF_PARENT_ON(err_error, mem, "memory",
-			  error_class_base, ERROR_ON);
 
 cl_error_mem::cl_error_mem(class cl_memory *amem, t_addr aaddr)
 {
   mem= amem;
   addr= aaddr;
-  classification= &error_mem_class;
+  classification= mem_error_registry.find("memory");
 }
 
 /* Invalid address in memory access */
-ERROR_CLASS_DEF_PARENT(err_error,
-		       mem_invalid_address,
-		       "invalid_address",
-		       error_mem_class);
 
 cl_error_mem_invalid_address::
 cl_error_mem_invalid_address(class cl_memory *amem, t_addr aaddr):
   cl_error_mem(amem, aaddr)
 {
-  classification= &error_mem_invalid_address_class;
+  classification= mem_error_registry.find("invalid_address");
 }
 
 void
@@ -1409,16 +1367,12 @@ cl_error_mem_invalid_address::print(class cl_commander *c)
 }
 
 /* Non-decoded address space access */
-ERROR_CLASS_DEF_PARENT(err_error,
-		       mem_non_decoded,
-		       "non_decoded",
-		       error_mem_class);
 
 cl_error_mem_non_decoded::
 cl_error_mem_non_decoded(class cl_memory *amem, t_addr aaddr):
   cl_error_mem(amem, aaddr)
 {
-  classification= &error_mem_non_decoded_class;
+  classification= mem_error_registry.find("non_decoded");
 }
 
 void
@@ -1428,6 +1382,14 @@ cl_error_mem_non_decoded::print(class cl_commander *c)
   cmd_fprintf(f, "%s: access of non-decoded address ", get_type_name());
   cmd_fprintf(f, mem->addr_format, addr);
   cmd_fprintf(f, " in memory %s.\n", mem->get_name());
+}
+
+cl_mem_error_registry::cl_mem_error_registry(void)
+{
+  class cl_error_class *prev = mem_error_registry.find("non-classified");
+  prev = register_error(new cl_error_class(err_error, "memory", prev, ERROR_OFF));
+  prev = register_error(new cl_error_class(err_error, "invalid_address", prev));
+  prev = register_error(new cl_error_class(err_error, "non_decoded", prev));
 }
 
 

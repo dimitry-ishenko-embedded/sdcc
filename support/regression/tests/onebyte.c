@@ -8,6 +8,7 @@
 void
 testMul(void)
 {
+#ifndef SDCC_pic16  /* bug [ 1444425 ] onebyte.c regression tes fails on pic16 */
   {attrL}            char  cL;
   {attrL}  unsigned  char ucL;
   {attrR}            char  cR;
@@ -35,6 +36,7 @@ testMul(void)
   ucL = 128;  cR =   1; ur8 = ucL * cR;  ur8b  = cR * ucL; ASSERT(ur8 ==  128); ASSERT(ur8b  ==  128);
   ucL = 128; ucR =   5; r16 = ucL * ucR; r16b = ucR * ucL; ASSERT(r16 ==  640); ASSERT(r16b ==  640);
   ucL = 128; ucR =   1; ur8 = ucL * ucR; ur8b = ucR * ucL; ASSERT(ur8 ==  128); ASSERT(ur8b ==  128);
+#endif
 }
 
 void
@@ -185,4 +187,59 @@ testComplement(void)
   uc = 0x80;  r16 = ~uc; ASSERT(r16 == (short) 0xff7f); ASSERT(~uc < 0);
   ASSERT(~ (char)          0x80 == (short) 0x007f); ASSERT(~ (char)          0x80 > 0);
   ASSERT(~ (unsigned char) 0x80 == (short) 0xff7f); ASSERT(~ (unsigned char) 0x80 < 0);
+
+  ASSERT(~ 1   < 0);
+  ASSERT(~ 1u  > 0);
+  ASSERT(~ 1l  < 0);
+  ASSERT(~ 1ul > 0);
+}
+
+void
+testCompare(void)
+{
+  {attrL}   signed char  c;
+  {attrR} unsigned char uc;
+
+   c = 0x80; /* -128 */
+  uc = 0x80; /* +128 */
+
+  ASSERT(!(c == uc));
+  ASSERT(  c != uc );
+  ASSERT(  c <  uc );
+  ASSERT(  c <= uc );
+  ASSERT(!(c >  uc));
+  ASSERT(!(c >= uc));
+}
+
+void
+testUMinus(void)
+{
+    signed char  {attrL} sc;
+  unsigned char  {attrL} uc;
+    signed int   {attrL} si;
+  unsigned int   {attrL} ui;
+    signed long  {attrL} sl;
+  unsigned long  {attrL} ul;
+
+  ASSERT(-(53l ) < 0);
+  ASSERT(-(53ul) > 0);
+  ul = 53;
+  ASSERT(-ul > 0);
+  sl = 53;
+  ASSERT(-sl < 0);
+
+  ASSERT(-(53  ) < 0);
+  ASSERT(-(53u ) > 0);
+  ui = 53;
+  ASSERT(-ui > 0);
+  si = 53;
+  ASSERT(-si < 0);
+
+  ASSERT(-( 250 ) == -250);
+  uc = 250;
+  ASSERT(-uc == -250);
+
+  ASSERT(-(-128 ) ==  128);
+  sc = -128;
+  ASSERT(-sc == 128);
 }

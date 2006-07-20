@@ -32,6 +32,8 @@
 #include "ralloc.h"
 #include "device.h"
 
+extern char *pic16_aopGet (struct asmop *aop, int offset, bool bit16, bool dname);
+
 #if defined(__BORLANDC__) || defined(_MSC_VER)
 #define STRCASECMP stricmp
 #define inline
@@ -159,7 +161,7 @@ extern void pic16_BuildFlowTree(pBlock *pb);
 extern void pic16_pCodeRegOptimizeRegUsage(int level);
 extern int pic16_picIsInitialized(void);
 extern void SAFE_snprintf(char **str, size_t *size, const char *format, ...);
-extern int mnem2key(char const *mnem);
+extern int mnem2key(unsigned char const *mnem);
 
 /****************************************************************/
 /*                      Forward declarations                    */
@@ -3111,7 +3113,7 @@ void  pic16_pCodeInitRegisters(void)
 /*                                                                 */
 /*-----------------------------------------------------------------*/
 
-int mnem2key(char const *mnem)
+int mnem2key(unsigned char const *mnem)
 {
   int key = 0;
 
@@ -3243,7 +3245,7 @@ void pic16initMnemonics(void)
 
   for(i=0; i<MAX_PIC16MNEMONICS; i++)
     if(pic16Mnemonics[i])
-      hTabAddItem(&pic16MnemonicsHash, mnem2key(pic16Mnemonics[i]->mnemonic), pic16Mnemonics[i]);
+      hTabAddItem(&pic16MnemonicsHash, mnem2key((const unsigned char *)pic16Mnemonics[i]->mnemonic), pic16Mnemonics[i]);
   pci = hTabFirstItem(pic16MnemonicsHash, &key);
 
   while(pci) {
@@ -3260,7 +3262,7 @@ int pic16_getpCode(char *mnem,unsigned dest)
 {
 
   pCodeInstruction *pci;
-  int key = mnem2key(mnem);
+  int key = mnem2key((unsigned char *)mnem);
 
   if(!mnemonics_initialized)
     pic16initMnemonics();
@@ -3300,7 +3302,7 @@ void pic16initpCodePeepCommands(void)
   i = 0;
   do {
     hTabAddItem(&pic16pCodePeepCommandsHash, 
-		mnem2key(peepCommands[i].cmd), &peepCommands[i]);
+		mnem2key((const unsigned char *)peepCommands[i].cmd), &peepCommands[i]);
     i++;
   } while (peepCommands[i].cmd);
 
@@ -3322,7 +3324,7 @@ int pic16_getpCodePeepCommand(char *cmd)
 {
 
   peepCommand *pcmd;
-  int key = mnem2key(cmd);
+  int key = mnem2key((unsigned char *)cmd);
 
 
   pcmd = hTabFirstItemWK(pic16pCodePeepCommandsHash, key);
@@ -3522,6 +3524,7 @@ static int RegCond(pCodeOp *pcop)
 
   return 0;
 }
+
 
 /*-----------------------------------------------------------------*/
 /* pic16_newpCode - create and return a newly initialized pCode          */
@@ -3854,7 +3857,7 @@ pCode *pic16_newpCodeAsmDir(char *asdir, char *argfmt, ...)
 
 	if(asdir && *asdir) {
 		
-		while(isspace(*asdir))asdir++;	// strip any white space from the beginning
+		while(isspace((unsigned char)*asdir))asdir++;	// strip any white space from the beginning
 		
 		pcad->directive = Safe_strdup( asdir );
 	}
@@ -3867,7 +3870,7 @@ pCode *pic16_newpCodeAsmDir(char *asdir, char *argfmt, ...)
 	
 	va_end(ap);
 	
-	while(isspace(*lbp))lbp++;
+	while(isspace((unsigned char)*lbp))lbp++;
 	
 	if(lbp && *lbp)
 		pcad->arg = Safe_strdup( lbp );
@@ -4067,6 +4070,30 @@ pCodeOp *pic16_newpCodeOpLit(int lit)
   return pcop;
 }
 
+/* Allow for 12 bit literals, required for LFSR */
+pCodeOp *pic16_newpCodeOpLit12(int lit)
+{
+  char *s = buffer;
+  pCodeOp *pcop;
+
+
+  pcop = Safe_calloc(1,sizeof(pCodeOpLit) );
+  pcop->type = PO_LITERAL;
+
+  pcop->name = NULL;
+  //if(lit>=0)
+    sprintf(s,"0x%03x", ((unsigned int)lit) & 0x0fff);
+  //else
+  //  sprintf(s, "%i", lit);
+  
+  if(s)
+    pcop->name = Safe_strdup(s);
+
+  ((pCodeOpLit *)pcop)->lit = lit;
+
+  return pcop;
+}
+
 /*-----------------------------------------------------------------*/
 /*-----------------------------------------------------------------*/
 pCodeOp *pic16_newpCodeOpLit2(int lit, pCodeOp *arg2)
@@ -4115,6 +4142,7 @@ pCodeOp *pic16_newpCodeOpImmd(char *name, int offset, int index, int code_space)
 //			fprintf(stderr,"%s %s %d\n",__FUNCTION__,name,offset);
 	} else {
 		pcop->name = NULL;
+		PCOI(pcop)->rIdx = -1;
 	}
 
 	PCOI(pcop)->index = index;
@@ -4224,6 +4252,12 @@ pCodeOp *pic16_newpCodeOpBit(char *s, int bit, int inBitSpace, PIC_OPTYPE subt)
   return pcop;
 }
 
+pCodeOp *pic16_newpCodeOpBit_simple (struct asmop *op, int offs, int bit)
+{
+  return pic16_newpCodeOpBit (pic16_aopGet(op,offs,FALSE,FALSE),
+  				bit, 0, PO_GPR_REGISTER);
+}
+
 
 /*-----------------------------------------------------------------*
  * pCodeOp *pic16_newpCodeOpReg(int rIdx) - allocate a new register
@@ -4236,26 +4270,28 @@ pCodeOp *pic16_newpCodeOpBit(char *s, int bit, int inBitSpace, PIC_OPTYPE subt)
 pCodeOp *pic16_newpCodeOpReg(int rIdx)
 {
   pCodeOp *pcop;
+  regs *r;
 
   pcop = Safe_calloc(1,sizeof(pCodeOpReg) );
 
   pcop->name = NULL;
 
   if(rIdx >= 0) {
-    PCOR(pcop)->rIdx = rIdx;
-    PCOR(pcop)->r = pic16_regWithIdx(rIdx);
+	r = pic16_regWithIdx(rIdx);
+	if(!r)
+		r = pic16_allocWithIdx(rIdx);
   } else {
-    PCOR(pcop)->r = pic16_findFreeReg(REG_GPR);
+    r = pic16_findFreeReg(REG_GPR);
 
-    if(PCOR(pcop)->r)
-      PCOR(pcop)->rIdx = PCOR(pcop)->r->rIdx;
-    else {
+    if(!r) {
     	fprintf(stderr, "%s:%d Could not find a free GPR register\n",
 	    	__FUNCTION__, __LINE__);
-	exit(-1);
+	exit(EXIT_FAILURE);
     }
   }
 
+  PCOR(pcop)->rIdx = rIdx;
+  PCOR(pcop)->r = r;
   pcop->type = PCOR(pcop)->r->pc_type;
 
   return pcop;
@@ -4364,6 +4400,11 @@ pCodeOp *pic16_newpCodeOp(char *name, PIC_OPTYPE type)
     else
       pcop = pic16_newpCodeOpReg(-1);
     break;
+    
+  case PO_TWO_OPS:
+    assert( !"Cannot create PO_TWO_OPS from string!" );
+    pcop = NULL;
+    break;
 
   default:
     pcop = Safe_calloc(1,sizeof(pCodeOp) );
@@ -4377,12 +4418,27 @@ pCodeOp *pic16_newpCodeOp(char *name, PIC_OPTYPE type)
   return pcop;
 }
 
-#define DB_ITEMS_PER_LINE	8
+pCodeOp *pic16_newpCodeOp2(pCodeOp *src, pCodeOp *dst)
+{
+  pCodeOp2 *pcop2 = Safe_calloc(1, sizeof(pCodeOp2));
+  pcop2->pcop.type = PO_TWO_OPS;
+  pcop2->pcopL = src;
+  pcop2->pcopR = dst;
+  return PCOP(pcop2);
+}
+
+/* This is a multiple of two as gpasm pads DB directives to even length,
+ * thus the data would be interleaved with \0 bytes...
+ * This is a multiple of three in order to have arrays of 3-byte pointers
+ * continuously in memory (without 0-padding at the lines' end).
+ * This is rather 12 than 6 in order not to split up 4-byte data types
+ * in arrays right in the middle of a 4-byte word. */
+#define DB_ITEMS_PER_LINE	12
 
 typedef struct DBdata
   {
     int count;
-    char buffer[256];
+    char buffer[512];
   } DBdata;
 
 struct DBdata DBd;
@@ -4424,7 +4480,7 @@ void pic16_flushDB(char ptype, void *p)
 /*-----------------------------------------------------------------*/
 /*    Add "DB" directives to a pBlock                              */
 /*-----------------------------------------------------------------*/
-void pic16_emitDB(char c, char ptype, void *p)
+void pic16_emitDB(int c, char ptype, void *p)
 {
   int l;
 
@@ -4462,7 +4518,7 @@ void pic16_emitDS(char *s, char ptype, void *p)
 //	fprintf(stderr, "%s:%d DBbuffer: '%s'\n", __FILE__, __LINE__, DBd.buffer);
 
 	DBd.count++;	//=strlen(s);
-	if (DBd.count>=16)
+	if (DBd.count>=DB_ITEMS_PER_LINE)
 		pic16_flushDB(ptype, p);
 }
 
@@ -4472,11 +4528,26 @@ void pic16_emitDS(char *s, char ptype, void *p)
 void pic16_pCodeConstString(char *name, char *value)
 {
   pBlock *pb;
-
-  //  fprintf(stderr, " %s  %s  %s\n",__FUNCTION__,name,value);
+  char *item;
+  static set *emittedSymbols = NULL;
 
   if(!name || !value)
     return;
+
+  /* keep track of emitted symbols to avoid multiple definition of str_<nr> */
+  if (emittedSymbols) {
+    /* scan set for name */
+    for (item = setFirstItem (emittedSymbols); item; item = setNextItem (emittedSymbols))
+    {
+      if (!strcmp (item,name)) {
+        //fprintf (stderr, "%s already emitted\n", name);
+        return;
+      } // if
+    } // for
+  } // if
+  addSet (&emittedSymbols, Safe_strdup (name));
+
+  //fprintf(stderr, " %s  %s  %s\n",__FUNCTION__,name,value);
 
   pb = pic16_newpCodeChain(NULL, 'P',pic16_newpCodeCharP("; Starting pCode block"));
 
@@ -4748,6 +4819,7 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 	} 
 
 	if(pcop) {
+
 		switch(pcop->type) {
 			case PO_W:
 			case PO_WREG:
@@ -4757,17 +4829,17 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 			case PO_FSR0:
 				if(use_buffer) {
 					SAFE_snprintf(&buffer,&size,"%s",PCOR(pcop)->r->name);
-					return buffer;
+					return (buffer);
 				}
-				return PCOR(pcop)->r->name;
+				return (PCOR(pcop)->r->name);
 				break;
 			case PO_GPR_TEMP:
 				r = pic16_regWithIdx(PCOR(pcop)->r->rIdx);
 				if(use_buffer) {
 					SAFE_snprintf(&buffer,&size,"%s",r->name);
-					return buffer;
+					return (buffer);
 				}
-				return r->name;
+				return (r->name);
 
 			case PO_IMMEDIATE:
 				s = buffer;
@@ -4794,7 +4866,7 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 							pcop->name);
 					}
 				}
-				return buffer;
+				return (buffer);
 
 			case PO_GPR_REGISTER:
 			case PO_DIR:
@@ -4807,7 +4879,7 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 				} else {
 					SAFE_snprintf(&s,&size,"%s",pcop->name);
 				}
-				return buffer;
+				return (buffer);
 			case PO_GPR_BIT:
 				s = buffer;
 				if(PCORB(pcop)->subtype == PO_GPR_TEMP) {
@@ -4820,19 +4892,23 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 				}
 
 				return (buffer);
+			case PO_TWO_OPS:
+				return (pic16_get_op( PCOP2(pcop)->pcopL, use_buffer ? buffer : NULL, size ));
+				
 			default:
 				if(pcop->name) {
 					if(use_buffer) {
 						SAFE_snprintf(&buffer,&size,"%s",pcop->name);
-						return buffer;
+						return (buffer);
 					}
-				return pcop->name;
+				return (pcop->name);
 				}
 
 		}
+  		return ("unhandled type for op1");
 	}
 
-  return "NO operand1";
+  return ("NO operand1");
 }
 
 /*-----------------------------------------------------------------*/
@@ -4840,95 +4916,10 @@ char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size)
 /*-----------------------------------------------------------------*/
 char *pic16_get_op2(pCodeOp *pcop,char *buffer, size_t size)
 {
-  regs *r;
-  static char b[128];
-  char *s;
-  int use_buffer = 1;    // copy the string to the passed buffer pointer
 
-	if(!buffer) {
-		buffer = b;
-		size = sizeof(b);
-		use_buffer = 0;     // Don't bother copying the string to the buffer.
-	} 
-
-#if 0
-	fprintf(stderr, "%s:%d second operand %s is %d\tPO_DIR(%d) PO_GPR_TEMP(%d) PO_IMMEDIATE(%d) PO_INDF0(%d) PO_FSR0(%d)\n",
-		__FUNCTION__, __LINE__, PCOR(PCOR2(pcop)->pcop2)->r->name, PCOR2(pcop)->pcop2->type,
-		PO_DIR, PO_GPR_TEMP, PO_IMMEDIATE, PO_INDF0, PO_FSR0);
-#endif
-
-	if(pcop) {
-		switch(PCOR2(pcop)->pcop2->type) {
-			case PO_W:
-			case PO_WREG:
-			case PO_PRODL:
-			case PO_PRODH:
-			case PO_INDF0:
-			case PO_FSR0:
-				if(use_buffer) {
-					SAFE_snprintf(&buffer,&size,"%s",PCOR(PCOR2(pcop)->pcop2)->r->name);
-					return buffer;
-				}
-				return PCOR(PCOR2(pcop)->pcop2)->r->name;
-				break;
-			case PO_GPR_TEMP:
-				r = pic16_regWithIdx(PCOR(PCOR2(pcop)->pcop2)->r->rIdx);
-
-				if(use_buffer) {
-					SAFE_snprintf(&buffer,&size,"%s",r->name);
-					return buffer;
-				}
-				return r->name;
-
-			case PO_IMMEDIATE:
-					assert( 0 );
-				break;
-#if 0
-				s = buffer;
-
-				if(PCOI(pcop)->_const) {
-					if( PCOI(pcop)->offset && PCOI(pcop)->offset<4) {
-						SAFE_snprintf(&s,&size,"(((%s+%d) >> %d)&0xff)",
-							pcop->name,
-							PCOI(pcop)->index,
-							8 * PCOI(pcop)->offset );
-					} else
-						SAFE_snprintf(&s,&size,"LOW(%s+%d)",pcop->name,PCOI(pcop)->index);
-				} else {
-      					if( PCOI(pcop)->index) {
-						SAFE_snprintf(&s,&size,"(%s + %d)",
-							pcop->name,
-							PCOI(pcop)->index );
-					} else {
-						if(PCOI(pcop)->offset)
-							SAFE_snprintf(&s,&size,"(%s >> %d)&0xff",pcop->name, 8*PCOI(pcop)->offset);
-						else
-							SAFE_snprintf(&s,&size,"%s",pcop->name);
-					}
-				}
-				return buffer;
-#endif
-			case PO_DIR:
-				s = buffer;
-				if( PCOR(PCOR2(pcop)->pcop2)->instance) {
-					SAFE_snprintf(&s,&size,"(%s + %d)",
-						PCOR(PCOR2(pcop)->pcop2)->r->name,
-						PCOR(PCOR2(pcop)->pcop2)->instance );
-				} else {
-					SAFE_snprintf(&s,&size,"%s",PCOR(PCOR2(pcop)->pcop2)->r->name);
-				}
-				return buffer;
-
-			default:
-				if(PCOR(PCOR2(pcop)->pcop2)->r->name) {
-					if(use_buffer) {
-						SAFE_snprintf(&buffer,&size,"%s",PCOR(PCOR2(pcop)->pcop2)->r->name);
-						return buffer;
-					}
-					return PCOR(PCOR2(pcop)->pcop2)->r->name;
-				}
-		}
-	}
+  if(pcop && pcop->type == PO_TWO_OPS) {
+    return pic16_get_op( PCOP2(pcop)->pcopR, buffer, size );
+  }
 
   return "NO operand2";
 }
@@ -4968,7 +4959,7 @@ char *pic16_pCode2str(char *str, size_t size, pCode *pc)
 	if(isPCI(pc) && (PCI(pc)->pci_magic != PCI_MAGIC)) {
 		fprintf(stderr, "%s:%d: pCodeInstruction initialization error in instruction %s, magic is %x (defaut: %x)\n",
 			__FILE__, __LINE__, PCI(pc)->mnemonic, PCI(pc)->pci_magic, PCI_MAGIC);
-//		exit(-1);
+//		exit(EXIT_FAILURE);
 	}
 #endif
 
@@ -4979,10 +4970,14 @@ char *pic16_pCode2str(char *str, size_t size, pCode *pc)
 
     if( (PCI(pc)->num_ops >= 1) && (PCI(pc)->pcop)) {
 
-	if(PCI(pc)->is2MemOp) {
-		SAFE_snprintf(&s,&size, "%s, %s", 
-		pic16_get_op(PCOP(PCI(pc)->pcop), NULL, 0),
-		pic16_get_op2(PCOP(PCI(pc)->pcop), NULL, 0));
+	//if(PCI(pc)->is2MemOp)
+	if (PCI(pc)->pcop->type == PO_TWO_OPS)
+	{
+		/* split into two phases due to static buffer in pic16_get_op() */
+		SAFE_snprintf(&s,&size, "%s", 
+			pic16_get_op((PCI(pc)->pcop), NULL, 0));
+		SAFE_snprintf(&s, &size, ", %s",
+			pic16_get_op2((PCI(pc)->pcop), NULL, 0));
 		break;
 	}
 
@@ -5029,7 +5024,14 @@ char *pic16_pCode2str(char *str, size_t size, pCode *pc)
 //              fprintf(stderr, "%s:%d reg = %p\tname= %s, accessBank= %d\n",
 //                      __FUNCTION__, __LINE__, r, (r)?r->name:"<null>", (r)?r->accessBank:-1);
 
-          if(r && !r->accessBank)SAFE_snprintf(&s,&size,", %s", (!pic16_mplab_comp?"B":"BANKED"));
+          if(PCI(pc)->isAccess) {
+	    static char *bank_spec[2][2] = {
+	      { "", ", ACCESS" },  /* gpasm uses access bank by default */
+	      { ", B", ", BANKED" }/* MPASM (should) use BANKED by default */
+	    };
+	     
+	    SAFE_snprintf(&s,&size,"%s", bank_spec[(r && !r->accessBank) ? 1 : 0][pic16_mplab_comp ? 1 : 0]);
+	  }
         }
 //      
 
@@ -5796,9 +5798,13 @@ regs * pic16_getRegFrompCodeOp (pCodeOp *pcop) {
     
   case PO_WILD:
     break;
+
+  case PO_TWO_OPS:
+    return pic16_getRegFrompCodeOp( PCOP2(pcop)->pcopL );
+    break;
     
   default:
-	fprintf(stderr, "pic16_getRegFromInstruction - unknown reg type %d (%s)\n",pcop->type, dumpPicOptype (pcop->type));
+	fprintf(stderr, "pic16_getRegFrompCodeOp - unknown reg type %d (%s)\n",pcop->type, dumpPicOptype (pcop->type));
 //	assert( 0 );
 	break;
   }
@@ -5810,7 +5816,6 @@ regs * pic16_getRegFrompCodeOp (pCodeOp *pcop) {
 /*-----------------------------------------------------------------*/
 regs * pic16_getRegFromInstruction(pCode *pc)
 {
-
   if(!pc                   || 
      !isPCI(pc)            ||
      !PCI(pc)->pcop        ||
@@ -5823,7 +5828,7 @@ regs * pic16_getRegFromInstruction(pCode *pc)
   	dumpPicOptype( PCI(pc)->pcop->type), PCI(pc)->pcop->type);
 #endif
 
-  return pic16_getRegFrompCodeOp (PCI(pc)->pcop);
+  return( pic16_getRegFrompCodeOp (PCI(pc)->pcop) );
 }
 
 /*-------------------------------------------------------------------------------*/
@@ -5839,13 +5844,15 @@ regs * pic16_getRegFromInstruction2(pCode *pc)
      (PCI(pc)->num_ops == 1))		// accept only 2 operand commands
     return NULL;
 
+  if (PCI(pc)->pcop->type != PO_TWO_OPS)
+    return NULL;
 
 #if 0
   fprintf(stderr, "pic16_getRegFromInstruction2 - reg type %s (%d)\n",
   	dumpPicOptype( PCI(pc)->pcop->type), PCI(pc)->pcop->type);
 #endif
 
-  return pic16_getRegFrompCodeOp (PCOR2(PCI(pc)->pcop)->pcop2);
+  return pic16_getRegFrompCodeOp (PCOP2(PCI(pc)->pcop)->pcopR);
 }
 
 /*-----------------------------------------------------------------*/
@@ -5896,7 +5903,7 @@ static void AnalyzepBlock(pBlock *pb)
       }
       if(PCI(pc)->pcop->type == PO_GPR_REGISTER) {
 	if(PCOR(PCI(pc)->pcop)->r) {
-	  pic16_allocWithIdx (PCOR(PCI(pc)->pcop)->r->rIdx);
+	  pic16_allocWithIdx(PCOR(PCI(pc)->pcop)->r->rIdx);			/* FIXME! - VR */
 	  DFPRINTF((stderr,"found register in pblock: reg 0x%x\n",PCOR(PCI(pc)->pcop)->r->rIdx));
 	} else {
 	  if(PCI(pc)->pcop->name)
@@ -8694,12 +8701,14 @@ char *pic_optype_names[]={
 	"PO_BIT",            // bit operand.
 	"PO_STR",            //  (8051 legacy)
 	"PO_LABEL",
-	"PO_WILD"            // Wild card operand in peep optimizer
+	"PO_WILD",           // Wild card operand in peep optimizer
+	"PO_TWO_OPS"         // combine two operands
 };
 
 
 char *dumpPicOptype(PIC_OPTYPE type)
 {
+	assert( type >= 0 && type < sizeof(pic_optype_names)/sizeof( char *) );
 	return (pic_optype_names[ type ]);
 }
 
@@ -8763,7 +8772,7 @@ int comparePtr (const void *p1, const void *p2)
 /* getSymbolFromOperand - return a pointer to the symbol in */
 /*                        the given operand and its length  */
 /*----------------------------------------------------------*/
-char *getSymbolFromOperand (char *op, unsigned int *len)
+char *getSymbolFromOperand (char *op, int *len)
 {
   char *sym, *curr;
   *len = 0;
@@ -9379,6 +9388,9 @@ typedef unsigned int valnum_t;
 #define PTR_TO_INT(x) (((char *)(x)) - ((char *) 0))
 #endif
 
+static int pic16_regIsLocal (regs *r);
+static int pic16_safepCodeRemove (pCode *pc, char *comment);
+
 /* statistics */
 static unsigned int pic16_df_removed_pcodes = 0;
 static unsigned int pic16_df_saved_bytes = 0;
@@ -9409,11 +9421,52 @@ static int pic16_safepCodeUnlink (pCode *pc, char *comment) {
   pcprev = pic16_findPrevInstruction (pc->prev);
   pcnext = pic16_findNextInstruction (pc->next);
   
-  /* if previous instruction is a skip -- do not remove */
-  if (pcprev && isPCI_SKIP(pcprev)) return 0;
-
   /* move labels to next instruction (if possible) */
   if (PCI(pc)->label && !pcnext) return 0;
+
+  /* if this is a SKIP with side-effects -- do not remove */
+  /* XXX: might try to replace this one with the side-effect only version */
+  if (isPCI_SKIP(pc)
+  	&& ((PCI(pc)->outCond & (PCC_REGISTER | PCC_W)) != 0))
+  {
+    pCode *newpc;
+    switch (PCI(pc)->op)
+    {
+    case POC_INCFSZ:
+    case POC_INFSNZ:
+      newpc = pic16_newpCode(POC_INCF, pic16_pCodeOpCopy( PCI(pc)->pcop ) );
+      pic16_pCodeReplace( pc, newpc );
+      return 1;
+      break;
+    case POC_INCFSZW:
+      newpc = pic16_newpCode(POC_INCFW, pic16_pCodeOpCopy( PCI(pc)->pcop ) );
+      pic16_pCodeReplace( pc, newpc );
+      return 1;
+      break;
+    case POC_DECFSZ:
+    case POC_DCFSNZ:
+      newpc = pic16_newpCode(POC_INCF, pic16_pCodeOpCopy( PCI(pc)->pcop ) );
+      pic16_pCodeReplace( pc, newpc );
+      return 1;
+      break;
+    case POC_DECFSZW:
+      newpc = pic16_newpCode(POC_INCF, pic16_pCodeOpCopy( PCI(pc)->pcop ) );
+      pic16_pCodeReplace( pc, newpc );
+      return 1;
+      break;
+    default:
+      return 0;
+    }
+    return 0;
+  }
+
+  /* if previous instruction is a skip -- do not remove */
+  if (pcprev && isPCI_SKIP(pcprev)) {
+    if (!pic16_safepCodeUnlink (pcprev, "=DF= removed now unused SKIP")) {
+      /* preceeding SKIP could not be removed -- keep this instruction! */
+      return 0;
+    }
+  }
 
   if (PCI(pc)->label) {
     //fprintf (stderr, "%s: moving label(s)\n", __FUNCTION__);
@@ -9595,7 +9648,7 @@ static symbol_t symFromStr (const char *str) {
   /* find symbol in table */
   sym = PTR_TO_INT(hTabFindByKey (map_strToSym, hash, str, &symcmp));
   if (sym) {
-    //fprintf (stderr, "found symbol %u for %s\n", sym, str);
+    //fprintf (stderr, "found symbol %x for %s\n", sym, str);
     return sym;
   }
 
@@ -9606,7 +9659,7 @@ static symbol_t symFromStr (const char *str) {
   hTabAddItemLong (&map_strToSym, hash, res, INT_TO_PTR(sym));
   hTabAddItemLong (&map_symToStr, sym % map_symToStr->size, INT_TO_PTR(sym), res);
 
-  //fprintf (stderr, "created symbol %u for %s\n", sym, res);
+  //fprintf (stderr, "created symbol %x for %s\n", sym, res);
   
   return sym;
 }
@@ -9911,18 +9964,18 @@ typedef struct stack_s {
   struct stack_s *next;
 } stackitem_t;
 
-typedef stackitem_t *stack_t;
+typedef stackitem_t *dynstack_t;
 static stackitem_t *free_stackitems = NULL;
 
 /* Create a stack with one item. */
-static stack_t *newStack () {
-  stack_t *s = (stack_t *) Safe_malloc (sizeof (stack_t));
+static dynstack_t *newStack () {
+  dynstack_t *s = (dynstack_t *) Safe_malloc (sizeof (dynstack_t));
   *s = NULL;
   return s;
 }
 
 /* Remove a stack -- its items are only marked free. */
-static void deleteStack (stack_t *s) {
+static void deleteStack (dynstack_t *s) {
   stackitem_t *i;
 
   while (*s) {
@@ -9945,7 +9998,7 @@ static void releaseStack () {
   } // while
 }
 
-static void stackPush (stack_t *stack, void *data) {
+static void stackPush (dynstack_t *stack, void *data) {
   stackitem_t *i;
   
   if (free_stackitems) {
@@ -9959,7 +10012,7 @@ static void stackPush (stack_t *stack, void *data) {
   *stack = i;
 }
 
-static void *stackPop (stack_t *stack) {
+static void *stackPop (dynstack_t *stack) {
   void *data;
   stackitem_t *i;
   
@@ -9976,7 +10029,7 @@ static void *stackPop (stack_t *stack) {
 }
 
 #if 0
-static int stackContains (stack_t *s, void *data) {
+static int stackContains (dynstack_t *s, void *data) {
   stackitem_t *i;
   if (!s) return 0;
   i = *s;
@@ -9990,7 +10043,7 @@ static int stackContains (stack_t *s, void *data) {
 }
 #endif
 
-static int stackIsEmpty (stack_t *s) {
+static int stackIsEmpty (dynstack_t *s) {
   return (*s == NULL);
 }
 
@@ -10011,7 +10064,7 @@ static void deleteState (state_t *s) {
   Safe_free (s);
 }
 
-static int stateIsNew (state_t *state, stack_t *todo, stack_t *done) {
+static int stateIsNew (state_t *state, dynstack_t *todo, dynstack_t *done) {
   stackitem_t *i;
 
   /* scan working list for state */
@@ -10098,8 +10151,8 @@ static int defmapFindAll (symbol_t sym, pCode *pc, defmap_t **chain) {
   pCodeFlow *curr;
   pCodeFlowLink *succ;
   state_t *state;
-  stack_t *todo;	/** stack of state_t */
-  stack_t *done;	/** stack of state_t */
+  dynstack_t *todo;	/** stack of state_t */
+  dynstack_t *done;	/** stack of state_t */
 
   int firstState, n_defs;
   
@@ -10306,6 +10359,7 @@ static valnum_t valnumFromStr (const char *str) {
   /* create new valnum */
   val = newValnum();
   hTabAddItemLong (&map_symToValnum, sym % map_symToValnum->size, INT_TO_PTR(sym), INT_TO_PTR(val));
+  //fprintf (stderr, "NEW VALNUM %x for symbol %s\n", val, str);
   return val;
 }
 
@@ -10453,7 +10507,7 @@ int pic16_isAliveInFlow (symbol_t sym, int mask, pCodeFlow *pcfl, pCode *pc) {
 static int pic16_isAlive (symbol_t sym, pCode *pc) {
   int mask, visit;
   defmap_t *map;
-  stack_t *todo, *done;
+  dynstack_t *todo, *done;
   state_t *state;
   pCodeFlow *pcfl;
   pCodeFlowLink *succ;
@@ -10541,6 +10595,8 @@ static int pic16_symIsSpecial (symbol_t sym) {
 static int pic16_regIsLocal (regs *r) {
   symbol_t sym;
   if (r) {
+    if (r->type == REG_TMP) return 1;
+
     sym = symFromStr (r->name);
     switch (sym) {
     case SPO_WREG:
@@ -10653,7 +10709,12 @@ static int pic16_pCodeIsAlive (pCode *pc) {
   while (map && map->pc != pc) map = map->next;
 
   /* no entries found? something is fishy with DF analysis... -- play safe */
-  if (!map) { fprintf (stderr, "%s: defmap not found\n", __FUNCTION__); return 1; }
+  if (!map) {
+    if (pic16_pcode_verbose) {
+      fprintf (stderr, "%s: defmap not found\n", __FUNCTION__);
+    }
+    return 1;
+  }
 
   /* remember first item assigned to pc for later use */
   lastpc = map;
@@ -10875,8 +10936,8 @@ static defmap_t *createDefmap (pCode *pc, defmap_t *list) {
       valnum_t val;
       lit = PCOL(pci->pcop)->lit;
       assert (lit >= 0 && lit < 3);
-      //fprintf (stderr, "LFSR: %s // %s\n", pci->pcop->name, ((pCodeOpLit2 *)(pci->pcop))->arg2->name);
-      val = valnumFromStr (((pCodeOpLit2 *)(pci->pcop))->arg2->name);
+      //fprintf (stderr, "LFSR: %s // %s\n", pci->pcop->name, pic16_get_op(((pCodeOpLit2 *)(pci->pcop))->arg2, NULL, 0));
+      val = valnumFromStr (pic16_get_op(((pCodeOpLit2 *)(pci->pcop))->arg2, NULL, 0));
       //fprintf (stderr, "LFSR lit=%u, symval=%4x\n", lit, val);
       list = newDefmap (pic16_fsrsym_idx[lit][0], 0x00, 0xff, 0, 1, pc, val, list);
       list = newDefmap (pic16_fsrsym_idx[lit][1], 0x00, 0xff, 0, 1, pc, val+1, list); // val+1 is guaranteed not be used as a valnum...
@@ -11538,7 +11599,7 @@ static void assignValnums (pCode *pc) {
       if (val) vallit = litFromValnum (val->in_val);
       if (vallit != -1) {
         /* xxxLW <literal>, WREG contains a known literal */
-	fprintf (stderr, "%s 0x%02x, WREG: 0x%x\n", pci->mnemonic, lit, vallit);
+	//fprintf (stderr, "%s 0x%02x, WREG: 0x%x\n", pci->mnemonic, lit, vallit);
 	if (pci->op == POC_ANDLW) {
 	  lit &= vallit;
 	} else if (pci->op == POC_IORLW) {
@@ -11569,7 +11630,7 @@ static void assignValnums (pCode *pc) {
       val = defmapCurr (list, pic16_fsrsym_idx[lit][0], pc);
       
       if (val && (val->in_val != 0) && (val->in_val == val->val)) {
-        fprintf (stderr, "FSR%dL already set up correctly at %p (%x)\n", lit, pc, val->val);
+        //fprintf (stderr, "FSR%dL already set up correctly at %p (%x)\n", lit, pc, val->val);
       } else {
 	/* cannot remove this LFSR */
 	ok = 0;      
@@ -11577,7 +11638,7 @@ static void assignValnums (pCode *pc) {
       
       val = defmapCurr (list, pic16_fsrsym_idx[lit][1], pc);
       if (val && (val->in_val != 0) && (val->in_val == val->val)) {
-        fprintf (stderr, "FSR%dH already set up correctly at %p (%x)\n", lit, pc, val->val);
+        //fprintf (stderr, "FSR%dH already set up correctly at %p (%x)\n", lit, pc, val->val);
       } else {
 	ok = 0;
       } // if
@@ -11654,9 +11715,9 @@ static void assignValnums (pCode *pc) {
     if (!isSpecial1 && pic16_regIsLocal (reg1) && val && oldval && !pic16_isAlive (SPO_STATUS, pc)) {
       //pc->print (stderr, pc); fprintf (stderr, "lit: %d (%x, %x)\n", lit, lit, val->in_val);
       if (lit == 0) {
-        newpc = pic16_newpCode (POC_CLRF, PCOR2(pci->pcop)->pcop2);
+        newpc = pic16_newpCode (POC_CLRF, PCOP2(pci->pcop)->pcopR);
       } else if (lit == 0x00ff) {
-	newpc = pic16_newpCode (POC_SETF, PCOR2(pci->pcop)->pcop2);
+	newpc = pic16_newpCode (POC_SETF, PCOP2(pci->pcop)->pcopR);
       } else {
         newpc = NULL;
       }
@@ -11669,8 +11730,10 @@ static void assignValnums (pCode *pc) {
         pc = newpc;
         break; // do not process instruction as MOVFF...
       }
-    } else if (!isSpecial1 && !isSpecial2 && pic16_regIsLocal (reg1) && pic16_regIsLocal (reg2)) {
-      if (val && oldval && (val->in_val != 0) && (val->in_val == oldval->in_val)) {
+    } else if (!isSpecial1 && !isSpecial2
+    		&& pic16_regIsLocal (reg1) && pic16_regIsLocal (reg2)
+		&& val && oldval && (val->in_val != 0)) {
+      if (val->in_val == oldval->in_val) {
 	//fprintf (stderr, "MOVFF: F2 (%s) already set up correctly (%x) at %p\n", strFromSym (sym2), oldval->in_val, pc);
         pic16_safepCodeRemove (pc, "=DF= redundant MOVFF removed");
       } else {
@@ -11694,12 +11757,36 @@ static void assignValnums (pCode *pc) {
 	    if (copy->val && copy->val == val->in_val) {
 	      //fprintf (stderr, "found replacement symbol for %s (val %x) <-- %s (assigned %x @ %p)\n", strFromSym(sym1), val->in_val, strFromSym(copy->sym), copy->val, copy->pc);
 	      if (copy->sym == SPO_WREG) {
-	        newpc = pic16_newpCode (POC_MOVWF, pic16_pCodeOpCopy (PCOR2(pci->pcop)->pcop2));
+	        newpc = pic16_newpCode (POC_MOVWF, pic16_pCodeOpCopy (PCOP2(pci->pcop)->pcopR));
 	      } else {
+		pCodeOp *pcop = NULL;
+		/* the code below fails if we try to replace
+		 *   MOVFF PRODL, r0x03
+		 *   MOVFF r0x03, PCLATU
+		 * with
+		 *   MOVFF PRODL, PCLATU
+		 * as copy(PRODL) contains has pc==NULL, by name fails...
+		 */
+	        if (!copy->pc || !PCI(copy->pc)->pcop) break;
+		
+		if (copy->pc && PCI(copy->pc)->pcop)
+		  pcop = PCI(copy->pc)->pcop;
+#if 0
+		/* This code is broken--see above. */
+		else
+		{
+		  const char *symname = strFromSym(copy->sym);
+		  
+		  assert( symname );
+	          pic16_InsertCommentAfter (pc->prev, "BUG-ME");
+	          pic16_InsertCommentAfter (pc->prev, "=DF= MOVFF: newpCodeOpregFromStr(%s)", (char *)symname);
+		  //pcop = pic16_newpCodeOpRegFromStr((char *)symname);
+		}
+#endif
+		assert( pcop );
                 newpc = pic16_newpCode(POC_MOVFF, pic16_popGet2p(
-//			/*TODO: change to copy->pc's out symbol*/pic16_pCodeOpCopy (pci->pcop),
-			pic16_pCodeOpCopy (PCI(copy->pc)->pcop),
-			pic16_pCodeOpCopy (PCOR2(pci->pcop)->pcop2)));
+			pcop,
+			pic16_pCodeOpCopy (PCOP2(pci->pcop)->pcopR)));
 	      }
 	      pic16_InsertCommentAfter (pc->prev, "=DF= MOVFF: SRC op %s replaced by %s", strFromSym(sym1), strFromSym(copy->sym));
 	      pic16_df_saved_bytes += PCI(pc)->isize - PCI(newpc)->isize;
@@ -11903,166 +11990,6 @@ static void pic16_createDF (pBlock *pb) {
   } while (change);
 #endif
 }
-
-
-/* ======================================================================= */
-/* === DEPRECATED CONTROL FLOW CREATION ROUTINES ========================= */
-/* ======================================================================= */
-
-#if 0
-
-/* connect pCode f anf t via their to/from pBranches */
-static void pic16_pCodeLink (pCode *f, pCode *t) {
-  pBranch *br;
-  pCodeInstruction *_f, *_t;
-
-  if (!f || !t) return;
-
-#if 0
-  fprintf (stderr, "linking:\n");
-  f->print(stderr, f);
-  f->print(stderr, t);
-#endif
-
-  assert (isPCI(f) || isPCAD(f));
-  assert (isPCI(t) || isPCAD(t));
-  _f = PCI(f);
-  _t = PCI(t);
-  
-  /* define t to be CF successor of f */
-  br = Safe_malloc (sizeof (pBranch));
-  br->pc = t;
-  br->next = NULL;
-  _f->to = pic16_pBranchAppend (_f->to, br);
-
-  /* define f to be CF predecessor of t */
-  br = Safe_malloc (sizeof (pBranch));
-  br->pc = f;
-  br->next = NULL;
-  _t->from = pic16_pBranchAppend (_t->from, br);
-
-  /* also update pcflow information */
-  if (_f->pcflow && _t->pcflow && _f->pcflow != _t->pcflow) {
-    //fprintf (stderr, "creating flow %p --> %p\n", _f->pcflow, _t->pcflow);
-    LinkFlow_pCode (_f, _t);
-  } // if
-}
-
-static void pic16_destructCF (pBlock *pb) {
-  pCode *pc;
-  pBranch *br;
-
-  /* remove old CF information */
-  pc = pb->pcHead;
-  while (pc) {
-    if (isPCI(pc)) {
-      while (PCI(pc)->to) {
-        br = PCI(pc)->to->next;
-        Safe_free (PCI(pc)->to);
-        PCI(pc)->to = br;
-      } // while
-      while (PCI(pc)->from) {
-        br = PCI(pc)->from->next;
-        Safe_free (PCI(pc)->from);
-        PCI(pc)->from = br;
-      }
-    } else if (isPCFL(pc)) {
-      deleteSet (&PCFL(pc)->to);
-      deleteSet (&PCFL(pc)->from);
-    }
-    pc = pc->next;
-  }
-  
-  releaseStack ();
-}
-
-/* Set up pCodeInstruction's to and from pBranches. */
-static void pic16_createCF (pBlock *pb) {
-  pCode *pc;
-  pCode *next, *dest;
-  char *label;
-
-  //fprintf (stderr, "creating CF for %p\n", pb);
-
-  pic16_destructCF (pb);
-
-  /* check pBlock: do not analyze pBlocks with ASMDIRs (for now...) */
-  if (pic16_pBlockHasAsmdirs (pb)) {
-    //fprintf (stderr, "%s: pBlock contains ASMDIRs -- data flow analysis not performed!\n", __FUNCTION__);
-    return;
-  }
-
-  pc = pic16_findNextInstruction(pb->pcHead);
-  while (pc) {
-    next = pic16_findNextInstruction(pc->next);
-    if (isPCI_SKIP(pc)) {
-      pic16_pCodeLink(pc, next);
-      pic16_pCodeLink(pc, pic16_findNextInstruction(next->next));
-    } else if (isPCI_BRANCH(pc)) {
-      // Bcc, BRA, CALL, GOTO
-      if (PCI(pc)->pcop) {
-        switch (PCI(pc)->pcop->type) {
-        case PO_LABEL:
-	  label = PCOLAB(PCI(pc)->pcop)->pcop.name;
-  	  dest = findLabelinpBlock (pc->pb, PCOLAB(PCI(pc)->pcop));
-          break;
-	
-        case PO_STR:
-	  /* needed for GOTO ___irq_handler */
-	  label = PCI(pc)->pcop->name;
-	  dest = NULL;
-	  break;
-
-        default:
-	  assert (0 && "invalid label format");
-	  break;
-        } // switch
-      } else {
-	label = "NO PCOP";
-        dest = NULL;
-      }
-
-      switch (PCI(pc)->op) {
-      case POC_BRA:
-      case POC_GOTO:
-        if (dest != NULL) { 
-          pic16_pCodeLink(pc, dest);
-	} else {
-          //fprintf (stderr, "jump target \"%s\" not found!\n", label);
-	}
-	break;
-      case POC_CALL:
-      case POC_RETURN:
-      case POC_RETFIE:
-        pic16_pCodeLink(pc, next);
-	break;
-      case POC_BC:
-      case POC_BNC:
-      case POC_BZ:
-      case POC_BNZ:
-      case POC_BN:
-      case POC_BNN:
-      case POC_BOV:
-      case POC_BNOV:
-        if (dest != NULL) { 
-          pic16_pCodeLink(pc, dest);
-	} else {
-          //fprintf (stderr, "jump target \"%s\"not found!\n", label);
-	}
-        pic16_pCodeLink(pc, next);
-        break;
-      default:
-	fprintf (stderr, "BRANCH instruction: %s\n", PCI(pc)->mnemonic);
-	assert (0 && "unhandled branch instruction");
-	break;
-      } // switch
-    } else {
-      pic16_pCodeLink (pc, next);
-    }
-    pc = next;
-  } // while
-}
-#endif
 
 /* ======================================================================== */
 /* === VCG DUMPER ROUTINES ================================================ */

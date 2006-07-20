@@ -1,9 +1,0 @@
-iscntrl.o: iscntrl.c
-isdigit.o: isdigit.c
-isgraph.o: isgraph.c
-islower.o: islower.c
-isprint.o: isprint.c
-ispunct.o: ispunct.c
-isspace.o: isspace.c
-isupper.o: isupper.c
-isxdigit.o: isxdigit.c

@@ -21,11 +21,14 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: errno.h,v 1.2 2004/11/24 00:20:29 vrokas Exp $
+** $Id: errno.h 3912 2005-10-26 11:08:11Z tecodev $
 */
 
 #ifndef _PIC16_ERRNO_H
 #define _PIC16_ERRNO_H
+
+/* link with C library */
+#pragma library c
 
 extern int errno;
 

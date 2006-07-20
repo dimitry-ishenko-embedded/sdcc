@@ -22,6 +22,8 @@
    what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 
+#include <math.h>
+
 #ifdef _WIN32
 #include <ctype.h>
 #include <windows.h>
@@ -136,7 +138,7 @@ getBinPath(const char *prel)
     return path;
   }
   /* not enough info in prel; do it with module name */
-  else if (0 != GetModuleFileName(NULL, path, sizeof path) != 0 &&
+  else if (0 != GetModuleFileName(NULL, path, sizeof path) &&
     NULL != (p = strrchr(path, DIR_SEPARATOR_CHAR))) {
     *p = '\0';
     return path;
@@ -295,8 +297,6 @@ const char *getBuildNumber(void)
 {
   return (SDCC_BUILD_NUMBER);
 }
-
-
 
 #if defined(HAVE_VSNPRINTF) || defined(HAVE_VSPRINTF)
 size_t SDCCsnprintf(char *dst, size_t n, const char *fmt, ...)

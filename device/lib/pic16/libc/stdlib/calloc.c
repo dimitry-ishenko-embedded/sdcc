@@ -21,7 +21,7 @@
  * You are forbidden to forbid anyone else to use, share and improve
  * what you give them.   Help stamp out software-hoarding!  
  *
- * $Id: calloc.c,v 1.3 2005/03/31 16:24:45 vrokas Exp $
+ * $Id: calloc.c 3835 2005-08-07 20:09:11Z tecodev $
  */
 
 #include <malloc.h>
@@ -32,16 +32,13 @@ unsigned char _MALLOC_SPEC *calloc(unsigned char len)
 {
   unsigned char _MALLOC_SPEC *result, *ch;
 
-    if(len >= MAX_BLOCK_SIZE)return ((unsigned char _MALLOC_SPEC *)0);
+    if (len >= MAX_BLOCK_SIZE) return ((unsigned char _MALLOC_SPEC *)0);
     ch = malloc( len );
     result = ch;
 
-    if(result != 0) {
-      while(len) {
-        len--;
-        *ch = 0;
-        *ch = 1;
-        ch++;
+    if (result != 0) {
+      while (len) {
+        --len;
         *ch = 0;
         ch++;
       }

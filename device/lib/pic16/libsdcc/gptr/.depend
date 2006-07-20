@@ -1,8 +1,0 @@
-gptrget1.o: gptrget1.c
-gptrget2.o: gptrget2.c
-gptrget3.o: gptrget3.c
-gptrget4.o: gptrget4.c
-gptrput1.o: gptrput1.c
-gptrput2.o: gptrput2.c
-gptrput3.o: gptrput3.c
-gptrput4.o: gptrput4.c

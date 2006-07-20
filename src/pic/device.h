@@ -71,10 +71,9 @@ typedef struct AssignedMemory {
  */
 
 extern AssignedMemory *finalMapping;
-#define PROCESSOR_NAMES    4
 /* Processor unique attributes */
 typedef struct PIC_device {
-	char *name[PROCESSOR_NAMES];/* aliases for the processor name */
+	char *name;                 /* the processor name */
 
 	memRange *ram;              /* RAM memory map */
 	memRange *sfr;              /* SFR memory map */
@@ -83,6 +82,12 @@ typedef struct PIC_device {
 	int defMaxRAMaddrs;         /* default maximum value for a data address */
 	int bankMask;               /* Bitmask that is ANDed with address to extract banking bits */
 	//  int hasAliasedRAM:1;        /* True if there are bank independent registers */
+	int hasSecondConfigReg;     /* True if there is a second configuration register */
+	
+	int programMemSize;         /* program memory size in words - for device listing only */
+	int dataMemSize;            /* data (RAM) memory size in bytes - for device listing only */
+	int eepromMemSize;          /* EEPROM memory size in bytes - for device listing only */
+	int ioPins;                 /* number of I/O pins - for device listing only */
 
 } PIC_device;
 
@@ -101,6 +106,13 @@ int REGallBanks(regs *reg);
 void addMemRange(memRange *r, int type);
 void setMaxRAM(int size);
 void setDefMaxRam(void);
-unsigned getMaxRam(void);
+
+void pic14_assignConfigWordValue(int address, int value);
+int pic14_emitConfigWord (FILE * vFile);
+int pic14_getConfigWord(int address);
+unsigned pic14_getMaxRam(void);
+int pic14_getHasSecondConfigReg(void);
+int pic14_getSharebankSize(void);
+int pic14_getSharebankAddress(void);
 
 #endif  /* __DEVICE_H__ */
