@@ -1,3 +1,9 @@
+sdcc (2.5.99+2.6.0rc1-3) experimental; urgency=low
+
+  * Make the arch-any packages buildable alone (second try).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 23 Jul 2006 17:57:40 +0200
+
 sdcc (2.5.99+2.6.0rc1-2) experimental; urgency=low
 
   * Make the arch-any packages buildable alone. 

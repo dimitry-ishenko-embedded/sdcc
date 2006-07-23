@@ -25,7 +25,6 @@ clean:
 	dh_testdir
 	dh_testroot
 	-$(MAKE) distclean
-	-cd doc && $(MAKE) distclean
 	-$(MAKE) -C doc/z80 clean
 	-find $(CURDIR)/device/lib -name Makefile -exec rm {} \;
 	-find $(CURDIR)/device/lib -name config.log -exec rm {} \;
@@ -40,15 +39,11 @@ clean:
 
 config.status: configure
 	dh_testdir
-	LYX=/usr/bin/lyx-xforms \
-	MAKEINDEX=/usr/bin/makeindex \
-	PDFLATEX=/usr/bin/pdflatex \
-	PDFOPT=/usr/bin/pdfopt \
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \
-		--disable-doc
+		--enable-doc
 
 build-arch: build-arch-stamp
 build-arch-stamp: config.status
@@ -59,7 +54,6 @@ build-arch-stamp: config.status
 build-indep: build-indep-stamp
 build-indep-stamp: config.status build-arch
 	dh_testdir
-	cd doc && $(MAKE)
 	cd doc/z80 && PRJDIR="$(CURDIR)" $(MAKE)
 	touch build-stamp
 
@@ -106,7 +100,6 @@ install-indep-stamp: build-indep install-arch
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
 	install -m 755 $(CURDIR)/support/scripts/inc2h.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
 	install -m 755 $(CURDIR)/support/scripts/keil2sdcc.pl $(CURDIR)/debian/tmp/usr/share/sdcc/scripts
-
 
 	# Removing execute permission on some text files.
 	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -type f -exec chmod -x {} \;
