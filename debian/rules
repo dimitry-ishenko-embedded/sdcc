@@ -25,6 +25,7 @@ clean:
 	dh_testdir
 	dh_testroot
 	-$(MAKE) distclean
+	-cd doc && $(MAKE) distclean
 	-$(MAKE) -C doc/z80 clean
 	-find $(CURDIR)/device/lib -name Makefile -exec rm {} \;
 	-find $(CURDIR)/device/lib -name config.log -exec rm {} \;
@@ -39,15 +40,15 @@ clean:
 
 config.status: configure
 	dh_testdir
-	#cd $(CURDIR)/device/lib/pic16 && ./configure \
-	#	--host=$(DEB_HOST_GNU_TYPE) \
-	#	--build=$(DEB_BUILD_GNU_TYPE) \
-	#	--prefix=/usr
-	cd $(CURDIR) && LYX=/usr/bin/lyx-xforms ./configure \
+	LYX=/usr/bin/lyx-xforms \
+	MAKEINDEX=/usr/bin/makeindex \
+	PDFLATEX=/usr/bin/pdflatex \
+	PDFOPT=/usr/bin/pdfopt \
+	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \
-		--enable-doc
+		--disable-doc
 
 build-arch: build-arch-stamp
 build-arch-stamp: config.status
