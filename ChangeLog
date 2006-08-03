@@ -1,3 +1,56 @@
+2006-07-28 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: remove $INSTDIR\include\asm\pic16\*.h
+	* doc/INSTALL.txt: updated
+
+2006-07-27 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/pic/Makefile.in, device/lib/pic/Makefile.subdir,
+	  device/lib/pic/libdev/Makefile.in: fixed bug
+	  [ 1438354 ] pic libsdcc: distclean doesn't work
+	* device/lib/pic16/Makefile.in, device/lib/pic16/Makefile.subdir,
+	  device/lib/pic16/libio/Makefile.in: fixed bug
+	  [ 1438344 ] pic16 lib: clean doesn't work properly
+	* doc/knownbugs.html removed [ 1438354 ] and [ 1438344 ] from the list
+
+2006-07-26 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/lib/pic/libsdcc/fsdiv.c,
+	* device/lib/pic/libsdcc/fsmul.c,
+	* device/lib/pic16/libsdcc/float/fsdiv.c,
+	* device/lib/pic16/libsdcc/float/fsmul.c,
+	* device/lib/_fsdiv.c,
+	* device/lib/_fsmul.c: bugfix, handle too large and too small numbers
+	* support/regression/tests/bug1520966.c: added
+	* doc/knownbugs.html: removed [ 1520966 ] from the list
+
+2006-07-25 Borut Razem <borut.razem AT siol.net>
+
+	* configure.in, configure, sdccconf_in.h: fixed bug
+	  [ 1519095 ] regression test onebyte.c fails on ppc64 host
+	* doc/knownbugs.html: removed [ 1519095 ] from the list
+
+2006-07-25 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* doc/knownbugs.html: added, contains list of known bugs at release
+	* device/include/mcs51/compiler.h: fixed SFR32 for SDCC
+
+2006-07-23 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/mcs51/compiler.h: added SFRX for xdata based special
+	  function registers and corrected defaults with additional warning
+	* device/lib/malloc.c: cosmetic changes
+	* device/lib/realloc.c: bugfix for bug #1496907, Thanks Efim Monyak
+	* src/ds390/ralloc.c (getRegBitNoSpil): reenabled,
+	  (fillGaps): and used it
+
+2006-07-20 Raphael Neider <rneider AT web.de>
+
+	* src/pic/device.c (addMemRange,assignRegister): suppress verbose
+	  output unless SDCCPICDEBUG is set
+	* device/lib/pic16/Makefile.rules (%.lib target): suppress verbose
+	  output if SILENT is set
+
 2006-07-11 Borut Razem <borut.razem AT siol.net>
 
 	* doc/README.txt: updated
@@ -13,7 +66,7 @@
 2006-07-08 Maarten Brock <sourceforge.brock AT dse.nl>
 
 	* device/include/mcs51/XC866.h: added sbit definitions for Px_x, P1_x, P2_x
-	* src/pic16/glue.c (initPointer), fixed bug 1496419 for pic16
+	* src/pic16/glue.c (initPointer): fixed bug 1496419 for pic16
 
 2006-07-06 Maarten Brock <sourceforge.brock AT dse.nl>
 
@@ -11954,4 +12007,4 @@
   * as/mcs51/lklex.c:  accept everything as symbol name in rel-files, bug fix ID 452601
   * as/mcs51/lksym.c:  accept everything as symbol name in rel-files, bug fix ID 452601
 
-$Revision: 4290 $
+$Revision: 4309 $

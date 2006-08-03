@@ -9,7 +9,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See GPL for details.
 ###
-### $Id: Makefile.in 4250 2006-06-25 22:17:57Z tecodev $
+### $Id: Makefile.in 4305 2006-07-27 14:24:33Z borutr $
 ###
 
 top_builddir = @top_builddir@
@@ -48,7 +48,8 @@ clean : recurse
 	$(Q)-$(RMDIR) "$(top_builddir)$(builddir)"
 
 distclean: clean
-	rm -f Makefile
+	$(Q)-$(RM) config.cache config.log config.status Makefile Makefile.common
+	$(Q)-$(RMDIR) bin
 
 clean-intermediate : recurse
 

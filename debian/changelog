@@ -1,26 +1,14 @@
-sdcc (2.5.99+2.6.0rc1-3) experimental; urgency=low
+sdcc (2.6.0-1) unstable; urgency=low
 
-  * Make the arch-any packages buildable alone (second try).
-
- -- Aurelien Jarno <aurel32@debian.org>  Sun, 23 Jul 2006 17:57:40 +0200
-
-sdcc (2.5.99+2.6.0rc1-2) experimental; urgency=low
-
-  * Make the arch-any packages buildable alone. 
-
- -- Aurelien Jarno <aurel32@debian.org>  Sun, 23 Jul 2006 12:19:15 +0200
-
-sdcc (2.5.99+2.6.0rc1-1) experimental; urgency=low
-
-  * New upstream release candidate:
+  * New upstream release:
     - bool datatype support for z80 target (closes: bug#325846)
     - support for code segments in memory for pic target (closes: bug#359675)
     - support for almost all PIC (closes: bug#361229)
     - support for tables for pic target (closes: bug#304320)
     - support for main() to be in any object when linking (closes: bug#335711)
-  * Bumped Standards-Version to 3.7.2 (no changes). 
+  * Bumped Standards-Version to 3.7.2 (no changes).
 
- -- Aurelien Jarno <aurel32@debian.org>  Thu, 20 Jul 2006 11:53:34 +0200
+ -- Aurelien Jarno <aurel32@debian.org>  Thu,  3 Aug 2006 17:04:44 +0200
 
 sdcc (2.5.0-11) unstable; urgency=low
 
