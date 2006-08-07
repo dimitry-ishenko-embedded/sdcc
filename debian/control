@@ -2,7 +2,7 @@ Source: sdcc
 Section: electronics
 Priority: optional
 Maintainer: Aurelien Jarno <aurel32@debian.org>
-Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev, gputils, lyx, tetex-bin, tetex-extra, gs-common, gs
+Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev, gputils, lyx-xforms (>= 1.4.2-1) | lyx-qt (>= 1.4.2-1), tetex-bin, tetex-extra, gs-common, gs
 Standards-Version: 3.7.2
 
 Package: sdcc

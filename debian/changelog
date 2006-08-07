@@ -1,3 +1,9 @@
+sdcc (2.6.0-2) unstable; urgency=medium
+
+  * Fix the FTBFS by workarounding the lyx bug.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon,  7 Aug 2006 18:21:56 +0200
+
 sdcc (2.6.0-1) unstable; urgency=low
 
   * New upstream release:
@@ -12,7 +18,7 @@ sdcc (2.6.0-1) unstable; urgency=low
 
 sdcc (2.5.0-11) unstable; urgency=low
 
-  * G++ 4.1 fixes. Thanks to Martin Michlmayr for the patch (closes:
+  * g++ 4.1 fixes. Thanks to Martin Michlmayr for the patch (closes:
     bug#357476).
 
  -- Aurelien Jarno <aurel32@debian.org>  Sat, 18 Mar 2006 10:52:19 +0100
