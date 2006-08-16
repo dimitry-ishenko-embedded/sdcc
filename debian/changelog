@@ -1,3 +1,10 @@
+sdcc (2.6.0-4) unstable; urgency=low
+
+  * Create a directory in the build tree, and set it as the HOME directory.
+    That should fix the FTBFS on some build daemons.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Wed, 16 Aug 2006 12:31:38 +0200
+
 sdcc (2.6.0-3) unstable; urgency=low
 
   * Remove the lyx workaround now that the bug has been fixed (closes: bug#381913).

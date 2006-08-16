@@ -14,6 +14,8 @@
 DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 
+export HOME=$(CURDIR)/build
+
 ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
 	CFLAGS += -g
 endif
@@ -34,11 +36,13 @@ clean:
 	-rm device/lib/pic16/pics.build
 	-rm support/valdiag/Makefile
 	-rm src/SDCCy.c src/SDCCy.h src/SDCClex.c
-	rm -f *-stamp
+	rm -f *-stamp 
+	rm -rf $(CURDIR)/build
 	dh_clean
 
 config.status: configure
 	dh_testdir
+	mkdir -p $(CURDIR)/build
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
