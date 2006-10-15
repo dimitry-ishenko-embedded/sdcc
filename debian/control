@@ -1,14 +1,14 @@
 Source: sdcc
 Section: electronics
 Priority: optional
-Maintainer: Aurelien Jarno <aurel32@debian.org>
+Maintainer: Debian QA Group <packages@qa.debian.org>
 Build-Depends: debhelper (>> 4.0.0), flex, bison, libncurses5-dev, gputils, lyx-xforms | lyx-qt, tetex-bin, tetex-extra, gs-common, gs
 Standards-Version: 3.7.2
 
 Package: sdcc
 Section: electronics
 Architecture: any
-Depends: sdcc-libraries(= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: sdcc-libraries(= ${source:Version}), ${shlibs:Depends}, ${misc:Depends}
 Recommends: sdcc-doc
 Suggests: sdcc-ucsim
 Description: Small Device C Compiler

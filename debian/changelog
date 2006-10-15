@@ -1,3 +1,11 @@
+sdcc (2.6.0-5) unstable; urgency=low
+
+  * Orphaning this package, setting maintainer field to
+    packages@qa.debian.org.
+  * Make the package binNMUable. 
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 15 Oct 2006 15:37:46 +0200
+
 sdcc (2.6.0-4) unstable; urgency=low
 
   * Create a directory in the build tree, and set it as the HOME directory.
