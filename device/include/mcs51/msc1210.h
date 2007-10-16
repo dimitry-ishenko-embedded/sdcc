@@ -2,7 +2,7 @@
  * Register Declarations for Texas Intruments MSC12xx MCU family
  *
  * Written By - Philippe Latu / philippe.latu(at)linux-france.org
- * $Id: msc1210.h 893 2006-05-10 21:32:22Z latu $
+ * $Id: msc1210.h 4776 2007-04-29 13:15:51Z borutr $
  *
  * Copyright (C) 2006  Philippe Latu
  *

@@ -8,6 +8,7 @@
 #include "main.h"
 #include "ralloc.h"
 #include "gen.h"
+#include "dbuf_string.h"
 #include "../SDCCutil.h"
 
 static char _defaultRules[] =
@@ -175,26 +176,26 @@ _mcs51_genAssemblerPreamble (FILE * of)
 
 /* Generate interrupt vector table. */
 static int
-_mcs51_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_mcs51_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
   int i;
 
-  fprintf (of, "\tljmp\t__sdcc_gsinit_startup\n");
+  dbuf_printf (oBuf, "\tljmp\t__sdcc_gsinit_startup\n");
 
   /* now for the other interrupts */
   for (i = 0; i < maxInterrupts; i++)
     {
       if (interrupts[i])
         {
-          fprintf (of, "\tljmp\t%s\n", interrupts[i]->rname);
+          dbuf_printf (oBuf, "\tljmp\t%s\n", interrupts[i]->rname);
           if ( i != maxInterrupts - 1 )
-            fprintf (of, "\t.ds\t5\n");
+            dbuf_printf (oBuf, "\t.ds\t5\n");
         }
       else
         {
-          fprintf (of, "\treti\n");
+          dbuf_printf (oBuf, "\treti\n");
           if ( i != maxInterrupts - 1 )
-            fprintf (of, "\t.ds\t7\n");
+            dbuf_printf (oBuf, "\t.ds\t7\n");
         }
     }
   return TRUE;
@@ -729,7 +730,8 @@ PORT mcs51_port =
     _defaultRules,
     getInstructionSize,
     getRegsRead,
-    getRegsWritten
+    getRegsWritten,
+    mcs51DeadMove
   },
   {
     /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
@@ -754,6 +756,9 @@ PORT mcs51_port =
     "XISEG   (XDATA)",          // xidata_name - initialized xdata   initialized xdata
     "XINIT   (CODE)",           // xinit_name - a code copy of xiseg
     "CONST   (CODE)",           // const_name - const data (code or not)
+    "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
+    "XABS    (ABS,XDATA)",      // xabs_name - absolute xdata/pdata
+    "IABS    (ABS,DATA)",       // iabs_name - absolute idata/data
     NULL,
     NULL,
     1

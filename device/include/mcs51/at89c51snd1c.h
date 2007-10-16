@@ -6,7 +6,7 @@
    This document is based on the AT8xC51SND1C document
        4109H-8051-01/05
 
-   $Id: at89c51snd1c.h 4035 2006-02-10 13:37:25Z maartenbrock $
+   $Id: at89c51snd1c.h 4388 2006-09-27 09:31:14Z MaartenBrock $
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -399,7 +399,7 @@ __sbit __at (0x98) RI     ;
 #define MSK_AUDEN   0x01
 
 /* AUDSTA bits */
-#define MSK_SREC    0x80
+#define MSK_SREQ    0x80
 #define MSK_UDRN    0x40
 #define MSK_AUBUSY  0x20
 

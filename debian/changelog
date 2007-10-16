@@ -1,3 +1,37 @@
+sdcc (2.7.0-1) unstable; urgency=low
+
+  [ Miriam Ruiz ]
+  * New Upstream Version.
+  * New Maintainer. Closes: #393289
+  * Updated Build-Depends:
+    + Added: autotools-dev to get the newest config.sub and config.guess
+    + Added: autoconf, automake, libtool
+    + Replaced lyx-qt by lyx
+  * Cleaned debian/rules a bit
+  * Use config.sub and config.guess from autotools-dev
+
+  [ Gudjon I. Gudjonsson ]
+  * New upstream version (Closes: #440380)
+  * Replaced lyx-xforms (Closes: #444558)
+  * Upgraded install targets for the new version.
+  * Added the p89c66x.h header file. Will be included in 2.7.1
+  * Added the copyright clause for ASxxxx into copyright.
+  * Moved package to non-free because of ASxxxx license.
+  * Added html documentation again since the package is in non-free.
+  * Removed the pdf documentation
+  * Cleaned the rules file
+
+  [ Bas Wijnen ]
+  * Regenerate configure as part of build process.
+  * Don't ignore errors in clean target.
+
+  [ Gudjon I. Gudjonsson ]
+  * Fixed the non stripping options (Closes: #438018)
+  * Changed dependencies from tetex to texlive.
+  * Removed gs dependencies as they were not necessary.
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Tue, 16 Oct 2007 11:25:54 +0200
+
 sdcc (2.6.0-5) unstable; urgency=low
 
   * Orphaning this package, setting maintainer field to

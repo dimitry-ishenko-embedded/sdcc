@@ -26,33 +26,48 @@
 #define SDCCUTIL_H
 
 #include "SDCChasht.h"
+#include "dbuf.h"
 #include <stdarg.h>
 
 /** Given an array of name, value string pairs creates a new hash
     containing all of the pairs.
 */
-hTab *populateStringHash(const char **pin);
+hTab *populateStringHash (const char **pin);
 
 /** Prints elements of the set to the file, each element on new line
 */
-void fputStrSet(FILE *fp, set *list);
+void fputStrSet (FILE *fp, set *list);
 
 /** Prepend / append given strings to each item of string set. The result is in a
     new string set.
 */
-set *appendStrSet(set *list, const char *pre, const char *post);
+set *appendStrSet (set *list, const char *pre, const char *post);
 
 /** Given a set returns a string containing all of the strings seperated
     by spaces. The returned string is on the heap.
 */
-const char *joinStrSet(set *list);
+const char *joinStrSet (set *list);
+
+/** Split the path string to the directory and file name (including extension) components.
+    The directory component doesn't contain trailing directory separator.
+    Returns true if the path contains the directory separator. */
+int dbuf_splitPath (const char *path, struct dbuf_s *dir, struct dbuf_s *file);
+
+/** Split the path string to the file name (including directory) and file extension components.
+    The file name component doesn't contain trailing extension separator.
+    Returns true if the path contains the extension separator. */
+int dbuf_splitFile (const char *path, struct dbuf_s *file, struct dbuf_s *ext);
+
+/** Combile directory and the file name to a path string using the DIR_SEPARATOR_CHAR.
+ */
+void dbuf_makePath (struct dbuf_s *path, const char *dir, const char *file);
 
 /** Given a file with path information in the binary files directory,
     returns the directory component. Used for discovery of bin
     directory of SDCC installation. Returns NULL if the path is
     impossible.
 */
-char *getBinPath (const char *prel);
+const char *getBinPath (const char *prel);
 
 /** Returns true if the given path exists.
  */
@@ -73,23 +88,22 @@ bool startsWith (const char *sz, const char *key);
 */
 void chomp (char *sz);
 
-hTab *
-getRuntimeVariables(void);
+hTab *getRuntimeVariables (void);
 
 /* strncpy() with guaranteed NULL termination. */
-char *strncpyz(char *dest, const char *src, size_t n);
+char *strncpyz (char *dest, const char *src, size_t n);
 
 /* like strncat() with guaranteed NULL termination
  * The passed size should be the size of the dest buffer, not the number of 
  * bytes to copy.
  */
-char *strncatz(char *dest, const char *src, size_t n);
+char *strncatz (char *dest, const char *src, size_t n);
 
 /* return SDCC build number */
-const char *getBuildNumber(void);
+const char *getBuildNumber (void);
 
 /* snprintf, by hook or by crook. */
-size_t SDCCsnprintf(char *, size_t, const char *, ...);
+size_t SDCCsnprintf (char *, size_t, const char *, ...);
 
 # if defined(HAVE_VSNPRINTF)
 
@@ -111,5 +125,26 @@ size_t SDCCsnprintf(char *, size_t, const char *, ...);
 // We don't have a native snprintf nor the functions we need to write one.
 #  error "Need at least one of snprintf, vsnprintf, vsprintf!"
 # endif
+
+/** Pragma tokenizer
+ */
+enum pragma_token_e { TOKEN_UNKNOWN, TOKEN_STR, TOKEN_INT, TOKEN_EOL };
+
+struct pragma_token_s {
+  enum pragma_token_e type;
+  struct dbuf_s dbuf;
+  union {
+    int int_val;
+  } val;
+};
+
+void init_pragma_token (struct pragma_token_s *token);
+char *get_pragma_token (const char *s, struct pragma_token_s *token);
+const char *get_pragma_string (struct pragma_token_s *token);
+void free_pragma_token (struct pragma_token_s *token);
+
+unsigned char hexEscape (const char **src);
+unsigned char octalEscape (const char **src);
+int copyStr (char *dest, const char *src);
 
 #endif

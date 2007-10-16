@@ -1,5 +1,11 @@
 #include "gpsim_assert.h"
 
+#if SUPPORT_BIT_TYPES
+# define bit bit
+#else
+# define bit unsigned char
+#endif
+
 unsigned char success=0;
 unsigned char failures=0;
 unsigned char dummy=0;
@@ -11,11 +17,11 @@ byte d2;
 
 unsigned char uchar0 = 0xa5;
 
-data at 0xa0 unsigned char  uc_bank1_temp=0x42;
-data at 0xa2 unsigned int  ui_bank1_temp=0;
+__data __at (0xa0) unsigned char uc_bank1_temp = 0x42;
+__data __at (0xa2) unsigned int  ui_bank1_temp = 3;
 
 void
-done()
+done(void)
 {
   dummy++;
   ASSERT(MANGLE(failures) == 0);

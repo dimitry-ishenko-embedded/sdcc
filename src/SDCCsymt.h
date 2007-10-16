@@ -29,6 +29,7 @@
 #define SDCC_NAME_MAX  3*SDCC_SYMNAME_MAX // big enough for _<func>_<var>_etc
 #include "SDCChasht.h"
 #include "SDCCglobl.h"
+#include "dbuf.h"
 
 #define INTNO_MAX 255                   /* maximum allowed interrupt number */
 #define INTNO_UNSPEC (INTNO_MAX+1)      /* interrupt number unspecified */
@@ -155,9 +156,11 @@ typedef struct specifier
     unsigned b_signed:1;                /* just for sanity checks only*/
     unsigned b_static:1;                /* 1=static keyword found     */
     unsigned b_extern:1;                /* 1=extern found             */
+    unsigned b_inline:1;		/* inline function requested  */
     unsigned b_absadr:1;                /* absolute address specfied  */
     unsigned b_volatile:1;              /* is marked as volatile      */
     unsigned b_const:1;                 /* is a constant              */
+    unsigned b_restrict:1;              /* is restricted              */
     unsigned b_typedef:1;               /* is typedefed               */
     unsigned b_isregparm:1;             /* is the first parameter     */
     unsigned b_isenum:1;                /* is an enumerated type      */
@@ -169,7 +172,7 @@ typedef struct specifier
     union
       {                                 /* Values if constant or enum */
         TYPE_TARGET_INT   v_int;        /* 2 bytes: int and char values           */
-        TYPE_TARGET_CHAR *v_char;       /*          character string              */
+        char             *v_char;       /*          character string              */
         TYPE_TARGET_UINT  v_uint;       /* 2 bytes: unsigned int const value      */
         TYPE_TARGET_LONG  v_long;       /* 4 bytes: long constant value           */
         TYPE_TARGET_ULONG v_ulong;      /* 4 bytes: unsigned long constant value  */
@@ -205,6 +208,7 @@ typedef struct declarator
                                         /* always 0 for flexible arrays */
     unsigned ptr_const:1;               /* pointer is constant        */
     unsigned ptr_volatile:1;            /* pointer is volatile        */
+    unsigned ptr_restrict:1;            /* pointer is resticted       */
     struct sym_link *tspec;             /* pointer type specifier     */
   }
 declarator;
@@ -243,6 +247,7 @@ typedef struct sym_link
       unsigned critical:1;              /* critical function          */
       unsigned intrtn:1;                /* this is an interrupt routine */
       unsigned rbank:1;                 /* seperate register bank     */
+      unsigned inlinereq:1;             /* inlining requested         */
       unsigned intno;                   /* 1=Interrupt svc routine    */
       short    regbank;                 /* register bank 2b used      */
       unsigned builtin;                 /* is a builtin function      */
@@ -265,7 +270,7 @@ typedef struct symbol
     int key;
     unsigned flexArrayLength;           /* if the symbol specifies a struct
     with a "flexible array member", then the additional length in bytes for
-    the "fam" is stored here. Because the lenght can be different from symbol
+    the "fam" is stored here. Because the length can be different from symbol
     to symbol AND v_struct isn't copied in copyLinkChain(), it's located here
     in the symbol and not in v_struct or the declarator */
     unsigned implicit:1;                /* implicit flag                     */
@@ -280,8 +285,9 @@ typedef struct symbol
     unsigned isinvariant:1;             /* is a loop invariant  */
     unsigned cdef:1;                    /* compiler defined symbol */
     unsigned addrtaken:1;               /* address of the symbol was taken */
-    unsigned isreqv:1;                  /* is the register quivalent of a symbol */
+    unsigned isreqv:1;                  /* is the register equivalent of a symbol */
     unsigned udChked:1;                 /* use def checking has been already done */
+    unsigned generated:1;               /* code generated (function symbols only) */
 
     /* following flags are used by the backend
        for code generation and can be changed
@@ -350,6 +356,7 @@ typedef struct symbol
     int used;                           /* no. of times this was used */
     int recvSize;                       /* size of first argument  */
     struct bitVect *clashes;            /* overlaps with what other symbols */
+    struct ast * funcTree;              /* function body ast if inlined */
   }
 symbol;
 
@@ -364,6 +371,7 @@ extern sym_link *validateLink(sym_link  *l,
 #define DCL_ELEM(l)  validateLink(l, "DCL_ELEM", #l, DECLARATOR, __FILE__, __LINE__)->select.d.num_elem
 #define DCL_PTR_CONST(l) validateLink(l, "DCL_PTR_CONST", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_const
 #define DCL_PTR_VOLATILE(l) validateLink(l, "DCL_PTR_VOLATILE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_volatile
+#define DCL_PTR_RESTRICT(l) validateLink(l, "DCL_PTR_RESTRICT", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_restrict
 #define DCL_TSPEC(l) validateLink(l, "DCL_TSPEC", #l, DECLARATOR, __FILE__, __LINE__)->select.d.tspec
 
 #define FUNC_DEBUG //assert(IS_FUNC(x));
@@ -383,6 +391,8 @@ extern sym_link *validateLink(sym_link  *l,
 #define FUNC_INTNO(x) (x->funcAttrs.intno)
 #define FUNC_REGBANK(x) (x->funcAttrs.regbank)
 #define FUNC_HASSTACKPARM(x) (x->funcAttrs.hasStackParms)
+#define FUNC_ISINLINE(x) (x->funcAttrs.inlinereq)
+#define IFFUNC_ISINLINE(x) (IS_FUNC(x) && FUNC_ISINLINE(x))
 
 #define FUNC_ISREENT(x) (x->funcAttrs.reent)
 #define IFFUNC_ISREENT(x) (IS_FUNC(x) && FUNC_ISREENT(x))
@@ -437,10 +447,12 @@ extern sym_link *validateLink(sym_link  *l,
 #define SPEC_ISR_SAVED_BANKS(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitStart
 #define SPEC_VOLATILE(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_volatile
 #define SPEC_CONST(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_const
+#define SPEC_RESTRICT(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_restrict
 #define SPEC_STRUCT(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.v_struct
 #define SPEC_TYPEDEF(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_typedef
 #define SPEC_REGPARM(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_isregparm
 #define SPEC_ARGREG(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.argreg
+#define SPEC_INLINE(x) validateLink(x, "SPEC_INLINE", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_inline
 
 /* type check macros */
 #define IS_DECL(x)   ( x && x->class == DECLARATOR      )
@@ -456,6 +468,7 @@ extern sym_link *validateLink(sym_link  *l,
                                      DCL_TYPE(x) == CPOINTER   ||    \
                                      DCL_TYPE(x) == UPOINTER  ))
 #define IS_PTR_CONST(x) (IS_PTR(x) && DCL_PTR_CONST(x))
+#define IS_PTR_RESTRICT(x) (IS_PTR(x) && DCL_PTR_RESTRICT(x))
 #define IS_FARPTR(x) (IS_DECL(x) && DCL_TYPE(x) == FPOINTER)
 #define IS_CODEPTR(x) (IS_DECL(x) && DCL_TYPE(x) == CPOINTER)
 #define IS_GENPTR(x) (IS_DECL(x) && DCL_TYPE(x) == GPOINTER)
@@ -473,6 +486,7 @@ extern sym_link *validateLink(sym_link  *l,
 #define IS_REGISTER(x)  (IS_SPEC(x) && SPEC_SCLS(x) == S_REGISTER)
 #define IS_RENT(x)   (IS_SPEC(x) && x->select.s._reent )
 #define IS_STATIC(x) (IS_SPEC(x) && SPEC_STAT(x))
+#define IS_INLINE(x) (IS_SPEC(x) && SPEC_INLINE(x))
 #define IS_INT(x)    (IS_SPEC(x) && x->select.s.noun == V_INT)
 #define IS_VOID(x)   (IS_SPEC(x) && x->select.s.noun == V_VOID)
 #define IS_CHAR(x)   (IS_SPEC(x) && x->select.s.noun == V_CHAR)
@@ -609,6 +623,7 @@ void processFuncPtrArgs (sym_link *);
 void processFuncArgs (symbol *);
 int isSymbolEqual (symbol *, symbol *);
 int powof2 (TYPE_TARGET_ULONG);
+void dbuf_printTypeChain (sym_link *, struct dbuf_s *);
 void printTypeChain (sym_link *, FILE *);
 void printTypeChainRaw (sym_link *, FILE *);
 void initCSupport ();

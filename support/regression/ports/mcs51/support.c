@@ -4,17 +4,9 @@
 unsigned char
 _sdcc_external_startup (void)
 {
-  /* copied from device/examples/mcs51/simple2/hi.c */
-  PCON = 0x80;  /* power control byte, set SMOD bit for serial port */
-  SCON = 0x40;  /* serial control byte, mode 1, RI _NOT_ active */
-  TMOD = 0x21;  /* timer control mode, byte operation */
-  TCON = 0;     /* timer control register, byte operation */
-
-  TH1  = 0xFA;  /* serial reload value, 9,600 baud at 11.0952Mhz */
-  TL1  = 0xFF;  /* reload asap */
-  TR1  = 1;     /* start serial timer */
-
-  TI   = 1;     /* enable transmission of first byte */
+  /* serial port mode 0 is default */
+  /* enable transmission of first byte */
+  TI = 1;
   return 0;
 }
 
@@ -23,8 +15,8 @@ _putchar (char c)
 {
   while (!TI)
     ;
-  SBUF = c;
   TI = 0;
+  SBUF = c;
 }
 
 void

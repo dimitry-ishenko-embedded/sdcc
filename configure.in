@@ -1,6 +1,6 @@
 #!/bin/sh
 
-AC_PREREQ(2.54)
+AC_PREREQ(2.60)
 AC_INIT
 AC_CONFIG_SRCDIR([Makefile.in])
 AC_CONFIG_HEADER(sdccconf.h:sdccconf_in.h)
@@ -38,16 +38,20 @@ sdcc_cv_versionp=$VERSIONP
 # Required programs
 # ===========================================================================
 AC_PROG_CC
-AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
-AC_PROG_LEX
-AC_PROG_YACC
 AC_CHECK_PROG(AUTOCONF, autoconf, autoconf, :)
 AC_CHECK_PROG(STRIP, strip, strip, :)
 AC_CHECK_PROG(AS, as, as, :)
 AC_CHECK_PROG(CP, cp, cp, :)
+
+dnl Don't use AC_PROG_LEX
+dnl LEXLIB is not useful in gcc.
+AC_CHECK_PROGS(LEX, flex lex, :)
+
+dnl Don't use AC_PROG_YACC
+AC_CHECK_PROGS(YACC, 'bison -y' byacc yacc, :)
 
 AC_DEFUN(SDCC_REQUIRE_PROG,
 [if test "$1" = ":"; then
@@ -56,20 +60,9 @@ AC_DEFUN(SDCC_REQUIRE_PROG,
 ])
 
 SDCC_REQUIRE_PROG($YACC, bison)
-SDCC_REQUIRE_PROG($LEX, lex)
+SDCC_REQUIRE_PROG($LEX, flex)
 
-AC_LANG([C])
-
-
-# Checking for header files.
-# ===========================================================================
-AC_CHECK_HEADERS(sys/socket.h)
-
-
-# Checking for functions/libs
-# ===========================================================================
-AC_CHECK_LIB(socket,socket)
-AC_CHECK_LIB(nsl,xdr_short)
+AC_LANG_C
 
 
 # Checking for functions
@@ -600,25 +593,20 @@ AC_DO_DISABLER(ucsim,      UCSIM,      [Disables configuring and building of ucs
 AC_DO_DISABLER(device-lib, DEVICE_LIB, [Disables building device libraries])
 AC_DO_DISABLER(packihx,    PACKIHX,    [Disables building packihx])
 AC_DO_DISABLER(sdcpp,      SDCPP,      [Disables building sdcpp])
+AC_DO_DISABLER(sdcdb,      SDCDB,      [Disables building sdcdb])
 
 AC_DO_ENABLER(doc,   DOC,   [Enables building the documentation])
 if test $OPT_ENABLE_DOC = 1; then
   AC_CHECK_PROG(LYX,        lyx,        lyx, :)
-#  AC_CHECK_PROG(LATEX,      latex,      latex, :)
   AC_CHECK_PROG(LATEX2HTML, latex2html, latex2html, :)
   AC_CHECK_PROG(PDFLATEX,   pdflatex,   pdflatex, :)
   AC_CHECK_PROG(PDFOPT,     pdfopt,     pdfopt, :)
-#  AC_CHECK_PROG(DVIPDF,     dvipdf,     dvipdf, :)
-#  AC_CHECK_PROG(DVIPS,      dvips,      dvips, :)
   AC_CHECK_PROG(MAKEINDEX,  makeindex,  makeindex, :)
 
   SDCC_REQUIRE_PROG($LYX,        lyx)
-#  SDCC_REQUIRE_PROG($LATEX,      latex)
-#  SDCC_REQUIRE_PROG($LATEX2HTML, latex2html)
+  SDCC_REQUIRE_PROG($LATEX2HTML, latex2html)
   SDCC_REQUIRE_PROG($PDFLATEX,   pdflatex)
   SDCC_REQUIRE_PROG($PDFOPT,     pdfopt)
-#  SDCC_REQUIRE_PROG($DVIPDF,     dvipdf)
-#  SDCC_REQUIRE_PROG($DVIPS,      dvips)
   SDCC_REQUIRE_PROG($MAKEINDEX,  makeindex)
 fi
 
@@ -641,6 +629,7 @@ mv ports ports.build
 test $OPT_DISABLE_SDCPP   = 0 && AC_CONFIG_SUBDIRS(support/cpp2)
 test $OPT_DISABLE_PACKIHX = 0 && AC_CONFIG_SUBDIRS(support/packihx)
 test $OPT_DISABLE_UCSIM   = 0 && AC_CONFIG_SUBDIRS(sim/ucsim)
+test $OPT_DISABLE_SDCDB   = 0 && AC_CONFIG_SUBDIRS(debugger/mcs51)
 AC_CONFIG_FILES([doc/Makefile])
 
 test $OPT_DISABLE_AVR = 0 && AC_CONFIG_FILES([src/avr/Makefile])
@@ -657,14 +646,15 @@ fi
 
 if test $OPT_DISABLE_HC08 = 0; then
   AC_CONFIG_FILES([src/hc08/Makefile
-                   as/hc08/Makefile])
+                   as/hc08/Makefile
+                   as/link/hc08/Makefile])
   test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/hc08/Makefile])
 fi
 
 if test $OPT_DISABLE_MCS51 = 0; then
   AC_CONFIG_FILES([src/mcs51/Makefile
                    as/mcs51/Makefile
-                   debugger/mcs51/Makefile])
+                   as/link/mcs51/Makefile])
   test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/mcs51/Makefile
                                                        device/lib/small/Makefile
                                                        device/lib/medium/Makefile
@@ -686,8 +676,8 @@ if test $OPT_DISABLE_Z80 = 0; then
   AC_CONFIG_FILES([src/z80/Makefile
                    as/Makefile
                    as/z80/Makefile
-                   link/Makefile
-                   link/z80/Makefile])
+                   as/link/Makefile
+                   as/link/z80/Makefile])
   test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/z80/Makefile
                                                        device/lib/gbz80/Makefile])
 fi
@@ -740,6 +730,7 @@ sdcc ${VERSION} is now configured for
     ds400               ${enable_ds400_port}
     gbz80               ${enable_gbz80_port}
     hc08                ${enable_hc08_port}
+    mcs51               ${enable_mcs51_port}
     pic                 ${enable_pic_port}
     pic16               ${enable_pic16_port}
     xa51                ${enable_xa51_port}
@@ -749,6 +740,7 @@ sdcc ${VERSION} is now configured for
   Disable ucsim:        ${OPT_DISABLE_UCSIM}
   Disable device lib:   ${OPT_DISABLE_DEVICE_LIB}
   Disable sdcpp:        ${OPT_DISABLE_SDCPP}
+  Disable sdcdb:        ${OPT_DISABLE_SDCDB}
   Enable documentation: ${OPT_ENABLE_DOC}
   Enable libgc:         ${OPT_ENABLE_LIBGC}
 
@@ -760,6 +752,7 @@ sdcc ${VERSION} is now configured for
 
     prefix:             ${prefix}
     datadir:            ${datadir}
+    datarootdir:        ${datarootdir}
 
   Search paths (incomplete, see manual for all search paths):
     binary files:       \$SDCC_HOME${binPath}

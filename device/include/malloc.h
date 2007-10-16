@@ -36,19 +36,9 @@ void free (void * ptr);
 
 #else
 
-#define MEMHEADER   struct MAH// Memory Allocation Header
-
-MEMHEADER
-{
-      MEMHEADER __xdata *  next;
-      unsigned int       len;
-      unsigned char      mem[];
-};
-
-extern void init_dynamic_memory(void xdata * heap, unsigned int size);
-extern void xdata * calloc (size_t nmemb, size_t size);
-extern void xdata * malloc (size_t size);
-extern void xdata * realloc (void * ptr, size_t size);
+extern void __xdata * calloc (size_t nmemb, size_t size);
+extern void __xdata * malloc (size_t size);
+extern void __xdata * realloc (void * ptr, size_t size);
 extern void free (void * ptr);
 
 #endif

@@ -22,7 +22,7 @@
 /* Version 1.0 - Initial release */
 
 /*
-** $Id: sincosf.c 3714 2005-04-02 13:13:53Z vrokas $
+** $Id: sincosf.c 4776 2007-04-29 13:15:51Z borutr $
 */
 
 #include <math.h>

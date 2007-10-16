@@ -13,10 +13,10 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.subdir 4306 2006-07-27 17:32:43Z borutr $
+### $Id: Makefile.subdir 4656 2007-02-25 21:57:27Z tecodev $
 ###
 
-include $(top_builddir)Makefile.common
+include $(top_builddir)/Makefile.common
 
 SUBDIRS ?= 
 MKLIB	?= 
@@ -26,29 +26,38 @@ builddir ?= build/$(patsubst $(shell cd $(top_builddir); pwd)/%,%,$(CURDIR))
 
 C_SRC	?= $(notdir $(wildcard $(srcdir)/*.c))
 S_SRC	?= $(notdir $(wildcard $(srcdir)/*.S))
-OBJS	?= $(addprefix $(top_builddir)$(builddir)/,$(C_SRC:.c=.o) $(S_SRC:.S=.o))
+OBJS	?= $(addprefix $(top_builddir)/$(builddir)/,$(C_SRC:.c=.o) $(S_SRC:.S=.o))
 LIB_O	?= $(OBJS)
 
 ifneq (,$(strip $(MKLIB)))
-LIB_LIB = $(top_builddir)$(builddir)/$(MKLIB)
+LIB_LIB = $(top_builddir)/$(builddir)/$(MKLIB)
 TARGETS ?= $(LIB_LIB)
 else
 LIB_LIB = 
 #TARGETS ?= $(OBJS)
 endif
 
-.PHONY : all install clean clean-intermediate
+.PHONY : all install clean clean-intermediate $(addprefix install,$(TARGETS))
+
+ifndef SILENT
+ECHO=echo
+else
+ECHO=true
+endif
 
 all : install
 
 ifneq (,$(strip $(TARGETS)))
+
+$(addprefix install,$(TARGETS)): install% : %
+	@-if [ -e "$<" ]; then \
+	[ -d "$(top_builddir)/$(installdir)" ] || $(MKDIR) "$(top_builddir)/$(installdir)"; \
+	$(ECHO) "[INSTALL] $(patsubst $(top_builddir)/$(builddir)/%,%,$<)"; \
+	[ ! -e "$<" ] || $(CP) "$<" "$(top_builddir)/$(installdir)"; \
+	fi
+
 # usually install $(LIB_LIB) or $(OBJS), race condition in "[ -d x ] || mkdir x"
-install : recurse $(OBJS) $(LIB_LIB)
-	@$(MKDIR) "$(top_builddir)$(installdir)"
-ifndef SILENT
-	@echo "[INSTALL] $(patsubst $(top_builddir)$(builddir)/%,%,$(TARGETS))";
-endif
-	$(Q)$(CP) $(TARGETS) "$(top_builddir)$(installdir)"
+install : recurse $(OBJS) $(LIB_LIB) $(addprefix install,$(TARGETS))
 else
 # used in subdirs like libc/ctype whose files
 # are contained in a parent's library
@@ -63,8 +72,8 @@ clean : recurse
 	@-echo "dummy" > .dummy
 	$(Q)-$(RM) .dummy $(TARGETS)
 	@-echo "dummy" > .dummy
-	$(Q)-$(RM) .dummy $(addprefix $(top_builddir)$(installdir)/,$(notdir $(TARGETS)))
-	$(Q)-[ ! -d "$(top_builddir)$(builddir)" ] || $(RMDIR) "$(top_builddir)$(builddir)"
+	$(Q)-$(RM) .dummy $(addprefix $(top_builddir)/$(installdir)/,$(notdir $(TARGETS)))
+	$(Q)-[ ! -d "$(top_builddir)/$(builddir)" ] || $(RMDIR) "$(top_builddir)/$(builddir)"
 
 distclean : clean
 

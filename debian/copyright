@@ -20,3 +20,13 @@ You are free to redistribute this software under the terms of the GNU
 General Public License.
 On Debian systems, the complete text of the GNU General Public License can
 be found at /usr/share/common-licenses/GPL
+
+Included in sdcc is the ASxxxx which has the following copyright
+clause:
+The  ASxxxx  assemblers  and the ASLINK relocating linker are
+placed in the Public Domain.   Publication  or  distribution  of
+these programs for non-commercial use is hereby granted with the
+stipulation that the  copyright  notice  be  included  with  all
+copies.
+
+The author of ASxxxx is Alan R.  Baldwin

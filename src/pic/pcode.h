@@ -22,6 +22,11 @@
 //#include "ralloc.h"
 struct regs;
 
+/* When changing these, you must also update the assembler template
+ * in device/lib/libsdcc/macros.inc */
+#define GPTRTAG_DATA	0x00
+#define GPTRTAG_CODE	0x80
+
 /*
    Post code generation
 
@@ -809,6 +814,7 @@ typedef struct peepCommand {
 #define isPCL(x)        ((PCODE(x)->type == PC_LABEL))
 #define isPCW(x)        ((PCODE(x)->type == PC_WILD))
 #define isPCCS(x)       ((PCODE(x)->type == PC_CSOURCE))
+#define isPCASMDIR(x)	((PCODE(x)->type == PC_ASMDIR))
 
 /*
   macros for checking pCodeInstruction types

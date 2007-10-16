@@ -15,22 +15,22 @@ SDCC_LIBS	= support/makebin
 SDCC_DOC        = doc
 
 # Parts that are not normally compiled but need to be cleaned
-SDCC_EXTRA      = support/regression
+SDCC_EXTRA      = support/regression support/valdiag
 
 SDCC_PACKIHX	= support/packihx
 SDCC_LIBRARIAN	= support/librarian
 
 ifeq ($(OPT_DISABLE_HC08), 0)
-SDCC_ASLINK     += as/hc08
+SDCC_ASLINK     += as/hc08 as/link/hc08
 endif
 
 ifeq ($(OPT_DISABLE_MCS51), 0)
-SDCC_ASLINK     += as/mcs51
+SDCC_ASLINK     += as/mcs51 as/link/mcs51
 SDCC_MISC	+= debugger/mcs51
 endif
 
 ifeq ($(OPT_DISABLE_Z80), 0)
-SDCC_ASLINK     += as link
+SDCC_ASLINK     += as as/link
 endif
 
 ifeq ($(OPT_DISABLE_UCSIM), 0)
@@ -100,7 +100,7 @@ sdcc-device-lib: sdcc-cc sdcc-aslink
 
 sdcc-device-tini:
 	$(MAKE) -C device/include
-	$(MAKE) -C device/lib modelDS390
+	$(MAKE) -C device/lib model-ds390 model-ds400
 
 # doc depends on latex and latex2html
 sdcc-doc:
@@ -129,7 +129,7 @@ install-tini:
 	@for pkg in $(PKGS_TINI); do\
 	  $(MAKE) -C $$pkg install ;\
 	done
-	$(MAKE) -C device/lib installDS390
+	$(MAKE) -C device/lib install
 
 
 

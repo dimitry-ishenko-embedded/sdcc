@@ -13,13 +13,15 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.in 4148 2006-05-01 20:47:12Z tecodev $
+### $Id: Makefile.in 4656 2007-02-25 21:57:27Z tecodev $
 ###
 
 top_builddir = @top_builddir@
 top_srcdir   = @top_srcdir@
 srcdir       = @srcdir@
 VPATH        = @srcdir@
+
+.NOTPARALLEL:
 
 SUBDIRS = 
 MKLIB	= device_libs
@@ -30,9 +32,9 @@ TARGETS = $(OBJS:.o=.lib)
 # [...]/devicelibs would be the default target)
 suball : all
 
-.PHONY : $(top_builddir)$(builddir)/device_libs suball
+.PHONY : $(top_builddir)/$(builddir)/device_libs suball
 
-$(top_builddir)$(builddir)/device_libs :
-	$(Q)+$(foreach dev,$(C_FILES:.c=),$(MAKE) $(top_builddir)$(builddir)/$(dev).lib LIB_O=$(top_builddir)$(builddir)/$(dev).o;)
+$(top_builddir)/$(builddir)/device_libs :
+	$(Q)+$(foreach dev,$(C_FILES:.c=),$(MAKE) $(top_builddir)/$(builddir)/$(dev).lib LIB_O=$(top_builddir)/$(builddir)/$(dev).o;)
 
 include $(top_srcdir)/Makefile.subdir

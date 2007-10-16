@@ -11,7 +11,7 @@ clean:
 	for model in $(MODELS); do \
 	  if [ -d $$model ]; then \
 	    cd $$model && for name in *; do if [ -f $$name -a $$name != Makefile -a $$name != Makefile.in ]; then rm $$name; fi; done; \
-	  fi; \
+	  fi;\
 	done
 	for port in $(CLEANALLPORTS) ; do\
 	  if [ -f $$port/Makefile ]; then\

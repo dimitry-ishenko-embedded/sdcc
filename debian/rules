@@ -1,13 +1,9 @@
 #!/usr/bin/make -f
-# Sample debian/rules that uses debhelper. 
-# GNU copyright 1997 by Joey Hess.
-#
-# This version is for a hypothetical package that builds an
-# architecture-dependant package, as well as an architecture-independent
-# package.
+
+#include /usr/share/quilt/quilt.make
 
 # Uncomment this to turn on verbose mode. 
-#export DH_VERBOSE=1
+# export DH_VERBOSE=1
 
 # These are used for cross-compiling and for saving the configure script
 # from having to guess our platform (since we know it already)
@@ -17,60 +13,72 @@ DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 export HOME=$(CURDIR)/build
 
 ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
-	CFLAGS += -g
+	CFLAGS += -g -O0
+	export STRIP=true
 endif
 ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
 	INSTALL_PROGRAM += -s
 endif
 
-clean:
+configure: config.status
+config.status:
+	#config.status: $(QUILT_STAMPFN)
 	dh_testdir
-	dh_testroot
-	-$(MAKE) distclean
-	-$(MAKE) -C doc/z80 clean
-	-find $(CURDIR)/device/lib -name Makefile -exec rm {} \;
-	-find $(CURDIR)/device/lib -name config.log -exec rm {} \;
-	-find $(CURDIR)/device/lib -name config.status -exec rm {} \;
-	-rm device/lib/pic/Makefile.common
-	-rm device/lib/pic16/Makefile.common
-	-rm device/lib/pic16/pics.build
-	-rm support/valdiag/Makefile
-	-rm src/SDCCy.c src/SDCCy.h src/SDCClex.c
-	rm -f *-stamp 
-	rm -rf $(CURDIR)/build
-	dh_clean
-
-config.status: configure
-	dh_testdir
+	cp /usr/share/misc/config.sub sim/ucsim/config.sub
+	cp /usr/share/misc/config.guess sim/ucsim/config.guess
+	autoconf
 	mkdir -p $(CURDIR)/build
+	@printf "\n == CONFIGURE =================================================== \n\n"
+	#CFLAGS+="$(CFLAGS)" 
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--prefix=/usr \
 		--enable-doc
+	@printf "\n ------------------------------------------- End of CONFIGURE ---- \n\n"
 
-build-arch: build-arch-stamp
-build-arch-stamp: config.status
+build: build-stamp
+build-stamp:  config.status
 	dh_testdir
+	@printf "\n == MAKE ======================================================== \n\n"
 	$(MAKE)
-	touch build-stamp
+	@printf "\n ----------------------------------------------- End of MAKE ---- \n\n"
+	touch $@
 
-build-indep: build-indep-stamp
-build-indep-stamp: config.status build-arch
+clean:
+#clean: unpatch
 	dh_testdir
-	cd doc/z80 && PRJDIR="$(CURDIR)" $(MAKE)
-	touch build-stamp
+	dh_testroot
+	[ ! -f Makefile ] || $(MAKE) distclean
+	rm -rf as/link/z80/obj-*
+	rm -f  as/strcmpi.o
+	rm -f support/cpp2/config{args.h,.log,.status}
+	rm -f sim/ucsim/config.{guess,sub,status,log}
+	rm -f doc/z80/combined_i186_z80_design.{aux,log,ps}
+	rm -f config.log
+	[ ! -f Makefile ] || $(MAKE) -C doc clean
+	[ ! -f Makefile ] || $(MAKE) -C doc/z80 clean
+	rm -f ports.*
+	find $(CURDIR)/device/lib -name Makefile -exec rm {} \;
+	find $(CURDIR) -name Makefile -exec rm {} \;
+	rm -rf $(CURDIR)/build
 
-build: build-arch build-indep
+	dh_clean
 
 install-arch: install-arch-stamp
-install-arch-stamp: build-arch
+install-arch-stamp: build
 	dh_testdir
 	dh_testroot
 	dh_clean -k
 	dh_installdirs -a
-	
+
+	@printf "\n == INSTALL ===================================================== \n\n"
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
+	@printf "\n -------------------------------------------- End of INSTALL ---- \n\n"
+
+#	@printf "\n == doc: INSTALL ================================================ \n\n"
+#	$(MAKE) -C doc install prefix=$(CURDIR)/debian/tmp
+#	@printf "\n --------------------------------------- End of doc: INSTALL ---- \n\n"
 
 	# Install emacs helper file.
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/emacs/site-lisp/sdcc-ucsim
@@ -78,25 +86,28 @@ install-arch-stamp: build-arch
 
 	dh_install -psdcc --sourcedir=debian/tmp
 
-	# Moving all files in /usr/share/sdcc/doc/ucsim to /usr/share/doc/sdcc-ucsim
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
-	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc/ucsim/* $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
-	
+	# Moving all files in /usr/share/doc/ucsim to /usr/share/doc/sdcc-ucsim
+	mv $(CURDIR)/debian/tmp/usr/share/doc/ucsim $(CURDIR)/debian/tmp/usr/share/doc/sdcc-ucsim
+
 	dh_install -psdcc-ucsim --sourcedir=debian/tmp
-	
-	touch install-arch-stamp
+
+	touch $@
 
 install-indep: install-indep-stamp
-install-indep-stamp: build-indep install-arch
+install-indep-stamp: install-arch
 	dh_testdir
 	dh_testroot
 	dh_installdirs -i
 
-	# Remove not needed files
-	rm -f $(CURDIR)/debian/tmp/usr/share/sdcc/doc/INSTALL.txt
-	
 	# Moving all other files in /usr/share/sdcc/doc to /usr/share/doc/sdcc-doc
-	mv $(CURDIR)/debian/tmp/usr/share/sdcc/doc $(CURDIR)/debian/tmp/usr/share/doc/sdcc-doc
+	mkdir $(CURDIR)/debian/tmp/usr/share/doc/sdcc-doc
+	mkdir -p debian/temp/sdcc-doc
+	mv $(CURDIR)/debian/tmp/usr/share/doc/* debian/temp/sdcc-doc
+	mv debian/temp/sdcc-doc/sdcc-ucsim $(CURDIR)/debian/tmp/usr/share/doc/
+	mv debian/temp/sdcc-doc $(CURDIR)/debian/tmp/usr/share/doc
+	rmdir debian/temp
+
+	find $(CURDIR)/debian/tmp/usr/share/doc -name "INSTALL.txt" -exec rm {} \;
 
 	dh_install -psdcc-doc --sourcedir=debian/tmp 
 
@@ -116,12 +127,18 @@ install-indep-stamp: build-indep install-arch
 	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "configure" -exec rm {} \;
 	find $(CURDIR)/debian/tmp/usr/share/sdcc/lib -name "config.status" -exec rm {} \;
 
-	dh_install -psdcc-libraries --sourcedir=debian/tmp 
-	
+	# Toggle the executable flag on the script
+	chmod +x $(CURDIR)/debian/tmp/usr/share/sdcc/lib/src/pic/libdev/mkall.sh
+
+	dh_install -psdcc-libraries --sourcedir=$(CURDIR)/debian/tmp 
+
 	mkdir -p $(CURDIR)/debian/sdcc-libraries/usr/share/lintian/overrides/
 	install -p -o root -g root -m 644 $(CURDIR)/debian/sdcc-libraries.overrides $(CURDIR)/debian/sdcc-libraries/usr/share/lintian/overrides/sdcc-libraries
 
-	touch install-indep-stamp
+	# Add a new header file (will be included in >=2.7.1)
+	cp debian/p89c66x.h $(CURDIR)/debian/sdcc-libraries/usr/share/sdcc/include/mcs51/
+
+	touch $@
 
 install: install-arch install-indep
 
@@ -129,16 +146,10 @@ install: install-arch install-indep
 binary-indep: install-indep
 	dh_testdir -i
 	dh_testroot -i
-#	dh_installdebconf -i
 	dh_installdocs -i
 #	dh_installexamples -i
 #	dh_installmenu -i
-#	dh_installlogrotate -i
 	dh_installemacsen -i
-#	dh_installpam -i
-#	dh_installmime -i
-#	dh_installinit -i
-#	dh_installcron -i
 	dh_installman -i
 #	dh_installinfo -i
 	dh_installchangelogs -i ChangeLog 
@@ -148,7 +159,6 @@ binary-indep: install-indep
 	dh_fixperms -i
 #	dh_makeshlibs -i
 	dh_installdeb -i
-#	dh_perl -i
 	dh_shlibdeps -i
 	dh_gencontrol -i
 	dh_md5sums -i
@@ -158,16 +168,10 @@ binary-indep: install-indep
 binary-arch: install-arch
 	dh_testdir -a
 	dh_testroot -a
-#	dh_installdebconf -a
 	dh_installdocs -a
 #	dh_installexamples -a
 #	dh_installmenu -a
-#	dh_installlogrotate -a
 	dh_installemacsen -a
-#	dh_installpam -a
-#	dh_installmime -a
-#	dh_installinit -a
-#	dh_installcron -a
 	dh_installman -a
 #	dh_installinfo -a
 	dh_installchangelogs -a ChangeLog 
@@ -177,7 +181,6 @@ binary-arch: install-arch
 	dh_fixperms -a
 #	dh_makeshlibs -a
 	dh_installdeb -a
-#	dh_perl -a
 	dh_shlibdeps -a
 	dh_gencontrol -a
 	dh_md5sums -a

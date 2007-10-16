@@ -87,12 +87,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#else
-#define STRCASECMP strcasecmp
-#endif
-
 #include "z80.h"
 #include "SDCCglobl.h"
 #include "SDCCpeeph.h"
@@ -128,16 +122,16 @@ enum
 };
 
 static char *_z80_return[] =
-{"l", "h", "e", "d"};
+  {"l", "h", "e", "d"};
 static char *_gbz80_return[] =
-{"e", "d", "l", "h"};
+  {"e", "d", "l", "h"};
 static char *_fReceive[] =
   { "c", "b", "e", "d" };
 
 static char **_fReturn;
 static char **_fTmp;
 
-extern FILE *codeOutFile;
+extern struct dbuf_s *codeOutBuf;
 
 enum
   {
@@ -388,7 +382,7 @@ _tidyUp (char *buf)
 }
 
 static lineNode *
-_newLineNode (char *line)
+_newLineNode (const char *line)
 {
   lineNode *pl;
 
@@ -401,11 +395,16 @@ _newLineNode (char *line)
 static void
 _vemit2 (const char *szFormat, va_list ap)
 {
-  char buffer[INITIAL_INLINEASM];
+  struct dbuf_s dbuf;
+  const char *buffer;
 
-  tvsprintf (buffer, sizeof(buffer), szFormat, ap);
+  dbuf_init(&dbuf, INITIAL_INLINEASM);
 
-  _tidyUp (buffer);
+  dbuf_tvprintf (&dbuf, szFormat, ap);
+
+  buffer = dbuf_c_str(&dbuf);
+
+  _tidyUp ((char *)buffer);
   _G.lines.current = (_G.lines.current ?
               connectLine (_G.lines.current, _newLineNode (buffer)) :
               (_G.lines.head = _newLineNode (buffer)));
@@ -413,6 +412,9 @@ _vemit2 (const char *szFormat, va_list ap)
   _G.lines.current->isInline = _G.lines.isInline;
   _G.lines.current->isDebug = _G.lines.isDebug;
   _G.lines.current->ic = _G.current_iCode;
+  _G.lines.current->isComment = (*buffer == ';');
+
+  dbuf_destroy(&dbuf);
 }
 
 static void
@@ -699,9 +701,12 @@ _push (PAIR_ID pairId)
 static void
 _pop (PAIR_ID pairId)
 {
-  emit2 ("pop %s", _pairs[pairId].name);
-  _G.stack.pushed -= 2;
-  spillPair (pairId);
+  if (pairId != PAIR_INVALID)
+    {
+      emit2 ("pop %s", _pairs[pairId].name);
+      _G.stack.pushed -= 2;
+      spillPair (pairId);
+    }
 }
 
 void
@@ -1636,6 +1641,7 @@ static void
 emitLabel (int key)
 {
   emit2 ("!tlabeldef", key);
+  _G.lines.current->isLabel = 1;
   spillCached ();
 }
 
@@ -2067,7 +2073,7 @@ aopPut (asmop * aop, const char *s, int offset)
       if (aop->aopu.aop_pairId==PAIR_IX)
         emit2 ("ld !*ixx,%s", 0, s);
       else if (aop->aopu.aop_pairId==PAIR_IY)
-        emit2 ("ld !*ixy,%s", 0, s);
+        emit2 ("ld !*iyx,%s", 0, s);
       else
         emit2 ("ld (%s),%s", _pairs[aop->aopu.aop_pairId].name, s);
       break;
@@ -2083,6 +2089,7 @@ aopPut (asmop * aop, const char *s, int offset)
 #define AOP_TYPE(op) AOP(op)->type
 #define AOP_SIZE(op) AOP(op)->size
 #define AOP_NEEDSACC(x) (AOP(x) && ((AOP_TYPE(x) == AOP_CRY) || (AOP_TYPE(x) == AOP_SFR)))
+#define AOP_IS_PAIRPTR(x, p) (AOP_TYPE (x) == AOP_PAIRPTR && AOP (x)->aopu.aop_pairId == p)
 
 static void
 commitPair (asmop * aop, PAIR_ID id)
@@ -2513,6 +2520,16 @@ assignResultValue (operand * oper)
     }
   else
     {
+      if ((AOP_TYPE (oper) == AOP_REG) && (AOP_SIZE (oper) == 4) &&
+          !strcmp (AOP (oper)->aopu.aop_reg[size-1]->name, _fReturn[size-2]))
+        {
+          size--;
+          _emitMove ("a", _fReturn[size-1]);
+          _emitMove (_fReturn[size-1], _fReturn[size]);
+          _emitMove (_fReturn[size], "a");
+          aopPut (AOP (oper), _fReturn[size], size-1);
+          size--;
+        }
       while (size--)
         {
           aopPut (AOP (oper), _fReturn[size], size);
@@ -2680,13 +2697,23 @@ genIpush (iCode * ic)
               char *l = aopGetLitWordLong (AOP (IC_LEFT (ic)), --offset, FALSE);
               wassert (l);
               emit2 ("ld a,(%s)", l);
+              emit2 ("push af");
             }
           else
             {
               l = aopGet (AOP (IC_LEFT (ic)), --offset, FALSE);
-              emit2 ("ld a,%s", l);
+              if (!strcmp(l, "b"))
+                emit2 ("push bc");
+              else if (!strcmp(l, "d"))
+                emit2 ("push de");
+              else if (!strcmp(l, "h"))
+                emit2 ("push hl");
+              else
+                {
+                  emit2 ("ld a,%s", l);
+                  emit2 ("push af");
+                }
             }
-          emit2 ("push af");
           emit2 ("inc sp");
           _G.stack.pushed++;
         }
@@ -2899,6 +2926,7 @@ emitCall (iCode * ic, bool ispcall)
           fetchHL (AOP (IC_LEFT (ic)));
           emit2 ("jp !*hl");
           emit2 ("!tlabeldef", (rlbl->key + 100));
+          _G.lines.current->isLabel = 1;
           _G.stack.pushed -= 2;
         }
       freeAsmop (IC_LEFT (ic), NULL, ic);
@@ -2931,7 +2959,6 @@ emitCall (iCode * ic, bool ispcall)
         OP_SYMBOL (IC_RESULT (ic))->spildir)) ||
       IS_TRUE_SYMOP (IC_RESULT (ic)))
     {
-
       aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
 
       assignResultValue (IC_RESULT (ic));
@@ -3112,8 +3139,10 @@ genFunction (iCode * ic)
     {
       sprintf (buffer, "%s_start", sym->rname);
       emit2 ("!labeldef", buffer);
+      _G.lines.current->isLabel = 1;
     }
   emit2 ("!functionlabeldef", sym->rname);
+  _G.lines.current->isLabel = 1;
 
   ftype = operandType (IC_LEFT (ic));
 
@@ -3329,9 +3358,10 @@ genEndFunction (iCode * ic)
               emit2 ("pop af");
               //parity odd <==> P/O=0 <==> interrupt enable flag IFF2 was 0 <==>
               //don't enable interrupts as they were off before
-              emit2 ("jp po,!tlabel", tlbl->key + 100);
+              emit2 ("jp PO,!tlabel", tlbl->key + 100);
               emit2 ("!ei");
               emit2 ("!tlabeldef", (tlbl->key + 100));
+              _G.lines.current->isLabel = 1;
             }
         }
     }
@@ -3359,6 +3389,7 @@ genEndFunction (iCode * ic)
     {
       sprintf (buffer, "%s_end", sym->rname);
       emit2 ("!labeldef", buffer);
+      _G.lines.current->isLabel = 1;
     }
 
   _G.flushStatics = 1;
@@ -3547,7 +3578,7 @@ genPlusIncr (iCode * ic)
           emit2 ("inc %s", aopGet (AOP (IC_RESULT (ic)), offset++, FALSE));
           if (size)
             {
-              emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+              emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
             }
         }
       emitLabel (tlbl->key + 100);
@@ -3600,7 +3631,7 @@ outBitAcc (operand * result)
     }
   else
     {
-      emit2 ("!shortjp z,!tlabel", tlbl->key + 100);
+      emit2 ("!shortjp Z,!tlabel", tlbl->key + 100);
       emit2 ("ld a,!one");
       emitLabel (tlbl->key + 100);
       outAcc (result);
@@ -3628,30 +3659,27 @@ shiftIntoPair (int idx, asmop *aop)
   wassertl (IS_Z80, "Only implemented for the Z80");
   //  wassertl (aop->type == AOP_EXSTK, "Only implemented for EXSTK");
 
+  emitDebug ("; Shift into pair idx %u", idx);
+
   switch (idx)
     {
     case 0:
       id = PAIR_HL;
+      setupPair (PAIR_HL, aop, 0);
       break;
     case 1:
       id = PAIR_DE;
       _push (PAIR_DE);
-      break;
-    default:
-      wassertl (0, "Internal error - hit default case");
-    }
-
-  emitDebug ("; Shift into pair idx %u", idx);
-
-  if (id == PAIR_HL)
-    {
-      setupPair (PAIR_HL, aop, 0);
-    }
-  else
-    {
       setupPair (PAIR_IY, aop, 0);
       emit2 ("push iy");
       emit2 ("pop %s", _pairs[id].name);
+      break;
+    case 2:
+      id = PAIR_IY;
+      setupPair (PAIR_IY, aop, 0);
+      break;
+    default:
+      wassertl (0, "Internal error - hit default case");
     }
 
   aop->type = AOP_PAIRPTR;
@@ -3661,8 +3689,12 @@ shiftIntoPair (int idx, asmop *aop)
 }
 
 static void
-setupToPreserveCarry (asmop *result, asmop *left, asmop *right)
+setupToPreserveCarry (iCode * ic)
 {
+  asmop *left   = AOP (IC_LEFT (ic));
+  asmop *right  = AOP (IC_RIGHT (ic));
+  asmop *result = AOP (IC_RESULT (ic));
+
   wassert (left && right);
 
   if (IS_Z80)
@@ -3672,7 +3704,12 @@ setupToPreserveCarry (asmop *result, asmop *left, asmop *right)
           shiftIntoPair (0, right);
           /* check result again, in case right == result */
           if (couldDestroyCarry (result))
-            shiftIntoPair (1, result);
+            {
+              if (!isPairInUse (PAIR_DE, ic))
+                shiftIntoPair (1, result);
+              else
+                shiftIntoPair (2, result);
+            }
         }
       else if (couldDestroyCarry (right))
         {
@@ -3743,8 +3780,6 @@ genPlus (iCode * ic)
   if (genPlusIncr (ic) == TRUE)
     goto release;
 
-  emitDebug ("; Can't optimise plus by inc, falling back to the normal way");
-
   size = getDataSize (IC_RESULT (ic));
 
   /* Special case when left and right are constant */
@@ -3812,8 +3847,8 @@ genPlus (iCode * ic)
     }
 
   /* Special case:
-     ld hl,sp+n trashes C so we cant afford to do it during an
-     add with stack based varibles.  Worst case is:
+     ld hl,sp+n trashes C so we can't afford to do it during an
+     add with stack based variables.  Worst case is:
      ld  hl,sp+left
      ld  a,(hl)
      ld  hl,sp+right
@@ -3826,7 +3861,7 @@ genPlus (iCode * ic)
      adc (hl)
      ld  hl,sp+result+1
      ld  (hl),a
-     So you cant afford to load up hl if either left, right, or result
+     So you can't afford to load up hl if either left, right, or result
      is on the stack (*sigh*)  The alt is:
      ld  hl,sp+left
      ld  de,(hl)
@@ -3882,7 +3917,7 @@ genPlus (iCode * ic)
         }
     }
 
-  setupToPreserveCarry (AOP (IC_RESULT (ic)), AOP (IC_LEFT (ic)), AOP (IC_RIGHT (ic)));
+  setupToPreserveCarry (ic);
 
   while (size--)
     {
@@ -3914,7 +3949,6 @@ release:
   freeAsmop (IC_LEFT (ic), NULL, ic);
   freeAsmop (IC_RIGHT (ic), NULL, ic);
   freeAsmop (IC_RESULT (ic), NULL, ic);
-
 }
 
 /*-----------------------------------------------------------------*/
@@ -4080,7 +4114,7 @@ genMinus (iCode * ic)
         }
     }
 
-  setupToPreserveCarry (AOP (IC_RESULT (ic)), AOP (IC_LEFT (ic)), AOP (IC_RIGHT (ic)));
+  setupToPreserveCarry (ic);
 
   /* if literal, add a,#-lit, else normal subb */
   while (size--)
@@ -4262,28 +4296,28 @@ genIfxJump (iCode * ic, char *jval)
       jlbl = IC_TRUE (ic);
       if (!strcmp (jval, "a"))
         {
-          inst = "nz";
+          inst = "NZ";
         }
       else if (!strcmp (jval, "c"))
         {
-          inst = "c";
+          inst = "C";
         }
       else if (!strcmp (jval, "nc"))
         {
-          inst = "nc";
+          inst = "NC";
         }
       else if (!strcmp (jval, "m"))
         {
-          inst = "m";
+          inst = "M";
         }
       else if (!strcmp (jval, "p"))
         {
-          inst = "p";
+          inst = "P";
         }
       else
         {
           /* The buffer contains the bit on A that we should test */
-          inst = "nz";
+          inst = "NZ";
         }
     }
   else
@@ -4292,28 +4326,28 @@ genIfxJump (iCode * ic, char *jval)
       jlbl = IC_FALSE (ic);
       if (!strcmp (jval, "a"))
         {
-          inst = "z";
+          inst = "Z";
         }
       else if (!strcmp (jval, "c"))
         {
-          inst = "nc";
+          inst = "NC";
         }
       else if (!strcmp (jval, "nc"))
         {
-          inst = "c";
+          inst = "C";
         }
       else if (!strcmp (jval, "m"))
         {
-          inst = "p";
+          inst = "P";
         }
       else if (!strcmp (jval, "p"))
         {
-          inst = "m";
+          inst = "M";
         }
       else
         {
           /* The buffer contains the bit on A that we should test */
-          inst = "z";
+          inst = "Z";
         }
     }
   /* Z80 can do a conditional long jump */
@@ -4729,8 +4763,9 @@ genCmpLt (iCode * ic, iCode * ifx)
 
 /*-----------------------------------------------------------------*/
 /* gencjneshort - compare and jump if not equal                    */
+/* returns pair that still needs to be popped                      */
 /*-----------------------------------------------------------------*/
-static void
+static PAIR_ID
 gencjneshort (operand * left, operand * right, symbol * lbl)
 {
   int size = max (AOP_SIZE (left), AOP_SIZE (right));
@@ -4745,18 +4780,13 @@ gencjneshort (operand * left, operand * right, symbol * lbl)
       left = t;
     }
 
+  /* if the right side is a literal then anything goes */
   if (AOP_TYPE (right) == AOP_LIT)
     {
       lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
-    }
-
-  /* if the right side is a literal then anything goes */
-  if (AOP_TYPE (right) == AOP_LIT &&
-      AOP_TYPE (left) != AOP_DIR)
-    {
       if (lit == 0)
         {
-          emit2 ("ld a,%s", aopGet (AOP (left), offset, FALSE));
+          _moveA (aopGet (AOP (left), offset, FALSE));
           if (size > 1)
             {
               while (--size)
@@ -4768,55 +4798,74 @@ gencjneshort (operand * left, operand * right, symbol * lbl)
             {
               emit2 ("or a,a");
             }
-          emit2 ("jp nz,!tlabel", lbl->key + 100);
+          emit2 ("jp NZ,!tlabel", lbl->key + 100);
         }
       else
         {
           while (size--)
             {
-              emit2 ("ld a,%s", aopGet (AOP (left), offset, FALSE));
-              if ((AOP_TYPE (right) == AOP_LIT) && lit == 0)
+              _moveA (aopGet (AOP (left), offset, FALSE));
+              if ((unsigned int) ((lit >> (offset * 8)) & 0x0FFL) == 0)
                 emit2 ("or a,a");
               else
-                emit2 ("cp a,%s", aopGet (AOP (right), offset, FALSE));
-              emit2 ("jp nz,!tlabel", lbl->key + 100);
+                emit2 ("sub a,%s", aopGet (AOP (right), offset, FALSE));
+              emit2 ("jp NZ,!tlabel", lbl->key + 100);
               offset++;
             }
         }
     }
-  /* if the right side is in a register or in direct space or
-     if the left is a pointer register & right is not */
+  /* if the right side is in a register or
+     pointed to by HL, IX or IY */
   else if (AOP_TYPE (right) == AOP_REG ||
-           AOP_TYPE (right) == AOP_DIR ||
-           (AOP_TYPE (left) == AOP_DIR && AOP_TYPE (right) == AOP_LIT))
+           AOP_TYPE (right) == AOP_HL  ||
+           AOP_TYPE (right) == AOP_IY  ||
+           AOP_TYPE (right) == AOP_STK ||
+           AOP_IS_PAIRPTR (right, PAIR_HL) ||
+           AOP_IS_PAIRPTR (right, PAIR_IX) ||
+           AOP_IS_PAIRPTR (right, PAIR_IY))
     {
       while (size--)
         {
           _moveA (aopGet (AOP (left), offset, FALSE));
-          if ((AOP_TYPE (left) == AOP_DIR && AOP_TYPE (right) == AOP_LIT) &&
+          if (AOP_TYPE (right) == AOP_LIT &&
               ((unsigned int) ((lit >> (offset * 8)) & 0x0FFL) == 0))
-            /* PENDING */
-            emit2 ("jp nz,!tlabel", lbl->key + 100);
+            {
+              emit2 ("or a,a");
+              emit2 ("jp NZ,!tlabel", lbl->key + 100);
+            }
           else
             {
-              emit2 ("cp %s", aopGet (AOP (right), offset, FALSE));
-              emit2 ("jp nz,!tlabel", lbl->key + 100);
+              emit2 ("sub %s", aopGet (AOP (right), offset, FALSE));
+              emit2 ("jp NZ,!tlabel", lbl->key + 100);
             }
           offset++;
         }
     }
+  /* right is in direct space or a pointer reg, need both a & b */
   else
     {
-      /* right is a pointer reg need both a & b */
-      /* PENDING: is this required? */
+      PAIR_ID pair;
+      for (pair = PAIR_BC; pair <= PAIR_HL; pair++)
+        {
+          if (((AOP_TYPE (left)  != AOP_PAIRPTR) || (AOP (left)->aopu.aop_pairId  != pair)) &&
+              ((AOP_TYPE (right) != AOP_PAIRPTR) || (AOP (right)->aopu.aop_pairId != pair)))
+            {
+              break;
+            }
+        }
+      _push (pair);
       while (size--)
         {
+          emit2 ("; direct compare");
+          _emitMove (_pairs[pair].l, aopGet (AOP (left), offset, FALSE));
           _moveA (aopGet (AOP (right), offset, FALSE));
-          emit2 ("cp %s", aopGet (AOP (left), offset, FALSE));
-          emit2 ("!shortjp nz,!tlabel", lbl->key + 100);
+          emit2 ("sub %s", _pairs[pair].l);
+          emit2 ("!shortjp NZ,!tlabel", lbl->key + 100);
           offset++;
         }
+      return pair;
     }
+  return PAIR_INVALID;
 }
 
 /*-----------------------------------------------------------------*/
@@ -4827,7 +4876,7 @@ gencjne (operand * left, operand * right, symbol * lbl)
 {
   symbol *tlbl = newiTempLabel (NULL);
 
-  gencjneshort (left, right, lbl);
+  PAIR_ID pop = gencjneshort (left, right, lbl);
 
   /* PENDING: ?? */
   emit2 ("ld a,!one");
@@ -4835,6 +4884,7 @@ gencjne (operand * left, operand * right, symbol * lbl)
   emitLabel (lbl->key + 100);
   emit2 ("xor a,a");
   emitLabel (tlbl->key + 100);
+  _pop (pop);
 }
 
 /*-----------------------------------------------------------------*/
@@ -4872,19 +4922,24 @@ genCmpEq (iCode * ic, iCode * ifx)
         }
       else
         {
+          PAIR_ID pop;
           tlbl = newiTempLabel (NULL);
-          gencjneshort (left, right, tlbl);
+          pop = gencjneshort (left, right, tlbl);
           if (IC_TRUE (ifx))
             {
+              _pop (pop);
               emit2 ("jp !tlabel", IC_TRUE (ifx)->key + 100);
               emitLabel (tlbl->key + 100);
+              _pop (pop);
             }
           else
             {
               /* PENDING: do this better */
               symbol *lbl = newiTempLabel (NULL);
+              _pop (pop);
               emit2 ("!shortjp !tlabel", lbl->key + 100);
               emitLabel (tlbl->key + 100);
+              _pop (pop);
               emit2 ("jp !tlabel", IC_FALSE (ifx)->key + 100);
               emitLabel (lbl->key + 100);
             }
@@ -4979,7 +5034,7 @@ genAndOp (iCode * ic)
     {
       tlbl = newiTempLabel (NULL);
       _toBoolean (left);
-      emit2 ("!shortjp z,!tlabel", tlbl->key + 100);
+      emit2 ("!shortjp Z,!tlabel", tlbl->key + 100);
       _toBoolean (right);
       emitLabel (tlbl->key + 100);
       outBitAcc (result);
@@ -5016,7 +5071,7 @@ genOrOp (iCode * ic)
     {
       tlbl = newiTempLabel (NULL);
       _toBoolean (left);
-      emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+      emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
       _toBoolean (right);
       emitLabel (tlbl->key + 100);
       outBitAcc (result);
@@ -5150,7 +5205,7 @@ genAnd (iCode * ic, iCode * ifx)
                   /* For the flags */
                   emit2 ("or a,a");
                 }
-              emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+              emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
             }
               offset++;
         }
@@ -5159,6 +5214,7 @@ genAnd (iCode * ic, iCode * ifx)
         {
           emit2 ("clr c");
           emit2 ("!tlabeldef", tlbl->key + 100);
+          _G.lines.current->isLabel = 1;
         }
       // if(left & literal)
       else
@@ -5334,7 +5390,7 @@ genOr (iCode * ic, iCode * ifx)
           _moveA (aopGet (AOP (left), offset, FALSE));
           /* OR with any literal is the same as OR with itself. */
           emit2 ("or a,a");
-          emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+          emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
 
           offset++;
         }
@@ -5489,7 +5545,7 @@ genXor (iCode * ic, iCode * ifx)
         {
           _moveA (aopGet (AOP (left), offset, FALSE));
           emit2 ("xor a,%s", aopGet (AOP (right), offset, FALSE));
-          emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+          emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
           offset++;
         }
       if (ifx)
@@ -5702,18 +5758,21 @@ shiftR2Left2Result (operand * left, int offl,
                     int shCount, int is_signed)
 {
   int size = 2;
-  symbol *tlbl, *tlbl1;
+  symbol *tlbl;
 
   movLeft2Result (left, offl, result, offr, 0);
   movLeft2Result (left, offl + 1, result, offr + 1, 0);
 
+  if (shCount == 0)
+    return;
+
   /*  if (AOP(result)->type == AOP_REG) { */
 
   tlbl = newiTempLabel (NULL);
-  tlbl1 = newiTempLabel (NULL);
 
   /* Left is already in result - so now do the shift */
-  if (shCount <= 4)
+  /* Optimizing for speed by default. */
+  if (!optimize.codeSize || shCount <= 2)
     {
       while (shCount--)
         {
@@ -5722,15 +5781,14 @@ shiftR2Left2Result (operand * left, int offl,
     }
   else
     {
-      emit2 ("ld a,!immedbyte+1", shCount);
-      emit2 ("!shortjp !tlabel", tlbl1->key + 100);
+      emit2 ("ld a,!immedbyte", shCount);
+
       emitLabel (tlbl->key + 100);
 
       emitRsh2 (AOP (result), size, is_signed);
 
-      emitLabel (tlbl1->key + 100);
       emit2 ("dec a");
-      emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+      emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
     }
 }
 
@@ -5752,6 +5810,9 @@ shiftL2Left2Result (operand * left, int offl,
       movLeft2Result (left, offl, result, offr, 0);
       movLeft2Result (left, offl + 1, result, offr + 1, 0);
     }
+
+  if (shCount == 0)
+    return;
 
   if (getPairId (AOP (result)) == PAIR_HL)
     {
@@ -5818,7 +5879,7 @@ shiftL2Left2Result (operand * left, int offl,
           {
             emitLabel (tlbl1->key + 100);
             emit2 ("dec a");
-            emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+            emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
           }
       }
   }
@@ -5956,7 +6017,7 @@ shiftL1Left2Result (operand * left, int offl,
 
 
 /*-----------------------------------------------------------------*/
-/* genlshTwo - left shift two bytes by known amount != 0           */
+/* genlshTwo - left shift two bytes by known amount                */
 /*-----------------------------------------------------------------*/
 static void
 genlshTwo (operand * result, operand * left, int shCount)
@@ -5974,8 +6035,8 @@ genlshTwo (operand * result, operand * left, int shCount)
           if (shCount)
             {
               movLeft2Result (left, LSB, result, MSB16, 0);
-              aopPut (AOP (result), "!zero", 0);
               shiftL1Left2Result (left, LSB, result, MSB16, shCount);
+              aopPut (AOP (result), "!zero", LSB);
             }
           else
             {
@@ -5988,7 +6049,7 @@ genlshTwo (operand * result, operand * left, int shCount)
           aopPut (AOP (result), "!zero", LSB);
         }
     }
-  /*  1 <= shCount <= 7 */
+  /*  0 <= shCount <= 7 */
   else
     {
       if (size == 1)
@@ -6031,12 +6092,8 @@ genLeftShiftLiteral (operand * left,
   size = getSize (operandType (result));
 
   /* I suppose that the left size >= result size */
-  if (shCount == 0)
-    {
-      wassert (0);
-    }
 
-  else if (shCount >= (size * 8))
+  if (shCount >= (size * 8))
     {
       while (size--)
         {
@@ -6146,7 +6203,7 @@ genLeftShift (iCode * ic)
     }
   emitLabel (tlbl1->key + 100);
   emit2 ("dec a");
-  emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+  emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
 
   freeAsmop (left, NULL, ic);
   freeAsmop (result, NULL, ic);
@@ -6231,7 +6288,7 @@ shiftR1Left2Result (operand * left, int offl,
 }
 
 /*-----------------------------------------------------------------*/
-/* genrshTwo - right shift two bytes by known amount != 0          */
+/* genrshTwo - right shift two bytes by known amount               */
 /*-----------------------------------------------------------------*/
 static void
 genrshTwo (operand * result, operand * left,
@@ -6264,7 +6321,7 @@ genrshTwo (operand * result, operand * left,
           aopPut (AOP (result), "!zero", 1);
         }
     }
-  /*  1 <= shCount <= 7 */
+  /*  0 <= shCount <= 7 */
   else
     {
       shiftR2Left2Result (left, LSB, result, LSB, shCount, sign);
@@ -6292,12 +6349,8 @@ genRightShiftLiteral (operand * left,
   size = getSize (operandType (result));
 
   /* I suppose that the left size >= result size */
-  if (shCount == 0)
-    {
-      wassert (0);
-    }
 
-  else if (shCount >= (size * 8)) {
+  if (shCount >= (size * 8)) {
     const char *s;
     if (!SPEC_USIGN(getSpec(operandType(left)))) {
       _moveA(aopGet (AOP (left), 0, FALSE));
@@ -6422,7 +6475,7 @@ genRightShift (iCode * ic)
     }
   emitLabel (tlbl1->key + 100);
   emit2 ("dec a");
-  emit2 ("!shortjp nz,!tlabel", tlbl->key + 100);
+  emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
 
   freeAsmop (left, NULL, ic);
   freeAsmop (result, NULL, ic);
@@ -6461,7 +6514,7 @@ genUnpackBits (operand * result, int pair)
           symbol *tlbl = newiTempLabel (NULL);
 
           emit2 ("bit %d,a", blen - 1);
-          emit2 ("jp z,!tlabel", tlbl->key + 100);
+          emit2 ("jp Z,!tlabel", tlbl->key + 100);
           emit2 ("or a,!immedbyte", (unsigned char) (0xff << blen));
           emitLabel (tlbl->key + 100);
         }
@@ -6485,7 +6538,7 @@ genUnpackBits (operand * result, int pair)
           symbol *tlbl = newiTempLabel (NULL);
 
           emit2 ("bit %d,a", blen - 1);
-          emit2 ("jp z,!tlabel", tlbl->key + 100);
+          emit2 ("jp Z,!tlabel", tlbl->key + 100);
           emit2 ("or a,!immedbyte", (unsigned char) (0xff << blen));
           emitLabel (tlbl->key + 100);
         }
@@ -6518,7 +6571,7 @@ genUnpackBits (operand * result, int pair)
           symbol *tlbl = newiTempLabel (NULL);
 
           emit2 ("bit %d,a", rlen - 1);
-          emit2 ("jp z,!tlabel", tlbl->key + 100);
+          emit2 ("jp Z,!tlabel", tlbl->key + 100);
           emit2 ("or a,!immedbyte", (unsigned char) (0xff << rlen));
           emitLabel (tlbl->key + 100);
         }
@@ -7458,9 +7511,10 @@ genCritical (iCode *ic)
       //disable interrupt
       emit2 ("!di");
       //parity odd <==> P/O=0 <==> interrupt enable flag IFF2=0
-      emit2 ("jp po,!tlabel", tlbl->key + 100);
+      emit2 ("jp PO,!tlabel", tlbl->key + 100);
       aopPut (AOP (IC_RESULT (ic)), "!one", 0);
       emit2 ("!tlabeldef", (tlbl->key + 100));
+      _G.lines.current->isLabel = 1;
       freeAsmop (IC_RESULT (ic), NULL, ic);
     }
   else
@@ -7491,7 +7545,7 @@ genEndCritical (iCode *ic)
       aopOp (IC_RIGHT (ic), ic, FALSE, TRUE);
       _toBoolean (IC_RIGHT (ic));
       //don't enable interrupts if they were off before
-      emit2 ("!shortjp z,!tlabel", tlbl->key + 100);
+      emit2 ("!shortjp Z,!tlabel", tlbl->key + 100);
       emit2 ("!ei");
       emitLabel (tlbl->key + 100);
       freeAsmop (IC_RIGHT (ic), NULL, ic);
@@ -7502,9 +7556,10 @@ genEndCritical (iCode *ic)
       emit2 ("pop af");
       //parity odd <==> P/O=0 <==> interrupt enable flag IFF2 was 0 <==>
       //don't enable interrupts as they were off before
-      emit2 ("jp po,!tlabel", tlbl->key + 100);
+      emit2 ("jp PO,!tlabel", tlbl->key + 100);
       emit2 ("!ei");
       emit2 ("!tlabeldef", (tlbl->key + 100));
+      _G.lines.current->isLabel = 1;
     }
 }
 
@@ -7960,7 +8015,7 @@ genBuiltInStrcpy (iCode *ic, int nParams, operand **pparams)
   emit2 ("ld a,(hl)");
   emit2 ("ldi");
   emit2 ("or a");
-  emit2 ("!shortjp nz,!tlabel ; 1", label->key);
+  emit2 ("!shortjp NZ,!tlabel ; 1", label->key);
 
   freeAsmop (from, NULL, ic->next);
   freeAsmop (to, NULL, ic);
@@ -8081,7 +8136,9 @@ genZ80Code (iCode * lic)
         }
       if (options.iCodeInAsm)
         {
-          emit2 (";ic:%d: %s", ic->key, printILine(ic));
+          char *iLine = printILine(ic);
+          emit2 (";ic:%d: %s", ic->key, iLine);
+          dbuf_free(iLine);
         }
       /* if the result is marked as
          spilt and rematerializable or code for
@@ -8118,7 +8175,7 @@ genZ80Code (iCode * lic)
              spilt live range, if there is an ifx statement
              following this pop then the if statement might
              be using some of the registers being popped which
-             would destory the contents of the register so
+             would destroy the contents of the register so
              we need to check for this condition and handle it */
           if (ic->next &&
               ic->next->op == IFX &&
@@ -8365,16 +8422,16 @@ genZ80Code (iCode * lic)
   /* This is unfortunate */
   /* now do the actual printing */
   {
-    FILE *fp = codeOutFile;
-    if (isInHome () && codeOutFile == code->oFile)
-      codeOutFile = home->oFile;
-    printLine (_G.lines.head, codeOutFile);
+    struct dbuf_s *buf = codeOutBuf;
+    if (isInHome () && codeOutBuf == &code->oBuf)
+      codeOutBuf = &home->oBuf;
+    printLine (_G.lines.head, codeOutBuf);
     if (_G.flushStatics)
       {
         flushStatics ();
         _G.flushStatics = 0;
       }
-    codeOutFile = fp;
+    codeOutBuf = buf;
   }
 
   freeTrace(&_G.lines.trace);

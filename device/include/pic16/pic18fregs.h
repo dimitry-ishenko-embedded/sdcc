@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18fregs.h 4255 2006-07-02 10:13:24Z tecodev $
+ * $Id: pic18fregs.h 4735 2007-04-08 13:05:45Z MaartenBrock $
  *
  */
 
@@ -48,23 +48,51 @@
 
 #elif defined(pic18f2220)
 #  include <pic18f2220.h>
+
+#elif defined(pic18f2221)
+#  include <pic18f2221.h>
+
 #elif defined(pic18f2320)
 #  include <pic18f2220.h>	/* Yes, it's 2220.h */
+
+#elif defined(pic18f2321)
+#  include <pic18f2321.h>
+
+#elif defined(pic18f2331)
+#  include <pic18f2331.h>
+
+#elif defined(pic18f2431)
+#  include <pic18f2431.h>
 
 #elif defined(pic18f2455)
 #  include <pic18f2455.h>
 
+#elif defined(pic18f2525)
+#  include <pic18f2620.h>   /* just a 2620 core with less flash */
+
 #elif defined(pic18f2550)
 #  include <pic18f2550.h>
+
+#elif defined(pic18f2620)
+#  include <pic18f2620.h>
 
 #elif defined(pic18f4220)
 #  include <pic18f4220.h>
 
+#elif defined(pic18f4221)
+#  include <pic18f4221.h>
+
 #elif defined(pic18f4320)
 #  include <pic18f4220.h>	/* Yes, it's 4220.h */
 
+#elif defined(pic18f4321)
+#  include <pic18f4321.h>
+
 #elif defined(pic18f4331)
 #  include <pic18f4331.h>
+
+#elif defined(pic18f4431)
+#  include <pic18f4431.h>
 
 #elif defined(pic18f4455)
 #  include <pic18f4455.h>
@@ -72,8 +100,14 @@
 #elif defined(pic18f4520)
 #  include <pic18f4520.h>
 
+#elif defined(pic18f4525)
+#  include <pic18f4620.h>   /* just a 4620 core with less flash */
+
 #elif defined(pic18f4550)
 #  include <pic18f4550.h>	/* Might use 2550.h */
+
+#elif defined(pic18f4620)
+#  include <pic18f4620.h>
 
 #elif defined(pic18f6520)
 #  include <pic18f6520.h>
@@ -105,10 +139,10 @@
 #endif
 
 
-#define Nop()           do { _asm nop _endasm; } while(0)
-#define ClrWdt()        do { _asm clrwdt _endasm; } while(0)
-#define Sleep()         do { _asm sleep _endasm; } while(0)
-#define Reset()         do { _asm reset _endasm; } while(0)
+#define Nop()           do { __asm nop __endasm; } while(0)
+#define ClrWdt()        do { __asm clrwdt __endasm; } while(0)
+#define Sleep()         do { __asm sleep __endasm; } while(0)
+#define Reset()         do { __asm reset __endasm; } while(0)
 
 
 #endif /* __PIC18FREGS_H__ */

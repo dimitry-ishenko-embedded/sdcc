@@ -65,7 +65,7 @@ static struct {
 
 extern int avr_ptrRegReq;
 extern int avr_nRegs;
-extern FILE *codeOutFile;
+extern struct dbuf_s *codeOutBuf;
 #define RESULTONSTACK(x) \
                          (IC_RESULT(x) && IC_RESULT(x)->aop && \
                          IC_RESULT(x)->aop->type == AOP_STK )
@@ -1706,12 +1706,6 @@ resultRemat (iCode * ic)
 
 	return 0;
 }
-
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#else
-#define STRCASECMP strcasecmp
-#endif
 
 /*-----------------------------------------------------------------*/
 /* genFunction - generated code for function entry                 */
@@ -5134,7 +5128,7 @@ genAVRCode (iCode * lic)
 	recvCnt = 0;
 	/* print the allocation information */
 	if (allocInfo)
-		printAllocInfo (currFunc, codeOutFile);
+		printAllocInfo (currFunc, codeOutBuf);
 	/* if debug information required */
 	if (options.debug && currFunc) {
 		debugFile->writeFunction (currFunc, lic);
@@ -5360,6 +5354,6 @@ genAVRCode (iCode * lic)
 		peepHole (&lineHead);
 
 	/* now do the actual printing */
-	printLine (lineHead, codeOutFile);
+	printLine (lineHead, codeOutBuf);
 	return;
 }

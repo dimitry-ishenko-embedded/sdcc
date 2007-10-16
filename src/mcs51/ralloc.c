@@ -1831,21 +1831,23 @@ createRegMask (eBBlock ** ebbs, int count)
 static char *
 rematStr (symbol * sym)
 {
-  char *s = buffer;
   iCode *ic = sym->rematiCode;
-
-  *s = 0;
+  int offset = 0;
 
   while (1)
     {
-
-      /* if plus or minus print the right hand side */
-      if (ic->op == '+' || ic->op == '-')
+      /* if plus adjust offset to right hand side */
+      if (ic->op == '+')
         {
-          SNPRINTF (s, sizeof(buffer) - strlen(buffer),
-                    "0x%04x %c ", (int) operandLitValue (IC_RIGHT (ic)),
-                    ic->op);
-          s += strlen (s);
+          offset += (int) operandLitValue (IC_RIGHT (ic));
+          ic = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
+          continue;
+        }
+
+      /* if minus adjust offset to right hand side */
+      if (ic->op == '-')
+        {
+          offset -= (int) operandLitValue (IC_RIGHT (ic));
           ic = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
           continue;
         }
@@ -1856,11 +1858,21 @@ rematStr (symbol * sym)
           continue;
       }
       /* we reached the end */
-      SNPRINTF (s, sizeof(buffer) - strlen(buffer),
-                "%s", OP_SYMBOL (IC_LEFT (ic))->rname);
       break;
     }
 
+  if (offset)
+    {
+      SNPRINTF (buffer, sizeof(buffer),
+                "(%s %c 0x%04x)",
+                OP_SYMBOL (IC_LEFT (ic))->rname,
+                offset >= 0 ? '+' : '-',
+                abs (offset) & 0xffff);
+    }
+  else
+    {
+      strncpyz (buffer, OP_SYMBOL (IC_LEFT (ic))->rname, sizeof(buffer));
+    }
   return buffer;
 }
 
@@ -1898,6 +1910,8 @@ regTypeNum (eBBlock *ebbs)
             {
               if (IS_AGGREGATE (sym->type) || sym->isptr)
                 sym->type = aggrToPtr (sym->type, FALSE);
+              else if (IS_BIT(sym->type))
+                sym->regType = REG_CND;
               continue;
             }
 
@@ -2097,6 +2111,13 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
               crossedCall = 1;
             }
         }
+
+      /* Don't move an assignment out of a critical block */
+      if (dic->op == CRITICAL)
+	{
+	  dic = NULL;
+	  break;
+	}
 
       if (SKIP_IC2 (dic))
         continue;
@@ -2453,8 +2474,8 @@ packRegsForOneuse (iCode * ic, operand * op, eBBlock * ebp)
 
   if (ic->op == SEND && ic->argreg != 1) return NULL;
 
-  /* this routine will mark the a symbol as used in one
-     instruction use only && if the defintion is local
+  /* this routine will mark the symbol as used in one
+     instruction use only && if the definition is local
      (ie. within the basic block) && has only one definition &&
      that definition is either a return value from a
      function or does not contain any variables in
@@ -2462,7 +2483,7 @@ packRegsForOneuse (iCode * ic, operand * op, eBBlock * ebp)
   if (bitVectnBitsOn (OP_USES (op)) > 1)
     return NULL;
 
-  /* if it has only one defintion */
+  /* if it has only one definition */
   if (bitVectnBitsOn (OP_DEFS (op)) > 1)
     return NULL;                /* has more than one definition */
 
@@ -2540,11 +2561,10 @@ packRegsForOneuse (iCode * ic, operand * op, eBBlock * ebp)
 
   sic = dic;
 
-  /* also make sure the intervenening instructions
-     don't have any thing in far space */
+  /* also make sure the intervening instructions
+     don't have anything in far space */
   for (dic = dic->next; dic && dic != ic && sic != ic; dic = dic->next)
     {
-
       /* if there is an intervening function call then no */
       if (dic->op == CALL || dic->op == PCALL)
         return NULL;
@@ -3131,7 +3151,6 @@ packRegisters (eBBlock ** ebpp, int blockno)
           getSize (aggrToPtr (operandType (IC_LEFT (ic)), FALSE)) > 1)
         packRegsForOneuse (ic, IC_LEFT (ic), ebp);
 
-
       /* if this is a cast for intergral promotion then
          check if it's the only use of the definition of the
          operand being casted/ if yes then replace
@@ -3166,7 +3185,6 @@ packRegisters (eBBlock ** ebpp, int blockno)
             }
           else
             {
-
               /* if the type from and type to are the same
                  then if this is the only use then packit */
               if (compareType (operandType (IC_RIGHT (ic)),

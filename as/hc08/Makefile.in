@@ -22,6 +22,7 @@ exec_prefix     = @exec_prefix@
 bindir          = @bindir@
 libdir          = @libdir@
 datadir         = @datadir@
+datarootdir     = @datarootdir@
 includedir      = @includedir@
 mandir          = @mandir@
 man1dir         = $(mandir)/man1
@@ -39,17 +40,11 @@ LDFLAGS		= @LDFLAGS@
 
 ASOBJECTS	= asmain.o aslex.o assym.o assubr.o asnoice.o \
 		  asexpr.o asdata.o aslist.o asout.o asstore.o \
-		  m08ext.o m08pst.o m08mch.o m08adr.o strcmpi.o
+		  m08ext.o m08pst.o m08mch.o m08adr.o \
+		  ../strcmpi.o
 ASSOURCES	= $(patsubst %.o,%.c,$(ASOBJECTS))
 
-LKOBJECTS	= lkmain.o lkhead.o lkarea.o lkdata.o \
-		  lkeval.o lklex.o lksym.o lkrloc.o \
-		  lklibr.o lklist.o lkihx.o lks19.o lkelf.o \
-		  lkstore.o lknoice.o lkmem.o lkaomf51.o strcmpi.o
-LKSOURCES	= $(patsubst %.o,%.c,$(LKOBJECTS))
-
-ASHC08		= $(top_builddir)bin/as-hc08$(EXEEXT)
-ASLINK		= $(top_builddir)bin/link-hc08$(EXEEXT)
+ASHC08		= $(top_builddir)/bin/as-hc08$(EXEEXT)
 
 transform       = @program_transform_name@
 
@@ -60,21 +55,16 @@ all: checkconf $(ASHC08) $(ASLINK)
 $(ASHC08): $(ASOBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(ASOBJECTS) 
 
-$(ASLINK): $(LKOBJECTS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LKOBJECTS)
-
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
 	$(INSTALL) $(ASHC08) `echo $(DESTDIR)$(bindir)/as-hc08$(EXEEXT)|sed '$(transform)'`
 	$(STRIP) `echo $(DESTDIR)$(bindir)/as-hc08$(EXEEXT)|sed '$(transform)'`
-	$(INSTALL) $(ASLINK) `echo $(DESTDIR)$(bindir)/link-hc08$(EXEEXT)|sed '$(transform)'`
-	$(STRIP) `echo $(DESTDIR)$(bindir)/link-hc08$(EXEEXT)|sed '$(transform)'`
 
 # Deleting all the installed files
 # --------------------------------
 uninstall:
-	rm -f $(DESTDIR)$(bindir)/as-hc08$(EXEEXT) $(DESTDIR)$(bindir)/link-hc08$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/as-hc08$(EXEEXT)
 
 
 # Performing self-test
@@ -97,7 +87,7 @@ installdirs:
 # ---------------------
 dep: Makefile.dep
 
-Makefile.dep: $(ASSOURCES) $(LKSOURCES) $(srcdir)/*.h $(top_builddir)*.h $(top_srcdir)/*.h
+Makefile.dep: $(ASSOURCES) $(srcdir)/*.h $(top_builddir)/*.h $(top_srcdir)/*.h
 	$(CPP) $(CPPFLAGS) $(M_OR_MM) $(filter %.c,$^) >Makefile.dep
 
 ifeq "$(findstring $(MAKECMDGOALS),uninstall check installcheck installdirs \
@@ -115,7 +105,7 @@ include $(srcdir)/clean.mk
 # Remaking configuration
 # ----------------------
 checkconf:
-	@if [ -f $(top_builddir)devel ]; then\
+	@if [ -f $(top_builddir)/devel ]; then\
           $(MAKE) -f conf.mk srcdir="$(srcdir)" top_builddir="$(top_builddir)" freshconf;\
         fi
 

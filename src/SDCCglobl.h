@@ -18,18 +18,49 @@
 
 #define UNIX_DIR_SEPARATOR_CHAR    '/'
 
-#ifdef _WIN32       /* WIN32 native */
+#if defined(__BORLANDC__) || defined(_MSC_VER)
+#define STRCASECMP stricmp
+#define STRNCASECMP strnicmp
+#else
+#define STRCASECMP strcasecmp
+#define STRNCASECMP strncasecmp
+#endif
 
-#  define NATIVE_WIN32          1
-#  ifdef __MINGW32__  /* GCC MINGW32 depends on configure */
-#    include "sdccconf.h"
-#  else
-#    include "sdcc_vc.h"
-#    define PATH_MAX  _MAX_PATH
-#  endif
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__) || defined (__CYGWIN__)
 
-#else               /* Assume Un*x style system */
-#  include "sdccconf.h"
+#ifndef HAVE_DOS_BASED_FILE_SYSTEM
+#define HAVE_DOS_BASED_FILE_SYSTEM 1
+#endif
+
+#define IS_DIR_SEPARATOR(c)     ((c) == DIR_SEPARATOR_CHAR || (c) == UNIX_DIR_SEPARATOR_CHAR)
+/* Note that IS_ABSOLUTE_PATH accepts d:foo as well, although it is
+   only semi-absolute.  This is because the users of IS_ABSOLUTE_PATH
+   want to know whether to prepend the current working directory to
+   a file name, which should not be done with a name like d:foo.  */
+#define IS_ABSOLUTE_PATH(f)     (IS_DIR_SEPARATOR((f)[0]) || (((f)[0]) && ((f)[1] == ':')))
+#define FILENAME_CMP(s1, s2)    STRCASECMP(s1, s2)
+
+#else  /* not DOSish */
+
+#define IS_DIR_SEPARATOR(c)     ((c) == DIR_SEPARATOR_CHAR)
+#define IS_ABSOLUTE_PATH(f)     (IS_DIR_SEPARATOR((f)[0]))
+#define FILENAME_CMP(s1, s2)    strcmp(s1, s2)
+
+#endif /* not DOSish */
+
+#ifdef WIN32
+# define NATIVE_WIN32          1
+# ifndef __MINGW32__
+#   define  PATH_MAX  _MAX_PATH
+# endif
+#endif
+
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#elif defined(_WIN32) && !defined(__MINGW32__)
+# include "sdcc_vc.h"
+#else
+# include "sdccconf.h"
 #endif
 
 #include "SDCCerr.h"
@@ -248,14 +279,17 @@ struct options
     int noCcodeInAsm;           /* hide c-code from asm */
     int iCodeInAsm;             /* show i-code in asm */
     int noPeepComments;         /* hide peephole optimizer comments */
+    int verboseAsm;             /* include comments generated with gen.c */
     int printSearchDirs;        /* display the directories in the compiler's search path */
     int vc_err_style;           /* errors and warnings are compatible with Micro$oft visual studio */
     int use_stdout;             /* send errors to stdout instead of stderr */
     int no_std_crt0;            /* for the z80/gbz80 do not link default crt0.o*/
     int std_c99;                /* enable C99 keywords/constructs */
     int std_sdcc;               /* enable SDCC extensions to C */
-    const char *code_seg;       /* segment name to use instead of CSEG */
-    const char *const_seg;      /* segment name to use instead of CONST */
+    int dollars_in_ident;       /* zero means dollar signs are punctuation */
+    int unsigned_char;          /* use unsigned for char without signed/unsigned modifier */
+    char *code_seg;             /* segment name to use instead of CSEG */
+    char *const_seg;            /* segment name to use instead of CONST */
     /* sets */
     set *calleeSavesSet;        /* list of functions using callee save */
     set *excludeRegsSet;        /* registers excluded from saving */
@@ -265,7 +299,8 @@ struct options
 /* forward definition for variables accessed globally */
 extern int noAssemble;          /* no assembly, stop after code generation */
 extern char *yytext;
-extern char *currFname;
+extern char *lexFilename;       /* lex idea of current file name */
+extern int lexLineno;           /* lex idea of line number of the current file */
 extern char *fullSrcFileName;   /* full name for the source file; */
                                 /* can be NULL while linking without compiling */
 extern char *fullDstFileName;   /* full name for the output file; */
@@ -276,21 +311,19 @@ extern char *dstPath;           /* path for the output files; */
 extern char *moduleName;        /* module name is source file without path and extension */
                                 /* can be NULL while linking without compiling */
 extern int seqPointNo;          /* current sequence point */
-extern int currLineno;          /* current line number    */
-extern int mylineno;            /* line number of the current file SDCC.lex */
 extern FILE *yyin;              /* */
 extern FILE *asmFile;           /* assembly output file */
 extern FILE *cdbFile;           /* debugger symbol file */
-extern int NestLevel;           /* NestLevel                 SDCC.y   */
-extern int stackPtr;            /* stack pointer             SDCC.y   */
-extern int xstackPtr;           /* external stack pointer    SDCC.y   */
+extern int NestLevel;           /* NestLevel                 SDCC.y */
+extern int stackPtr;            /* stack pointer             SDCC.y */
+extern int xstackPtr;           /* external stack pointer    SDCC.y */
 extern int reentrant;           /* /X flag has been sent     SDCC.y */
-extern char buffer[PATH_MAX * 2];/* general buffer           SDCCmain.c   */
-extern int currRegBank;         /* register bank being used  SDCCgens.c   */
-extern int RegBankUsed[4];      /* JCF: register banks used  SDCCmain.c   */
-extern int BitBankUsed;         /* MB: overlayable bit bank  SDCCmain.c   */
+extern char buffer[PATH_MAX * 2];/* general buffer           SDCCmain.c */
+extern int currRegBank;         /* register bank being used  SDCCgens.c */
+extern int RegBankUsed[4];      /* JCF: register banks used  SDCCmain.c */
+extern int BitBankUsed;         /* MB: overlayable bit bank  SDCCmain.c */
 extern struct symbol *currFunc; /* current function    SDCCgens.c */
-extern int cNestLevel;          /* block nest level  SDCCval.c      */
+extern int cNestLevel;          /* block nest level  SDCCval.c */
 extern int currBlockno;         /* sequentail block number */
 extern struct optimize optimize;
 extern struct options options;
@@ -304,19 +337,7 @@ extern set *libFilesSet;
 extern set *libPathsSet;
 extern set *libDirsSet;         /* list of lib search directories */
 
-void setParseWithComma (set **, char *);
-
-/** Creates a temporary file a'la tmpfile which avoids the bugs
-    in cygwin wrt c:\tmp.
-    Scans, in order: TMP, TEMP, TMPDIR, else uses tmpfile().
-*/
-FILE *tempfile (void);
-
-/** Creates a temporary file name a'la tmpnam which avoids the bugs
-    in cygwin wrt c:\tmp.
-    Scans, in order: TMP, TEMP, TMPDIR, else uses tmpfile().
-*/
-char *tempfilename (void);
+void setParseWithComma (set **, const char *);
 
 /** An assert() macro that will go out through sdcc's error
     system.

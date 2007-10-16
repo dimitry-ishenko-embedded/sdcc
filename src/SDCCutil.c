@@ -23,9 +23,9 @@
 -------------------------------------------------------------------------*/
 
 #include <math.h>
+#include <ctype.h>
 
 #ifdef _WIN32
-#include <ctype.h>
 #include <windows.h>
 #endif
 #include <sys/stat.h>
@@ -34,6 +34,7 @@
 #include "SDCCmacro.h"
 #include "SDCCutil.h"
 #include "newalloc.h"
+#include "dbuf_string.h"
 #ifndef _WIN32
 #include "findme.h"
 #endif
@@ -82,13 +83,16 @@ appendStrSet(set *list, const char *pre, const char *post)
 
   for (item = setFirstItem(list); item != NULL; item = setNextItem(list)) {
     dbuf_init(&dbuf, PATH_MAX);
+
     if (pre != NULL)
-      dbuf_append(&dbuf, pre, strlen(pre));
-    dbuf_append(&dbuf, item, strlen(item));
+      dbuf_append_str(&dbuf, pre);
+    dbuf_append_str(&dbuf, item);
     if (post != NULL)
-      dbuf_append(&dbuf, post, strlen(post));
-    addSet(&new_list, (void *)dbuf_c_str(&dbuf));
-    dbuf_detach(&dbuf);
+      dbuf_append_str(&dbuf, post);
+
+    /* null terminate the buffer */
+    dbuf_c_str(&dbuf);
+    addSet(&new_list, dbuf_detach(&dbuf));
   }
 
   return new_list;
@@ -107,13 +111,104 @@ joinStrSet(set *list)
 
   for (s = setFirstItem(list); s != NULL; s = setNextItem(list))
     {
-      dbuf_append(&dbuf, s, strlen(s));
-      dbuf_append(&dbuf, " ", 1);
+      dbuf_append_str(&dbuf, s);
+      dbuf_append_char(&dbuf, ' ');
     }
 
   s = dbuf_c_str(&dbuf);
   dbuf_detach(&dbuf);
   return s;
+}
+
+/** Split the path string to the directory and file name (including extension) components.
+    The directory component doesn't contain trailing directory separator.
+    Returns true if the path contains the directory separator. */
+int
+dbuf_splitPath(const char *path, struct dbuf_s *dir, struct dbuf_s *file)
+{
+  const char *p;
+  int ret;
+  const char *end = &path[strlen(path)];
+
+  for (p = end - 1; p >= path && !IS_DIR_SEPARATOR(*p); --p)
+    ;
+
+  ret = p >= path;
+
+  if (NULL != dir)
+    {
+      int len = p - path;
+
+      if (0 < len)
+        dbuf_append(dir, path, len);
+    }
+
+  if (NULL != file)
+    {
+      int len;
+
+      ++p;
+      len = end - p;
+
+      if (0 < len)
+        dbuf_append(file, p, len);
+    }
+
+  return ret;
+}
+
+/** Split the path string to the file name (including directory) and file extension components.
+    File extension component contains the extension separator.
+    Returns true if the path contains the extension separator. */
+int
+dbuf_splitFile(const char *path, struct dbuf_s *file, struct dbuf_s *ext)
+{
+  const char *p;
+  const char *end = &path[strlen(path)];
+
+  for (p = end - 1; p >= path && !IS_DIR_SEPARATOR(*p) && '.' != *p; --p)
+    ;
+
+  if (p < path || '.' != *p)
+    {
+      dbuf_append_str(file, path);
+
+      return 0;
+    }
+  else
+    {
+      if (NULL != file)
+        {
+          int len = p - path;
+
+          if (0 < len)
+            dbuf_append(file, path, len);
+        }
+
+      if (NULL != ext)
+        {
+          int len = end - p;
+
+          if (0 < len)
+            dbuf_append(ext, p, len);
+        }
+
+      return 1;
+    }
+}
+
+/** Combile directory and the file name to a path string using the DIR_SEPARATOR_CHAR.
+ */
+void
+dbuf_makePath(struct dbuf_s *path,const char *dir, const char *file)
+{
+  if (dir != NULL)
+    dbuf_append_str(path, dir);
+  
+  dbuf_append_char(path, DIR_SEPARATOR_CHAR);
+
+  if (file != NULL)
+    dbuf_append_str(path, file);
 }
 
 /** Given a file with path information in the binary files directory,
@@ -122,55 +217,54 @@ joinStrSet(set *list)
     impossible.
 */
 #ifdef _WIN32
-char *
+const char *
 getBinPath(const char *prel)
 {
-  char *p;
-  size_t len;
-  static char path[PATH_MAX];
-    
-  /* try DOS and *nix dir separator on WIN32 */
-  if (NULL != (p = strrchr(prel, DIR_SEPARATOR_CHAR)) ||
-    NULL != (p = strrchr(prel, UNIX_DIR_SEPARATOR_CHAR))) {
-    len = min((sizeof path) - 1, p - prel);
-    strncpy(path, prel, len);
-    path[len] = '\0';
-    return path;
-  }
-  /* not enough info in prel; do it with module name */
-  else if (0 != GetModuleFileName(NULL, path, sizeof path) &&
-    NULL != (p = strrchr(path, DIR_SEPARATOR_CHAR))) {
-    *p = '\0';
-    return path;
-  }
+  struct dbuf_s path;
+  const char *p;
+
+  dbuf_init(&path, 128);
+  dbuf_splitPath(prel, &path, NULL);
+
+  p = dbuf_c_str(&path);
+  if ('\0' != *p)
+    return p;
   else
-    return NULL;
+    {
+      char module[PATH_MAX];
+
+      dbuf_destroy(&path);
+
+      /* not enough info in prel; do it with module name */
+      if (0 != GetModuleFileName(NULL, module, sizeof (module)))
+        {
+          dbuf_init(&path, 128);
+
+          dbuf_splitPath(module, &path, NULL);
+          dbuf_c_str(&path);
+          return dbuf_detach(&path);
+        }
+      else
+        return NULL;
+    }
 }
 #else
-char *
+const char *
 getBinPath(const char *prel)
 {
-  static char path[PATH_MAX];
   const char *ret_path;
 
-  if (NULL != (ret_path = findProgramPath(prel))) {
-    char *p;
-    size_t len;
+  if (NULL != (ret_path = findProgramPath(prel)))
+    {
+      struct dbuf_s path;
 
-    if (NULL != (p = strrchr(ret_path, DIR_SEPARATOR_CHAR)) &&
-      PATH_MAX > (len = p - ret_path)) {
-      memcpy(path, ret_path, len);
-      path[len] = '\0';
+      dbuf_init(&path, 128);
+
+      dbuf_splitPath(ret_path, &path, NULL);
       free((void *)ret_path);
-
-      return path;
+      dbuf_c_str(&path);
+      return dbuf_detach(&path);
     }
-    else {
-      free((void *)ret_path);
-
-      return NULL;
-    }
-  }
   else
     return NULL;
 }
@@ -289,7 +383,6 @@ char *strncatz(char *dest, const char *src, size_t n)
     return dest;
 }
 
-
 /*-----------------------------------------------------------------*/
 /* getBuildNumber - return build number                            */
 /*-----------------------------------------------------------------*/
@@ -325,5 +418,223 @@ size_t SDCCsnprintf(char *dst, size_t n, const char *fmt, ...)
 
   return len;
 }
-
 #endif
+
+/** Pragma tokenizer
+ */
+void
+init_pragma_token(struct pragma_token_s *token)
+{
+  dbuf_init(&token->dbuf, 16);
+  token->type = TOKEN_UNKNOWN;
+}
+
+char *
+get_pragma_token(const char *s, struct pragma_token_s *token)
+{
+  dbuf_set_length(&token->dbuf, 0);
+
+  /* skip leading spaces */
+  while ('\n' != *s && isspace(*s))
+    ++s;
+
+  if ('\0' == *s || '\n' == *s)
+    {
+      token->type = TOKEN_EOL;
+    }
+  else
+    {
+      char *end;
+
+      long val = strtol(s, &end, 0);
+
+      if (end != s && ('\0' == *end || isspace(*end)))
+        {
+          token->val.int_val = val;
+          token->type = TOKEN_INT;
+          dbuf_append(&token->dbuf, s, end - s);
+          s = end;
+        }
+      else
+        {
+          while ('\0' != *s && !isspace(*s))
+            {
+              dbuf_append_char(&token->dbuf, *s);
+              ++s;
+            }
+
+          token->type = TOKEN_STR;
+        }
+    }
+
+  return (char *)s;
+}
+
+const char *
+get_pragma_string(struct pragma_token_s *token)
+{
+  return dbuf_c_str(&token->dbuf);
+}
+
+void
+free_pragma_token(struct pragma_token_s *token)
+{
+  dbuf_destroy(&token->dbuf);
+}
+
+/*! /fn char hexEscape(char **src)
+
+    /param src Pointer to 'x' from start of hex character value
+*/
+
+unsigned char
+hexEscape (const char **src)
+{
+  char *s ;
+  unsigned long value ;
+
+  (*src)++ ;    /* Skip over the 'x' */
+
+  value = strtol (*src, &s, 16);
+
+  if (s == *src)
+    {
+      // no valid hex found
+      werror(E_INVALID_HEX);
+    }
+  else
+    {
+      if (value > 255)
+        {
+          werror(W_ESC_SEQ_OOR_FOR_CHAR);
+        }
+    }
+  *src = s;
+
+  return (char) value;
+}
+
+/*------------------------------------------------------------------*/
+/* octalEscape - process an octal constant of max three digits      */
+/* return the octal value, throw a warning for illegal octal        */
+/* adjust src to point at the last proccesed char                   */
+/*------------------------------------------------------------------*/
+
+unsigned char
+octalEscape (const char **str)
+{
+  int digits;
+  unsigned value=0;
+
+  for (digits = 0; digits < 3; digits++)
+    {
+      if (**str >='0' && **str <= '7')
+        {
+          value = value*8 + (**str - '0');
+          (*str)++;
+        }
+      else
+        {
+          break;
+        }
+    }
+  if (digits)
+    {
+      if (value > 255 /* || (**str>='0' && **str<='7') */ )
+        {
+          werror (W_ESC_SEQ_OOR_FOR_CHAR);
+        }
+    }
+  return value;
+}
+
+/*!
+  /fn int copyStr (char *dest, char *src)
+
+  Copies a source string to a dest buffer interpreting escape sequences
+  and special characters
+
+  /param dest Buffer to receive the resultant string
+  /param src  Buffer containing the source string with escape sequecnes
+  /return Number of characters in output string
+
+*/
+
+int
+copyStr (char *dest, const char *src)
+{
+  char *OriginalDest = dest ;
+
+  while (*src)
+    {
+      if (*src == '\"')
+        src++;
+      else if (*src == '\\')
+        {
+          src++;
+          switch (*src)
+            {
+            case 'n':
+              *dest++ = '\n';
+              break;
+            case 't':
+              *dest++ = '\t';
+              break;
+            case 'v':
+              *dest++ = '\v';
+              break;
+            case 'b':
+              *dest++ = '\b';
+              break;
+            case 'r':
+              *dest++ = '\r';
+              break;
+            case 'f':
+              *dest++ = '\f';
+              break;
+            case 'a':
+              *dest++ = '\a';
+              break;
+
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+              *dest++ = octalEscape(&src);
+              src-- ;
+              break;
+
+            case 'x':
+              *dest++ = hexEscape(&src) ;
+              src-- ;
+              break ;
+
+            case '\\':
+              *dest++ = '\\';
+              break;
+            case '\?':
+              *dest++ = '\?';
+              break;
+            case '\'':
+              *dest++ = '\'';
+              break;
+            case '\"':
+              *dest++ = '\"';
+              break;
+            default:
+              *dest++ = *src;
+            }
+          src++;
+        }
+      else
+        *dest++ = *src++;
+    }
+
+  *dest++ = '\0';
+
+  return dest - OriginalDest ;
+}

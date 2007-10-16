@@ -42,8 +42,8 @@ RSC=rc.exe
 # PROP Intermediate_Dir "Debug"
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /MLd /W3 /Gm /GX /ZI /Od /I "." /I ".\libiberty" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /D "HAVE_CONFIG_H"/FR /FD /GZ /c
-# ADD CPP /nologo /MLd /W3 /Gm /GX /ZI /Od /I "." /I ".\libiberty" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /D "HAVE_CONFIG_H" /FR /FD /GZ /c
+# ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /I "." /I ".\libiberty" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /FR /FD /D /GZ "HAVE_CONFIG_H" /c
+# ADD CPP /nologo /W3 /Gm /GX /ZI /Od /I "." /I ".\libiberty" /I ".\win32" /I ".\libcpp" /I ".\libcpp\include" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /D "HAVE_CONFIG_H" /FR /FD /GZ /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -69,8 +69,8 @@ LINK32=link.exe
 # PROP Intermediate_Dir "Release"
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /ML /W3 /GX /O2 /I "." /I ".\libiberty" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /FD /c
-# ADD CPP /nologo /ML /W3 /GX /O2 /I "." /I ".\libiberty" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "HAVE_CONFIG_H" /D "_WIN32" /FD /c
+# ADD BASE CPP /nologo /W3 /GX /O2 /I "." /I ".\libiberty" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /FD /c
+# ADD CPP /nologo /W3 /GX /O2 /I "." /I ".\libiberty" /I ".\win32" /I ".\libcpp" /I ".\libcpp\include" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /D "HAVE_CONFIG_H" /D "_WIN32" /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -86,58 +86,89 @@ LINK32=link.exe
 
 # Begin Target
 
-# Name "sdcpp - Win32 Release"
 # Name "sdcpp - Win32 Debug"
+# Name "sdcpp - Win32 Release"
 # Begin Group "Source Files"
+
+# PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Begin Group "libcpp"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\cppdefault.c
+SOURCE=.\libcpp\charset.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cpperror.c
+SOURCE=.\libcpp\directives.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cppexp.c
+SOURCE=.\libcpp\errors.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cppfiles.c
+SOURCE=.\libcpp\expr.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cpphash.c
+SOURCE=.\libcpp\files.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cppinit.c
+SOURCE=.\libcpp\identifiers.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cpplex.c
+SOURCE=.\libcpp\init.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cpplib.c
+SOURCE=.\libcpp\lex.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\cppmacro.c
+SOURCE=".\libcpp\line-map.c"
 # End Source File
 # Begin Source File
 
-SOURCE=.\cppmain.c
+SOURCE=.\libcpp\macro.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\hashtable.c
+SOURCE=.\libcpp\mkdeps.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\intl.c
+SOURCE=.\libcpp\symtab.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\traditional.c
+# End Source File
+# End Group
+# Begin Group "libiberty"
+
+# PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Begin Source File
+
+SOURCE=.\libiberty\concat.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\fopen_unlocked.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\getpwd.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\hashtab.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\hex.c
 # End Source File
 # Begin Source File
 
@@ -145,19 +176,11 @@ SOURCE=.\libiberty\lbasename.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\mbchar.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\mkdeps.c
+SOURCE=.\libiberty\md5.c
 # End Source File
 # Begin Source File
 
 SOURCE=.\libiberty\obstack.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\prefix.c
 # End Source File
 # Begin Source File
 
@@ -169,12 +192,133 @@ SOURCE=".\libiberty\splay-tree.c"
 # End Source File
 # Begin Source File
 
+SOURCE=.\libiberty\vasprintf.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\xexit.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\xmalloc.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\xmemdup.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\xstrdup.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\libiberty\xstrerror.c
+# End Source File
+# End Group
+# Begin Group "win32"
+
+# PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Begin Source File
+
+SOURCE=.\win32\dirent.c
+# End Source File
+# End Group
+# Begin Source File
+
+SOURCE=".\c-incpath.c"
+# End Source File
+# Begin Source File
+
+SOURCE=".\c-ppoutput.c"
+# End Source File
+# Begin Source File
+
+SOURCE=.\cppdefault.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\options.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\opts.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\prefix.c
+# End Source File
+# Begin Source File
+
+SOURCE=".\sdcpp-opts.c"
+# End Source File
+# Begin Source File
+
+SOURCE=.\sdcpp.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\version.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Group "libcpp_h"
+
+# PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Group "include"
+
+# PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=".\libcpp\include\cpp-id-data.h"
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\include\cpplib.h
+# End Source File
+# Begin Source File
+
+SOURCE=".\libcpp\include\line-map.h"
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\include\mkdeps.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\include\symtab.h
+# End Source File
+# End Group
+# Begin Source File
+
+SOURCE=.\libcpp\internal.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\system.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\libcpp\ucnid.h
+# End Source File
+# End Group
+# Begin Group "win32_h"
+
+# PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=.\win32\dirent.h
+# End Source File
+# End Group
+# Begin Group "libiberty_h"
+
+# PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=.\libiberty\obstack.h
+# End Source File
+# End Group
 # Begin Source File
 
 SOURCE=.\ansidecl.h
@@ -185,23 +329,15 @@ SOURCE=".\auto-host.h"
 # End Source File
 # Begin Source File
 
+SOURCE=".\c-incpath.h"
+# End Source File
+# Begin Source File
+
 SOURCE=.\config.h
 # End Source File
 # Begin Source File
 
 SOURCE=.\cppdefault.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\cpphash.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\cpplib.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\hashtable.h
 # End Source File
 # Begin Source File
 
@@ -217,11 +353,11 @@ SOURCE=.\libiberty.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\mkdeps.h
+SOURCE=.\options.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\libiberty\obstack.h
+SOURCE=.\opts.h
 # End Source File
 # Begin Source File
 
@@ -237,7 +373,7 @@ SOURCE=".\libiberty\safe-ctype.h"
 # End Source File
 # Begin Source File
 
-SOURCE=.\sdcc.h
+SOURCE=.\sdcpp.h
 # End Source File
 # Begin Source File
 

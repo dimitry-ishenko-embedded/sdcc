@@ -51,7 +51,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "as_gbz80"=.\as\as_gbz80.dsp - Package Owner=<4>
+Project: "as_gbz80"=.\as\z80\as_gbz80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -75,7 +75,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "as_z80"=.\as\as_z80.dsp - Package Owner=<4>
+Project: "as_z80"=.\as\z80\as_z80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -87,7 +87,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "aslink"=.\as\aslink.dsp - Package Owner=<4>
+Project: "aslink"=.\as\link\mcs51\aslink.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -95,11 +95,14 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
 }}}
 
 ###############################################################################
 
-Project: "asx8051"=.\as\asx8051.dsp - Package Owner=<4>
+Project: "asx8051"=.\as\mcs51\asx8051.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -228,7 +231,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "link_hc08"=.\as\hc08\link_hc08.dsp - Package Owner=<4>
+Project: "link_hc08"=.\as\link\hc08\link_hc08.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -240,7 +243,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "linkgbz80"=.\link\z80\linkgbz80.dsp - Package Owner=<4>
+Project: "linkgbz80"=.\as\link\z80\linkgbz80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -252,7 +255,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "linkz80"=.\LINK\Z80\linkz80.dsp - Package Owner=<4>
+Project: "linkz80"=.\as\link\z80\linkz80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -434,6 +437,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name hc08
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name config
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -483,7 +489,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "z80"=.\SRC\z80\z80.dsp - Package Owner=<4>
+Project: "z80"=.\src\z80\z80.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

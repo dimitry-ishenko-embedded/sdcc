@@ -4,9 +4,9 @@ Author: Johan Knol
 Abstract: This is the user manual for the SDCC Compiler.
 Section: Apps/Programming
 
-Format: pdf
-Files: /usr/share/doc/sdcc-doc/sdccman.pdf.gz
-
 Format: text
 Files: /usr/share/doc/sdcc-doc/sdccman.txt.gz
 
+Format: HTML
+Index: /usr/share/doc/sdcc-doc/sdccman.html/sdccman.html
+Files: /usr/share/doc/sdcc-doc/sdccman.html/*.html

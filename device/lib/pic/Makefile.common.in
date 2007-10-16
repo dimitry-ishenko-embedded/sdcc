@@ -9,10 +9,8 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See GPL for details.
 ###
-### $Id: Makefile.common.in 4148 2006-05-01 20:47:12Z tecodev $
+### $Id: Makefile.common.in 4785 2007-05-05 07:41:17Z borutr $
 ###
-
-SHELL = bash
 
 #################################################
 ### verboseness
@@ -70,8 +68,8 @@ LIBFLAGS += -c
 
 #################################################
 ### programs to use
-CPP	= $(top_builddir)../../../bin/sdcpp
-CC	= $(top_builddir)../../../bin/sdcc
+CPP	= $(top_builddir)/../../../bin/sdcpp
+CC	= $(top_builddir)/../../../bin/sdcc
 AS	= @GPASM@
 LD	= @GPLINK@
 LIB	= @GPLIB@

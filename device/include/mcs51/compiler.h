@@ -22,7 +22,9 @@
   * Header file to overcome 8051 compiler differences for specifying
   * special function registers. The following compilers are supported:
   * SDCC, Keil, Raisonance, IAR, Hi-Tech, Tasking, Crossware, Wickenhäuser.
-  * Unfortunately not for use with Dunfield.
+  * Unfortunately not for use with Dunfield. The compilers are identified by
+  * their unique predefined macros. See also:
+  * http://predef.sourceforge.net/precomp.html
   *
   * SBIT and SFR define special bit and special function registers at the given
   * address. SFR16 and SFR32 define sfr combinations at adjacent addresses in
@@ -112,7 +114,11 @@
 # define SBIT(name, addr, bit)  _sfrbit  name _at(addr+bit)
 # define SFR(name, addr)        _sfrbyte name _at(addr)
 # define SFRX(name, addr)       _xdat volatile unsigned char name _at(addr)
+#if _CC51 > 71
+# define SFR16(name, addr)      _sfrword _little name _at(addr)
+#else
 # define SFR16(name, addr)      /* not supported */
+#endif
 # define SFR16E(name, fulladdr) /* not supported */
 # define SFR32(name, fulladdr)  /* not supported */
 # define SFR32E(name, fulladdr) /* not supported */

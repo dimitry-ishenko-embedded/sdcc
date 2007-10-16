@@ -41,7 +41,7 @@
 .SILENT:
 
 CC = @CC@
-CPPFLAGS = @CPPFLAGS@
+CPPFLAGS = @CPPFLAGS@ -DNO_VARARGS
 
 # support VPATH:
 VPATH        = @srcdir@
@@ -69,7 +69,7 @@ GENERATE_CASES = $(srcdir)/generate-cases.py
 # Each directory under ports/ is used as a port name.  Each port is tested.
 # Each port must have a spec.mk which describes how to build the object
 # files and how to run the emulator.
-ALL_PORTS = $(filter-out .svn xa51 ucz80 gbz80 pic16,$(notdir $(wildcard $(PORTS_DIR)/*)))
+ALL_PORTS = $(filter-out .svn xa51 z80 gbz80 pic16 pic14,$(notdir $(wildcard $(PORTS_DIR)/*)))
 
 # These  ports will be cleaned with 'make clean'
 CLEAN_PORTS = $(filter-out .svn,$(notdir $(wildcard $(PORTS_DIR)/*)))
@@ -126,6 +126,10 @@ test-xa51:
 test-pic16:
 	$(MAKE) test-port PORT=pic16
 
+# Helper rule for testing the pic14 port only(use gpsim simulator)
+test-pic14:
+	$(MAKE) test-port PORT=pic14
+
 ### Helper rule for testing the host cc only
 test-host:
 	$(MAKE) test-port PORT=host
@@ -143,14 +147,14 @@ PORT_RESULTS_DIR = $(RESULTS_DIR)/$(PORT)
 # Each test generates a result log file
 PORT_RESULTS = $(ALL_TESTS:$(TESTS_DIR)/%.c=$(PORT_RESULTS_DIR)/%.out)
 
-SDCC_EXTRA_DIR = $(top_builddir)../sdcc-extra
+SDCC_EXTRA_DIR = $(top_builddir)/../sdcc-extra
 INC_DIR = $(top_srcdir)/device/include
 
 # Defaults.  Override in spec.mk if required.
 # Path to SDCC
-SDCC = $(top_builddir)bin/sdcc
+SDCC = $(top_builddir)/bin/sdcc
 # Base flags.
-SDCCFLAGS +=
+SDCCFLAGS += --fverbose-asm -DNO_VARARGS
 # Extension of object intermediate files
 OBJEXT = .o
 # Extension of files that can be run in the emulator

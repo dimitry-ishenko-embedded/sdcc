@@ -23,12 +23,13 @@ CPPFLAGS        = @CPPFLAGS@ -I$(srcdir) -I$(top_srcdir) -I$(top_builddir) \
 		  -I$(top_srcdir)/gui.src
 CFLAGS          = @CFLAGS@ -Wall
 CXXFLAGS        = @CXXFLAGS@ -Wall
+LDFLAGS         = @LDFLAGS@
 M_OR_MM         = @M_OR_MM@
 PICOPT		= @PICOPT@
 SHAREDLIB	= @SHAREDLIB@
 EXEEXT		= @EXEEXT@
 
-LIBS		= @LIBS@ -L$(top_builddir) -lsim -lutil -lguiucsim -lcmd -lsim
+LIBS		= -L$(top_builddir) -lsim -lutil -lguiucsim -lcmd -lsim @LIBS@
 DL		= @DL@
 dl_ok		= @dl_ok@
 
@@ -37,6 +38,7 @@ exec_prefix     = @exec_prefix@
 bindir          = @bindir@
 libdir          = @libdir@
 datadir         = @datadir@
+datarootdir     = @datarootdir@
 includedir      = @includedir@
 mandir          = @mandir@
 man1dir         = $(mandir)/man1
@@ -116,23 +118,23 @@ include $(srcdir)/clean.mk
 
 avr.src: savr$(EXEEXT) shared_lib
 
-savr$(EXEEXT): $(OBJECTS) $(top_builddir)*.a
-	$(CXX) $(CXXFLAGS) $(OBJECTS) $(LIBS) -o $@
+savr$(EXEEXT): $(OBJECTS) $(top_builddir)/*.a
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
 
 ifeq ($(dlso_ok),yes)
-shared_lib: $(top_builddir)savr.so
+shared_lib: $(top_builddir)/savr.so
 else
 shared_lib:
 	@$(top_srcdir)/mkecho $(top_builddir) "No AVR shared lib made."
 	@$(top_srcdir)/mkecho $(top_builddir) "(SHAREDLIB="$(SHAREDLIB)",dl_ok="$(dl_ok)",enable_dlso="$(enable_dlso)")"
 endif
 
-$(top_builddir)savr.so: $(OBJECTS_SHARED)
-	$(CXX) -shared $(OBJECTS_SHARED) -o $(top_builddir)savr.so
+$(top_builddir)/savr.so: $(OBJECTS_SHARED)
+	$(CXX) -shared $(LDFLAGS) $(OBJECTS_SHARED) -o $(top_builddir)/savr.so
 
 otherlibs:
-	$(MAKE) -C $(top_builddir)cmd.src all
-	$(MAKE) -C $(top_builddir)sim.src all
+	$(MAKE) -C $(top_builddir)/cmd.src all
+	$(MAKE) -C $(top_builddir)/sim.src all
 
 .cc.o:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $< -o $@
@@ -144,7 +146,7 @@ otherlibs:
 # Remaking configuration
 # ----------------------
 checkconf:
-	@if [ -f $(top_builddir)devel ]; then\
+	@if [ -f $(top_builddir)/devel ]; then\
 	  $(MAKE) -f conf.mk srcdir="$(srcdir)" top_builddir="$(top_builddir)" freshconf;\
 	fi
 

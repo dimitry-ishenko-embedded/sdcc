@@ -10,7 +10,7 @@
  * originally designed by
  *     Vangelis Rokas <vrokas@otenet.gr>
  * 
- * $Id: pic18f2455.c 4148 2006-05-01 20:47:12Z tecodev $
+ * $Id: pic18f2455.c 4573 2007-01-14 23:40:09Z tecodev $
  * 
  */
 
@@ -115,6 +115,9 @@ volatile __PORTB_t __at (0xF81) PORTBbits;
 __sfr __at (0xF82) PORTC;
 volatile __PORTC_t __at (0xF82) PORTCbits;
 
+__sfr __at (0xF83) PORTD;
+volatile __PORTD_t __at (0xF83) PORTDbits;
+
 __sfr __at (0xF84) PORTE;
 volatile __PORTE_t __at (0xF84) PORTEbits;
 
@@ -127,6 +130,12 @@ volatile __LATB_t __at (0xF8A) LATBbits;
 __sfr __at (0xF8B) LATC;
 volatile __LATC_t __at (0xF8B) LATCbits;
 
+__sfr __at (0xF8C) LATD;
+volatile __LATD_t __at (0xF8C) LATDbits;
+
+__sfr __at (0xF8D) LATE;
+volatile __LATE_t __at (0xF8D) LATEbits;
+
 __sfr __at (0xF92) TRISA;
 volatile __TRISA_t __at (0xF92) TRISAbits;
 
@@ -135,6 +144,12 @@ volatile __TRISB_t __at (0xF93) TRISBbits;
 
 __sfr __at (0xF94) TRISC;
 volatile __TRISC_t __at (0xF94) TRISCbits;
+
+__sfr __at (0xF95) TRISD;
+volatile __TRISD_t __at (0xF95) TRISDbits;
+
+__sfr __at (0xF96) TRISE;
+volatile __TRISE_t __at (0xF96) TRISEbits;
 
 __sfr __at (0xF9B) OSCTUNE;
 volatile __OSCTUNE_t __at (0xF9B) OSCTUNEbits;

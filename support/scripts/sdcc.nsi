@@ -26,7 +26,7 @@
 # How to create WIN32 setup.exe
 #
 # - unpack WIN32 mingw daily snapshot sdcc-snapshot-i586-mingw32msvc-yyyymmdd.zip
-#   to a clean directory (the option to create directories should be enambled).
+#   to a clean directory (the option to create directories should be enabled).
 #   A sub directory sdcc is created (referenced as PKGDIR in continuation).
 # - copy files sdcc/support/scripts/sdcc.ico and sdcc/support/scripts/sdcc.nsi
 #   (this file) from the sdcc Subversion snapshot to the PKGDIR directory
@@ -60,9 +60,9 @@ SetCompressor /SOLID lzma
 !system "unix2dos ${SDCC_ROOT}\doc\ChangeLog_head.txt" = 0
 !system "unix2dos ${SDCC_ROOT}\doc\README.TXT" = 0
 
-InstType "Full (Bin, Doc, Lib, Src)"
-InstType "Medium (Bin, Doc, Lib)"
-InstType "Compact (Bin, Doc)"
+InstType "Full (Bin, ucSim, SDCDB, Doc, Lib, Src)"
+InstType "Medium (Bin, ucSim, SDCDB, Doc, Lib)"
+InstType "Compact (Bin, ucSim, SDCDB, Doc)"
 
 ;--------------------------------
 ;Variables
@@ -140,14 +140,47 @@ SectionEnd
 Section "SDCC application files"
   SectionIn 1 2 3 RO
   SetOutPath "$INSTDIR\bin"
-  File "${SDCC_ROOT}\bin\*.exe"
+  File "${SDCC_ROOT}\bin\as-gbz80.exe"
+  File "${SDCC_ROOT}\bin\as-hc08.exe"
+  File "${SDCC_ROOT}\bin\as-z80.exe"
+  File "${SDCC_ROOT}\bin\asx8051.exe"
+  File "${SDCC_ROOT}\bin\aslink.exe"
+  File "${SDCC_ROOT}\bin\link-gbz80.exe"
+  File "${SDCC_ROOT}\bin\link-hc08.exe"
+  File "${SDCC_ROOT}\bin\link-z80.exe"
+  File "${SDCC_ROOT}\bin\makebin.exe"
+  File "${SDCC_ROOT}\bin\packihx.exe"
+  File "${SDCC_ROOT}\bin\sdcc.exe"
+  File "${SDCC_ROOT}\bin\sdcclib.exe"
+  File "${SDCC_ROOT}\bin\sdcpp.exe"
+  File "${SDCC_ROOT}\bin\readline5.dll"
+SectionEnd
+
+Section "ucSim application files"
+  SectionIn 1 2 3
+  SetOutPath "$INSTDIR\bin"
+  File "${SDCC_ROOT}\bin\s51.exe"
+  File "${SDCC_ROOT}\bin\savr.exe"
+  File "${SDCC_ROOT}\bin\shc08.exe"
+  File "${SDCC_ROOT}\bin\sz80.exe"
+SectionEnd
+
+Section "SDCDB files"
+  SectionIn 1 2 3
+  File "${SDCC_ROOT}\bin\sdcdb.exe"
+  File "${SDCC_ROOT}\bin\sdcdb.el"
+  File "${SDCC_ROOT}\bin\sdcdbsrc.el"
 SectionEnd
 
 Section "SDCC documentation"
   SectionIn 1 2 3
   SetOutPath "$INSTDIR\doc"
+!ifdef FULL_DOC
+  File /r "${SDCC_ROOT}\doc\*"
+!else
   File "${SDCC_ROOT}\doc\ChangeLog_head.txt"
   File "${SDCC_ROOT}\doc\README.TXT"
+!endif
 SectionEnd
 
 Section "SDCC include files"
@@ -589,10 +622,35 @@ Section Uninstall
   Delete "$INSTDIR\include\hc08\*.h"
   Delete "$INSTDIR\include\*.h"
 
+!ifndef FULL_DOC
   Delete "$INSTDIR\doc\README.TXT"
   Delete "$INSTDIR\doc\ChangeLog_head.txt"
+!endif
 
-  Delete "$INSTDIR\bin\*.exe"
+  Delete "$INSTDIR\bin\as-gbz80.exe"
+  Delete "$INSTDIR\bin\as-hc08.exe"
+  Delete "$INSTDIR\bin\as-z80.exe"
+  Delete "$INSTDIR\bin\asx8051.exe"
+  Delete "$INSTDIR\bin\aslink.exe"
+  Delete "$INSTDIR\bin\link-gbz80.exe"
+  Delete "$INSTDIR\bin\link-hc08.exe"
+  Delete "$INSTDIR\bin\link-z80.exe"
+  Delete "$INSTDIR\bin\makebin.exe"
+  Delete "$INSTDIR\bin\packihx.exe"
+  Delete "$INSTDIR\bin\sdcc.exe"
+  Delete "$INSTDIR\bin\sdcclib.exe"
+  Delete "$INSTDIR\bin\sdcpp.exe"
+  Delete "$INSTDIR\bin\readline5.dll"
+
+
+  Delete "$INSTDIR\bin\s51.exe"
+  Delete "$INSTDIR\bin\savr.exe"
+  Delete "$INSTDIR\bin\shc08.exe"
+  Delete "$INSTDIR\bin\sz80.exe"
+
+  Delete "$INSTDIR\bin\sdcdb.exe"
+  Delete "$INSTDIR\bin\sdcdb.el"
+  Delete "$INSTDIR\bin\sdcdbsrc.el"
 
   Delete "$INSTDIR\COPYING.TXT"
   Delete "$INSTDIR\sdcc.ico"
@@ -641,7 +699,11 @@ Section Uninstall
   RMDir "$INSTDIR\include\hc08"
   RMDir "$INSTDIR\include"
 
+!ifdef FULL_DOC
+  RMDir /r "$INSTDIR\doc"
+!else
   RMDir "$INSTDIR\doc"
+!endif
 
   RMDir "$INSTDIR\bin"
 
