@@ -58,6 +58,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
   operand *left;
   operand *right;
   symbol *func = NULL;
+  char *filename = ic->filename;
   int lineno = ic->lineno;
   int bytesPushed=0;
 
@@ -72,7 +73,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
       bitVectUnSetBit (OP_USES (left), ic->key);
   if (IS_SYMOP (right))
       bitVectUnSetBit (OP_USES (right), ic->key);
-  
+
   if (IS_FLOAT (operandType (right))) {
     switch (ic->op)
       {
@@ -143,7 +144,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
         break;
       }
   }
-  
+
 
   /* if float support routines NOT compiled as reentrant */
   if (!options.float_rent)
@@ -162,6 +163,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
         }
 
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
       if (IS_SYMOP (left))
           OP_USES (left) = bitVectSetBit (OP_USES (left), newic->key);
@@ -178,6 +180,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type)->next);
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
       if (IS_SYMOP (right))
           OP_USES (right) = bitVectSetBit (OP_USES (right), newic->key);
@@ -200,6 +203,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
         }
 
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
       if (IS_SYMOP (right))
           OP_USES (right) = bitVectSetBit (OP_USES (right), newic->key);
@@ -217,6 +221,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
           bytesPushed += getSize(operandType(left));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
       if (IS_SYMOP (left))
           OP_USES (left) = bitVectSetBit (OP_USES (left), newic->key);
@@ -227,6 +232,7 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
   IC_RESULT (newic) = IC_RESULT (ic);
   bitVectUnSetBit (OP_DEFS (IC_RESULT (ic)), ic->key);
   OP_USES (IC_RESULT (newic)) = bitVectSetBit (OP_USES (IC_RESULT (newic)), newic->key);
+  newic->filename = filename;
   newic->lineno = lineno;
   newic->parmBytes += bytesPushed;
   ebp->hasFcall = 1;
@@ -240,9 +246,9 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
         if(!SPEC_EXTR(func->etype)) {
             memmap *seg = SPEC_OCLS(OP_SYMBOL(IC_LEFT(newic))->etype);
 
-                SPEC_EXTR(func->etype) = 1;
-                seg = SPEC_OCLS( func->etype );
-                addSet(&seg->syms, func);
+            SPEC_EXTR(func->etype) = 1;
+            seg = SPEC_OCLS( func->etype );
+            addSet(&seg->syms, func);
         }
   }
 
@@ -290,7 +296,7 @@ found:
   if (!options.float_rent)
     {
       /* first one */
-      if (IS_REGPARM (FUNC_ARGS(func->type)->etype)) 
+      if (IS_REGPARM (FUNC_ARGS(func->type)->etype))
         {
           newic = newiCode (SEND, IC_RIGHT (ic), NULL);
           newic->argreg = SPEC_ARGREG(FUNC_ARGS(func->type)->etype);
@@ -301,6 +307,7 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = linenno;
 
     }
@@ -318,8 +325,8 @@ found:
         bytesPushed += getSize(operandType(IC_RIGHT(ic)));
       }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = linenno;
-
     }
 
   /* make the call */
@@ -331,26 +338,27 @@ found:
     FUNC_HASFCALL (currFunc->type) = 1;
 
   if(TARGET_IS_PIC16 || TARGET_IS_PIC) {
-	/* normally these functions aren't marked external, so we can use their
-	 * _extern field to marked as already added to symbol table */
+        /* normally these functions aren't marked external, so we can use their
+         * _extern field to marked as already added to symbol table */
 
-	if(!SPEC_EXTR(func->etype)) {
-	    memmap *seg = SPEC_OCLS(OP_SYMBOL(IC_LEFT(newic))->etype);
-		
-		SPEC_EXTR(func->etype) = 1;
-		seg = SPEC_OCLS( func->etype );
-		addSet(&seg->syms, func);
-	}
+        if(!SPEC_EXTR(func->etype)) {
+            memmap *seg = SPEC_OCLS(OP_SYMBOL(IC_LEFT(newic))->etype);
+
+            SPEC_EXTR(func->etype) = 1;
+            seg = SPEC_OCLS( func->etype );
+            addSet(&seg->syms, func);
+        }
   }
 
   addiCodeToeBBlock (ebp, newic, ip);
+  newic->filename = filename;
   newic->lineno = linenno;
 }
 
 /*----------------------------------------------------------------------*/
 /* cnvToFixed16x16Cast - converts casts to fixed16x16 to function calls */
 /*----------------------------------------------------------------------*/
-static void 
+static void
 cnvToFixed16x16Cast (iCode * ic, eBBlock * ebp)
 {
   iCode *ip, *newic;
@@ -367,13 +375,13 @@ cnvToFixed16x16Cast (iCode * ic, eBBlock * ebp)
   for (bwd = 0; bwd < 3; bwd++)
     {
       for (su = 0; su < 2; su++)
-	{
-	  if (compareType (type, __multypes[bwd][su]) == 1)
-	    {
-	      func = __fp16x16conv[0][bwd][su];
-	      goto found;
-	    }
-	}
+        {
+          if (compareType (type, __multypes[bwd][su]) == 1)
+            {
+              func = __fp16x16conv[0][bwd][su];
+              goto found;
+            }
+        }
     }
   assert (0);
 found:
@@ -393,6 +401,7 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = linenno;
 
     }
@@ -410,8 +419,8 @@ found:
           bytesPushed += getSize(operandType(IC_RIGHT(ic)));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = linenno;
-
     }
 
   /* make the call */
@@ -436,6 +445,7 @@ found:
   }
 
   addiCodeToeBBlock (ebp, newic, ip);
+  newic->filename = filename;
   newic->lineno = linenno;
 }
 
@@ -448,6 +458,7 @@ cnvFromFloatCast (iCode * ic, eBBlock * ebp)
   iCode *ip, *newic;
   symbol *func = NULL;
   sym_link *type = operandType (IC_LEFT (ic));
+  char *filename = ic->filename;
   int lineno = ic->lineno;
   int bwd, su;
   int bytesPushed=0;
@@ -485,6 +496,7 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
     }
@@ -503,6 +515,7 @@ found:
           bytesPushed += getSize(operandType(IC_RIGHT(ic)));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
     }
@@ -529,18 +542,20 @@ found:
   }
 
   addiCodeToeBBlock (ebp, newic, ip);
+  newic->filename = filename;
   newic->lineno = lineno;
 }
 
 /*--------------------------------------------------------------------------*/
 /* cnvFromFixed16x16Cast - converts casts from fixed16x16 to function calls */
 /*--------------------------------------------------------------------------*/
-static void 
+static void
 cnvFromFixed16x16Cast (iCode * ic, eBBlock * ebp)
 {
   iCode *ip, *newic;
   symbol *func = NULL;
   sym_link *type = operandType (IC_LEFT (ic));
+  char *filename = ic->filename;
   int lineno = ic->lineno;
   int bwd, su;
   int bytesPushed=0;
@@ -561,13 +576,13 @@ cnvFromFixed16x16Cast (iCode * ic, eBBlock * ebp)
             }
         }
     }
-    
+
   if (compareType (type, floatType) == 1)
     {
       func = __fp16x16conv[1][3][0];
       goto found;
     }
-    
+
   assert (0);
 found:
 
@@ -585,8 +600,8 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
-
     }
   else
     {
@@ -603,8 +618,8 @@ found:
           bytesPushed += getSize(operandType(IC_RIGHT(ic)));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
-
     }
 
   /* make the call */
@@ -616,19 +631,20 @@ found:
     FUNC_HASFCALL (currFunc->type) = 1;
 
   if(TARGET_IS_PIC16 || TARGET_IS_PIC) {
-	/* normally these functions aren't marked external, so we can use their
-	 * _extern field to marked as already added to symbol table */
+        /* normally these functions aren't marked external, so we can use their
+         * _extern field to marked as already added to symbol table */
 
-	if(!SPEC_EXTR(func->etype)) {
-	    memmap *seg = SPEC_OCLS(OP_SYMBOL(IC_LEFT(newic))->etype);
-		
-		SPEC_EXTR(func->etype) = 1;
-		seg = SPEC_OCLS( func->etype );
-		addSet(&seg->syms, func);
-	}
+        if(!SPEC_EXTR(func->etype)) {
+            memmap *seg = SPEC_OCLS(OP_SYMBOL(IC_LEFT(newic))->etype);
+
+                SPEC_EXTR(func->etype) = 1;
+                seg = SPEC_OCLS( func->etype );
+                addSet(&seg->syms, func);
+        }
   }
 
   addiCodeToeBBlock (ebp, newic, ip);
+  newic->filename = filename;
   newic->lineno = lineno;
 }
 
@@ -643,6 +659,7 @@ convilong (iCode * ic, eBBlock * ebp, sym_link * type, int op)
   symbol *func = NULL;
   iCode *ip = ic->next;
   iCode *newic;
+  char *filename = ic->filename;
   int lineno = ic->lineno;
   int bwd;
   int su;
@@ -693,6 +710,7 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
       /* second one */
@@ -706,6 +724,7 @@ found:
           IC_RESULT (newic) = operandFromValue (FUNC_ARGS(func->type)->next);
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
     }
@@ -726,6 +745,7 @@ found:
           bytesPushed += getSize(operandType(IC_RIGHT(ic)));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
       /* insert push left */
@@ -742,6 +762,7 @@ found:
           bytesPushed += getSize(operandType(IC_LEFT(ic)));
         }
       addiCodeToeBBlock (ebp, newic, ip);
+      newic->filename = filename;
       newic->lineno = lineno;
 
     }
@@ -749,6 +770,7 @@ found:
   /* for the result */
   newic = newiCode (CALL, operandFromSymbol (func), NULL);
   IC_RESULT (newic) = IC_RESULT (ic);
+  newic->filename = filename;
   newic->lineno = lineno;
   newic->parmBytes+=bytesPushed; // to clear the stack after the call
   ebp->hasFcall = 1;
@@ -805,10 +827,10 @@ convertToFcall (eBBlock ** ebbs, int count)
                 cnvFromFloatCast (ic, ebbs[i]);
               else if (IS_FLOAT (operandType (IC_LEFT (ic))))
                 cnvToFloatCast (ic, ebbs[i]);
-	      if (IS_FIXED16X16 (operandType (IC_RIGHT (ic))))
-		cnvFromFixed16x16Cast (ic, ebbs[i]);
-	      else if (IS_FIXED16X16 (operandType (IC_LEFT (ic))))
-		cnvToFixed16x16Cast (ic, ebbs[i]);
+              if (IS_FIXED16X16 (operandType (IC_RIGHT (ic))))
+                cnvFromFixed16x16Cast (ic, ebbs[i]);
+              else if (IS_FIXED16X16 (operandType (IC_LEFT (ic))))
+                cnvToFixed16x16Cast (ic, ebbs[i]);
             }
 
           // Easy special case which avoids function call: modulo by a literal power
@@ -816,7 +838,7 @@ convertToFcall (eBBlock ** ebbs, int count)
           if (ic->op == '%' && isOperandLiteral(IC_RIGHT(ic)) &&
               IS_UNSIGNED(operandType(IC_LEFT(ic))))
             {
-              unsigned litVal = abs((unsigned)operandLitValue(IC_RIGHT(ic)));
+              unsigned litVal = abs((unsigned) double2ul (operandLitValue(IC_RIGHT(ic))));
 
               /* modulo by 1: no remainder */
               if (litVal == 1)
@@ -1245,7 +1267,7 @@ killDeadCode (ebbIndex * ebbi)
                       symbol * resultsym = OP_SYMBOL (IC_RESULT (ic));
                       symbol * prereqv = resultsym->prereqv;
 
-		      if (prereqv && prereqv->reqv && (OP_SYMBOL (prereqv->reqv) == resultsym))
+                      if (prereqv && prereqv->reqv && (OP_SYMBOL (prereqv->reqv) == resultsym))
                         {
                           operand * newreqv;
 
@@ -1290,7 +1312,7 @@ killDeadCode (ebbIndex * ebbi)
             }                   /* end of all instructions */
 
           if (!ebbs[i]->sch && !ebbs[i]->noPath)
-	    disconBBlock (ebbs[i], ebbi);
+            disconBBlock (ebbs[i], ebbi);
 
         }                       /* end of for all blocks */
 
@@ -1462,7 +1484,7 @@ eBBlockFromiCode (iCode * ic)
 
   /* replace the local variables with their
      register equivalents : the liveRange computation
-     along with the register allocation will determine 
+     along with the register allocation will determine
      if it finally stays in the registers */
   replaceRegEqv (ebbi);
 
@@ -1494,7 +1516,7 @@ eBBlockFromiCode (iCode * ic)
     {
       change += cseAllBlocks (ebbi, FALSE);
       if (options.dump_gcse)
-	dumpEbbsToFileExt (DUMP_GCSE, ebbi);
+        dumpEbbsToFileExt (DUMP_GCSE, ebbi);
     }
   else
     {
@@ -1524,7 +1546,7 @@ eBBlockFromiCode (iCode * ic)
       computeDataFlow (ebbi);
       change += cseAllBlocks (ebbi, FALSE);
       if (options.dump_loop)
-	dumpEbbsToFileExt (DUMP_LOOPG, ebbi);
+        dumpEbbsToFileExt (DUMP_LOOPG, ebbi);
 
       /* if loop optimizations caused a change then do
          dead code elimination once more : this will
@@ -1533,7 +1555,7 @@ eBBlockFromiCode (iCode * ic)
       killDeadCode (ebbi);
 
       if (options.dump_loop)
-	dumpEbbsToFileExt (DUMP_LOOPD, ebbi);
+        dumpEbbsToFileExt (DUMP_LOOPD, ebbi);
 
     }
 
@@ -1548,9 +1570,9 @@ eBBlockFromiCode (iCode * ic)
        && !FUNC_ISNAKED(currFunc->type)) {
         eBBlock *bp;
         // make sure all predecessors of the last block end in a return
-	for (bp=setFirstItem(ebbi->bbOrder[ebbi->count-1]->predList); 
+        for (bp=setFirstItem(ebbi->bbOrder[ebbi->count-1]->predList);
              bp;
-	     bp=setNextItem(ebbi->bbOrder[ebbi->count-1]->predList)) {
+             bp=setNextItem(ebbi->bbOrder[ebbi->count-1]->predList)) {
           if (bp->ech->op != RETURN) {
             werrorfl (bp->ech->filename, bp->ech->lineno,
                       W_VOID_FUNC, currFunc->name);

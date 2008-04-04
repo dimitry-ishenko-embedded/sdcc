@@ -73,14 +73,22 @@ testConstantRange (void)
   ASSERT (! (UINT16_MAX + 1L == u16));
   ASSERT (  (         0 - 1  != u16));
   ASSERT (  (UINT16_MAX + 1L != u16));
-  ASSERT (  (         0 - 1  <  u16));
   ASSERT (! (UINT16_MAX      <  u16));
   ASSERT (  (         0      <= u16));
   ASSERT (! (UINT16_MAX + 1L <= u16));
   ASSERT (! (         0      >  u16));
   ASSERT (  (UINT16_MAX + 1L >  u16));
-  ASSERT (! (         0 - 1  >= u16));
   ASSERT (  (UINT16_MAX      >= u16));
+
+#if defined(PORT_HOST)
+/* on 32bit host: -1 is presented as 32 bit int, 16 bit unsigned short is promoted to 32 bit int */
+  ASSERT (  (         0 - 1  <  u16)); /* -1 > 0 */
+  ASSERT (! (         0 - 1  >= u16)); /* !(-1 <= 0) */
+#else
+/* on 16bit sdcc: int (-1) is promoted to unsigned int (0xffff) */
+  ASSERT (  (         0 - 1  >  u16)); /* 0xffff > 0 */
+  ASSERT (! (         0 - 1  <= u16)); /* !(0xffff <= 0) */
+#endif
 
    /* sdcc can't hold a number (INT32_MIN - 1) or (INT32_MAX + 1),
       there's no 'double' or 'long long' */
@@ -101,19 +109,21 @@ testConstantRange (void)
 /* ASSERT (! (UINT32_MAX + 1 == u32)); */
    ASSERT (  (         0 - 1 != u32));
 /* ASSERT (  (UINT32_MAX + 1 != u32)); */
-   ASSERT (  (         0 - 1 <  u32));
+   ASSERT (  (         0 - 1 >  u32)); /* 0xffffffff > 0 */
    ASSERT (! (UINT32_MAX     <  u32));
    ASSERT (  (         0     <= u32));
 /* ASSERT (! (UINT32_MAX + 1 <= u32)); */
    ASSERT (! (         0     >  u32));
 /* ASSERT (  (UINT32_MAX + 1 >  u32)); */
-   ASSERT (! (         0 - 1 >= u32));
+   ASSERT (! (         0 - 1 <= u32)); /* !(0xffffffff <= 0) */
    ASSERT (  (UINT32_MAX     >= u32));
 }
 
 void
 testFoo1(void)
 {
+#ifdef __bool_true_false_are_defined
+
 #if defined(PORT_HOST)
    volatile bool sb, ub;
 #else
@@ -164,6 +174,7 @@ testFoo1(void)
 
   ASSERT (! (-1 >= INT_CAST ub));
   ASSERT (  ( 0 >= ub));
+#endif //__bool_true_false_are_defined
 }
 
 void

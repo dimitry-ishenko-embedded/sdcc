@@ -197,7 +197,7 @@ dbuf_splitFile(const char *path, struct dbuf_s *file, struct dbuf_s *ext)
     }
 }
 
-/** Combile directory and the file name to a path string using the DIR_SEPARATOR_CHAR.
+/** Combine directory and the file name to a path string using the DIR_SEPARATOR_CHAR.
  */
 void
 dbuf_makePath(struct dbuf_s *path,const char *dir, const char *file)
@@ -375,7 +375,7 @@ char *strncatz(char *dest, const char *src, size_t n)
     /* paranoia... */
     if (strlen(src) + destLen >= n)
     {
-	fprintf(stderr, "strncatz prevented buffer overrun!\n");
+        fprintf(stderr, "strncatz prevented buffer overrun!\n");
     }
     
     strncat(dest, src, maxToCopy);
@@ -389,6 +389,40 @@ char *strncatz(char *dest, const char *src, size_t n)
 const char *getBuildNumber(void)
 {
   return (SDCC_BUILD_NUMBER);
+}
+
+/*-----------------------------------------------------------------*/
+/* getBuildDate - return build date                                */
+/*-----------------------------------------------------------------*/
+const char *getBuildDate(void)
+{
+  return (__DATE__);
+}
+
+/*-----------------------------------------------------------------*/
+/* getBuildEnvironment - return environment used to build SDCC     */
+/*-----------------------------------------------------------------*/
+const char *getBuildEnvironment(void)
+{
+#ifdef __CYGWIN__
+  return "CYGWIN";
+#elif defined __MINGW32__
+  return "MINGW32";
+#elif defined __DJGPP__
+  return "DJGPP";
+#elif defined(_MSC_VER)
+  return "MSVC";
+#elif defined(__BORLANDC__)
+  return "BORLANDC";
+#elif defined(__APPLE__)
+# if defined(__i386__)
+  return "Mac OS X i386";
+# else
+  return "Mac OS X ppc";
+#endif
+#else
+  return "UNIX";
+#endif
 }
 
 #if defined(HAVE_VSNPRINTF) || defined(HAVE_VSPRINTF)

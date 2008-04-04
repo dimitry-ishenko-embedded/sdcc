@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18fregs.h 4735 2007-04-08 13:05:45Z MaartenBrock $
+ * $Id: pic18fregs.h 5000 2008-01-24 11:24:53Z tecodev $
  *
  */
 
@@ -44,7 +44,7 @@
 #  include <pic18f1220.h>
 
 #elif defined(pic18f1320)
-# include <pic18f1220.h>	/* Yes, it's 1220.h */
+#  include <pic18f1320.h>
 
 #elif defined(pic18f2220)
 #  include <pic18f2220.h>
@@ -53,7 +53,7 @@
 #  include <pic18f2221.h>
 
 #elif defined(pic18f2320)
-#  include <pic18f2220.h>	/* Yes, it's 2220.h */
+#  include <pic18f2320.h>
 
 #elif defined(pic18f2321)
 #  include <pic18f2321.h>
@@ -61,20 +61,50 @@
 #elif defined(pic18f2331)
 #  include <pic18f2331.h>
 
+#elif defined(pic18f2420)
+#  include <pic18f2420.h>
+
+#elif defined(pic18f2423)
+#  include <pic18f2423.h>
+
 #elif defined(pic18f2431)
 #  include <pic18f2431.h>
 
 #elif defined(pic18f2455)
 #  include <pic18f2455.h>
 
+#elif defined(pic18f24j10)
+#  include <pic18f24j10.h>
+
+#elif defined(pic18f2520)
+#  include <pic18f2520.h>
+
+#elif defined(pic18f2585)
+#  include <pic18f2585.h>
+
+#elif defined(pic18f2523)
+#  include <pic18f2523.h>
+
 #elif defined(pic18f2525)
-#  include <pic18f2620.h>   /* just a 2620 core with less flash */
+#  include <pic18f2525.h>
 
 #elif defined(pic18f2550)
 #  include <pic18f2550.h>
 
+#elif defined(pic18f25j10)
+#  include <pic18f25j10.h>
+
 #elif defined(pic18f2620)
 #  include <pic18f2620.h>
+
+#elif defined(pic18f2680)
+#  include <pic18f2680.h>
+
+#elif defined(pic18f2682)
+#  include <pic18f2682.h>
+
+#elif defined(pic18f2685)
+#  include <pic18f2685.h>
 
 #elif defined(pic18f4220)
 #  include <pic18f4220.h>
@@ -83,7 +113,7 @@
 #  include <pic18f4221.h>
 
 #elif defined(pic18f4320)
-#  include <pic18f4220.h>	/* Yes, it's 4220.h */
+#  include <pic18f4320.h>
 
 #elif defined(pic18f4321)
 #  include <pic18f4321.h>
@@ -91,23 +121,44 @@
 #elif defined(pic18f4331)
 #  include <pic18f4331.h>
 
+#elif defined(pic18f4420)
+#  include <pic18f4420.h>
+
 #elif defined(pic18f4431)
 #  include <pic18f4431.h>
 
 #elif defined(pic18f4455)
 #  include <pic18f4455.h>
 
+#elif defined(pic18f44j10)
+#  include <pic18f44j10.h>
+
 #elif defined(pic18f4520)
 #  include <pic18f4520.h>
 
+#elif defined(pic18f4585)
+#  include <pic18f4585.h>
+
 #elif defined(pic18f4525)
-#  include <pic18f4620.h>   /* just a 4620 core with less flash */
+#  include <pic18f4525.h>
 
 #elif defined(pic18f4550)
-#  include <pic18f4550.h>	/* Might use 2550.h */
+#  include <pic18f4550.h>
+
+#elif defined(pic18f45j10)
+#  include <pic18f45j10.h>
 
 #elif defined(pic18f4620)
 #  include <pic18f4620.h>
+
+#elif defined(pic18f4680)
+#  include <pic18f4680.h>
+
+#elif defined(pic18f4682)
+#  include <pic18f4682.h>
+
+#elif defined(pic18f4685)
+#  include <pic18f4685.h>
 
 #elif defined(pic18f6520)
 #  include <pic18f6520.h>

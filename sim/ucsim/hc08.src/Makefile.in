@@ -30,7 +30,7 @@ SHAREDLIB	= @SHAREDLIB@
 
 EXEEXT          = @EXEEXT@
 
-LIBS		= -L$(top_builddir) -lsim -lutil -lguiucsim -lcmd -lsim @LIBS@
+LIBS		= -L$(top_builddir) -lsim -lucsimutil -lguiucsim -lcmd -lsim @LIBS@
 DL		= @DL@
 dl_ok		= @dl_ok@
 
@@ -107,7 +107,7 @@ dep: Makefile.dep
 Makefile.dep: $(srcdir)/*.cc $(srcdir)/*.h
 	$(CXXCPP) $(CPPFLAGS) $(M_OR_MM) $(filter %.cc,$^) >Makefile.dep
 
-include Makefile.dep
+-include Makefile.dep
 include $(srcdir)/clean.mk
 
 # My rules

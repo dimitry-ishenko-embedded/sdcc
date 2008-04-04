@@ -8,7 +8,7 @@
 # The GNU PIC Library is maintained by,
 # 	Vangelis Rokas <vrokas@otenet.gr>
 #
-# $Id: configure.in 4555 2007-01-03 21:19:58Z bernhardheld $
+# $Id: configure.in 4914 2007-09-16 18:24:27Z tecodev $
 #
 
 # Process this file with autoconf to produce a configure script.
@@ -30,7 +30,7 @@ AC_CHECK_PROG(LS,	ls,	ls, :)
 AC_CHECK_PROG(SED,	sed,	sed, :)
 AC_PROG_EGREP
 AC_CHECK_PROG(MKDIR,	mkdir,	[mkdir -p], :)
-AC_CHECK_PROG(RMDIR,	rmdir,	rmdir, :)
+AC_CHECK_PROG(RMDIR,	rm,	[rm -rf], :)
 
 AC_PROG_MAKE_SET
 

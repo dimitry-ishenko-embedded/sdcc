@@ -3,18 +3,22 @@
  * 
  * This file is part of the GNU PIC Library.
  * 
+ * September, 2006
+ * Added modifications by
+ *     Anton Strobl <a.strobl AT aws-it.at>
+ * 
+ * September, 2006
+ * Added based on existing PICs
+ *      Gary Plumbridge <gary AT phodex.net>
+ * 
  * May, 2005
  * The GNU PIC Library is maintained by
  *     Raphael Neider <rneider AT web.de>
  * 
  * originally designed by
- *     Vangelis Rokas <vrokas@otenet.gr>
- *
- * September, 2006
- *  Added based on existing PICs
- *      Gary Plumbridge <gary@phodex.net>
+ *     Vangelis Rokas <vrokas AT otenet.gr>
  * 
- * $Id: pic18f4620.c 4777 2007-04-29 13:31:48Z borutr $
+ * $Id: pic18f4620.c 5085 2008-03-09 22:12:13Z tecodev $
  * 
  */
 

@@ -56,7 +56,7 @@ use strict;
 # Some testing beforehand would be appreciated, though.
 #####################################################################
 
-my $rcsid = q~$Id: inc2h.pl 4783 2007-05-01 10:59:39Z tecodev $~;
+my $rcsid = q~$Id: inc2h.pl 4850 2007-06-12 21:49:18Z tecodev $~;
 my ($junk, $file, $version, $date, $time, $programmer, $status)
     = split(/\s+/, $rcsid);
 my ($programName) = ($file =~ /(\S+)/);
@@ -551,6 +551,7 @@ foreach my $reg (sort keys %bits)
   #}
   
   # emit defines for individual bits
+  $structs .= "#ifndef NO_BIT_DEFINES\n";
   for (my $i=0; $i < 8; $i++)
   {
     my @names = @{$bits{$reg}->{oct($i)}};
@@ -558,6 +559,7 @@ foreach my $reg (sort keys %bits)
       $structs .= sprintf("#define %-20s ${reg}_bits.$field\n", $field);
     } # foreach
   }
+  $structs .= "#endif /* NO_BIT_DEFINES */\n";
   $structs .= "\n";
 } # foreach
 

@@ -1947,9 +1947,7 @@ reAdjustPreg (asmop * aop)
 static int
 opIsGptr (operand * op)
 {
-  sym_link *type = operandType (op);
-
-  if ((AOP_SIZE (op) == GPTRSIZE) && IS_GENPTR (type))
+  if (op && IS_GENPTR (operandType (op)) && (AOP_SIZE (op) == GPTRSIZE))
     {
       return 1;
     }
@@ -1962,8 +1960,8 @@ opIsGptr (operand * op)
 static int
 getDataSize (operand * op)
 {
-  int size;
-  size = AOP_SIZE (op);
+  int size = AOP_SIZE (op);
+
   if (size == GPTRSIZE)
     {
       sym_link *type = operandType (op);
@@ -2455,12 +2453,32 @@ unsaveRegisters (iCode * ic)
 
 
 /*-----------------------------------------------------------------*/
-/* pushSide -                */
+/* pushSide -                                                      */
 /*-----------------------------------------------------------------*/
 static void
-pushSide (operand * oper, int size)
+pushSide (operand * oper, int size, iCode * ic)
 {
   int offset = 0;
+  int nPushed = _G.r0Pushed + _G.r1Pushed;
+
+  aopOp (oper, ic, FALSE, FALSE);
+
+  if (nPushed != _G.r0Pushed + _G.r1Pushed)
+    {
+      while (offset < size)
+        {
+          char *l = aopGet (oper, offset, FALSE, TRUE, NULL);
+          emitcode ("mov", "%s,%s", fReturn[offset++], l);
+        }
+      freeAsmop (oper, NULL, ic, TRUE);
+      offset = 0;
+      while (offset < size)
+        {
+          emitcode ("push", "%s", fReturn[offset++]);
+        }
+      return;
+    }
+
   _startLazyDPSEvaluation ();
   while (size--)
     {
@@ -2478,6 +2496,7 @@ pushSide (operand * oper, int size)
         }
     }
   _endLazyDPSEvaluation ();
+  freeAsmop (oper, NULL, ic, TRUE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -3235,14 +3254,10 @@ genPcall (iCode * ic)
       emitcode ("push", "acc");
     }
 
-  /* now push the calling address */
-  aopOp (IC_LEFT (ic), ic, FALSE, FALSE);
+  /* now push the function address */
+  pushSide (IC_LEFT (ic), FPTRSIZE, ic);
 
-  pushSide (IC_LEFT (ic), FPTRSIZE);
-
-  freeAsmop (IC_LEFT (ic), NULL, ic, TRUE);
-
-  /* if send set is not empty the assign */
+  /* if send set is not empty then assign */
   if (_G.sendSet)
     {
         genSend(reverseSet(_G.sendSet));
@@ -4210,7 +4225,7 @@ genPlusIncr (iCode * ic)
 
   /* if the literal value of the right hand side
      is greater than 4 then it is not worth it */
-  if ((icount = (unsigned int) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit)) > 4)
+  if ((icount = (unsigned int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit)) > 4)
     return FALSE;
 
   if (size == 1 && AOP(IC_LEFT(ic)) == AOP(IC_RESULT(ic)) &&
@@ -4450,8 +4465,8 @@ adjustArithmeticResult (iCode * ic)
     }
 
   if (opIsGptr (IC_RESULT (ic)) &&
-      AOP_SIZE (IC_LEFT (ic)) < GPTRSIZE &&
-      AOP_SIZE (IC_RIGHT (ic)) < GPTRSIZE &&
+      IC_LEFT (ic) && AOP_SIZE (IC_LEFT (ic)) < GPTRSIZE &&
+      IC_RIGHT (ic) && AOP_SIZE (IC_RIGHT (ic)) < GPTRSIZE &&
       !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_LEFT (ic))) &&
       !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_RIGHT (ic))))
     {
@@ -4666,7 +4681,7 @@ genPlus (iCode * ic)
   if ( AOP_IS_STR (IC_LEFT (ic)) &&
       isOperandLiteral (IC_RIGHT (ic)) && OP_SYMBOL (IC_RESULT (ic))->ruonly) {
       aopOp (IC_RIGHT (ic), ic, TRUE, FALSE);
-      size = (int)floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
+      size = (int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
       if (size <= 9) {
           while (size--) emitcode ("inc","dptr");
       } else {
@@ -4731,7 +4746,7 @@ genPlus (iCode * ic)
           /* if result in bit space */
           if (AOP_TYPE (IC_RESULT (ic)) == AOP_CRY)
             {
-              if ((unsigned long) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit) != 0L)
+              if (ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit) != 0L)
                 emitcode ("cpl", "c");
               outBitC (IC_RESULT (ic));
             }
@@ -4871,7 +4886,7 @@ genMinusDec (iCode * ic)
 
   /* if the literal value of the right hand side
      is greater than 4 then it is not worth it */
-  if ((icount = (unsigned int) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit)) > 4)
+  if ((icount = (unsigned int) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit)) > 4)
     return FALSE;
 
   if (size == 1 && AOP(IC_LEFT(ic)) == AOP(IC_RESULT(ic)) &&
@@ -5116,7 +5131,7 @@ genMinus (iCode * ic)
     }
   else
     {
-      lit = (long) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
+      lit = (long) ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
       lit = -lit;
     }
 
@@ -5293,7 +5308,7 @@ genMultOneByte (operand * left,
       if (AOP_TYPE(left) == AOP_LIT)
         {
           /* signed literal */
-          signed char val = (char) floatFromVal (AOP (left)->aopu.aop_lit);
+          signed char val = (char) ulFromVal (AOP (left)->aopu.aop_lit);
           if (val < 0)
             compiletimeSign = TRUE;
         }
@@ -5307,7 +5322,7 @@ genMultOneByte (operand * left,
       if (AOP_TYPE(right) == AOP_LIT)
         {
           /* signed literal */
-          signed char val = (char) floatFromVal (AOP (right)->aopu.aop_lit);
+          signed char val = (char) ulFromVal (AOP (right)->aopu.aop_lit);
           if (val < 0)
             compiletimeSign ^= TRUE;
         }
@@ -5328,7 +5343,7 @@ genMultOneByte (operand * left,
   /* save the signs of the operands */
   if (AOP_TYPE(right) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (right)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (right)->aopu.aop_lit);
 
       if (!rUnsigned && val < 0)
         emitcode ("mov", "b,#!constbyte", -val);
@@ -5354,7 +5369,7 @@ genMultOneByte (operand * left,
 
   if (AOP_TYPE(left) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (left)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (left)->aopu.aop_lit);
 
       if (!lUnsigned && val < 0)
         emitcode ("mov", "a,#!constbyte", -val);
@@ -5443,7 +5458,7 @@ static void genMultTwoByte (operand *left, operand *right,
         if (!umult) {
                 emitcode("clr","F0");
                 if (AOP_TYPE(right) == AOP_LIT) {
-                        int val=(int)floatFromVal (AOP (right)->aopu.aop_lit);
+                        int val=(int) ulFromVal (AOP (right)->aopu.aop_lit);
                         if (val < 0) {
                                 emitcode("setb","F0");
                                 val = -val;
@@ -5708,7 +5723,7 @@ genDivOneByte (operand * left,
       if (AOP_TYPE(left) == AOP_LIT)
         {
           /* signed literal */
-          signed char val = (char) floatFromVal (AOP (left)->aopu.aop_lit);
+          signed char val = (char) ulFromVal (AOP (left)->aopu.aop_lit);
           if (val < 0)
             compiletimeSign = TRUE;
         }
@@ -5722,7 +5737,7 @@ genDivOneByte (operand * left,
       if (AOP_TYPE(right) == AOP_LIT)
         {
           /* signed literal */
-          signed char val = (char) floatFromVal (AOP (right)->aopu.aop_lit);
+          signed char val = (char) ulFromVal (AOP (right)->aopu.aop_lit);
           if (val < 0)
             compiletimeSign ^= TRUE;
         }
@@ -5743,7 +5758,7 @@ genDivOneByte (operand * left,
   /* save the signs of the operands */
   if (AOP_TYPE(right) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (right)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (right)->aopu.aop_lit);
 
       if (!rUnsigned && val < 0)
         emitcode ("mov", "b,#0x%02x", -val);
@@ -5769,7 +5784,7 @@ genDivOneByte (operand * left,
 
   if (AOP_TYPE(left) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (left)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (left)->aopu.aop_lit);
 
       if (!lUnsigned && val < 0)
         emitcode ("mov", "a,#0x%02x", -val);
@@ -5885,7 +5900,7 @@ static void genDivTwoByte (operand *left, operand *right,
         /* load up MB with right */
         if (!umult) {
                 if (AOP_TYPE(right) == AOP_LIT) {
-                        int val=(int)floatFromVal (AOP (right)->aopu.aop_lit);
+                        int val=(int) ulFromVal (AOP (right)->aopu.aop_lit);
                         if (val < 0) {
                                 lbl = newiTempLabel(NULL);
                                 emitcode ("jbc","F0,!tlabel",lbl->key+100);
@@ -6078,7 +6093,7 @@ genModOneByte (operand * left,
   /* modulus: sign of the right operand has no influence on the result! */
   if (AOP_TYPE(right) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (right)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (right)->aopu.aop_lit);
 
       if (!rUnsigned && val < 0)
         emitcode ("mov", "b,#0x%02x", -val);
@@ -6110,7 +6125,7 @@ genModOneByte (operand * left,
   /* sign adjust left side */
   if (AOP_TYPE(left) == AOP_LIT)
     {
-      signed char val = (char) floatFromVal (AOP (left)->aopu.aop_lit);
+      signed char val = (char) ulFromVal (AOP (left)->aopu.aop_lit);
 
       if (!lUnsigned && val < 0)
         {
@@ -6231,7 +6246,7 @@ static void genModTwoByte (operand *left, operand *right,
         /* load up MB with right */
         if (!umult) {
                 if (AOP_TYPE(right) == AOP_LIT) {
-                        int val=(int)floatFromVal (AOP (right)->aopu.aop_lit);
+                        int val=(int) ulFromVal (AOP (right)->aopu.aop_lit);
                         if (val < 0) {
                                 val = -val;
                         }
@@ -6408,7 +6423,7 @@ genCmp (operand * left, operand * right,
         {
           if (AOP_TYPE (right) == AOP_LIT)
             {
-              lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+              lit = ulFromVal (AOP (right)->aopu.aop_lit);
               /* optimize if(x < 0) or if(x >= 0) */
               if (lit == 0L)
                 {
@@ -6452,8 +6467,7 @@ genCmp (operand * left, operand * right,
                   emitcode ("xrl", "a,#!constbyte",0x80);
                   if (AOP_TYPE (right) == AOP_LIT)
                     {
-                      unsigned long lit = (unsigned long)
-                      floatFromVal (AOP (right)->aopu.aop_lit);
+                      unsigned long lit = ulFromVal (AOP (right)->aopu.aop_lit);
                       // emitcode (";", "genCmp #3.1");
                       emitcode ("subb", "a,#!constbyte",
                                 0x80 ^ (unsigned int) ((lit >> (offset * 8)) & 0x0FFL));
@@ -6589,7 +6603,7 @@ gencjneshort (operand * left, operand * right, symbol * lbl)
     }
 
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+    lit = ulFromVal (AOP (right)->aopu.aop_lit);
 
   if (opIsGptr (left) || opIsGptr (right))
     {
@@ -6704,7 +6718,7 @@ genCmpEq (iCode * ic, iCode * ifx)
         {
           if (AOP_TYPE (right) == AOP_LIT)
             {
-              unsigned long lit = (unsigned long) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
+              unsigned long lit = ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
               if (lit == 0L)
                 {
                   emitcode ("mov", "c,%s", AOP (left)->aopu.aop_dir);
@@ -6775,7 +6789,7 @@ genCmpEq (iCode * ic, iCode * ifx)
     {
       if (AOP_TYPE (right) == AOP_LIT)
         {
-          unsigned long lit = (unsigned long) floatFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
+          unsigned long lit = ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit);
           if (lit == 0L)
             {
               emitcode ("mov", "c,%s", AOP (left)->aopu.aop_dir);
@@ -7180,7 +7194,7 @@ genAnd (iCode * ic, iCode * ifx)
       left = tmp;
     }
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+    lit = ulFromVal (AOP (right)->aopu.aop_lit);
 
   size = AOP_SIZE (result);
 
@@ -7615,7 +7629,7 @@ genOr (iCode * ic, iCode * ifx)
       left = tmp;
     }
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+    lit = ulFromVal (AOP (right)->aopu.aop_lit);
 
   size = AOP_SIZE (result);
 
@@ -8007,7 +8021,7 @@ genXor (iCode * ic, iCode * ifx)
       left = tmp;
     }
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+    lit = ulFromVal (AOP (right)->aopu.aop_lit);
 
   size = AOP_SIZE (result);
 
@@ -8299,40 +8313,51 @@ static void
 genInline (iCode * ic)
 {
   char *buffer, *bp, *bp1;
+  bool inComment = FALSE;
 
   D (emitcode (";", "genInline"));
 
   _G.inLine += (!options.asmpeep);
 
-  buffer = bp = bp1 = Safe_strdup(IC_INLINE(ic));
+  buffer = bp = bp1 = Safe_strdup (IC_INLINE(ic));
 
   /* emit each line as a code */
   while (*bp)
     {
-      if (*bp == '\n')
+      switch (*bp)
         {
+        case ';':
+          inComment = TRUE;
+          ++bp;
+          break;
+
+        case '\n':
+          inComment = FALSE;
           *bp++ = '\0';
           emitcode (bp1, "");
           bp1 = bp;
-        }
-      else
-        {
+          break;
+
+        default:
           /* Add \n for labels, not dirs such as c:\mydir */
-          if ( (*bp == ':') && (isspace((unsigned char)bp[1])) )
+          if (!inComment && (*bp == ':') && (isspace((unsigned char)bp[1])))
             {
-              bp++;
+              ++bp;
               *bp = '\0';
-              bp++;
+              ++bp;
               emitcode (bp1, "");
               bp1 = bp;
             }
           else
-            bp++;
+            ++bp;
+          break;
         }
     }
   if (bp1 != bp)
     emitcode (bp1, "");
-  /*     emitcode("",buffer); */
+
+  Safe_free (buffer);
+
   _G.inLine -= (!options.asmpeep);
 }
 
@@ -9472,7 +9497,7 @@ genLeftShiftLiteral (operand * left,
                      operand * result,
                      iCode * ic)
 {
-  int shCount = (int) floatFromVal (AOP (right)->aopu.aop_lit);
+  int shCount = (int) ulFromVal (AOP (right)->aopu.aop_lit);
   int size;
 
   size = getSize (operandType (result));
@@ -9612,7 +9637,7 @@ genLeftShift (iCode * ic)
        * some small improvement.
        */
        emitcode("mov", "b,#!constbyte",
-                ((int) floatFromVal (AOP (right)->aopu.aop_lit)) + 1);
+                ((int) ulFromVal (AOP (right)->aopu.aop_lit)) + 1);
   }
   else
   {
@@ -9916,7 +9941,7 @@ genRightShiftLiteral (operand * left,
                       iCode * ic,
                       int sign)
 {
-  int shCount = (int) floatFromVal (AOP (right)->aopu.aop_lit);
+  int shCount = (int) ulFromVal (AOP (right)->aopu.aop_lit);
   int size;
 
   size = getSize (operandType (result));
@@ -10037,7 +10062,7 @@ genSignedRightShift (iCode * ic)
        * some small improvement.
        */
        emitcode("mov", "b,#!constbyte",
-                ((int) floatFromVal (AOP (right)->aopu.aop_lit)) + 1);
+                ((int) ulFromVal (AOP (right)->aopu.aop_lit)) + 1);
   }
   else
   {
@@ -10185,7 +10210,7 @@ genRightShift (iCode * ic)
        * some small improvement.
        */
        emitcode("mov", "b,#!constbyte",
-                ((int) floatFromVal (AOP (right)->aopu.aop_lit)) + 1);
+                ((int) ulFromVal (AOP (right)->aopu.aop_lit)) + 1);
   }
   else
   {
@@ -11136,7 +11161,7 @@ genPackBits (sym_link * etype,
         {
           /* Case with a bitfield length <8 and literal source
           */
-          litval = (int) floatFromVal (AOP (right)->aopu.aop_lit);
+          litval = (int) ulFromVal (AOP (right)->aopu.aop_lit);
           litval <<= bstr;
           litval &= (~mask) & 0xff;
           emitPtrByteGet (rname, p_type, FALSE);
@@ -11207,7 +11232,7 @@ genPackBits (sym_link * etype,
         {
           /* Case with partial byte and literal source
           */
-          litval = (int) floatFromVal (AOP (right)->aopu.aop_lit);
+          litval = (int) ulFromVal (AOP (right)->aopu.aop_lit);
           litval >>= (blen-rlen);
           litval &= (~mask) & 0xff;
           emitPtrByteGet (rname, p_type, FALSE);
@@ -11581,7 +11606,8 @@ genFarPointerSet (operand * right,
           _endLazyDPSEvaluation ();
       }
       pi->generated=1;
-  } else if ((OP_SYMBOL(result)->ruonly || AOP_INDPTRn(result)) &&
+  } else if (IS_SYMOP (result) &&
+             (OP_SYMBOL(result)->ruonly || AOP_INDPTRn(result)) &&
              AOP_SIZE(right) > 1 &&
              (OP_SYMBOL (result)->liveTo > ic->seq || ic->depth)) {
 
@@ -11924,13 +11950,14 @@ genAddrOf (iCode * ic)
   }
 
   /* object not on stack then we need the name */
-  size = AOP_SIZE (IC_RESULT (ic));
+  size = getDataSize (IC_RESULT (ic));
   offset = 0;
 
   while (size--)
     {
       char s[SDCC_NAME_MAX];
-      if (offset) {
+      if (offset)
+        {
           switch (offset) {
           case 1:
               tsprintf(s, sizeof(s), "#!his",sym->rname);
@@ -11942,9 +11969,7 @@ genAddrOf (iCode * ic)
               tsprintf(s, sizeof(s), "#!hihihis",sym->rname);
               break;
           default: /* should not need this (just in case) */
-              SNPRINTF (s, sizeof(s), "#(%s >> %d)",
-                       sym->rname,
-                       offset * 8);
+              SNPRINTF (s, sizeof(s), "#(%s >> %d)", sym->rname, offset * 8);
           }
       }
       else
@@ -11953,6 +11978,13 @@ genAddrOf (iCode * ic)
       }
 
       aopPut (IC_RESULT (ic), s, offset++);
+    }
+  if (opIsGptr (IC_RESULT (ic)))
+    {
+      char buffer[10];
+      SNPRINTF (buffer, sizeof(buffer), "#0x%02x",
+                pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
+      aopPut (IC_RESULT (ic), buffer, GPTRSIZE - 1);
     }
 
 release:
@@ -12242,10 +12274,10 @@ genAssign (iCode * ic)
 
   /* bit variables done */
   /* general case */
-  size = AOP_SIZE (result);
+  size = getDataSize (result);
   offset = 0;
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = (unsigned long) floatFromVal (AOP (right)->aopu.aop_lit);
+    lit = ulFromVal (AOP (right)->aopu.aop_lit);
 
   if ((size > 1) &&
       (AOP_TYPE (result) != AOP_REG) &&
@@ -12284,6 +12316,7 @@ genAssign (iCode * ic)
         }
       _endLazyDPSEvaluation ();
     }
+  adjustArithmeticResult (ic);
 
 release:
   freeAsmop (result, NULL, ic, TRUE);
@@ -12613,7 +12646,7 @@ static void genMemcpyX2X( iCode *ic, int nparms, operand **parms, int fromc)
 
     /* now for the actual copy */
     if (AOP_TYPE(count) == AOP_LIT &&
-        (int)floatFromVal (AOP(count)->aopu.aop_lit) <= 256) {
+        (int) ulFromVal (AOP(count)->aopu.aop_lit) <= 256) {
         emitcode ("mov", "b,%s",aopGet(count,0,FALSE,FALSE,NULL));
         if (fromc) {
             emitcode ("lcall","__bi_memcpyc2x_s");
@@ -12729,7 +12762,7 @@ static void genMemcmpX2X( iCode *ic, int nparms, operand **parms, int fromc)
 
     /* now for the actual compare */
     if (AOP_TYPE(count) == AOP_LIT &&
-        (int)floatFromVal (AOP(count)->aopu.aop_lit) <= 256) {
+        (int) ulFromVal (AOP(count)->aopu.aop_lit) <= 256) {
         emitcode ("mov", "b,%s",aopGet(count,0,FALSE,FALSE,NULL));
         if (fromc)
             emitcode("lcall","__bi_memcmpc2x_s");
@@ -12860,7 +12893,7 @@ static void genInp( iCode *ic, int nparms, operand **parms)
 
     /* now for the actual copy */
     if (AOP_TYPE(count) == AOP_LIT &&
-        (int)floatFromVal (AOP(count)->aopu.aop_lit) <= 256) {
+        (int) ulFromVal (AOP(count)->aopu.aop_lit) <= 256) {
         emitcode (";","OH  JOY auto increment with djnz (very fast)");
         emitcode ("mov", "dps,#!constbyte",0x1);        /* Select DPTR2 */
         emitcode ("mov", "b,%s",aopGet(count,0,FALSE,FALSE,NULL));
@@ -12981,7 +13014,7 @@ static void genOutp( iCode *ic, int nparms, operand **parms)
 
     /* now for the actual copy */
     if (AOP_TYPE(count) == AOP_LIT &&
-        (int)floatFromVal (AOP(count)->aopu.aop_lit) <= 256) {
+        (int) ulFromVal (AOP(count)->aopu.aop_lit) <= 256) {
         emitcode (";","OH  JOY auto increment with djnz (very fast)");
         emitcode ("mov", "dps,#!constbyte",0x0);        /* Select DPTR */
         emitcode ("mov", "b,%s",aopGet(count,0,FALSE,FALSE,NULL));
@@ -13115,7 +13148,7 @@ static void genMemsetX(iCode *ic, int nparms, operand **parms)
     lbl =newiTempLabel(NULL);
     /* now for the actual copy */
     if (AOP_TYPE(count) == AOP_LIT &&
-        (int)floatFromVal (AOP(count)->aopu.aop_lit) <= 256) {
+        (int) ulFromVal (AOP(count)->aopu.aop_lit) <= 256) {
         l = aopGet(val, 0, FALSE, FALSE, NULL);
         emitcode ("mov", "b,%s",aopGet(count,0,FALSE,FALSE,NULL));
         MOVA(l);
@@ -14229,7 +14262,7 @@ gen390Code (iCode * lic)
           cln = ic->lineno;
         }
       if (options.iCodeInAsm) {
-        char *iLine = printILine(ic);
+        const char *iLine = printILine(ic);
         emitcode(";", "ic:%d: %s", ic->key, iLine);
         dbuf_free(iLine);
       }
@@ -14454,11 +14487,11 @@ gen390Code (iCode * lic)
 #endif
 
         default:
-	    /* This should never happen, right? */
-	    fprintf(stderr, "*** Probable error: unsupported op 0x%x (%c) in %s @ %d\n", 
-		    ic->op, ic->op, __FILE__, __LINE__);
-	    ic = ic;
-	}
+            /* This should never happen, right? */
+            fprintf(stderr, "*** Probable error: unsupported op 0x%x (%c) in %s @ %d\n",
+                    ic->op, ic->op, __FILE__, __LINE__);
+            ic = ic;
+        }
     }
 
 

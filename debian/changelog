@@ -1,3 +1,13 @@
+sdcc (2.8.0.dfsg-1) unstable; urgency=low
+
+  * Move sdcc back to main, removing the non-DFSG-compliant ports and html
+    documentation.  There will be a new sdcc-nf package set in non-free that
+    delivers the full version for those who need the other ports.
+  * Update README.Debian to explain the main/non-free split.
+  * Add Bdale as co-maintainer, repackage using git and Alioth collab-maint
+
+ -- Bdale Garbee <bdale@gag.com>  Thu, 03 Apr 2008 22:56:28 -0600
+
 sdcc (2.7.0-1) unstable; urgency=low
 
   [ Miriam Ruiz ]

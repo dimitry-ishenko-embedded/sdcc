@@ -21,7 +21,7 @@
  * You are forbidden to forbid anyone else to use, share and improve
  * what you give them.   Help stamp out software-hoarding!  
  *
- * $Id: free.c 3711 2005-03-31 16:25:17Z vrokas $
+ * $Id: free.c 4914 2007-09-16 18:24:27Z tecodev $
  */
 
 #include <malloc.h>
@@ -31,6 +31,6 @@ extern char _MALLOC_SPEC *heap;
 void free(unsigned char _MALLOC_SPEC *buf)
 {
   /* mark block as deallocated */
-  ((_malloc_rec *)((unsigned int)buf - 1))->bits.alloc = 0;
+  ((_MALLOC_SPEC _malloc_rec *)((unsigned int)buf - 1))->bits.alloc = 0;
 }
 

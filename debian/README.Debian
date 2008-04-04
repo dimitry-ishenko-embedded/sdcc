@@ -1,6 +1,15 @@
 sdcc for Debian
 ---------------
 
+This is the DFSG version of sdcc. Due to licensing reasons the following
+ports: mcs51, gbz80, z80, hc08, ds390 and ds400 are disabled as
+well as the html documentation
+
+The remaining ports are XA51 and PIC.
+
+If you need the other ports, a complete version of sdcc is available in
+non-free as sdcc-nf.
+
 SDCDB, the source debugger for SDCC, is included in the simulator package
 (sdcc-ucsim), since it can only work with a simulator. 
 
@@ -8,5 +17,4 @@ The SDCDB manual is included in the SDCC one (section 7), which it is located
 in /usr/share/doc/sdcc. You can also access it using dhelp (in the programming 
 section).
 
-
- -- Aurelien Jarno <aurel32@debian.org>, Sat, 19 Jan 2002 14:14:00 +0100
+ -- Gudjon I. Gudjonsson, Sun, 03 Feb 2008 09:11:52 +0100
