@@ -19,13 +19,18 @@
    
 -------------------------------------------------------------------------*/
 
-//#include "ralloc.h"
-struct regs;
+#ifndef __PCODE_H__
+#define __PCODE_H__
+
+#include "common.h"
 
 /* When changing these, you must also update the assembler template
  * in device/lib/libsdcc/macros.inc */
 #define GPTRTAG_DATA	0x00
 #define GPTRTAG_CODE	0x80
+
+/* Cyclic dependency with ralloc.h: */
+struct regs;
 
 /*
    Post code generation
@@ -55,20 +60,17 @@ struct regs;
      movwf  t1
      movf   t1,w     ; Can't remove this movf
      skpz
-      return
+     return
 
    example3:
      movwf  t1
      movf   t1,w     ; This  movf can be removed
      xorwf  t2,w     ; since xorwf will over write Z 
      skpz
-      return
+     return
 
 */
 
-
-#ifndef __PCODE_H__
-#define __PCODE_H__
 
 /***********************************************************************
  * debug stuff
@@ -86,7 +88,7 @@ struct regs;
 #ifdef PCODE_DEBUG
 #define DFPRINTF(args) (fprintf args)
 #else
-#define DFPRINTF(args) ;
+#define DFPRINTF(args) ((void)0)
 #endif
 
 
@@ -111,13 +113,6 @@ struct regs;
 #define PIC_T0IE_BIT 5   /* TMR0 overflow Interrupt Enable */
 #define PIC_PIE_BIT  6   /* Peripheral Interrupt Enable */
 #define PIC_GIE_BIT  7   /* Global Interrupt Enable */
-
-/***********************************************************************
- *  Operand types 
- ***********************************************************************/
-#define POT_RESULT  0
-#define POT_LEFT    1
-#define POT_RIGHT   2
 
 
 /***********************************************************************
@@ -304,15 +299,7 @@ typedef struct pCodeOp
 	char *name;
 
 } pCodeOp;
-#if 0
-typedef struct pCodeOpBit
-{
-	pCodeOp pcop;
-	int bit;
-	unsigned int inBitSpace: 1; /* True if in bit space, else
-	                            just a bit of a register */
-} pCodeOpBit;
-#endif
+
 typedef struct pCodeOpLit
 {
 	pCodeOp pcop;
@@ -356,16 +343,6 @@ typedef struct pCodeOpRegBit
 	unsigned int inBitSpace: 1; /* True if in bit space, else
 	                            just a bit of a register */
 } pCodeOpRegBit;
-
-
-typedef struct pCodeOpRegPtr
-{
-	pCodeOpReg  pcor;       // The Register containing this bit
-
-	//  PIC_OPTYPE subtype;     // The type of this register.
-	//  unsigned int inBitSpace: 1; /* True if in bit space, else
-
-} pCodeOpRegPtr;
 
 typedef struct pCodeOpStr /* Only used here for the name of fn being called or jumped to */
 {
@@ -415,7 +392,6 @@ typedef struct pCode
 	 * in C++. The subsequent structures that "inherit"
 	 * the pCode structure will initialize these function
 	 * pointers to something useful */
-	//  void (*analyze) (struct pCode *_this);
 	void (*destruct)(struct pCode *_this);
 	void (*print)  (FILE *of,struct pCode *_this);
 
@@ -471,12 +447,6 @@ typedef struct pCodeFlow
 
 	pCode *end;   /* Last pCode in this flow. Note that
 	                 the first pCode is pc.next */
-
-	/*  set **uses;   * map the pCode instruction inCond and outCond conditions 
-	 * in this array of set's. The reason we allocate an 
-	 * array of pointers instead of declaring each type of 
-	 * usage is because there are port dependent usage definitions */
-	//int nuses;    /* number of uses sets */
 
 	set *from;    /* flow blocks that can send control to this flow block */
 	set *to;      /* flow blocks to which this one can send control */
@@ -727,11 +697,6 @@ typedef struct pCodePeep {
 	pCodeWildBlock target;     // code we'd like to optimize
 	pCodeWildBlock replace;    // and this is what we'll optimize it with.
 
-	//pBlock *target;
-	//pBlock replace;            // and this is what we'll optimize it with.
-
-
-
 	/* (Note: a wildcard register is a place holder. Any register
 	 * can be replaced by the wildcard when the pcode is being 
 	 * compared to the target. */
@@ -788,7 +753,6 @@ typedef struct peepCommand {
 #define PCAD(x)	  ((pCodeAsmDir *)(x))
 
 #define PCOP(x)   ((pCodeOp *)(x))
-//#define PCOB(x)   ((pCodeOpBit *)(x))
 #define PCOL(x)   ((pCodeOpLit *)(x))
 #define PCOI(x)   ((pCodeOpImmd *)(x))
 #define PCOLAB(x) ((pCodeOpLabel *)(x))
@@ -834,11 +798,12 @@ typedef struct peepCommand {
 
 pCode *newpCode (PIC_OPCODE op, pCodeOp *pcop); // Create a new pCode given an operand
 pCode *newpCodeCharP(char *cP);              // Create a new pCode given a char *
-pCode *newpCodeInlineP(char *cP);            // Create a new pCode given a char *
 pCode *newpCodeFunction(char *g, char *f,int); // Create a new function
 pCode *newpCodeLabel(char *name,int key);    // Create a new label given a key
 pCode *newpCodeCSource(int ln, char *f, const char *l); // Create a new symbol line 
+pCode *newpCodeWild(int pCodeID, pCodeOp *optional_operand, pCodeOp *optional_label);
 pCode *findNextInstruction(pCode *pci);
+pCode *findPrevInstruction(pCode *pci);
 pCode *findNextpCode(pCode *pc, PC_TYPE pct);
 pCode *pCodeInstructionCopy(pCodeInstruction *pci,int invert);
 
@@ -847,13 +812,17 @@ void printpBlock(FILE *of, pBlock *pb);      // Write a pBlock to a file
 void printpCode(FILE *of, pCode *pc);        // Write a pCode to a file
 void addpCode2pBlock(pBlock *pb, pCode *pc); // Add a pCode to a pBlock
 void addpBlock(pBlock *pb);                  // Add a pBlock to a pFile
+void unlinkpCode(pCode *pc);
 void copypCode(FILE *of, char dbName);       // Write all pBlocks with dbName to *of
 void movepBlock2Head(char dbName);           // move pBlocks around
+void AnalyzeBanking(void);
+void ReuseReg(void);
 void AnalyzepCode(char dbName);
-int OptimizepCode(char dbName);
-void printCallTree(FILE *of);
-void pCodePeepInit(void);
+void InlinepCode(void);
+void pCodeInitRegisters(void);
+void pic14initpCodePeepCommands(void);
 void pBlockConvert2ISR(pBlock *pb);
+void pBlockMergeLabels(pBlock *pb);
 void pCodeInsertAfter(pCode *pc1, pCode *pc2);
 void pCodeInsertBefore(pCode *pc1, pCode *pc2);
 void pCodeDeleteChain(pCode *f,pCode *t);
@@ -864,15 +833,23 @@ pCodeOp *newpCodeOpLabel(char *name, int key);
 pCodeOp *newpCodeOpImmd(char *name, int offset, int index, int code_space,int is_func);
 pCodeOp *newpCodeOpLit(int lit);
 pCodeOp *newpCodeOpBit(char *name, int bit,int inBitSpace);
+pCodeOp *newpCodeOpWild(int id, pCodeWildBlock *pcwb, pCodeOp *subtype);
 pCodeOp *newpCodeOpRegFromStr(char *name);
 pCodeOp *newpCodeOp(char *name, PIC_OPTYPE p);
 pCodeOp *pCodeOpCopy(pCodeOp *pcop);
+pCodeOp *popCopyGPR2Bit(pCodeOp *pc, int bitval);
 pCodeOp *popCopyReg(pCodeOpReg *pc);
 
-int isPCinFlow(pCode *pc, pCode *pcflow);
+pBranch *pBranchAppend(pBranch *h, pBranch *n);
+
 struct regs * getRegFromInstruction(pCode *pc);
 
-extern void pcode_test(void);
+char *get_op(pCodeOp *pcop, char *buff, size_t buf_size);
+char *pCode2str(char *str, size_t size, pCode *pc);
+
+int pCodePeepMatchRule(pCode *pc);
+
+void pcode_test(void);
 void resetpCodeStatistics (void);
 void dumppCodeStatistics (FILE *of);
 
@@ -890,5 +867,15 @@ extern pCodeOpReg pc_wsave;     /* wsave, ssave and psave are used to save W, th
 extern pCodeOpReg pc_ssave;     /* registers during an interrupt */
 extern pCodeOpReg pc_psave;     /* registers during an interrupt */
 
+extern pFile *the_pFile;
+extern pCodeInstruction *pic14Mnemonics[MAX_PIC14MNEMONICS];
+
+/*
+ * From pcodepeep.h:
+ */
+int getpCode(char *mnem, unsigned dest);
+int getpCodePeepCommand(char *cmd);
+int pCodeSearchCondition(pCode *pc, unsigned int cond, int contIfSkip);
 
 #endif // __PCODE_H__
+

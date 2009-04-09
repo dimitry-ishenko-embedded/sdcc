@@ -18,29 +18,21 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-
-#include "common.h"   // Include everything in the SDCC src directory
-#include "newalloc.h"
-
-
-#include "main.h"
-#include "pcode.h"
-#include "ralloc.h"
 #include "device.h"
 
-extern int Gstack_base_addr;
-extern int Gstack_size;
+/*
+ * Imports
+ */
+extern set *includeDirsSet;
+extern set *userIncDirsSet;
+extern set *libDirsSet;
+extern set *libPathsSet;
 
 #define MAX_PICLIST 200
 static PIC_device *Pics[MAX_PICLIST];
+static PIC_device *pic = NULL;
 static int num_of_supported_PICS = 0;
-
-static PIC_device *pic=NULL;
-
-int maxRAMaddress = 0;
+static int maxRAMaddress = 0;
 
 #define CONFIG_WORD_ADDRESS 0x2007
 #define CONFIG2_WORD_ADDRESS 0x2008
@@ -51,402 +43,429 @@ int maxRAMaddress = 0;
 #define PIC14_STRING_LEN 256
 #define SPLIT_WORDS_MAX 16
 
+/* Keep track of whether we found an assignment to the __config words. */
+static int pic14_hasSetConfigWord = 0;
 static unsigned int config_word = DEFAULT_CONFIG_WORD;
 static unsigned int config2_word = DEFAULT_CONFIG2_WORD;
 static memRange *rangeRAM = NULL;
 
 
 /* parse a value from the configuration file */
-static int parse_config_value(char *str)
+static int
+parse_config_value (char *str)
 {
-	if (str[strlen(str) - 1] == 'K')
-		return atoi(str) * 1024;        /* like "1K" */
-		
-	else if (STRNCASECMP(str, "0x", 2) == 0)
-		return strtol(str+2, NULL, 16); /* like "0x400" */
-	
-	else
-		return atoi(str);               /* like "1024" */
+  if (str[strlen (str) - 1] == 'K')
+    return atoi (str) * 1024;        /* like "1K" */
+
+  else if (STRNCASECMP (str, "0x", 2) == 0)
+    return strtol (str+2, NULL, 16); /* like "0x400" */
+
+  else
+    return atoi (str);               /* like "1024" */
 }
 
 
 /* split a line into words */
-static int split_words(char result_word[SPLIT_WORDS_MAX][PIC14_STRING_LEN], char *str)
+static int
+split_words (char **result_word, char *str)
 {
-	char *pos = str;
-	int num_words = 0;
-	int ccount;
-	
-	while (*pos != '\0' && num_words < SPLIT_WORDS_MAX) {
-		/* remove leading spaces */
-		while (isspace(*pos) || *pos == ',')
-			pos++;
-	
-		/* copy everything up until the first space or comma */
-		for (ccount = 0; *pos != '\0' && !isspace(*pos) && *pos != ',' && ccount < PIC14_STRING_LEN-1; ccount++, pos++)
-			result_word[num_words][ccount] = *pos;
-		result_word[num_words][ccount] = '\0';
-		
-		num_words++;
-	}
-	
-	return num_words;
+  static const char delim[] = " \f\n\r\t\v,";
+  char *token;
+  int num_words;
+
+  /* release previously allocated words */
+  for (num_words = 0; num_words < SPLIT_WORDS_MAX; num_words++)
+    {
+      if (result_word[num_words])
+        {
+          free (result_word[num_words]);
+          result_word[num_words] = NULL;
+        } // if
+    } // for
+
+  /* split line */
+  token = strtok (str, delim);
+  num_words = 0;
+  while (token && (num_words < SPLIT_WORDS_MAX))
+    {
+      result_word[num_words] = Safe_strdup (token);
+      num_words++;
+      token = strtok (NULL, delim);
+    } // while
+
+  return num_words;
 }
 
 
 /* remove annoying prefixes from the processor name */
-static char *sanitise_processor_name(char *name)
+static char *
+sanitise_processor_name (char *name)
 {
-	char *proc_pos = name;
+  char *proc_pos = name;
 
-	if (name == NULL)
-		return NULL;
-	
-	if (STRNCASECMP(proc_pos, "pic", 3) == 0)
-		proc_pos += 3;
+  if (name == NULL)
+    return NULL;
 
-	else if (tolower(*proc_pos) == 'p')
-		proc_pos += 1;
-				
-	return proc_pos;
+  if (STRNCASECMP (proc_pos, "pic", 3) == 0)
+    proc_pos += 3;
+
+  else if (tolower (*proc_pos) == 'p')
+    proc_pos += 1;
+
+  return proc_pos;
 }
 
 
 /* create a structure for a pic processor */
-static PIC_device *create_pic(char *pic_name, int maxram, int bankmsk, int confsiz, int program, int data, int eeprom, int io)
+static PIC_device *
+create_pic (char *pic_name, int maxram, int bankmsk, int confsiz,
+            int program, int data, int eeprom, int io)
 {
-	PIC_device *new_pic;
-	char *simple_pic_name = sanitise_processor_name(pic_name);
-	
-	new_pic = Safe_calloc(1, sizeof(PIC_device));
-	new_pic->name = Safe_calloc(strlen(simple_pic_name)+1, sizeof(char));
-	strcpy(new_pic->name, simple_pic_name);
-			
-	new_pic->defMaxRAMaddrs = maxram;
-	new_pic->bankMask = bankmsk;
-	new_pic->hasSecondConfigReg = confsiz > 1;
-	
-	new_pic->programMemSize = program;
-	new_pic->dataMemSize = data;
-	new_pic->eepromMemSize = eeprom;
-	new_pic->ioPins = io;
+  PIC_device *new_pic;
+  char *simple_pic_name = sanitise_processor_name (pic_name);
 
-	new_pic->ram = rangeRAM;
-	
-	Pics[num_of_supported_PICS] = new_pic;
-	num_of_supported_PICS++;
-			
-	return new_pic;
+  new_pic = Safe_calloc (1, sizeof (PIC_device));
+  new_pic->name = Safe_strdup (simple_pic_name);
+
+  new_pic->defMaxRAMaddrs = maxram;
+  new_pic->bankMask = bankmsk;
+  new_pic->hasSecondConfigReg = confsiz > 1;
+
+  new_pic->programMemSize = program;
+  new_pic->dataMemSize = data;
+  new_pic->eepromMemSize = eeprom;
+  new_pic->ioPins = io;
+
+  new_pic->ram = rangeRAM;
+
+  Pics[num_of_supported_PICS] = new_pic;
+  num_of_supported_PICS++;
+
+  return new_pic;
 }
 
 
 /* mark some registers as being duplicated across banks */
-static void register_map(int num_words, char word[SPLIT_WORDS_MAX][PIC14_STRING_LEN])
+static void
+register_map (int num_words, char **word)
 {
-	memRange *r;
-	int pcount;
-	
-	if (num_words < 3) {
-		fprintf(stderr, "WARNING: not enough values in %s regmap directive\n", DEVICE_FILE_NAME);
-		return;
-	}
+  memRange *r;
+  int pcount;
 
-	for (pcount = 2; pcount < num_words; pcount++) {
-		r = Safe_calloc(1, sizeof(memRange));
-		
-		r->start_address = parse_config_value(word[pcount]);
-		r->end_address = parse_config_value(word[pcount]);
-		r->alias = parse_config_value(word[1]);
-		r->bank = (r->start_address >> 7) & 3;
-		// add memRange to device entry for future lookup (sharebanks)
-		r->next = rangeRAM;
-		rangeRAM = r;
-	}
+  if (num_words < 3)
+    {
+      fprintf (stderr, "WARNING: not enough values in %s regmap directive\n",
+               DEVICE_FILE_NAME);
+      return;
+    } // if
+
+  for (pcount = 2; pcount < num_words; pcount++)
+    {
+      r = Safe_calloc (1, sizeof (memRange));
+
+      r->start_address = parse_config_value (word[pcount]);
+      r->end_address = parse_config_value (word[pcount]);
+      r->alias = parse_config_value (word[1]);
+      r->bank = (r->start_address >> 7) & 3;
+      // add memRange to device entry for future lookup (sharebanks)
+      r->next = rangeRAM;
+      rangeRAM = r;
+    } // for
 }
 
 
 /* define ram areas - may be duplicated across banks */
-static void ram_map(int num_words, char word[SPLIT_WORDS_MAX][PIC14_STRING_LEN])
+static void
+ram_map (int num_words, char **word)
 {
-	memRange *r;
-	
-	if (num_words < 4) {
-		fprintf(stderr, "WARNING: not enough values in %s memmap directive\n", DEVICE_FILE_NAME);
-		return;
-	}
+  memRange *r;
 
-	r = Safe_calloc(1, sizeof(memRange));
-	//fprintf (stderr, "%s: %s %s %s\n", __FUNCTION__, word[1], word[2], word[3]);
-	
-	r->start_address = parse_config_value(word[1]);
-	r->end_address = parse_config_value(word[2]);
-	r->alias = parse_config_value(word[3]);
-	r->bank = (r->start_address >> 7) & 3;
-		
-	// add memRange to device entry for future lookup (sharebanks)
-	r->next = rangeRAM;
-	rangeRAM = r;
+  if (num_words < 4)
+    {
+      fprintf (stderr, "WARNING: not enough values in %s memmap directive\n",
+               DEVICE_FILE_NAME);
+      return;
+    } // if
+
+  r = Safe_calloc (1, sizeof (memRange));
+  //fprintf (stderr, "%s: %s %s %s\n", __FUNCTION__, word[1], word[2], word[3]);
+
+  r->start_address = parse_config_value (word[1]);
+  r->end_address = parse_config_value (word[2]);
+  r->alias = parse_config_value (word[3]);
+  r->bank = (r->start_address >> 7) & 3;
+
+  // add memRange to device entry for future lookup (sharebanks)
+  r->next = rangeRAM;
+  rangeRAM = r;
 }
 
-extern set *includeDirsSet;
-extern set *userIncDirsSet;
-extern set *libDirsSet;
-extern set *libPathsSet;
+static void
+setMaxRAM (int size)
+{
+  maxRAMaddress = size;
+
+  if (maxRAMaddress < 0)
+    {
+      fprintf (stderr, "invalid maxram 0x%x setting in %s\n",
+               maxRAMaddress, DEVICE_FILE_NAME);
+      return;
+    } // if
+}
 
 /* read the file with all the pic14 definitions and pick out the definition
  * for a processor if specified. if pic_name is NULL reads everything */
-static PIC_device *find_device(char *pic_name)
+static PIC_device *
+find_device (char *pic_name)
 {
-	FILE *pic_file;
-	char pic_buf[PIC14_STRING_LEN];
-	char *pic_buf_pos;
-	int found_processor = FALSE;
-	int done = FALSE;
-	char processor_name[SPLIT_WORDS_MAX][PIC14_STRING_LEN];
-	int num_processor_names = 0;
-	int pic_maxram = 0;
-	int pic_bankmsk = 0;
-	int pic_confsiz = 0;
-	int pic_program = 0;
-	int pic_data = 0;
-	int pic_eeprom = 0;
-	int pic_io = 0;
-	char *simple_pic_name;
-	char *dir;
-	char filename[512];
-	int len = 512;
-	
-	/* allow abbreviations of the form "f877" - convert to "16f877" */
-	simple_pic_name = sanitise_processor_name(pic_name);
-	num_of_supported_PICS = 0;
-	
-	/* open the piclist file */
-	/* first scan all include directories */
-	pic_file = NULL;
-	//fprintf( stderr, "%s: searching %s\n", __FUNCTION__, DEVICE_FILE_NAME );
-	for (dir = setFirstItem(userIncDirsSet);
-		!pic_file && dir;
-		dir = setNextItem(userIncDirsSet))
-	{
-	  //fprintf( stderr, "searching1 %s\n", dir );
-	  SNPRINTF(&filename[0], len, "%s%s", dir,
-	    DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
-	  pic_file = fopen( filename, "rt" );
-	  if (pic_file) break;
-	} // for
+  FILE *pic_file;
+  char pic_buf[PIC14_STRING_LEN];
+  int found_processor = FALSE;
+  int done = FALSE;
+  char **processor_name;
+  int num_processor_names = 0;
+  int pic_maxram = 0;
+  int pic_bankmsk = 0;
+  int pic_confsiz = 0;
+  int pic_program = 0;
+  int pic_data = 0;
+  int pic_eeprom = 0;
+  int pic_io = 0;
+  char *simple_pic_name;
+  char *dir;
+  char filename[512];
+  int len = 512;
+  char **pic_word;
+  int num_pic_words;
+  int wcount;
 
-	for (dir = setFirstItem(includeDirsSet);
-		!pic_file && dir;
-		dir = setNextItem(includeDirsSet))
-	{
-	  //fprintf( stderr, "searching2 %s\n", dir );
-	  SNPRINTF(&filename[0], len, "%s%s", dir,
-	    DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
-	  pic_file = fopen( filename, "rt" );
-	  if (pic_file) break;
-	} // for
+  pic_word = Safe_calloc (sizeof (char *), SPLIT_WORDS_MAX);
+  processor_name = Safe_calloc (sizeof (char *), SPLIT_WORDS_MAX);
 
-	for (dir = setFirstItem(libDirsSet);
-		!pic_file && dir;
-		dir = setNextItem(libDirsSet))
-	{
-	  //fprintf( stderr, "searching3 %s\n", dir );
-	  SNPRINTF(&filename[0], len, "%s%s", dir,
-	    DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
-	  pic_file = fopen( filename, "rt" );
-	  if (pic_file) break;
-	} // for
+  /* allow abbreviations of the form "f877" - convert to "16f877" */
+  simple_pic_name = sanitise_processor_name (pic_name);
+  num_of_supported_PICS = 0;
 
-	for (dir = setFirstItem(libPathsSet);
-		!pic_file && dir;
-		dir = setNextItem(libPathsSet))
-	{
-	  //fprintf( stderr, "searching4 %s\n", dir );
-	  SNPRINTF(&filename[0], len, "%s%s", dir,
-	    DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
-	  pic_file = fopen( filename, "rt" );
-	  if (pic_file) break;
-	} // for
+  /* open the piclist file */
+  /* first scan all include directories */
+  pic_file = NULL;
+  //fprintf (stderr, "%s: searching %s\n", __FUNCTION__, DEVICE_FILE_NAME);
+  for (dir = setFirstItem (userIncDirsSet);
+      !pic_file && dir;
+      dir = setNextItem (userIncDirsSet))
+    {
+      //fprintf (stderr, "searching1 %s\n", dir);
+      SNPRINTF (&filename[0], len, "%s%s", dir,
+                DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
+      pic_file = fopen (filename, "rt");
+      if (pic_file) break;
+    } // for
 
-	if (!pic_file) {
-	  SNPRINTF(&filename[0], len, "%s",
-	    DATADIR LIB_DIR_SUFFIX
-	    DIR_SEPARATOR_STRING "pic"
-	    DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
-	  pic_file = fopen( filename, "rt" );
-	} // if
+  for (dir = setFirstItem (includeDirsSet);
+      !pic_file && dir;
+      dir = setNextItem (includeDirsSet))
+    {
+      //fprintf (stderr, "searching2 %s\n", dir);
+      SNPRINTF (&filename[0], len, "%s%s", dir,
+                DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
+      pic_file = fopen (filename, "rt");
+      if (pic_file) break;
+    } // for
 
-        if (pic_file == NULL) {
-            fprintf(stderr, "can't find %s\n", DEVICE_FILE_NAME);
-            return NULL;
+  for (dir = setFirstItem (libDirsSet);
+      !pic_file && dir;
+      dir = setNextItem (libDirsSet))
+    {
+      //fprintf (stderr, "searching3 %s\n", dir);
+      SNPRINTF (&filename[0], len, "%s%s", dir,
+                DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
+      pic_file = fopen (filename, "rt");
+      if (pic_file) break;
+    } // for
+
+  for (dir = setFirstItem (libPathsSet);
+      !pic_file && dir;
+      dir = setNextItem (libPathsSet))
+    {
+      //fprintf (stderr, "searching4 %s\n", dir);
+      SNPRINTF (&filename[0], len, "%s%s", dir,
+                DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
+      pic_file = fopen (filename, "rt");
+      if (pic_file) break;
+    } // for
+
+  if (!pic_file)
+    {
+      SNPRINTF (&filename[0], len, "%s",
+                DATADIR LIB_DIR_SUFFIX
+                DIR_SEPARATOR_STRING "pic"
+                DIR_SEPARATOR_STRING DEVICE_FILE_NAME);
+      pic_file = fopen (filename, "rt");
+    } // if
+
+  if (pic_file == NULL)
+    {
+      fprintf (stderr, "can't find %s\n", DEVICE_FILE_NAME);
+      return NULL;
+    } // if
+
+  if (options.verbose)
+    printf ("Using devices from %s.\n", filename);
+
+  /* read line by line */
+  pic_buf[sizeof (pic_buf)-1] = '\0';
+  while (fgets (pic_buf, sizeof (pic_buf)-1, pic_file) != NULL && !done)
+    {
+      /* strip comments */
+      {
+        char *comment = strchr (pic_buf, '#');
+        if (comment)
+          *comment = 0;
+      }
+
+      /* split into fields */
+      num_pic_words = split_words (pic_word, pic_buf);
+
+      /* ignore comment / empty lines */
+      if (num_pic_words > 0)
+        {
+
+          if (STRCASECMP (pic_word[0], "processor") == 0)
+            {
+              if (pic_name == NULL)
+                {
+                  int dcount;
+
+                  /* this is the mode where we read all the processors in - store the names for now */
+                  if (num_processor_names > 0)
+                    {
+                      /* store away all the previous processor definitions */
+                      for (dcount = 1; dcount < num_processor_names; dcount++)
+                        {
+                          create_pic (processor_name[dcount], pic_maxram,
+                                      pic_bankmsk, pic_confsiz, pic_program,
+                                      pic_data, pic_eeprom, pic_io);
+                        } // for
+                    } // if
+
+                  /* copy processor names */
+                  num_processor_names = num_pic_words;
+                  for (dcount = 1; dcount < num_processor_names; dcount++)
+                    {
+                      processor_name[dcount] = pic_word[dcount];
+                      pic_word[dcount] = NULL;
+                    } // for
+                } // if
+              else
+                {
+                  /* if we've just completed reading a processor definition stop now */
+                  if (found_processor)
+                    done = TRUE;
+                  else
+                    {
+                      /* check if this processor name is a match */
+                      for (wcount = 1; wcount < num_pic_words; wcount++)
+                        {
+                          /* skip uninteresting prefixes */
+                          char *found_name = sanitise_processor_name (pic_word[wcount]);
+
+                          if (STRCASECMP (found_name, simple_pic_name) == 0)
+                            found_processor = TRUE;
+                        } // for
+                    } // if
+                } // if
+            } // if
+          else
+            {
+              if (found_processor || pic_name == NULL)
+                {
+                  /* only parse a processor section if we've found the one we want */
+                  if (STRCASECMP (pic_word[0], "maxram") == 0 && num_pic_words > 1)
+                    {
+                      pic_maxram = parse_config_value (pic_word[1]);
+                      setMaxRAM (pic_maxram);
+                    } // if
+
+                  else if (STRCASECMP (pic_word[0], "bankmsk") == 0 && num_pic_words > 1)
+                    pic_bankmsk = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "confsiz") == 0 && num_pic_words > 1)
+                    pic_confsiz = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "program") == 0 && num_pic_words > 1)
+                    pic_program = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "data") == 0 && num_pic_words > 1)
+                    pic_data = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "eeprom") == 0 && num_pic_words > 1)
+                    pic_eeprom = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "io") == 0 && num_pic_words > 1)
+                    pic_io = parse_config_value (pic_word[1]);
+
+                  else if (STRCASECMP (pic_word[0], "regmap") == 0 && num_pic_words > 2)
+                    {
+                      if (found_processor)
+                        register_map (num_pic_words, pic_word);
+                    } // if
+
+                  else if (STRCASECMP (pic_word[0], "memmap") == 0 && num_pic_words > 2)
+                    {
+                      if (found_processor)
+                        ram_map (num_pic_words, pic_word);
+                    } // if
+
+                  else
+                    {
+                      fprintf (stderr, "WARNING: %s: bad syntax `%s'\n",
+                               DEVICE_FILE_NAME, pic_word[0]);
+                    } // if
+                } // if
+            } // if
         } // if
+    } // while
 
-	if (options.verbose) {
-	    printf ("Using devices from %s.\n", filename);
-	} // if
-	
-	/* read line by line */
-	pic_buf[sizeof(pic_buf)-1] = '\0';
-	while (fgets(pic_buf, sizeof(pic_buf)-1, pic_file) != NULL && !done) {
-		unsigned llen;
-		llen = strlen (pic_buf);
-		
-		/* remove trailing spaces */
-		while (llen && isspace(pic_buf[llen-1])) {
-			pic_buf[llen-1] = '\0';
-			llen--;
-		}
-		
-		/* remove leading spaces */
-		for (pic_buf_pos = pic_buf; isspace(*pic_buf_pos); pic_buf_pos++)
-		{}
-		
-		/* ignore comment / empty lines */
-		if (*pic_buf_pos != '\0' && *pic_buf_pos != '#') {
-			
-			/* split into fields */
-			char pic_word[SPLIT_WORDS_MAX][PIC14_STRING_LEN];
-			int num_pic_words;
-			int wcount;
-			
-			num_pic_words = split_words(pic_word, pic_buf_pos);
-			
-			if (STRCASECMP(pic_word[0], "processor") == 0) {
-			
-				if (pic_name == NULL) {
-					/* this is the mode where we read all the processors in - store the names for now */
-					if (num_processor_names > 0) {
-						/* store away all the previous processor definitions */
-						int dcount;
-						
-						for (dcount = 1; dcount < num_processor_names; dcount++)
-							create_pic(processor_name[dcount], pic_maxram, pic_bankmsk,
-							           pic_confsiz, pic_program, pic_data, pic_eeprom, pic_io);
-					}
-					
-					num_processor_names = split_words(processor_name, pic_buf_pos);
-				}
-				else {
-					/* if we've just completed reading a processor definition stop now */
-					if (found_processor)
-						done = TRUE;
-					else {
-						/* check if this processor name is a match */
-						for (wcount = 1; wcount < num_pic_words; wcount++) {
-							
-							/* skip uninteresting prefixes */
-							char *found_name = sanitise_processor_name(pic_word[wcount]);
+  fclose (pic_file);
 
-							if (STRCASECMP(found_name, simple_pic_name) == 0)
-								found_processor = TRUE;
-						}
-					}
-				}
-			}
-			
-			else {
-				if (found_processor || pic_name == NULL) {
-					/* only parse a processor section if we've found the one we want */
-					if (STRCASECMP(pic_word[0], "maxram") == 0 && num_pic_words > 1) {
-						pic_maxram = parse_config_value(pic_word[1]);
-						setMaxRAM(pic_maxram);
-					}
-					else if (STRCASECMP(pic_word[0], "bankmsk") == 0 && num_pic_words > 1)
-						pic_bankmsk = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "confsiz") == 0 && num_pic_words > 1)
-						pic_confsiz = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "program") == 0 && num_pic_words > 1)
-						pic_program = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "data") == 0 && num_pic_words > 1)
-						pic_data = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "eeprom") == 0 && num_pic_words > 1)
-						pic_eeprom = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "io") == 0 && num_pic_words > 1)
-						pic_io = parse_config_value(pic_word[1]);
-			
-					else if (STRCASECMP(pic_word[0], "regmap") == 0 && num_pic_words > 2) {
-						if (found_processor)
-							register_map(num_pic_words, pic_word);
-					}
-					else if (STRCASECMP(pic_word[0], "memmap") == 0 && num_pic_words > 2) {
-						if (found_processor)
-							ram_map(num_pic_words, pic_word);
-					}
-					else {
-						fprintf(stderr, "WARNING: %s: bad syntax `%s'\n", DEVICE_FILE_NAME, pic_word[0]);
-					}
-				}
-			}
-		}
-	}
-	
-	fclose(pic_file);
+  split_words (pic_word, NULL);
+  free (pic_word);
 
-	/* if we're in read-the-lot mode then create the final processor definition */
-	if (pic_name == NULL) {
-	    
-		if (num_processor_names > 0) {
-			/* store away all the previous processor definitions */
-			int dcount;
-		
-			for (dcount = 1; dcount < num_processor_names; dcount++)
-				create_pic(processor_name[dcount], pic_maxram, pic_bankmsk,
-				           pic_confsiz, pic_program, pic_data, pic_eeprom, pic_io);
-		}
-	}
-	else {
-		/* in search mode */
-		if (found_processor) {
-			/* create a new pic entry */
-			return create_pic(pic_name, pic_maxram, pic_bankmsk,
-			                  pic_confsiz, pic_program, pic_data, pic_eeprom, pic_io);
-		}
-	}
-	
-	return NULL;
-}
+  /* if we're in read-the-lot mode then create the final processor definition */
+  if (pic_name == NULL)
+    {
+      if (num_processor_names > 0)
+        {
+          /* store away all the previous processor definitions */
+          int dcount;
 
-void setMaxRAM(int size)
-{
-	maxRAMaddress = size;
-	
-	if (maxRAMaddress < 0) {
-		fprintf(stderr, "invalid maxram 0x%x setting in %s\n",
-			maxRAMaddress, DEVICE_FILE_NAME);
-		return;
-	}
-}
+          for (dcount = 1; dcount < num_processor_names; dcount++)
+            {
+              create_pic (processor_name[dcount], pic_maxram, pic_bankmsk,
+                          pic_confsiz, pic_program, pic_data, pic_eeprom,
+                          pic_io);
+            } // for
+        } // if
+    } // if
+  else
+    {
+      /* in search mode */
+      if (found_processor)
+        {
+          split_words (processor_name, NULL);
+          free (processor_name);
 
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
+          /* create a new pic entry */
+          return create_pic (pic_name, pic_maxram, pic_bankmsk,
+                             pic_confsiz, pic_program, pic_data,
+                             pic_eeprom, pic_io);
+        } // if
+    } // if
 
-int isREGinBank(regs *reg, int bank)
-{
-	
-	if(!reg || !pic)
-		return 0;
-	
-	if((int)((reg->address | reg->alias) & pic->bankMask & bank) == bank)
-		return 1;
-	
-	return 0;
-}
+  split_words (processor_name, NULL);
+  free (processor_name);
 
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-int REGallBanks(regs *reg)
-{
-	
-	if(!reg || !pic)
-		return 0;
-	
-	return ((reg->address | reg->alias) & pic->bankMask);
-	
+  return NULL;
 }
 
 /*-----------------------------------------------------------------*
@@ -459,7 +478,8 @@ int REGallBanks(regs *reg)
  * list_alias - if non-zero, print all of the supported aliases
  *              for a device (e.g. F84, 16F84, etc...)
  *-----------------------------------------------------------------*/
-void list_valid_pics(int ncols)
+static void
+list_valid_pics(int ncols)
 {
 	int col=0,longest;
 	int i,k,l;
@@ -576,172 +596,15 @@ char *processor_base_name(void)
 	return pic->name;
 }
 
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-int validAddress(int address, int reg_size)
+int IS_CONFIG_ADDRESS(int address)
 {
-	if (maxRAMaddress < 0) {
-		fprintf(stderr, "missing maxram setting in %s\n", DEVICE_FILE_NAME);
-		return 0;
-	}
-	//  fprintf(stderr, "validAddress: Checking 0x%04x\n",address);
-	assert (reg_size > 0);
-	if(address + (reg_size - 1) > maxRAMaddress)
-		return 0;
-	
-	return 1;
-}
 
-#if 0
-/* The following code should be (and is) implemented in the linker. */
-
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-void mapRegister(regs *reg)
-{
-	
-	unsigned i;
-	int alias;
-	
-	if(!reg || !reg->size) {
-		fprintf(stderr,"WARNING: %s:%s:%d Bad register\n",__FILE__,__FUNCTION__,__LINE__);
-		return;
-	}
-	
-	if (maxRAMaddress < 0) {
-		fprintf(stderr, "missing maxram setting in %s\n", DEVICE_FILE_NAME);
-		return;
-	}
-	
-	for(i=0; i<reg->size; i++) {
-		
-		assert(reg->address >= 0 && reg->address < maxRAMaddress);
-		
-		alias = finalMapping[reg->address].alias;
-		reg->alias = alias;
-		
-		do {
-			
-			//fprintf(stdout,"mapping %s to address 0x%02x, reg size = %d\n",reg->name, (reg->address+alias+i),reg->size);
-			
-			finalMapping[reg->address + alias + i].reg = reg;
-			finalMapping[reg->address + alias + i].instance = i;
-			
-			/* Decrement alias */
-			if(alias)
-				alias -= ((alias & (alias - 1)) ^ alias);
-			else
-				alias--;
-			
-		} while (alias>=0);
-	}
-	
-	//fprintf(stderr,"%s - %s addr = 0x%03x, size %d\n",__FUNCTION__,reg->name, reg->address,reg->size);
-	
-	reg->isMapped = 1;
-	
+        return ((address == CONFIG_WORD_ADDRESS)
+                || (address == CONFIG2_WORD_ADDRESS));
 }
 
 /*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-int assignRegister(regs *reg, int start_address)
-{
-	int i;
-	
-	//fprintf(stderr,"%s -  %s start_address = 0x%03x\n",__FUNCTION__,reg->name, start_address);
-	if(reg->isFixed) {
-		
-		if (validAddress(reg->address,reg->size)) {
-			//fprintf(stderr,"%s -  %s address = 0x%03x\n",__FUNCTION__,reg->name, reg->address);
-			mapRegister(reg);
-			return reg->address;
-		}
-		
-		if (getenv("SDCCPICDEBUG")) {
-			fprintf(stderr, "WARNING: Ignoring Out of Range register assignment at fixed address %d, %s\n",
-			    reg->address, reg->name);
-		}
-		
-	} else {
-		
-	/* This register does not have a fixed address requirement
-	* so we'll search through all availble ram address and
-		* assign the first one */
-		
-		for (i=start_address; i<=maxRAMaddress; i++) {
-			
-			if (validAddress(i,reg->size)) {
-				reg->address = i;
-				mapRegister(reg);
-				return i;
-			}
-		}
-		
-		fprintf(stderr, "WARNING: No more RAM available for %s\n",reg->name);
-		
-	}
-	
-	return -1;
-}
-
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-void assignFixedRegisters(set *regset)
-{
-	regs *reg;
-	
-	for (reg = setFirstItem(regset) ; reg ; 
-	reg = setNextItem(regset)) {
-		
-		if(reg->isFixed) 
-			assignRegister(reg,0);
-	}
-	
-}
-
-/*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-void assignRelocatableRegisters(set *regset, int used)
-{
-	
-	regs *reg;
-	int address = 0;
-	
-	for (reg = setFirstItem(regset) ; reg ; 
-	reg = setNextItem(regset)) {
-		
-		//fprintf(stdout,"assigning %s (%d) isFixed=%d, wasUsed=%d\n",reg->name,reg->size,reg->isFixed,reg->wasUsed);
-		
-		if((!reg->isExtern) && (!reg->isFixed) && ( used || reg->wasUsed)) {
-			/* If register have been reused then shall not print it a second time. */
-			set *s;
-			int done = 0;
-			for (s = regset; s; s = s->next) {
-				regs *r;
-				r = s->item;
-				if (r == reg)
-					break;
-				if((!r->isFixed) && ( used || r->wasUsed)) {
-					if (r->rIdx == reg->rIdx) {
-						reg->address = r->address;
-						done = 1;
-						break;
-					}
-				}
-			}
-			if (!done)
-				address = assignRegister(reg,address);
-		}
-	}
-	
-}
-#endif
-
-/* Keep track of whether we found an assignment to the __config words. */
-static int pic14_hasSetConfigWord = 0;
-
-/*-----------------------------------------------------------------*
- *  void assignConfigWordValue(int address, int value)
+ *  void pic14_assignConfigWordValue(int address, int value)
  *
  * Most midrange PICs have one config word at address 0x2007.
  * Newer PIC14s have a second config word at address 0x2008.
@@ -762,12 +625,45 @@ void pic14_assignConfigWordValue(int address, int value)
 }
 
 /*-----------------------------------------------------------------*
+ * int pic14_getConfigWord(int address)
+ *
+ * Get the current value of a config word.
+ *
+ *-----------------------------------------------------------------*/
+
+static int pic14_getConfigWord(int address)
+{
+	switch (address)
+	{
+	case CONFIG_WORD_ADDRESS:
+		return config_word;
+	
+	case CONFIG2_WORD_ADDRESS:
+		return config2_word;
+	
+	default:
+		return 0;
+	}
+}
+
+/*-----------------------------------------------------------------*
+*  int getHasSecondConfigReg(void) - check if the device has a 
+*  second config register, rather than just one.
+*-----------------------------------------------------------------*/
+static int pic14_getHasSecondConfigReg(void)
+{
+	if(!pic)
+		return 0;
+	else
+		return pic->hasSecondConfigReg;
+}
+
+/*-----------------------------------------------------------------*
  * int pic14_emitConfigWord (FILE * vFile)
- * 
+ *
  * Emit the __config directives iff we found a previous assignment
  * to the config word.
  *-----------------------------------------------------------------*/
-extern char *iComments2;
 int pic14_emitConfigWord (FILE * vFile)
 {
   if (pic14_hasSetConfigWord)
@@ -789,54 +685,11 @@ int pic14_emitConfigWord (FILE * vFile)
 }
 
 /*-----------------------------------------------------------------*
- * int pic14_getConfigWord(int address)
- *
- * Get the current value of a config word.
- *
- *-----------------------------------------------------------------*/
-
-int pic14_getConfigWord(int address)
-{
-	switch (address)
-	{
-	case CONFIG_WORD_ADDRESS:
-		return config_word;
-	
-	case CONFIG2_WORD_ADDRESS:
-		return config2_word;
-	
-	default:
-		return 0;
-	}
-}
-
-/*-----------------------------------------------------------------*
-*  
-*-----------------------------------------------------------------*/
-unsigned pic14_getMaxRam(void)
-{
-	return pic->defMaxRAMaddrs;
-}
-
-
-/*-----------------------------------------------------------------*
-*  int getHasSecondConfigReg(void) - check if the device has a 
-*  second config register, rather than just one.
-*-----------------------------------------------------------------*/
-int pic14_getHasSecondConfigReg(void)
-{
-	if(!pic)
-		return 0;
-	else
-		return pic->hasSecondConfigReg;
-}
-
-/*-----------------------------------------------------------------*
  * True iff the device has memory aliased in every bank.
  * If true, low and high will be set to the low and high address
  * occupied by the (last) sharebank found.
  *-----------------------------------------------------------------*/
-int pic14_hasSharebank(int *low, int *high, int *size)
+static int pic14_hasSharebank(int *low, int *high, int *size)
 {
 	memRange *r;
 
@@ -868,7 +721,7 @@ int pic14_hasSharebank(int *low, int *high, int *size)
 /*
  * True iff the memory region [low, high] is aliased in all banks.
  */
-int pic14_isShared(int low, int high)
+static int pic14_isShared(int low, int high)
 {
 	memRange *r;
 

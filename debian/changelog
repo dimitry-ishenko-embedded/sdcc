@@ -1,12 +1,44 @@
-sdcc (2.8.0.dfsg-1) unstable; urgency=low
+sdcc (2.9.0-1) unstable; urgency=low
 
-  * Move sdcc back to main, removing the non-DFSG-compliant ports and html
-    documentation.  There will be a new sdcc-nf package set in non-free that
-    delivers the full version for those who need the other ports.
-  * Update README.Debian to explain the main/non-free split.
-  * Add Bdale as co-maintainer, repackage using git and Alioth collab-maint
+  [ Bdale Garbee ]
+  * new upstream version, with assemblers re-licensed under GPL version 3 or
+    later, allowing the full SDCC package to return to Debian main!
+  * update debian/copyright to more accurately reflect the set of copyright
+    holders, and in light of the assemblers now being GPL v3 or later.
+  * stop building html docs again since latex2html is non-free
 
- -- Bdale Garbee <bdale@gag.com>  Thu, 03 Apr 2008 22:56:28 -0600
+  [ Gudjon I. Gudjonsson ]
+  * Move manpages to debian/manpages
+  * Edit the copyright file
+  * Remove references to html doc from sdcc-doc.doc-base
+  * Remove XS-Autobuild field
+  * Bump standards version to 3.8.1, no changes needed
+  * Add fields to install and remove postscript documentation
+  * Add some perl scripts to sdcc package
+  * Add examples to sdcc-doc
+  * Add a lot to the clean target in rules. Will be sent to upstream
+  * Add watch file
+
+ -- Bdale Garbee <bdale@gag.com>  Thu, 09 Apr 2009 14:14:27 -0700
+
+sdcc-nf (2.8.0-1) unstable; urgency=low
+
+  [ Bdale Garbee ]
+  * new upstream version
+  * add Bdale as a co-maintainer
+
+  [ Gudjon I. Gudjonsson ]
+  * Renamed the packages. A DFSG version of the packages have been
+    made and put into main, this non-free version has therefore the
+    name extension -nf on all packages.
+  * This version conflicts and provides the corresponding DFSG version.
+  * Bumped the Debian policy standard version to 3.7.3. No changes needed.
+  * Added a "XS-Autobuild: yes" field to the control file.
+  * Removed the p89c66x.h file since it is included in upstream now.
+  * Fixed some lintian warnings from doc-base file.
+  * A new upstream version. (Closes: #474090)
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Thu, 24 Apr 2008 13:52:02 +0000
 
 sdcc (2.7.0-1) unstable; urgency=low
 

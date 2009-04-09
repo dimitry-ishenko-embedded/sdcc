@@ -903,7 +903,7 @@ static int cmdDisasm (char *s, context *cctxt, int args)
     else
     {
         if ( args > 1 )
-            printf("Dump of assembler code from 0x%08x to 0x%08x:\n",saddr,eaddr);
+            printf("Dump of assembler code from 0x%08lx to 0x%08lx:\n",saddr,eaddr);
         found = 0;
         while ( saddr < eaddr )
         {
@@ -1011,11 +1011,11 @@ static int commonSetUserBp(char *s, context *cctxt, char bpType)
             module *modul;
             if (!applyToSet(modules,moduleLineWithAddr,braddr,&modul,&line))
             {
-                fprintf(stderr,"Address 0x%08x not exists in code.\n",braddr);
+                fprintf(stderr,"Address 0x%08lx not exists in code.\n",braddr);
             }
             else
             {
-                Dprintf(D_break, ("commonSetUserBp: g) addr:%x \n",braddr));
+                Dprintf(D_break, ("commonSetUserBp: g) addr:%lx \n",braddr));
                 setBreakPoint ( braddr , CODE , bpType , userBpCB ,
                             modul->c_name,line);
             }
@@ -1927,17 +1927,17 @@ static void infoRegisters( int all, context *ctxt)
     for ( j = 0; j < 8 ; j++ )
     {
         val = simGetValue (j,'R',1);
-        fprintf(stdout," 0x%02X",val);
+        fprintf(stdout," 0x%02lX",val);
     }
     fprintf(stdout,"\n");
     val = simGetValue (0xe0,'I',1);
-    fprintf(stdout,"ACC : 0x%02X %d %c\n",val,val,(isprint(val) ? val : '.'));
+    fprintf(stdout,"ACC : 0x%02lX %lu %c\n",val,val,(isprint(val) ? (char)val : '.'));
     val = simGetValue (0xf0,'I',1);
-    fprintf(stdout,"B   : 0x%02X %d %c\n",val,val,(isprint(val) ? val : '.'));
+    fprintf(stdout,"B   : 0x%02lX %lu %c\n",val,val,(isprint(val) ? (char)val : '.'));
     val = simGetValue (0x82,'I',2);
-    fprintf(stdout,"DPTR: 0x%04X %d\n",val,val);
+    fprintf(stdout,"DPTR: 0x%04lX %lu\n",val,val);
     val = simGetValue (0x81,'I',1);
-    fprintf(stdout,"SP  : 0x%02X (0x%04X)\n",val,simGetValue (val-1,'B',2));
+    fprintf(stdout,"SP  : 0x%02lX (0x%04lX)\n",val,simGetValue (val-1,'B',2));
     fprintf(stdout,"PSW : 0x%02X | CY : %c | AC : %c | OV : %c | P : %c\n",
             i,(i&0x80)?'1':'0',(i&0x40)?'1':'0',(i&4)?'1':'0',(i&1)?'1':'0');
     if ( all )
@@ -1956,7 +1956,7 @@ static void infoRegisters( int all, context *ctxt)
             if (applyToSetFTrue(sfrsymbols,symWithAddr,i,'I',&sym))
             {
                 val = simGetValue (sym->addr,sym->addrspace,sym->size);
-                fprintf(stdout,"%s : 0x%02x",sym->name,val);
+                fprintf(stdout,"%s : 0x%02lx",sym->name,val);
                 if ( !(i & 0x07 ))
                 {
                     for ( j = 0 ; j < 8 ; j++ )
@@ -2480,7 +2480,7 @@ static void printValBasic(symbol *sym, link *type,
         fprintf(stdout,"%f",v.f);
     else
         if (IS_PTR(type))
-            fprintf(stdout,"0x%*x",size<<1,v.val);
+            fprintf(stdout,"0x%*lx",size<<1,v.val);
         else
         if (IS_INTEGRAL(type))
         {
@@ -2516,11 +2516,11 @@ static void printValBasic(symbol *sym, link *type,
                     if (IS_BITVAR(etype))
                         fprintf(stdout,"%c",(v.val?'1':'0'));
                     else
-                        fprintf(stdout,"0x%0*x",size<<1,v.val);
+                        fprintf(stdout,"0x%0*lx",size<<1,v.val);
                 }
             }
             } else
-            fprintf(stdout,"0x%0*x",size<<1,v.val);
+            fprintf(stdout,"0x%0*lx",size<<1,v.val);
 }
 
 /*-----------------------------------------------------------------*/

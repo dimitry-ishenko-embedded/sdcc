@@ -302,7 +302,7 @@ void AddRel(char * RelName)
                         fprintf(libindex, "<MODULE>\n%s %ld\n", FLine, newlibpos);
                         state++;
                     }
-                }                
+                }
             break;
             case 1:
                 fprintf(newlib, "%s\n", FLine);
@@ -350,7 +350,7 @@ void AddRel(char * RelName)
         fclose(rel);
         fprintf(libindex, "</MODULE>\n");
         fprintf(newlib, "</REL>\n<ADB>\n");
-    
+
         adb=fopen(AdbName, "r");
         if(adb!=NULL)
         {
@@ -467,7 +467,7 @@ void ExtractRel(char * RelName)
                     fgets(FLine, MAXLINE, lib);
                     CleanLine(FLine);
                     if(EQ(FLine, ModName)) state=1;
-                }                
+                }
             break;
             case 1:
                 if(EQ(FLine, "<REL>")) state=2;
@@ -486,10 +486,10 @@ void ExtractRel(char * RelName)
                     state=5;
                 else
                     fprintf(adb, "%s\n", FLine);
-            break; 
+            break;
         }
     }
-    
+
     fclose(rel);
     fclose(lib);
     fclose(adb);
@@ -511,10 +511,10 @@ void DumpSymbols(void)
     CleanLine(FLine);
     if(NEQ(FLine, "<SDCCLIB>"))
     {
-        printf("ERROR: File '%s' was not created with '%s'\n", LibName, ProgName); 
+        printf("ERROR: File '%s' was not created with '%s'\n", LibName, ProgName);
         return;
     }
-    
+
     while(!feof(lib))
     {
         if(state==3) break;
@@ -559,14 +559,14 @@ void DumpSymbols(void)
             break;
         }
     }
-    
+
     fclose(lib);
 }
 
 int fileexist(char * fname)
 {
     FILE * fp;
-    
+
     fp=fopen(fname, "r");
     if(fp==NULL) return 0;
     fclose(fp);
@@ -660,7 +660,7 @@ int main(int argc, char **argv)
             for(j=0; j<NumRelFiles; j++) free(RelName[j]);
             free(RelName);
         break;
-        
+
         case OPT_ADD_LIST:
             AddList();
         break;
@@ -671,7 +671,7 @@ int main(int argc, char **argv)
             for(j=0; j<NumRelFiles; j++) free(RelName[j]);
             free(RelName);
         break;
-        
+
         case OPT_DUMP_SYM:
         case OPT_DUMP_MOD:
             DumpSymbols();

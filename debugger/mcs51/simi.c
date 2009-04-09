@@ -363,6 +363,7 @@ static int execSimulator(char **args, int nargs)
             exit(1);
         }
     }
+    return simPid;
 }
 
 void openSimulator (char **args, int nargs)
@@ -544,7 +545,7 @@ int simSetValue (unsigned int addr,char mem, int size, unsigned long val)
     s = buffer + strlen(buffer) -1;
     for ( i = 0 ; i < size ; i++ )
     {
-        sprintf(s," 0x%x", val & 0xff);
+        sprintf(s," 0x%lx", val & 0xff);
         s += strlen(s);
         val >>= 8;
     }
@@ -653,7 +654,7 @@ void simLoadFile (char *s)
     char buff[128];
 
     sprintf(buff,"file \"%s\"\n",s);
-    printf(buff);
+    printf("%s",buff);
     sendSim(buff);
     waitForSim(500,NULL);
 }

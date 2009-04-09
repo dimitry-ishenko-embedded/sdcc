@@ -51,24 +51,21 @@ extern unsigned long pFile_isize;
 
 extern unsigned long pic16_countInstructions();
 set *pic16_localFunctions = NULL;
-set *rel_idataSymSet=NULL;
-set *fix_idataSymSet=NULL;
-
-extern DEFSETFUNC (closeTmpFiles);
-extern DEFSETFUNC (rmTmpFiles);
+set *rel_idataSymSet = NULL;
+set *fix_idataSymSet = NULL;
 
 extern void pic16_AnalyzeBanking (void);
-extern void pic16_OptimizeJumps ();
-extern void pic16_OptimizeBanksel ();
-extern void pic16_InlinepCode(void);
-extern void pic16_writeUsedRegs(FILE *);
+extern void pic16_OptimizeJumps (void);
+extern void pic16_OptimizeBanksel (void);
+extern void pic16_InlinepCode (void);
+extern void pic16_writeUsedRegs (FILE *);
 
 extern void initialComments (FILE * afile);
 extern void printPublics (FILE * afile);
 
-void  pic16_pCodeInitRegisters(void);
-pCodeOp *pic16_popCopyReg(pCodeOpReg *pc);
-extern void pic16_pCodeConstString(char *name, char *value);
+void  pic16_pCodeInitRegisters (void);
+pCodeOp *pic16_popCopyReg (pCodeOpReg *pc);
+extern void pic16_pCodeConstString (char *name, char *value, unsigned length);
 
 
 /*-----------------------------------------------------------------*/
@@ -374,7 +371,8 @@ pic16emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 /*-----------------------------------------------------------------*/
 /* pic16_initPointer - pointer initialization code massaging       */
 /*-----------------------------------------------------------------*/
-value *pic16_initPointer (initList * ilist, sym_link *toType)
+static value *
+pic16_initPointer (initList * ilist, sym_link *toType)
 {
   value *val;
   ast *expr;
@@ -516,7 +514,8 @@ value *pic16_initPointer (initList * ilist, sym_link *toType)
 /*-----------------------------------------------------------------*/
 /* printPointerType - generates ival for pointer type              */
 /*-----------------------------------------------------------------*/
-void _pic16_printPointerType (const char *name, char ptype, void *p)
+static void
+_pic16_printPointerType (const char *name, char ptype, void *p)
 {
   char buf[256];
 
@@ -529,7 +528,8 @@ void _pic16_printPointerType (const char *name, char ptype, void *p)
 /*-----------------------------------------------------------------*/
 /* printPointerType - generates ival for pointer type              */
 /*-----------------------------------------------------------------*/
-void pic16_printPointerType (const char *name, char ptype, void *p)
+static void
+pic16_printPointerType (const char *name, char ptype, void *p)
 {
   _pic16_printPointerType (name, ptype, p);
   //pic16_flushDB(ptype, p); /* breaks char* const arr[] = {&c, &c, &c}; */
@@ -538,7 +538,8 @@ void pic16_printPointerType (const char *name, char ptype, void *p)
 /*-----------------------------------------------------------------*/
 /* printGPointerType - generates ival for generic pointer type     */
 /*-----------------------------------------------------------------*/
-void pic16_printGPointerType (const char *iname, const unsigned int itype,
+static void
+pic16_printGPointerType (const char *iname, const unsigned int itype,
   char ptype, void *p)
 {
   char buf[256];
@@ -547,26 +548,29 @@ void pic16_printGPointerType (const char *iname, const unsigned int itype,
 
   switch (itype)
     {
-    case CPOINTER:
-    case FUNCTION:
+    case CPOINTER: /* fall through */
+    case FUNCTION: /* fall through */
+    case GPOINTER:
+      /* GPTRs pointing to __data space should be reported as POINTERs */
       sprintf (buf, "UPPER(%s)", iname);
       pic16_emitDS (buf, ptype, p);
       break;
 
-    case GPOINTER:
-    case POINTER:
-      sprintf (buf, "0x80");
+    case POINTER:  /* fall through */
+    case FPOINTER: /* fall through */
+    case IPOINTER: /* fall through */
+    case PPOINTER: /* __data space */
+      sprintf (buf, "0x%02x", GPTR_TAG_DATA);
       pic16_emitDS (buf, ptype, p);
       break;
 
-    /*
-     * FPOINTER and IPOINTER are not used in pic16 port
-      case FPOINTER:
-      case IPOINTER:
-     */
     default:
       debugf ("itype = %d\n", itype );
       assert (0);
+    }
+
+    if (itype == GPOINTER) {
+      fprintf(stderr, "%s: initialized generic pointer with unknown storage class assumes object in code space\n", __func__);
     }
 
   //pic16_flushDB(ptype, p); /* might break char* const arr[] = {...}; */
@@ -583,6 +587,7 @@ static void
 pic16_printIvalType (symbol *sym, sym_link * type, initList * ilist, char ptype, void *p)
 {
   value *val;
+  int i;
 
 //  fprintf(stderr, "%s for symbol %s\n",__FUNCTION__, sym->rname);
 
@@ -608,26 +613,9 @@ pic16_printIvalType (symbol *sym, sym_link * type, initList * ilist, char ptype,
     val = valCastLiteral(type, floatFromVal(val));
   }
 
-  switch (getSize (type)) {
-  case 1:
-    pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-    break;
-
-  case 2:
-    pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-    break;
-  case 3:
-    pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 2), ptype, p);
-  case 4:
-    pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 2), ptype, p);
-    pic16_emitDB(pic16aopLiteral(val, 3), ptype, p);
-    break;
-  }
+  for (i = 0; i < getSize (type); i++) {
+    pic16_emitDB(pic16aopLiteral(val, i), ptype, p);
+  } // for
 }
 
 /*--------------------------------------------------------------------*/
@@ -654,8 +642,11 @@ pic16_printIvalChar (symbol *sym, sym_link * type, initList * ilist, char *s, ch
       /* length of initializer string (might contain \0, so do not use strlen) */
       ilen = DCL_ELEM(val->type);
 
+#if 0
+      /* This causes structflexarray.c to fail. */
       if(!DCL_ELEM (type))
         DCL_ELEM (type) = ilen;
+#endif
 
       /* len is 0 if declartion equals initializer,
        * >0 if declaration greater than initializer
@@ -671,19 +662,25 @@ pic16_printIvalChar (symbol *sym, sym_link * type, initList * ilist, char *s, ch
 
       if(len >= 0) {
         /* emit initializer */
-        for(remain=0; remain<ilen; remain++)
+        for(remain=0; remain<ilen; remain++) {
           pic16_emitDB(SPEC_CVAL(val->etype).v_char[ remain ], ptype, p);
+        } // for
 
-          /* fill array with 0x00 */
-          while(len--) {
-            pic16_emitDB(0x00, ptype, p);
-          }
+        /* fill array with 0x00 */
+        while(len--) {
+          pic16_emitDB(0x00, ptype, p);
+        } // while
+      } else if (!DCL_ELEM (type)) {
+        // flexible arrays: char str[] = "something"; */
+        for(remain=0; remain<ilen; remain++) {
+          pic16_emitDB(SPEC_CVAL(val->etype).v_char[ remain ], ptype, p);
+        } // for
       } else {
         werror (W_EXCESS_INITIALIZERS, "array of chars", sym->name, sym->lineDef);
-
-        for(remain=0; remain<DCL_ELEM (type); remain++)
+        for(remain=0; remain<DCL_ELEM (type); remain++) {
           pic16_emitDB(SPEC_CVAL(val->etype).v_char[ remain ], ptype, p);
-      }
+        } // for
+      } // if
 
 
 //      if((remain = (DCL_ELEM (type) - strlen (SPEC_CVAL (val->etype).v_char) - 1)) > 0) {
@@ -718,7 +715,7 @@ pic16_printIvalArray (symbol * sym, sym_link * type, initList * ilist,
   /* take care of the special   case  */
   /* array of characters can be init  */
   /* by a string                      */
-  if (IS_CHAR (type->next)) {
+  if (IS_CHAR (type->next) && ilist) {
     if (!IS_LITERAL(list2val(ilist)->etype)) {
       werror (W_INIT_WRONG);
       return;
@@ -736,7 +733,7 @@ pic16_printIvalArray (symbol * sym, sym_link * type, initList * ilist,
       return;
     }
 
-  iloop = ilist->init.deep;
+  iloop = (ilist ? ilist->init.deep : NULL);
   lcnt = DCL_ELEM (type);
 
   for (;;)
@@ -762,9 +759,12 @@ pic16_printIvalArray (symbol * sym, sym_link * type, initList * ilist,
       }
     }
 
+#if 0
+  /* This causes bug #1843745. */
   /* if we have not been given a size  */
   if (!DCL_ELEM (type))
     DCL_ELEM (type) = size;
+#endif
 
   return;
 }
@@ -772,13 +772,14 @@ pic16_printIvalArray (symbol * sym, sym_link * type, initList * ilist,
 /*-----------------------------------------------------------------*/
 /* pic16_printIvalBitFields - generate initializer for bitfields   */
 /*-----------------------------------------------------------------*/
-void pic16_printIvalBitFields(symbol **sym, initList **ilist, char ptype, void *p)
+static void
+pic16_printIvalBitFields (symbol **sym, initList **ilist, char ptype, void *p)
 {
-  value *val ;
   symbol *lsym = *sym;
-  initList *lilist = *ilist ;
+  initList *lilist = *ilist;
   unsigned long ival = 0;
-  int size =0;
+  int size = 0;
+  unsigned long i;
 
 
 #if DEBUG_PRINTIVAL
@@ -786,49 +787,37 @@ void pic16_printIvalBitFields(symbol **sym, initList **ilist, char ptype, void *
 #endif
 
 
-  do {
-    unsigned long i;
-    val = list2val(lilist);
-    if (size) {
-      if (SPEC_BLEN(lsym->etype) > 8) {
-        size += ((SPEC_BLEN (lsym->etype) / 8) +
-                 (SPEC_BLEN (lsym->etype) % 8 ? 1 : 0));
-      }
-    } else {
-      size = ((SPEC_BLEN (lsym->etype) / 8) +
-              (SPEC_BLEN (lsym->etype) % 8 ? 1 : 0));
+  while (lsym)
+    {
+      if (0 == SPEC_BLEN (lsym->etype))
+        {
+          /* bit-field structure member with a width of 0 */
+          lsym = lsym->next;
+          break;
+        }
+      else if (!SPEC_BUNNAMED (lsym->etype))
+        {
+          /* not an unnamed bit-field structure member */
+          value *val = list2val (lilist);
+          int bit_length = SPEC_BLEN (lsym->etype);
+
+          if (size)
+            {
+              if (bit_length > 8)
+                size += (bit_length + 7) / 8;
+            }
+          else
+            size = (bit_length + 7) / 8;
+
+          ival |= (ulFromVal (val) & ((1ul << bit_length) - 1ul)) << SPEC_BSTR (lsym->etype);
+          lilist = (lilist ? lilist->next : NULL);
+        }
+      lsym = lsym->next;
     }
-    i = ulFromVal (val);
-    i <<= SPEC_BSTR (lsym->etype);
-    ival |= i;
-    if (! ( lsym->next &&
-          (lilist && lilist->next) &&
-          (IS_BITFIELD(lsym->next->type)) &&
-          (SPEC_BSTR(lsym->next->etype)))) break;
-    lsym = lsym->next;
-    lilist = lilist->next;
-  } while (1);
-  switch (size) {
-  case 1:
-        pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
-        break;
 
-  case 2:
-        pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
-        pic16_emitDB(BYTE_IN_LONG(ival, 1), ptype, p);
-    break;
+  for (i = 0; i < size; i++)
+    pic16_emitDB (BYTE_IN_LONG (ival, i), ptype, p);
 
-  case 4: /* EEP: why is this db and not dw? */
-        pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
-        pic16_emitDB(BYTE_IN_LONG(ival, 1), ptype, p);
-        pic16_emitDB(BYTE_IN_LONG(ival, 2), ptype, p);
-        pic16_emitDB(BYTE_IN_LONG(ival, 3), ptype, p);
-    break;
-  default:
-        /* VR - only 1,2,4 size long can be handled???? Why? */
-        fprintf(stderr, "%s:%d: unhandled case. Contact author.\n", __FILE__, __LINE__);
-        assert(0);
-  }
   *sym = lsym;
   *ilist = lilist;
 }
@@ -837,7 +826,8 @@ void pic16_printIvalBitFields(symbol **sym, initList **ilist, char ptype, void *
 /*-----------------------------------------------------------------*/
 /* printIvalStruct - generates initial value for structures        */
 /*-----------------------------------------------------------------*/
-void pic16_printIvalStruct (symbol * sym, sym_link * type,
+static void
+pic16_printIvalStruct (symbol * sym, sym_link * type,
                  initList * ilist, char ptype, void *p)
 {
   symbol *sflds;
@@ -850,6 +840,55 @@ void pic16_printIvalStruct (symbol * sym, sym_link * type,
 
   sflds = SPEC_STRUCT (type)->fields;
 
+  if (ilist)
+    {
+      if (ilist->type != INIT_DEEP)
+        {
+          werrorfl (sym->fileDef, sym->lineDef, E_INIT_STRUCT, sym->name);
+          return;
+        }
+
+      iloop = ilist->init.deep;
+    }
+
+  while (sflds)
+    {
+//      fprintf(stderr, "%s:%d sflds: %p\tiloop = %p\n", __FILE__, __LINE__, sflds, iloop);
+      if (IS_BITFIELD (sflds->type))
+        {
+          pic16_printIvalBitFields (&sflds, &iloop, ptype, p);
+        }
+      else
+        {
+          pic16_printIval (sym, sflds->type, iloop, ptype, p);
+          sflds = sflds->next;
+          iloop = iloop ? iloop->next : NULL;
+        }
+    }
+  if (iloop)
+    werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "struct", sym->name);
+}
+
+/*-----------------------------------------------------------------*/
+/* printIvalUnion - generates initial value for unions             */
+/*-----------------------------------------------------------------*/
+static void
+pic16_printIvalUnion (symbol * sym, sym_link * type,
+                 initList * ilist, char ptype, void *p)
+{
+  //symbol *sflds;
+  initList *iloop = NULL;
+  int size;
+  symbol *sflds = NULL;
+
+#if DEBUG_PRINTIVAL
+  fprintf(stderr, "%s\n",__FUNCTION__);
+#endif
+
+  assert (type);
+
+  sflds = SPEC_STRUCT (type)->fields;
+
   if (ilist) {
     if (ilist->type != INIT_DEEP) {
       werrorfl (sym->fileDef, sym->lineDef, E_INIT_STRUCT, sym->name);
@@ -859,60 +898,15 @@ void pic16_printIvalStruct (symbol * sym, sym_link * type,
     iloop = ilist->init.deep;
   }
 
-  for (; (sflds && iloop); sflds = sflds->next, iloop = (iloop ? iloop->next : NULL)) {
-//    fprintf(stderr, "%s:%d sflds: %p\tiloop = %p\n", __FILE__, __LINE__, sflds, iloop);
-    if (IS_BITFIELD(sflds->type)) {
-      pic16_printIvalBitFields(&sflds, &iloop, ptype, p);
-    } else {
-      pic16_printIval (sym, sflds->type, iloop, ptype, p);
-    }
-  }
-  if (iloop) {
-    werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "struct", sym->name);
-  }
-  return;
-}
+  size = SPEC_STRUCT(type)->size;
+  sflds = SPEC_STRUCT(type)->fields;
+  pic16_printIval (sym, sflds->type, iloop, ptype, p);
 
-/*-----------------------------------------------------------------*/
-/* printIvalUnion - generates initial value for unions             */
-/*-----------------------------------------------------------------*/
-void pic16_printIvalUnion (symbol * sym, sym_link * type,
-                 initList * ilist, char ptype, void *p)
-{
-  //symbol *sflds;
-  initList *iloop = NULL;
-  int i, size;
-
-
-#if DEBUG_PRINTIVAL
-  fprintf(stderr, "%s\n",__FUNCTION__);
-#endif
-
-  iloop = ilist;
-  i = 0;
-  while (iloop)
-  {
-    i++;
-    iloop = iloop->next;
+  /* if the first field is not the longest, fill with 0s */
+  while (size > getSize (sflds->type)) {
+      pic16_emitDB(0, ptype, p);
+      size--;
   } // while
-
-  size = -1;
-  if (type) size = SPEC_STRUCT(type)->size;
-
-  if (i == 1 && size >= 0 && size <= sizeof(long))
-  {
-    unsigned long val = ulFromVal (list2val(ilist));
-    while (size--)
-    {
-      pic16_emitDB(val, ptype, p);
-      val >>= 8;
-    } // while
-    return;
-  } // if
-
-  fprintf( stderr, "INCOMPLETE SUPPORT FOR INITIALIZED union---FALLING BACK TO struct\n" );
-  fprintf( stderr, "This is a bug. Please file a bug-report with your source attached.\n" );
-  pic16_printIvalStruct( sym, type, ilist, ptype, p );
 }
 
 static int
@@ -925,9 +919,11 @@ pic16_isUnion( symbol *sym, sym_link *type )
 /*--------------------------------------------------------------------------*/
 /* pic16_printIvalCharPtr - generates initial values for character pointers */
 /*--------------------------------------------------------------------------*/
-int pic16_printIvalCharPtr (symbol * sym, sym_link * type, value * val, char ptype, void *p)
+static int
+pic16_printIvalCharPtr (symbol * sym, sym_link * type, value * val, char ptype, void *p)
 {
   int size = 0;
+  int i;
 
   /* PENDING: this is _very_ mcs51 specific, including a magic
      number...
@@ -956,14 +952,10 @@ int pic16_printIvalCharPtr (symbol * sym, sym_link * type, value * val, char pty
       else if (size == 3)
         {
           int type;
-          if (IS_PTR (val->type)) {
-            type = DCL_TYPE (val->type);
-          } else {
-            type = PTR_TYPE (SPEC_OCLS (val->etype));
-          }
+          type = PTR_TYPE (SPEC_OCLS (val->etype));
           if (val->sym && val->sym->isstrlit) {
             // this is a literal string
-            type=CPOINTER;
+            type = CPOINTER;
           }
           pic16_printGPointerType(val->name, type, ptype, p);
         }
@@ -977,24 +969,10 @@ int pic16_printIvalCharPtr (symbol * sym, sym_link * type, value * val, char pty
   else
     {
       // these are literals assigned to pointers
-      switch (size)
+      for (i = 0; i < size; i++)
         {
-        case 1:
-          pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-          break;
-        case 2:
-          pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-          pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-          break;
-        case 3:
-          pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-          pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-          pic16_emitDB(pic16aopLiteral(val, 2), ptype, p);
-          break;
-
-        default:
-          assert (0);
-        }
+          pic16_emitDB(pic16aopLiteral(val, i), ptype, p);
+        } // for
     }
 
   if (val->sym && val->sym->isstrlit) { // && !isinSet(statsg->syms, val->sym)) {
@@ -1008,7 +986,8 @@ int pic16_printIvalCharPtr (symbol * sym, sym_link * type, value * val, char pty
 /*-----------------------------------------------------------------------*/
 /* pic16_printIvalFuncPtr - generate initial value for function pointers */
 /*-----------------------------------------------------------------------*/
-void pic16_printIvalFuncPtr (sym_link * type, initList * ilist, char ptype, void *p)
+static void
+pic16_printIvalFuncPtr (sym_link * type, initList * ilist, char ptype, void *p)
 {
   value *val;
   int dLvl = 0;
@@ -1029,7 +1008,7 @@ void pic16_printIvalFuncPtr (sym_link * type, initList * ilist, char ptype, void
   }
 
   if (IS_LITERAL(val->etype)) {
-    if (compareType(type, val->etype) == 0) {
+    if (0 && compareType(type, val->etype) == 0) {
       werrorfl (ilist->filename, ilist->lineno, E_INCOMPAT_TYPES);
       printFromToType (val->type, type);
     }
@@ -1046,9 +1025,9 @@ void pic16_printIvalFuncPtr (sym_link * type, initList * ilist, char ptype, void
 
   /* now generate the name */
   if (!val->sym) {
-      pic16_printGPointerType (val->name, DCL_TYPE(val->type), ptype, p);
+      pic16_printGPointerType (val->name, CPOINTER /*DCL_TYPE(val->type)*/, ptype, p);
   } else {
-      pic16_printGPointerType (val->sym->rname, DCL_TYPE(val->type), ptype, p);
+      pic16_printGPointerType (val->sym->rname, CPOINTER /*DCL_TYPE(val->type)*/, ptype, p);
 
       if(IS_FUNC(val->sym->type) && !val->sym->used && !IS_STATIC(val->sym->etype)) {
 
@@ -1070,10 +1049,12 @@ void pic16_printIvalFuncPtr (sym_link * type, initList * ilist, char ptype, void
 /*-----------------------------------------------------------------*/
 /* pic16_printIvalPtr - generates initial value for pointers       */
 /*-----------------------------------------------------------------*/
-void pic16_printIvalPtr (symbol * sym, sym_link * type, initList * ilist, char ptype, void *p)
+static void
+pic16_printIvalPtr (symbol * sym, sym_link * type, initList * ilist, char ptype, void *p)
 {
   value *val;
   int size;
+  int i;
 
 #if 0
         fprintf(stderr, "%s:%d initialising pointer: %s size: %d\n", __FILE__, __LINE__,
@@ -1105,32 +1086,17 @@ void pic16_printIvalPtr (symbol * sym, sym_link * type, initList * ilist, char p
     printFromToType (val->type, type);
   }
 
+  size = getSize (type);
+
   /* if val is literal */
   if (IS_LITERAL (val->etype))
     {
-      switch (getSize (type))
+      for (i = 0; i < size; i++)
         {
-        case 1:
-            pic16_emitDB((unsigned int) ulFromVal (val) & 0xff, ptype, p);
-            break;
-        case 2:
-            pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-            pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-            break;
-        case 3:
-            pic16_emitDB(pic16aopLiteral(val, 0), ptype, p);
-            pic16_emitDB(pic16aopLiteral(val, 1), ptype, p);
-            pic16_emitDB(pic16aopLiteral(val, 2), ptype, p);
-            break;
-        default:
-                fprintf(stderr, "%s:%d size = %d\n", __FILE__, __LINE__, getSize(type));
-                assert(0);
-        }
+          pic16_emitDB(pic16aopLiteral(val, i), ptype, p);
+        } // for
       return;
     }
-
-
-  size = getSize (type);
 
   if (size == 1)                /* Z80 specific?? */
     {
@@ -1138,15 +1104,18 @@ void pic16_printIvalPtr (symbol * sym, sym_link * type, initList * ilist, char p
     }
   else if (size == 2)
     {
-        pic16_printPointerType (val->name, ptype, p);
+      pic16_printPointerType (val->name, ptype, p);
     }
   else if (size == 3)
     {
-      pic16_printGPointerType (val->name, (IS_PTR(type)?DCL_TYPE(type):PTR_TYPE(SPEC_OCLS(sym->etype))),
-                          ptype, p);
-    } else
-        assert(0);
-  return;
+      int itype = 0;
+      itype = PTR_TYPE (SPEC_OCLS (val->etype));
+      pic16_printGPointerType (val->name, itype, ptype, p);
+    }
+  else
+    {
+      assert(0);
+    }
 }
 
 
@@ -1240,22 +1209,17 @@ void pic16_printIval (symbol * sym, sym_link * type, initList * ilist, char ptyp
     }
 }
 
-int PIC16_IS_CONFIG_ADDRESS(int address)
+static int
+PIC16_IS_CONFIG_ADDRESS(int address)
 {
   return ((address >= pic16->cwInfo.confAddrStart && address <= pic16->cwInfo.confAddrEnd));
 }
 
-int PIC16_IS_IDLOC_ADDRESS(int address)
+static int
+PIC16_IS_IDLOC_ADDRESS(int address)
 {
    return ((address >= pic16->idInfo.idAddrStart && address <= pic16->idInfo.idAddrEnd));
 }
-
-/* wrapper function for the above */
-int PIC16_IS_HWREG_ADDRESS(int address)
-{
-  return (PIC16_IS_CONFIG_ADDRESS(address) || PIC16_IS_IDLOC_ADDRESS(address));
-}
-
 
 /*-----------------------------------------------------------------*/
 /* emitStaticSeg - emitcode for the static segment                 */
@@ -1264,68 +1228,76 @@ static void
 pic16emitStaticSeg (memmap * map)
 {
   symbol *sym;
-  static int didcode=0;
+  static int didcode = 0;
 
   //fprintf(stderr, "%s\n",__FUNCTION__);
 
-  pic16_initDB();
+  pic16_initDB ();
 
   /* for all variables in this segment do */
-  for (sym = setFirstItem (map->syms); sym;
-       sym = setNextItem (map->syms))
+  for (sym = setFirstItem (map->syms); sym; sym = setNextItem (map->syms))
     {
 
 #if 0
-        fprintf(stderr, "%s\t%s: sym: %s\tused: %d\tSPEC_ABSA: %d\tSPEC_AGGREGATE: %d\tCODE: %d\n\
-CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
-                map->sname, sym->name, sym->used, SPEC_ABSA(sym->etype), IS_AGGREGATE(sym->type),
-                IS_CODE(sym->etype), IN_CODESPACE( SPEC_OCLS(sym->etype)), IS_CONSTANT(sym->etype),
-                IS_PTR_CONST(sym->etype), SPEC_CONST(sym->etype));
-        printTypeChain( sym->type, stderr );
-        fprintf(stderr, "\n");
+      fprintf (stderr, "%s\t%s: sym: %s\tused: %d\tSPEC_ABSA: %d\tSPEC_AGGREGATE: %d\tCODE: %d\n\
+CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__, map->sname, sym->name, sym->used, SPEC_ABSA (sym->etype), IS_AGGREGATE (sym->type), IS_CODE (sym->etype), IN_CODESPACE (SPEC_OCLS (sym->etype)), IS_CONSTANT (sym->etype), IS_PTR_CONST (sym->etype), SPEC_CONST (sym->etype));
+      printTypeChain (sym->type, stderr);
+      fprintf (stderr, "\n");
 #endif
 
-        if(SPEC_ABSA(sym->etype) && PIC16_IS_CONFIG_ADDRESS(SPEC_ADDR(sym->etype))) {
-                pic16_assignConfigWordValue(SPEC_ADDR(sym->etype),
-                        (int) ulFromVal (list2val(sym->ival)));
+      if (SPEC_ABSA (sym->etype) && PIC16_IS_CONFIG_ADDRESS (SPEC_ADDR (sym->etype)))
+        {
+          pic16_assignConfigWordValue (SPEC_ADDR (sym->etype), (int) ulFromVal (list2val (sym->ival)));
 
-                continue;
-        }
-
-        if(SPEC_ABSA(sym->etype) && PIC16_IS_IDLOC_ADDRESS(SPEC_ADDR(sym->etype))) {
-                pic16_assignIdByteValue(SPEC_ADDR(sym->etype),
-                        (char) ulFromVal (list2val(sym->ival)));
-
-                continue;
-        }
-
-        /* if it is "extern" then do nothing */
-        if (IS_EXTERN (sym->etype)/* && !SPEC_ABSA(sym->etype)*/) {
-                checkAddSym(&externs, sym);
           continue;
         }
 
-        /* if it is not static add it to the public
-           table */
-        if (!IS_STATIC (sym->etype)) {
-                /* do not emit if it is a config word declaration */
-                checkAddSym(&publics, sym);
+      if (SPEC_ABSA (sym->etype) && PIC16_IS_IDLOC_ADDRESS (SPEC_ADDR (sym->etype)))
+        {
+          pic16_assignIdByteValue (SPEC_ADDR (sym->etype), (char) ulFromVal (list2val (sym->ival)));
+
+          continue;
+        }
+
+      /* if it is "extern" then do nothing */
+      if (IS_EXTERN (sym->etype) /* && !SPEC_ABSA(sym->etype) */ )
+        {
+          checkAddSym (&externs, sym);
+          continue;
+        }
+
+      /* if it is not static add it to the public
+         table */
+      if (!IS_STATIC (sym->etype))
+        {
+          /* do not emit if it is a config word declaration */
+          checkAddSym (&publics, sym);
         }
 
       /* print extra debug info if required */
-      if (options.debug || sym->level == 0) {
+      if (options.debug || sym->level == 0)
+        {
           /* NOTE to me - cdbFile may be null in which case,
            * the sym name will be printed to stdout. oh well */
-           debugFile->writeSymbol(sym);
-      }
+          debugFile->writeSymbol (sym);
+        }
 
       /* if it has an absolute address */
-      if (SPEC_ABSA (sym->etype)) {
-//              fprintf(stderr, "%s:%d spec_absa is true for symbol: %s\n",
-//                      __FILE__, __LINE__, sym->name);
+      if (SPEC_ABSA (sym->etype))
+        {
+//        fprintf(stderr, "%s:%d spec_absa is true for symbol: %s\n",
+//                __FILE__, __LINE__, sym->name);
 
-          /* if it has an initial value */
-          if (sym->ival)
+          if (!sym->ival && IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) && SPEC_CVAL (sym->etype).v_char)
+            {
+              /* symbol has absolute address but no initial value */
+              /* special case for character strings */
+
+//            fprintf(stderr, "%s:%d printing code string from %s\n", __FILE__, __LINE__, sym->rname);
+
+              pic16_pCodeConstString (sym->rname, SPEC_CVAL (sym->etype).v_char, getSize (sym->type));
+            }
+          else
             {
               pBlock *pb;
               symbol *asym;
@@ -1333,57 +1305,43 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
               pCode *pcf;
 
               /* symbol has absolute address and initial value */
-              noAlloc++;
+              ++noAlloc;
               resolveIvalSym (sym->ival, sym->type);
-              asym = newSymbol(sym->rname, 0);
-              abSym = Safe_calloc(1, sizeof(absSym));
-              strcpy(abSym->name, sym->rname);
-              abSym->address = SPEC_ADDR( sym->etype );
-              addSet(&absSymSet, abSym);
+              asym = newSymbol (sym->rname, 0);
+              abSym = Safe_calloc (1, sizeof (absSym));
+              strcpy (abSym->name, sym->rname);
+              abSym->address = SPEC_ADDR (sym->etype);
+              addSet (&absSymSet, abSym);
 
-              pb = pic16_newpCodeChain(NULL, 'A', pic16_newpCodeCharP("; Starting pCode block for absolute Ival"));
-              pic16_addpBlock(pb);
+              pb = pic16_newpCodeChain (NULL, 'A', pic16_newpCodeCharP ("; Starting pCode block for absolute Ival"));
+              pic16_addpBlock (pb);
 
-              pcf = pic16_newpCodeFunction(moduleName, asym->name);
-              PCF(pcf)->absblock = 1;
+              pcf = pic16_newpCodeFunction (moduleName, asym->name);
+              PCF (pcf)->absblock = 1;
 
-              pic16_addpCode2pBlock(pb,pcf);
-              pic16_addpCode2pBlock(pb,pic16_newpCodeLabel(sym->rname,-1));
+              pic16_addpCode2pBlock (pb, pcf);
+              pic16_addpCode2pBlock (pb, pic16_newpCodeLabel (sym->rname, -1));
               //fprintf(stderr, "%s:%d [1] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
-              pic16_printIval(sym, sym->type, sym->ival, 'p', (void *)pb);
-              pic16_flushDB('p', (void *)pb);
+              /* if it has an initial value */
+              if (sym->ival)
+                {
+                  pic16_printIval (sym, sym->type, sym->ival, 'p', (void *) pb);
+                  pic16_flushDB ('p', (void *) pb);
+                }
 
-              pic16_addpCode2pBlock(pb, pic16_newpCodeFunction(NULL, NULL));
-              noAlloc--;
+              pic16_addpCode2pBlock (pb, pic16_newpCodeFunction (NULL, NULL));
+              --noAlloc;
             }
-          else
-            {
-
-              /* symbol has absolute address but no initial value */
-
-              /* allocate space */
-              dbuf_printf (&code->oBuf, "%s:\n", sym->rname);
-
-              /* special case for character strings */
-              if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) &&
-                  SPEC_CVAL (sym->etype).v_char) {
-
-//              fprintf(stderr, "%s:%d printing code string from %s\n", __FILE__, __LINE__, sym->rname);
-
-                pic16_pCodeConstString(sym->rname , SPEC_CVAL (sym->etype).v_char);
-              } else {
-                fprintf (stderr, "%s:%u(%s): do not know how to intialize symbol %s\n", __FILE__, __LINE__, __FUNCTION__, sym->rname);
-                assert(0);
-              }
-            }
-
-        } else {
-//              fprintf(stderr, "%s:%d spec_absa is false for symbol: %s\n",
-//                      __FILE__, __LINE__, sym->name);
+        }
+      else
+        {
+//        fprintf(stderr, "%s:%d spec_absa is false for symbol: %s\n",
+//               __FILE__, __LINE__, sym->name);
 
 
           /* if it has an initial value */
-          if (sym->ival) {
+          if (sym->ival)
+            {
               pBlock *pb;
 
               /* symbol doesn't have absolute address but has initial value */
@@ -1391,43 +1349,46 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
               ++noAlloc;
               resolveIvalSym (sym->ival, sym->type);
 
-              pb = pic16_newpCodeChain(NULL, 'P',pic16_newpCodeCharP("; Starting pCode block for Ival"));
-              pic16_addpBlock(pb);
+              pb = pic16_newpCodeChain (NULL, 'P', pic16_newpCodeCharP ("; Starting pCode block for Ival"));
+              pic16_addpBlock (pb);
 
-              if(!didcode) {
-                /* make sure that 'code' directive is emitted before, once */
-                pic16_addpCode2pBlock(pb, pic16_newpCodeAsmDir("code", NULL));
+              if (!didcode)
+                {
+                  /* make sure that 'code' directive is emitted before, once */
+                  pic16_addpCode2pBlock (pb, pic16_newpCodeAsmDir ("code", NULL));
 
-                didcode++;
-              }
+                  ++didcode;
+                }
 
-              pic16_addpCode2pBlock(pb,pic16_newpCodeLabel(sym->rname,-1));
+              pic16_addpCode2pBlock (pb, pic16_newpCodeLabel (sym->rname, -1));
               //fprintf(stderr, "%s:%d [2] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
-              pic16_printIval(sym, sym->type, sym->ival, 'p', (void *)pb);
-              pic16_flushDB('p', (void *)pb);
+              pic16_printIval (sym, sym->type, sym->ival, 'p', (void *) pb);
+              pic16_flushDB ('p', (void *) pb);
               --noAlloc;
-            } else {
+            }
+          else
+            {
 
               /* symbol doesn't have absolute address and no initial value */
               /* allocate space */
 //            fprintf(stderr, "%s:%d [3] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
               dbuf_printf (&code->oBuf, "%s:\n", sym->rname);
               /* special case for character strings */
-              if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) &&
-                  SPEC_CVAL (sym->etype).v_char) {
+              if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) && SPEC_CVAL (sym->etype).v_char)
+                {
 
-//              fprintf(stderr, "%s:%d printing code string for %s\n", __FILE__, __LINE__, sym->rname);
+//                fprintf(stderr, "%s:%d printing code string for %s\n", __FILE__, __LINE__, sym->rname);
 
-                pic16_pCodeConstString(sym->rname , SPEC_CVAL (sym->etype).v_char);
-              } else {
-                assert(0);
-              }
+                  pic16_pCodeConstString (sym->rname, SPEC_CVAL (sym->etype).v_char, getSize (sym->type));
+                }
+              else
+                {
+                  assert (0);
+                }
             }
         }
     }
-
 }
-
 
 /*-----------------------------------------------------------------*/
 /* pic16_emitConfigRegs - emits the configuration registers              */
@@ -1508,19 +1469,21 @@ pic16createInterruptVect (struct dbuf_s * vBuf)
 static void
 pic16initialComments (FILE * afile)
 {
-        initialComments (afile);
-        fprintf (afile, "; PIC16 port for the Microchip 16-bit core micros\n");
-        if(xinst)
-          fprintf (afile, "; * Extended Instruction Set\n");
+    initialComments (afile);
+    fprintf (afile, "; PIC16 port for the Microchip 16-bit core micros\n");
+    if (pic16_options.xinst) {
+        fprintf (afile, "; * Extended Instruction Set\n");
+    } // if
 
-        if(pic16_mplab_comp)
-                fprintf(afile, "; * MPLAB/MPASM/MPASMWIN/MPLINK compatibility mode enabled\n");
-        fprintf (afile, iComments2);
+    if (pic16_mplab_comp) {
+        fprintf(afile, "; * MPLAB/MPASM/MPASMWIN/MPLINK compatibility mode enabled\n");
+    } // if
+    fprintf (afile, "%s", iComments2);
 
-        if(options.debug) {
-                fprintf (afile, "\n\t.ident \"SDCC version %s #%s [pic16 port]%s\"\n",
-                                SDCC_VERSION_STR, getBuildNumber(), (!xinst?"":" {extended}") );
-        }
+    if (options.debug) {
+        fprintf (afile, "\n\t.ident \"SDCC version %s #%s [pic16 port]%s\"\n",
+                SDCC_VERSION_STR, getBuildNumber(), (!pic16_options.xinst?"":" {extended}") );
+    } // if
 }
 
 int
@@ -1685,7 +1648,8 @@ pic16emitOverlay (struct dbuf_s *aBuf)
     }
 }
 
-void emitStatistics(FILE *asmFile)
+static void
+emitStatistics(FILE *asmFile)
 {
   unsigned long isize, udsize, ramsize;
   statistics.isize = pic16_countInstructions();
@@ -1784,7 +1748,7 @@ pic16glue ()
     if(pic16_options.dumpcalltree) {
       FILE *cFile;
 
-        sprintf(buffer, dstFileName);
+        sprintf(buffer, "%s", dstFileName);
         strcat(buffer, ".calltree");
         cFile = fopen(buffer, "w");
         pic16_printCallTree( cFile );
@@ -1802,9 +1766,9 @@ pic16glue ()
     /* now put it all together into the assembler file */
     /* create the assembler file name */
     if((noAssemble || options.c1mode)  && fullDstFileName) {
-      sprintf (buffer, fullDstFileName);
+      sprintf (buffer, "%s", fullDstFileName);
     } else {
-      sprintf (buffer, dstFileName);
+      sprintf (buffer, "%s", dstFileName);
       strcat (buffer, ".asm");
     }
 
@@ -1840,7 +1804,7 @@ pic16glue ()
     }
 
     /* turn GOTOs into BRAs -- added by RN 2004-11-16 */
-    if(pic16_options.opt_flags & OF_OPTIMIZE_GOTO) {
+    if(!(pic16_options.opt_flags & OF_NO_OPTIMIZE_GOTO)) {
       pic16_OptimizeJumps();
     }
 

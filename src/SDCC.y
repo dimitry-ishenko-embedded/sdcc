@@ -709,7 +709,7 @@ type_specifier2
             symbol *sym;
             sym_link   *p  ;
             sym = findSym(TypedefTab,NULL,$1) ;
-            $$ = p = copyLinkChain(sym->type);
+            $$ = p = copyLinkChain(sym ? sym->type : NULL);
             SPEC_TYPEDEF(getSpec(p)) = 0;
             ignoreTypedefType = 1;
          }
@@ -926,6 +926,7 @@ struct_declarator
                            if (!bitsize)
                              bitsize = BITVAR_PAD;
                            $$->bitVar = bitsize;
+                           $$->bitUnnamed = 1;
                         }
    | declarator ':' constant_expr
                         {
@@ -1550,6 +1551,8 @@ selection_statement
                            {
                               noLineno++ ;
                               $$ = createIf ($3, $6, $7 );
+                              $$->lineno = $3->lineno;
+                              $$->filename = $3->filename;
                               noLineno--;
                            }
    | SWITCH '(' expr ')'   {
@@ -1630,7 +1633,8 @@ iteration_statement
                            noLineno++ ;
                            $$ = createWhile ( $1, STACK_POP(continueStack),
                                               STACK_POP(breakStack), $3, $6 );
-                           $$->lineno = $1->lineDef ;
+                           $$->lineno = $1->lineDef;
+                           $$->filename = $1->fileDef;
                            noLineno-- ;
                          }
    | do statement   WHILE '(' expr ')' ';'
@@ -1639,7 +1643,8 @@ iteration_statement
                           noLineno++ ;
                           $$ = createDo ( $1 , STACK_POP(continueStack),
                                           STACK_POP(breakStack), $5, $2);
-                          $$->lineno = $1->lineDef ;
+                          $$->lineno = $1->lineDef;
+                          $$->filename = $1->fileDef;
                           noLineno-- ;
                         }
    | for '(' expr_opt   ';' expr_opt ';' expr_opt ')'  statement

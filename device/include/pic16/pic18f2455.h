@@ -10,7 +10,7 @@
  * originally designed by
  *     Vangelis Rokas <vrokas@otenet.gr>
  * 
- * $Id: pic18f2455.h 4573 2007-01-14 23:40:09Z tecodev $
+ * $Id: pic18f2455.h 5369 2009-02-09 23:45:54Z tecodev $
  * 
  */
 
@@ -509,7 +509,7 @@ typedef union {
 		unsigned RC0       	: 1;
 		unsigned RC1       	: 1;
 		unsigned RC2       	: 1;
-		unsigned           	: 1;
+		unsigned RC3       	: 1;
 		unsigned RC4       	: 1;
 		unsigned RC5       	: 1;
 		unsigned RC6       	: 1;
@@ -632,9 +632,9 @@ typedef union {
 		unsigned LATC0     	: 1;
 		unsigned LATC1     	: 1;
 		unsigned LATC2     	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
+		unsigned LATC3     	: 1;
+		unsigned LATC4     	: 1;
+		unsigned LATC5     	: 1;
 		unsigned LATC6     	: 1;
 		unsigned LATC7     	: 1;
 	};
@@ -707,9 +707,9 @@ typedef union {
 		unsigned TRISC0    	: 1;
 		unsigned TRISC1    	: 1;
 		unsigned TRISC2    	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
+		unsigned TRISC3    	: 1;
+		unsigned TRISC4    	: 1;
+		unsigned TRISC5    	: 1;
 		unsigned TRISC6    	: 1;
 		unsigned TRISC7    	: 1;
 	};
@@ -1395,11 +1395,11 @@ typedef union {
 	};
 	struct {
 		unsigned           	: 1;
+		unsigned INT0F     	: 1;
+		unsigned T0IF      	: 1;
 		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
+		unsigned INT0E     	: 1;
+		unsigned T0IE      	: 1;
 		unsigned GIEL      	: 1;
 		unsigned GIEH      	: 1;
 	};

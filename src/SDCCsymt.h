@@ -67,10 +67,10 @@ enum {
 #define GPTYPE_XSTACK    0x60
 #define GPTYPE_CODE      0x80
 #else
-#define GPTYPE_FAR	(port->gp_tags.tag_far)
-#define GPTYPE_NEAR	(port->gp_tags.tag_near)
-#define GPTYPE_XSTACK	(port->gp_tags.tag_xstack)
-#define GPTYPE_CODE	(port->gp_tags.tag_code)
+#define GPTYPE_FAR      (port->gp_tags.tag_far)
+#define GPTYPE_NEAR     (port->gp_tags.tag_near)
+#define GPTYPE_XSTACK   (port->gp_tags.tag_xstack)
+#define GPTYPE_CODE     (port->gp_tags.tag_code)
 #endif
 
 #define HASHTAB_SIZE 256
@@ -164,10 +164,11 @@ typedef struct specifier
     unsigned b_typedef:1;               /* is typedefed               */
     unsigned b_isregparm:1;             /* is the first parameter     */
     unsigned b_isenum:1;                /* is an enumerated type      */
-    unsigned _addr;                     /* address of symbol          */
-    unsigned _stack;                    /* stack offset for stacked v */
+    unsigned b_bitUnnamed:1;            /* is an unnamed bit-field    */
     unsigned _bitStart;                 /* bit start position         */
     int _bitLength;                     /* bit length                 */
+    unsigned _addr;                     /* address of symbol          */
+    unsigned _stack;                    /* stack offset for stacked v */
     int argreg;                         /* reg no for regparm         */
     union
       {                                 /* Values if constant or enum */
@@ -337,7 +338,8 @@ typedef struct symbol
         struct set *itmpStack;          /* symbols spilt @ this stack location */
       }
     usl;
-    short bitVar;                       /* this is a bit variable    */
+    char bitVar;                        /* if bitVar != 0: this is a bit variable, bitVar is the size in bits */
+    char bitUnnamed:1;                  /* unnamed bit variable */
     unsigned offset;                    /* offset from top if struct */
 
     int lineDef;                        /* defined line number        */
@@ -367,8 +369,8 @@ extern sym_link *validateLink(sym_link  *l,
                                const char       *file,
                                unsigned         line);
 /* Easy Access Macros */
-#define IS_OP_RUONLY(x) (x && IS_SYMOP(x) && OP_SYMBOL(x)->ruonly)
-#define IS_OP_ACCUSE(x) (x && IS_SYMOP(x) && OP_SYMBOL(x)->accuse)
+#define IS_OP_RUONLY(x) (IS_SYMOP(x) && OP_SYMBOL(x) && OP_SYMBOL(x)->ruonly)
+#define IS_OP_ACCUSE(x) (IS_SYMOP(x) && OP_SYMBOL(x) && OP_SYMBOL(x)->accuse)
 
 #define DCL_TYPE(l)  validateLink(l, "DCL_TYPE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.dcl_type
 #define DCL_ELEM(l)  validateLink(l, "DCL_ELEM", #l, DECLARATOR, __FILE__, __LINE__)->select.d.num_elem
@@ -441,6 +443,7 @@ extern sym_link *validateLink(sym_link  *l,
 #define SPEC_CVAL(x) validateLink(x, "SPEC_CVAL", #x, SPECIFIER, __FILE__, __LINE__)->select.s.const_val
 #define SPEC_BSTR(x) validateLink(x, "SPEC_BSTR", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitStart
 #define SPEC_BLEN(x) validateLink(x, "SPEC_BLEN", #x, SPECIFIER, __FILE__, __LINE__)->select.s._bitLength
+#define SPEC_BUNNAMED(x) validateLink(x, "SPEC_BLEN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_bitUnnamed
 
 /* Sleaze: SPEC_ISR_SAVED_BANKS is only used on
  * function type symbols, which obviously cannot
@@ -549,8 +552,8 @@ extern symbol *__fps16x16_lteq;
 extern symbol *__fps16x16_gt;
 extern symbol *__fps16x16_gteq;
 
-/* Dims: mul/div/mod, BYTE/WORD/DWORD, SIGNED/UNSIGNED */
-extern symbol *__muldiv[3][3][2];
+/* Dims: mul/div/mod, BYTE/WORD/DWORD, SIGNED/UNSIGNED/BOTH */
+extern symbol *__muldiv[3][3][4];
 /* Dims: BYTE/WORD/DWORD SIGNED/UNSIGNED */
 extern sym_link *__multypes[3][2];
 /* Dims: to/from float, BYTE/WORD/DWORD, SIGNED/USIGNED */
@@ -580,6 +583,7 @@ typedef enum
   RESULT_TYPE_INT,
   RESULT_TYPE_OTHER,    /* operands will be promoted to int */
   RESULT_TYPE_IFX,
+  RESULT_TYPE_GPTR,     /* operands will be promoted to generic ptr */
 } RESULT_TYPE;
 
 /* forward definitions for the symbol table related functions */

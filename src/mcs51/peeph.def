@@ -1332,14 +1332,13 @@ replace restart {
 } if notVolatile(%1 %2),operandsNotRelated(%1 %2 %3)
 
 // applies to f.e. bug-607243.c
-// also check notVolatile %3, as it will return FALSE if it's @r%1
 replace {
-	mov	r%1,%2
-	mov	ar%1,%3
+	mov	%1,%2
+	mov	a%1,%3
 } by {
-	;	peephole 177.e	removed redundant mov
-	mov	ar%1,%3
-} if notVolatile %2 %3
+	;	peephole 177.e	removed redundant mov %1,%2
+	mov	a%1,%3
+} if notVolatile(%2), operandsNotRelated(%1 %3)
 
 replace {
 	mov	ar%1,%2
@@ -1375,6 +1374,16 @@ replace {
 	mov	r%1,a
 	;	peephole 177.i	optimized mov sequence
 	mov	r%2,a
+}
+
+replace {
+	mov	r%1,%2
+	mov	ar%3,r%1
+	mov	r%1,%4
+} by {
+	;	peephole 177.j	optimized mov sequence
+	mov	r%3,%2
+	mov	r%1,%4
 }
 
 replace {
@@ -1743,7 +1752,7 @@ replace {
 	cjne	%13,%14,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
+} if labelInRange(%8), labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
 
 replace {
 	cjne	%1,%2,%3
@@ -1767,7 +1776,7 @@ replace {
 	cjne	%13,%14,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
+} if labelInRange(%8), labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
 
 replace {
 	cjne	@%1,%2,%3
@@ -1791,7 +1800,7 @@ replace {
 	cjne	@%1,%14,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
+} if labelInRange(%8), labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
 
 replace {
 	cjne	%1,%2,%3
@@ -1809,7 +1818,7 @@ replace {
 	cjne	%13,%14,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
+} if labelInRange(%8), labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%8 3)
 
 replace {
 	jnz	%3
@@ -1829,7 +1838,7 @@ replace {
 	cjne	%10,%11,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
+} if labelInRange(%8), labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
 
 replace {
 	cjne	%1,%2,%3
@@ -1849,7 +1858,7 @@ replace {
 	cjne	%10,%11,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
+} if labelInRange(%8), labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
 
 replace {
 	cjne	@%1,%2,%3
@@ -1869,7 +1878,7 @@ replace {
 	cjne	@%1,%11,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
+} if labelInRange(%8), labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
 
 replace {
 	cjne	%1,%2,%3
@@ -1885,7 +1894,7 @@ replace {
 	cjne	%10,%11,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
+} if labelInRange(%8), labelRefCount(%3 3), labelRefCountChange(%3 -3), labelRefCountChange(%8 2)
 
 replace {
 	jnz	%3
@@ -1901,7 +1910,7 @@ replace {
 	cjne	%5,%6,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
+} if labelInRange(%8), labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
 
 replace {
 	cjne	%1,%2,%3
@@ -1917,7 +1926,7 @@ replace {
 	cjne	%5,%6,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
+} if labelInRange(%8), labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
 
 replace {
 	cjne	 @%1,%2,%3
@@ -1933,7 +1942,7 @@ replace {
 	cjne	@%1,%6,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
+} if labelInRange(%8), labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
 
 replace {
 	cjne	%1,%2,%3
@@ -1947,7 +1956,7 @@ replace {
 	cjne	%5,%6,%8
 	sjmp	%7
 %3:
-} if labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
+} if labelInRange(%8), labelRefCount(%3 2), labelRefCountChange(%3 -2), labelRefCountChange(%8 1)
 
 replace {
 	cjne	%1,%2,%3
@@ -1959,7 +1968,7 @@ replace {
 	cjne	%1,%2,%5
 	sjmp	%4
 %3:
-} if labelRefCount(%3 1), labelRefCountChange(%3 -1)
+} if labelInRange(%5), labelRefCount(%3 1), labelRefCountChange(%3 -1)
 
 replace {
 	sjmp	%1

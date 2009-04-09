@@ -1,5 +1,5 @@
 Macro system design
-$Id: macro-sys-design.txt 1303 2001-09-23 18:25:45Z michaelh $
+$Id: macro-sys-design.txt 5290 2008-12-19 07:09:42Z borutr $
 
 The purposes of the macro system are:
 1.  Provide a way to target other assemblers than asxxxx, such as the
@@ -8,7 +8,7 @@ GB IAR or rgbds assemblers.
 simple level from one backend, such as the gbz80 and z80.
 3.  Provide a way to dynamically build a command line for any spawned
 processes.
-4.  Provide a way for the backend to convientely access volatile global data
+4.  Provide a way for the backend to conveniently access volatile global data
 such as the source file name or current function name.  This is mainly
 to get around assembler limitations.
 

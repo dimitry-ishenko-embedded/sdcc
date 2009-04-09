@@ -1,93 +1,6 @@
         ;; Originally from GBDK by Pascal Felber.
+
         .area   _CODE
-
-__divschar_rrx_s::
-        ld      hl,#2+1
-        add     hl,sp
-
-        ld      e,(hl)
-        dec     hl
-        ld      l,(hl)
-
-        ;; Fall through
-__divschar_rrx_hds::
-        ld      c,l
-
-        call    .div8
-
-        ld      l,c
-        ld      h,b
-
-        ret
-
-__modschar_rrx_s::
-        ld      hl,#2+1
-        add     hl,sp
-
-        ld      e,(hl)
-        dec     hl
-        ld      l,(hl)
-
-        ;; Fall through
-__modschar_rrx_hds::
-        ld      c,l
-
-        call    .div8
-
-        ld      l,e
-        ld      h,d
-
-        ret
-
-__divsint_rrx_s::
-        ld      hl,#2+3
-        add     hl,sp
-
-        ld      d,(hl)
-        dec     hl
-        ld      e,(hl)
-        dec     hl
-        ld      a,(hl)
-        dec     hl
-        ld      l,(hl)
-        ld      h,a
-
-        ;; Fall through
-__divsint_rrx_hds::
-        ld      b,h
-        ld      c,l
-
-        call    .div16
-
-        ld      l,c
-        ld      h,b
-
-        ret
-
-__modsint_rrx_s::
-        ld      hl,#2+3
-        add     hl,sp
-
-        ld      d,(hl)
-        dec     hl
-        ld      e,(hl)
-        dec     hl
-        ld      a,(hl)
-        dec     hl
-        ld      l,(hl)
-        ld      h,a
-
-        ;; Fall through
-__modsint_rrx_hds::
-        ld      b,h
-        ld      c,l
-
-        call    .div16
-
-        ld      l,e
-        ld      h,d
-
-        ret
 
         ;; Unsigned
 __divuchar_rrx_s::
@@ -101,28 +14,10 @@ __divuchar_rrx_s::
         ;; Fall through
 __divuchar_rrx_hds::
         ld      c,l
-        call    .divu8
+        call    __divu8
 
         ld      l,c
         ld      h,b
-
-        ret
-
-__moduchar_rrx_s::
-        ld      hl,#2+1
-        add     hl,sp
-
-        ld      e,(hl)
-        dec     hl
-        ld      l,(hl)
-
-        ;; Fall through
-__moduchar_rrx_hds::
-        ld      c,l
-        call    .divu8
-
-        ld      l,e
-        ld      h,d
 
         ret
 
@@ -143,50 +38,79 @@ __divuint_rrx_s::
 __divuint_rrx_hds::
         ld      b,h
         ld      c,l
-        call    .divu16
+        call    __divu16
 
         ld      l,c
         ld      h,b
 
         ret
 
-__moduint_rrx_s::
-        ld      hl,#2+3
+__divsuchar_rrx_s::
+        ld      hl,#2+1
         add     hl,sp
 
-        ld      d,(hl)
-        dec     hl
         ld      e,(hl)
         dec     hl
-        ld      a,(hl)
+        ld      c,(hl)
+        ld      b, #0
+
+        call    signexte
+
+        ld      l,c
+        ld      h,b
+
+        ret
+
+__modsuchar_rrx_s::
+        ld      hl,#2+1
+        add     hl,sp
+
+        ld      e,(hl)
         dec     hl
-        ld      l,(hl)
-        ld      h,a
-        ;; Fall through
+        ld      c,(hl)
+        ld      b, #0
 
-__moduint_rrx_hds::
-        ld      b,h
-        ld      c,l
-
-        call    .divu16
+        call    signexte
 
         ld      l,e
         ld      h,d
 
         ret
 
-.div8::
+__divuschar_rrx_s::
+        ld      hl,#2+1
+        add     hl,sp
+
+        ld      e,(hl)
+        ld      d, #0
+        dec     hl
+        ld      c,(hl)
+
+        ld      a,c             ; Sign extend
+        rlca
+        sbc     a
+        ld      b,a
+
+        call    __div16
+
+        ld      l,c
+        ld      h,b
+
+        ret
+
+__div8::
 .mod8::
         ld      a,c             ; Sign extend
         rlca
         sbc     a
         ld      b,a
+signexte:
         ld      a,e             ; Sign extend
         rlca
         sbc     a
         ld      d,a
 
-        ; Fall through to .div16
+        ; Fall through to __div16
 
         ;; 16-bit division
         ;;
@@ -201,19 +125,20 @@ __moduint_rrx_hds::
         ;;   If divisor is 0, carry=1 and both quotient and remainder are 0
         ;;
         ;; Register used: AF,BC,DE,HL
-.div16::
+__div16::
 .mod16::
         ;; Determine sign of quotient by xor-ing high bytes of dividend
         ;;  and divisor. Quotient is positive if signs are the same, negative
         ;;  if signs are different
         ;; Remainder has same sign as dividend
         ld      a,b             ; Get high byte of dividend
-        ld      (.srem),a       ; Save as sign of remainder
+        push    af              ; Save as sign of remainder
         xor     d               ; Xor with high byte of divisor
-        ld      (.squot),a      ; Save sign of quotient
+        push    af              ; Save sign of quotient
+
         ;; Take absolute value of divisor
         bit     7,d
-        jp      Z,.chkde        ; Jump if divisor is positive
+        jr      Z,.chkde        ; Jump if divisor is positive
         sub     a               ; Substract divisor from 0
         sub     e
         ld      e,a
@@ -223,7 +148,7 @@ __moduint_rrx_hds::
         ;; Take absolute value of dividend
 .chkde:
         bit     7,b
-        jp      Z,.dodiv        ; Jump if dividend is positive
+        jr      Z,.dodiv        ; Jump if dividend is positive
         sub     a               ; Substract dividend from 0
         sub     c
         ld      c,a
@@ -232,12 +157,12 @@ __moduint_rrx_hds::
         ld      b,a
         ;; Divide absolute values
 .dodiv:
-        call    .divu16
-        ret     C               ; Exit if divide by zero
+        call    __divu16
+        jr      C,.exit         ; Exit if divide by zero
         ;; Negate quotient if it is negative
-        ld      a,(.squot)
+        pop     af              ; recover sign of quotient
         and     #0x80
-        jp      Z,.dorem        ; Jump if quotient is positive
+        jr      Z,.dorem        ; Jump if quotient is positive
         sub     a               ; Substract quotient from 0
         sub     c
         ld      c,a
@@ -246,7 +171,7 @@ __moduint_rrx_hds::
         ld      b,a
 .dorem:
         ;; Negate remainder if it is negative
-        ld      a,(.srem)
+        pop     af              ; recover sign of remainder
         and     #0x80
         ret     Z               ; Return if remainder is positive
         sub     a               ; Substract remainder from 0
@@ -256,19 +181,23 @@ __moduint_rrx_hds::
         sub     d
         ld      d,a
         ret
+.exit:
+        pop     af
+        pop     af
+        ret
 
-.divu8::
+__divu8::
 .modu8::
         ld      b,#0x00
         ld      d,b
         ; Fall through to divu16
 
-.divu16::
+__divu16::
 .modu16::
         ;; Check for division by zero
         ld      a,e
         or      d
-        jp      NZ,.divide      ; Branch if divisor is non-zero
+        jr      NZ,.divide      ; Branch if divisor is non-zero
         ld      bc,#0x00        ; Divide by zero error
         ld      d,b
         ld      e,c
@@ -280,7 +209,7 @@ __moduint_rrx_hds::
 ;       ld      h,b             ; H = high byte of dividend/quotient
 ;       ld      bc,#0x00        ; BC = remainder
         or      a               ; Clear carry to start
-        ex      af,af
+        ex      af,af'
         ld      a,#16           ; 16 bits in dividend
 .dvloop:
         ;; Shift next bit of quotient into bit 0 of dividend
@@ -308,9 +237,9 @@ __moduint_rrx_hds::
         ccf                     ; Complement borrow so 1 indicates a
                                 ;  successful substraction (this is the
                                 ;  next bit of quotient)
-        jp      C,.drop         ; Jump if remainder is >= dividend
+        jr      C,.drop         ; Jump if remainder is >= dividend
         pop     hl              ; Otherwise, restore remainder
-        jp      .nodrop
+        jr      .nodrop
 .drop:
         inc     sp
         inc     sp
@@ -329,11 +258,3 @@ __moduint_rrx_hds::
         or      a               ; Clear carry, valid result
         ret
 
-        .area   _BSS
-
-.srem:
-        .ds 0x01                ; Sign of quotient
-.squot:
-        .ds 0x01                ; Sign of remainder
-.dcnt:
-        .ds 0x01                ; Counter for division

@@ -51,7 +51,7 @@ static char *_pic16_keywords[] =
   "far",
   "interrupt",
   "near",
-  "pdata",
+  //"pdata",
   "reentrant",
   "sfr",
   "sfr16",
@@ -60,7 +60,7 @@ static char *_pic16_keywords[] =
   "_code",
   "_generic",
   "_near",
-  "_pdata",
+  //"_pdata",
   "_naked",
   "shadowregs",
   "wparam",
@@ -80,9 +80,6 @@ static char *_pic16_keywords[] =
 
 
 pic16_sectioninfo_t pic16_sectioninfo;
-
-int xinst=0;
-
 
 extern char *pic16_processor_base_name(void);
 
@@ -163,8 +160,7 @@ struct {
 
 
 enum {
-  P_MAXRAM = 1,
-  P_STACK,
+  P_STACK = 1,
   P_CODE,
   P_UDATA,
   P_LIBRARY
@@ -181,31 +177,6 @@ do_pragma(int id, const char *name, const char *cp)
 
   switch (id)
     {
-    /* #pragma maxram [maxram] */
-    case P_MAXRAM:
-      {
-        int max_ram;
-
-        cp = get_pragma_token(cp, &token);
-        if (TOKEN_INT == token.type)
-          max_ram = token.val.int_val;
-        else
-          {
-            err = 1;
-            break;
-          }
-
-        cp = get_pragma_token(cp, &token);
-        if (TOKEN_EOL != token.type)
-          {
-            err = 1;
-            break;
-          }
-
-        pic16_setMaxRAM(max_ram);
-      }
-      break;
-
     /* #pragma stack [stack-position] [stack-len] */
     case  P_STACK:
       {
@@ -502,7 +473,6 @@ do_pragma(int id, const char *name, const char *cp)
 }
 
 static struct pragma_s pragma_tbl[] = {
-  { "maxram",  P_MAXRAM,  0, do_pragma },
   { "stack",   P_STACK,   0, do_pragma },
   { "code",    P_CODE,    0, do_pragma },
   { "udata",   P_UDATA,   0, do_pragma },
@@ -517,48 +487,48 @@ _process_pragma(const char *s)
   return process_pragma_tbl(pragma_tbl, s);
 }
 
-#define REP_UDATA       "--preplace-udata-with="
+#define REP_UDATA         "--preplace-udata-with="
 
-#define STACK_MODEL     "--pstack-model="
-#define OPT_BANKSEL     "--obanksel="
+#define STACK_MODEL       "--pstack-model="
+#define OPT_BANKSEL       "--obanksel="
 
-#define ALT_ASM         "--asm="
-#define ALT_LINK        "--link="
+#define ALT_ASM           "--asm="
+#define ALT_LINK          "--link="
 
-#define IVT_LOC         "--ivt-loc="
-#define NO_DEFLIBS      "--nodefaultlibs"
-#define MPLAB_COMPAT    "--mplab-comp"
+#define IVT_LOC           "--ivt-loc="
+#define NO_DEFLIBS        "--nodefaultlibs"
+#define MPLAB_COMPAT      "--mplab-comp"
 
-#define USE_CRT         "--use-crt="
+#define USE_CRT           "--use-crt="
 
-#define OFMSG_LRSUPPORT "--flr-support"
+#define OFMSG_LRSUPPORT   "--flr-support"
 
-#define OPTIMIZE_GOTO   "--optimize-goto"
-#define OPTIMIZE_CMP    "--optimize-cmp"
-#define OPTIMIZE_DF     "--optimize-df"
+#define NO_OPTIMIZE_GOTO  "--no-optimize-goto"
+#define OPTIMIZE_CMP      "--optimize-cmp"
+#define OPTIMIZE_DF       "--optimize-df"
 
-char *alt_asm=NULL;
-char *alt_link=NULL;
+char *alt_asm = NULL;
+char *alt_link = NULL;
 
-int pic16_mplab_comp=0;
+int pic16_mplab_comp = 0;
 extern int pic16_debug_verbose;
 extern int pic16_ralloc_debug;
 extern int pic16_pcode_verbose;
 
-int pic16_enable_peeps=0;
+int pic16_enable_peeps = 0;
 
 OPTION pic16_optionsTable[]= {
     /* code generation options */
     { 0, STACK_MODEL,        NULL, "use stack model 'small' (default) or 'large'"},
 #if XINST
-    { 'y', "--extended",     &xinst, "enable Extended Instruction Set/Literal Offset Addressing mode"},
+    { 'y', "--extended",     &pic16_options.xinst, "enable Extended Instruction Set/Literal Offset Addressing mode"},
 #endif
     { 0, "--pno-banksel",    &pic16_options.no_banksel, "do not generate BANKSEL assembler directives"},
 
     /* optimization options */
     { 0, OPT_BANKSEL,       &pic16_options.opt_banksel, "set banksel optimization level (default=0 no)", CLAT_INTEGER },
     { 0, "--denable-peeps", &pic16_enable_peeps, "explicit enable of peepholes"},
-    { 0, OPTIMIZE_GOTO,     NULL, "try to use (conditional) BRA instead of GOTO"},
+    { 0, NO_OPTIMIZE_GOTO,  NULL, "do NOT use (conditional) BRA instead of GOTO"},
     { 0, OPTIMIZE_CMP,      NULL, "try to optimize some compares"},
     { 0, OPTIMIZE_DF,       NULL, "thoroughly analyze data flow (memory and time intensive!)"},
 
@@ -636,8 +606,8 @@ _pic16_parseOptions (int *pargc, char **argv, int *i)
     }
 #endif
 
-    if (ISOPT(OPTIMIZE_GOTO)) {
-      pic16_options.opt_flags |= OF_OPTIMIZE_GOTO;
+    if (ISOPT(NO_OPTIMIZE_GOTO)) {
+      pic16_options.opt_flags |= OF_NO_OPTIMIZE_GOTO;
       return TRUE;
     }
 
@@ -655,56 +625,25 @@ _pic16_parseOptions (int *pargc, char **argv, int *i)
   return FALSE;
 }
 
-extern set *userIncDirsSet;
+extern void pic16_init_pic(const char *name);
 
 static void _pic16_initPaths(void)
 {
-  set *pic16incDirsSet=NULL;
-  set *pic16libDirsSet=NULL;
-  char devlib[512];
+    set *pic16libDirsSet=NULL;
 
-    setMainValue("mcu", pic16->name[2] );
-    addSet(&preArgvSet, Safe_strdup("-D{mcu}"));
+    if (!options.nostdlib) {
+        struct dbuf_s pic16libDir;
 
-    setMainValue("mcu1", pic16->name[1] );
-    addSet(&preArgvSet, Safe_strdup("-D__{mcu1}"));
-
-    if(!options.nostdinc) {
-      struct dbuf_s pic16incDir;
-
-      dbuf_init(&pic16incDir, 128);
-      dbuf_makePath(&pic16incDir, INCLUDE_DIR_SUFFIX, "pic16");
-
-      /* setup pic16 include directory */
-      pic16incDirsSet = appendStrSet(dataDirsSet, NULL, dbuf_c_str(&pic16incDir));
-      dbuf_destroy(&pic16incDir);
-      includeDirsSet = pic16incDirsSet;
-//      mergeSets(&includeDirsSet, pic16incDirsSet);
-    }
-    /* pic16 port should not search to the SDCC standard include directories,
-     * so add here the deleted include dirs that user has issued in command line */
-    mergeSets(&pic16incDirsSet, userIncDirsSet);
-
-    if(!options.nostdlib) {
-      struct dbuf_s pic16libDir;
-
-      dbuf_init(&pic16libDir, 128);
-      dbuf_makePath(&pic16libDir, LIB_DIR_SUFFIX, "pic16");
-      /* setup pic16 library directory */
-      pic16libDirsSet = appendStrSet(dataDirsSet, NULL, dbuf_c_str(&pic16libDir));
-      dbuf_destroy(&pic16libDir);
-      libDirsSet = pic16libDirsSet;
-//      mergeSets(&libDirsSet, pic16libDirsSet);
+        dbuf_init(&pic16libDir, 128);
+        dbuf_makePath(&pic16libDir, LIB_DIR_SUFFIX, "pic16");
+        pic16libDirsSet = appendStrSet(dataDirsSet, NULL, dbuf_c_str(&pic16libDir));
+        dbuf_destroy(&pic16libDir);
+        mergeSets(&pic16libDirsSet, libDirsSet);
+        libDirsSet = pic16libDirsSet;
     }
 
-    if(!pic16_options.nodefaultlibs) {
-      /* now add the library for the device */
-      sprintf(devlib, "%s.lib", pic16->name[2]);
-      addSet(&libFilesSet, Safe_strdup(devlib));
-
-      /* add the internal SDCC library */
-      addSet(&libFilesSet, Safe_strdup( "libsdcc.lib" ));
-    }
+    /* now that we have the paths set up... */
+    pic16_init_pic(port->processor);
 }
 
 extern set *linkOptionsSet;
@@ -735,8 +674,8 @@ static void _pic16_linkEdit(void)
 
     shash_add(&linkValues, "linker", pic16_linkCmd[0]);
 
-    mergeSets(&tSet, libDirsSet);
     mergeSets(&tSet, libPathsSet);
+    mergeSets(&tSet, libDirsSet);
 
     shash_add(&linkValues, "incdirs", joinStrSet( appendStrSet(tSet, "-I\"", "\"")));
     shash_add(&linkValues, "lflags", joinStrSet(linkOptionsSet));
@@ -786,90 +725,83 @@ static void _pic16_linkEdit(void)
 static void
 _pic16_finaliseOptions (void)
 {
-    port->mem.default_local_map = data;
-    port->mem.default_globl_map = data;
+  port->mem.default_local_map = data;
+  port->mem.default_globl_map = data;
 
-    /* peepholes are disabled for the time being */
-    options.nopeep = 1;
+  /* peepholes are disabled for the time being */
+  options.nopeep = 1;
 
-    /* explicit enable peepholes for testing */
-    if(pic16_enable_peeps)
-      options.nopeep = 0;
+  /* explicit enable peepholes for testing */
+  if (pic16_enable_peeps)
+    options.nopeep = 0;
 
-    options.all_callee_saves = 1;       // always callee saves
+  options.all_callee_saves = 1;       // always callee saves
 
 #if 0
-    options.float_rent = 1;
-    options.intlong_rent = 1;
+  options.float_rent = 1;
+  options.intlong_rent = 1;
 #endif
 
+  setMainValue("mcu", pic16->name[2] );
+  addSet(&preArgvSet, Safe_strdup("-D{mcu}"));
 
-    if(alt_asm && strlen(alt_asm))
+  setMainValue("mcu1", pic16->name[1] );
+  addSet(&preArgvSet, Safe_strdup("-D__{mcu1}"));
+
+  if (!pic16_options.nodefaultlibs)
+    {
+      char devlib[512];
+
+      /* now add the library for the device */
+      sprintf(devlib, "libdev%s.lib", pic16->name[1]);   /* e.g., libdev18f452.lib */
+      addSet(&libFilesSet, Safe_strdup(devlib));
+
+      /* add the internal SDCC library */
+      addSet(&libFilesSet, Safe_strdup( "libsdcc.lib" ));
+    }
+
+  if (alt_asm && alt_asm[0] != '\0')
+    {
       pic16_asmCmd[0] = alt_asm;
+    }
 
-    if(alt_link && strlen(alt_link))
+  if (alt_link && alt_link[0] != '\0')
+    {
       pic16_linkCmd[0] = alt_link;
+    }
 
-    if(!pic16_options.no_crt) {
+  if (!pic16_options.no_crt)
+    {
       pic16_options.omit_ivt = 1;
       pic16_options.leave_reset = 0;
     }
 
-    if(options.model == MODEL_SMALL)
+  if (options.model == MODEL_SMALL)
+    {
       addSet(&asmOptionsSet, Safe_strdup("-DSDCC_MODEL_SMALL"));
-    else
-    if(options.model == MODEL_LARGE)
-      addSet(&asmOptionsSet, Safe_strdup("-DSDCC_MODEL_LARGE"));
-
+    }
+  else if (options.model == MODEL_LARGE)
     {
       char buf[128];
 
-        sprintf(buf, "-D%s -D__%s", pic16->name[2], pic16->name[1]);
-        *(strrchr(buf, 'f')) = 'F';
-        addSet(&asmOptionsSet, Safe_strdup( buf ));
+      addSet(&asmOptionsSet, Safe_strdup("-DSDCC_MODEL_LARGE"));
+
+      sprintf(buf, "-D%s -D__%s", pic16->name[2], pic16->name[1]);
+      *(strrchr(buf, 'f')) = 'F';
+      addSet(&asmOptionsSet, Safe_strdup(buf));
     }
 
-    if(STACK_MODEL_LARGE) {
+  if (STACK_MODEL_LARGE)
+    {
       addSet(&preArgvSet, Safe_strdup("-DSTACK_MODEL_LARGE"));
       addSet(&asmOptionsSet, Safe_strdup("-DSTACK_MODEL_LARGE"));
-    } else {
+    }
+  else
+    {
       addSet(&preArgvSet, Safe_strdup("-DSTACK_MODEL_SMALL"));
       addSet(&asmOptionsSet, Safe_strdup("-DSTACK_MODEL_SMALL"));
     }
 }
-
-
-#if 0
-  if (options.model == MODEL_LARGE)
-    {
-      port->mem.default_local_map = xdata;
-      port->mem.default_globl_map = xdata;
-    }
-  else
-    {
-      port->mem.default_local_map = data;
-      port->mem.default_globl_map = data;
-    }
-
-  if (options.stack10bit)
-    {
-      if (options.model != MODEL_FLAT24)
-    {
-      fprintf (stderr,
-           "*** warning: 10 bit stack mode is only supported in flat24 model.\n");
-      fprintf (stderr, "\t10 bit stack mode disabled.\n");
-      options.stack10bit = 0;
-    }
-      else
-    {
-      /* Fixup the memory map for the stack; it is now in
-       * far space and requires a FPOINTER to access it.
-       */
-      istack->fmap = 1;
-      istack->ptrType = FPOINTER;
-    }
-    }
-#endif
 
 
 static void

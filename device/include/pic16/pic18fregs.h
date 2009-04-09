@@ -8,13 +8,12 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18fregs.h 5000 2008-01-24 11:24:53Z tecodev $
+ * $Id: pic18fregs.h 5391 2009-02-27 13:03:40Z tecodev $
  *
  */
 
 #ifndef __PIC18FREGS_H__
 #define __PIC18FREGS_H__
-
 
 #if defined(pic18f242)
 #  include <pic18f242.h>
@@ -61,6 +60,12 @@
 #elif defined(pic18f2331)
 #  include <pic18f2331.h>
 
+#elif defined(pic18f23k20)
+#  include <pic18f23k20.h>
+
+#elif defined(pic18f2410)
+#  include <pic18f2410.h>
+
 #elif defined(pic18f2420)
 #  include <pic18f2420.h>
 
@@ -70,17 +75,29 @@
 #elif defined(pic18f2431)
 #  include <pic18f2431.h>
 
+#elif defined(pic18f2450)
+#  include <pic18f2450.h>
+
 #elif defined(pic18f2455)
 #  include <pic18f2455.h>
+
+#elif defined(pic18f2480)
+#  include <pic18f2480.h>
 
 #elif defined(pic18f24j10)
 #  include <pic18f24j10.h>
 
+#elif defined(pic18f24k20)
+#  include <pic18f24k20.h>
+
+#elif defined(pic18f2510)
+#  include <pic18f2510.h>
+
+#elif defined(pic18f2515)
+#  include <pic18f2515.h>
+
 #elif defined(pic18f2520)
 #  include <pic18f2520.h>
-
-#elif defined(pic18f2585)
-#  include <pic18f2585.h>
 
 #elif defined(pic18f2523)
 #  include <pic18f2523.h>
@@ -91,8 +108,20 @@
 #elif defined(pic18f2550)
 #  include <pic18f2550.h>
 
+#elif defined(pic18f2580)
+#  include <pic18f2580.h>
+
+#elif defined(pic18f2585)
+#  include <pic18f2585.h>
+
 #elif defined(pic18f25j10)
 #  include <pic18f25j10.h>
+
+#elif defined(pic18f25k20)
+#  include <pic18f25k20.h>
+
+#elif defined(pic18f2610)
+#  include <pic18f2610.h>
 
 #elif defined(pic18f2620)
 #  include <pic18f2620.h>
@@ -105,6 +134,9 @@
 
 #elif defined(pic18f2685)
 #  include <pic18f2685.h>
+
+#elif defined(pic18f26k20)
+#  include <pic18f26k20.h>
 
 #elif defined(pic18f4220)
 #  include <pic18f4220.h>
@@ -121,23 +153,47 @@
 #elif defined(pic18f4331)
 #  include <pic18f4331.h>
 
+#elif defined(pic18f43k20)
+#  include <pic18f43k20.h>
+
+#elif defined(pic18f4410)
+#  include <pic18f4410.h>
+
 #elif defined(pic18f4420)
 #  include <pic18f4420.h>
+
+#elif defined(pic18f4423)
+#  include <pic18f4423.h>
 
 #elif defined(pic18f4431)
 #  include <pic18f4431.h>
 
+#elif defined(pic18f4450)
+#  include <pic18f4450.h>
+
 #elif defined(pic18f4455)
 #  include <pic18f4455.h>
+
+#elif defined(pic18f4480)
+#  include <pic18f4480.h>
 
 #elif defined(pic18f44j10)
 #  include <pic18f44j10.h>
 
+#elif defined(pic18f44k20)
+#  include <pic18f44k20.h>
+
+#elif defined(pic18f4510)
+#  include <pic18f4510.h>
+
+#elif defined(pic18f4515)
+#  include <pic18f4515.h>
+
 #elif defined(pic18f4520)
 #  include <pic18f4520.h>
 
-#elif defined(pic18f4585)
-#  include <pic18f4585.h>
+#elif defined(pic18f4523)
+#  include <pic18f4523.h>
 
 #elif defined(pic18f4525)
 #  include <pic18f4525.h>
@@ -145,8 +201,20 @@
 #elif defined(pic18f4550)
 #  include <pic18f4550.h>
 
+#elif defined(pic18f4580)
+#  include <pic18f4580.h>
+
+#elif defined(pic18f4585)
+#  include <pic18f4585.h>
+
 #elif defined(pic18f45j10)
 #  include <pic18f45j10.h>
+
+#elif defined(pic18f45k20)
+#  include <pic18f45k20.h>
+
+#elif defined(pic18f4610)
+#  include <pic18f4610.h>
 
 #elif defined(pic18f4620)
 #  include <pic18f4620.h>
@@ -160,8 +228,17 @@
 #elif defined(pic18f4685)
 #  include <pic18f4685.h>
 
+#elif defined(pic18f46k20)
+#  include <pic18f46k20.h>
+
 #elif defined(pic18f6520)
 #  include <pic18f6520.h>
+
+#elif defined(pic18f6585)
+#  include <pic18f6585.h>
+
+#elif defined(pic18f65j50)
+#  include <pic18f65j50.h>
 
 #elif defined(pic18f6620)
 #  include <pic18f6620.h>
@@ -169,11 +246,35 @@
 #elif defined(pic18f6680)
 #  include <pic18f6680.h>
 
+#elif defined(pic18f66j50)
+#  include <pic18f66j50.h>
+
+#elif defined(pic18f66j55)
+#  include <pic18f66j55.h>
+
+#elif defined(pic18f66j60)
+#  include <pic18f66j60.h>
+
+#elif defined(pic18f66j65)
+#  include <pic18f66j65.h>
+
 #elif defined(pic18f6720)
 #  include <pic18f6720.h>
 
+#elif defined(pic18f67j50)
+#  include <pic18f67j50.h>
+
+#elif defined(pic18f67j60)
+#  include <pic18f67j60.h>
+
 #elif defined(pic18f8520)
 #  include <pic18f8520.h>
+
+#elif defined(pic18f8585)
+#  include <pic18f8585.h>
+
+#elif defined(pic18f85j50)
+#  include <pic18f85j50.h>
 
 #elif defined(pic18f8620)
 #  include <pic18f8620.h>
@@ -181,8 +282,36 @@
 #elif defined(pic18f8680)
 #  include <pic18f8680.h>
 
+#elif defined(pic18f86j50)
+#  include <pic18f86j50.h>
+
+#elif defined(pic18f86j55)
+#  include <pic18f86j55.h>
+
+#elif defined(pic18f86j60)
+#  include <pic18f86j60.h>
+
+#elif defined(pic18f86j65)
+#  include <pic18f86j65.h>
+
 #elif defined(pic18f8720)
 #  include <pic18f8720.h>
+
+#elif defined(pic18f87j50)
+#  include <pic18f87j50.h>
+
+#elif defined(pic18f87j60)
+#  include <pic18f87j60.h>
+
+#elif defined(pic18f96j60)
+#  include <pic18f96j60.h>
+
+#elif defined(pic18f96j65)
+#  include <pic18f96j65.h>
+
+#elif defined(pic18f97j60)
+#  include <pic18f97j60.h>
+
 
 #else
 #  error Unsupported processor
@@ -197,3 +326,4 @@
 
 
 #endif /* __PIC18FREGS_H__ */
+

@@ -4,10 +4,6 @@
  *
  * written by Vangelis Rokas, 2004 <vrokas AT otenet.gr>
  *
- * Devices implemented:
- *	PIC18F[24][45][28]
- *
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public License
  * as published by the Free Software Foundation; either version 2
@@ -23,12 +19,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/*
-** $Id: adcread.c 3714 2005-04-02 13:13:53Z vrokas $
-*/
-
 #include <pic18fregs.h>
-
 #include <adc.h>
 
 
@@ -40,3 +31,4 @@ int adc_read(void) __naked
     return
   __endasm;
 }
+

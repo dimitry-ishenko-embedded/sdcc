@@ -5,36 +5,42 @@
     it easier to set a breakpoint using the debugger.
 */
 #include "common.h"
-#include "main.h"
-#include "ralloc.h"
-#include "device.h"
-#include "SDCCutil.h"
-#include "SDCCmacro.h"
 #include "MySystem.h"
+#include "SDCCmacro.h"
+
+#include "device.h"
+#include "gen.h"
 #include "glue.h"
-#include "dbuf_string.h"
-#include <errno.h>
-//#include "gen.h"
+#include "main.h"
+#include "pcode.h"
+#include "ralloc.h"
+
+/*
+ * Imports
+ */
+extern set *dataDirsSet;
+extern set *includeDirsSet;
+extern set *libDirsSet;
+extern set *libPathsSet;
+extern set *linkOptionsSet;
+
+
+pic14_options_t pic14_options;
+int debug_verbose = 0;
+
 
 #define OPTION_STACK_SIZE         "--stack-size"
-#define OPTION_UDATA_SECTION_NAME "--udata-section-name"
-
 
 static char _defaultRules[] =
 {
 #include "peeph.rul"
 };
 
-pic14_options_t pic14_options;
-extern int debug_verbose; /* from pcode.c */
-extern char *udata_section_name;
-
 static OPTION _pic14_poptions[] =
   {
     { 0, "--debug-xtra",   &debug_verbose, "show more debug info in assembly output" },
     { 0, "--no-pcode-opt", &pic14_options.disable_df, "disable (slightly faulty) optimization on pCode" },
     { 0, OPTION_STACK_SIZE, &options.stack_size, "sets the size if the argument passing stack (default: 16, minimum: 4)", CLAT_INTEGER },
-    { 0, OPTION_UDATA_SECTION_NAME, &udata_section_name, "set udata section name", CLAT_STRING },
     { 0, NULL, NULL, NULL }
   };
 
@@ -66,15 +72,24 @@ static char *_pic14_keywords[] =
   NULL
 };
 
-void  pCodeInitRegisters(void);
-
-void pic14_assignRegisters (ebbIndex *);
-
-/* Also defined in gen.h, but the #include is commented out */
-/* for an unknowned reason. - EEP */
-void pic14_emitDebuggerSymbol (char *);
-
 static int regParmFlg = 0;  /* determine if we can register a parameter */
+
+
+/** $1 is always the basename.
+    $2 is always the output file.
+    $3 varies
+    $l is the list of extra options that should be there somewhere...
+    MUST be terminated with a NULL.
+*/
+static const char *_linkCmd[] =
+{
+  "gplink", "$l", "-w", "-r", "-o \"$2\"", "\"$1\"", "$3", NULL
+};
+
+static const char *_asmCmd[] =
+{
+  "gpasm", "$l", "$3", "-c", "\"$1.asm\"", NULL
+};
 
 static void
 _pic14_init (void)
@@ -110,8 +125,6 @@ _pic14_parseOptions (int *pargc, char **argv, int *i)
     return FALSE;
 }
 
-extern set *dataDirsSet;
-extern set *includeDirsSet;
 /* pic14 port uses include/pic and lib/pic instead of
  * include/pic14 and lib/pic14 as indicated by SDCCmain.c's
  * setIncludePaths routine. */
@@ -149,61 +162,6 @@ _pic14_finaliseOptions (void)
   
   port->mem.default_local_map = data;
   port->mem.default_globl_map = data;
-#if 0
-  /* Hack-o-matic: if we are using the flat24 model,
-  * adjust pointer sizes.
-  */
-  if (options.model == MODEL_FLAT24)
-  {
-    
-    fprintf (stderr, "*** WARNING: you should use the '-mds390' option "
-      "for DS80C390 support. This code generator is "
-      "badly out of date and probably broken.\n");
-    
-    port->s.fptr_size = 3;
-    port->s.gptr_size = 4;
-    port->stack.isr_overhead++; /* Will save dpx on ISR entry. */
-#if 1
-    port->stack.call_overhead++;  /* This acounts for the extra byte 
-                                     * of return addres on the stack.
-                                     * but is ugly. There must be a 
-                                     * better way.
-                                     */
-#endif
-    fReturn = fReturn390;
-    fReturnSize = 5;
-  }
-  
-  if (options.model == MODEL_LARGE)
-  {
-    port->mem.default_local_map = xdata;
-    port->mem.default_globl_map = xdata;
-  }
-  else
-  {
-    port->mem.default_local_map = data;
-    port->mem.default_globl_map = data;
-  }
-  
-  if (options.stack10bit)
-  {
-    if (options.model != MODEL_FLAT24)
-    {
-      fprintf (stderr,
-        "*** warning: 10 bit stack mode is only supported in flat24 model.\n");
-      fprintf (stderr, "\t10 bit stack mode disabled.\n");
-      options.stack10bit = 0;
-    }
-    else
-    {
-    /* Fixup the memory map for the stack; it is now in
-    * far space and requires a FPOINTER to access it.
-    */
-      istack->fmap = 1;
-      istack->ptrType = FPOINTER;
-    }
-  }
-#endif
 }
 
 static void
@@ -218,8 +176,6 @@ _pic14_getRegName (struct regs *reg)
     return reg->name;
   return "err";
 }
-
-extern char *processor_base_name(void);
 
 static void
 _pic14_genAssemblerPreamble (FILE * of)
@@ -241,42 +197,13 @@ _pic14_genAssemblerPreamble (FILE * of)
 static int
 _pic14_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
-  int i;
-  
-  if (options.model != MODEL_FLAT24)
-  {
-    /* Let the default code handle it. */
-    return FALSE;
-  }
-  
-  dbuf_printf (oBuf, "\t;ajmp\t__sdcc_gsinit_startup\n");
-  
-  /* now for the other interrupts */
-  for (i = 0; i < maxInterrupts; i++)
-  {
-    if (interrupts[i])
-    {
-      dbuf_printf (oBuf, "\t;ljmp\t%s\n\t.ds\t4\n", interrupts[i]->rname);
-    }
-    else
-    {
-      dbuf_printf (oBuf, "\t;reti\n\t.ds\t7\n");
-    }
-  }
-  
-  return TRUE;
+  /* Let the default code handle it. */
+  return FALSE;
 }
 
 static bool
 _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
-/*
-sym_link *test = NULL;
-value *val;
-  */
-  
-  //fprintf(stderr,"checking for native mult\n");
-  
   if ( ic->op != '*')
   {
     return FALSE;
@@ -288,35 +215,6 @@ value *val;
   
   /* use library functions for more complex maths */
   return FALSE;
-
-  /*
-  if ( IS_LITERAL (left))
-  {
-  fprintf(stderr,"left is lit\n");
-  test = left;
-  val = OP_VALUE (IC_LEFT (ic));
-  }
-  else if ( IS_LITERAL (right))
-  {
-  fprintf(stderr,"right is lit\n");
-  test = left;
-  val = OP_VALUE (IC_RIGHT (ic));
-  }
-  else
-  {
-  fprintf(stderr,"oops, neither is lit so no\n");
-  return FALSE;
-  }
-  
-    if ( getSize (test) <= 2)
-    {
-    fprintf(stderr,"yep\n");
-    return TRUE;
-    }
-    fprintf(stderr,"nope\n");
-    
-    return FALSE;
-  */
 }
 
 /* Indicate which extended bit operations this port supports */
@@ -344,32 +242,6 @@ oclsExpense (struct memmap *oclass)
 
   return 0;
 }
-
-/** $1 is always the basename.
-    $2 is always the output file.
-    $3 varies
-    $l is the list of extra options that should be there somewhere...
-    MUST be terminated with a NULL.
-*/
-static const char *_linkCmd[] =
-{
-  "gplink", "$l", "-w", "-r", "-o \"$2\"", "\"$1\"", "$3", NULL
-};
-
-static const char *_asmCmd[] =
-{
-  "gpasm", "$l", "$3", "-c", "\"$1.asm\"", NULL
-    
-};
-
-extern set *libFilesSet;
-extern set *libDirsSet;
-extern set *libPathsSet;
-extern set *includeDirsSet;
-extern set *userIncDirsSet;
-extern set *dataDirsSetSet;
-extern set *relFilesSet;
-extern set *linkOptionsSet;
 
 static void _pic14_do_link (void)
 {
@@ -560,3 +432,4 @@ PORT pic_port =
   1,            /* globals & local static allowed */
   PORT_MAGIC
 };
+

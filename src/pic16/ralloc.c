@@ -380,7 +380,7 @@ regs* newReg(int type, short pc_type, int rIdx, char *name, unsigned size, int a
         if(name)
                 dReg->name = Safe_strdup(name);
         else {
-          if(xinst && pc_type == PO_GPR_TEMP) {
+          if(pic16_options.xinst && pc_type == PO_GPR_TEMP) {
             sprintf(buffer,"0x%02x", dReg->rIdx);
           } else {
             sprintf(buffer,"r0x%02x", dReg->rIdx);
@@ -489,21 +489,6 @@ regFindFreeNext(set *dRegs, regs *creg)
     }
 
   return NULL;
-}
-
-/*-----------------------------------------------------------------*/
-/* pic16_initStack - allocate registers for a pseudo stack               */
-/*-----------------------------------------------------------------*/
-void pic16_initStack(int base_address, int size)
-{
-
-  int i;
-
-  pic16_Gstack_base_addr = base_address;
-  //fprintf(stderr,"initStack");
-
-  for(i = 0; i<size; i++)
-    addSet(&pic16_dynStackRegs,newReg(REG_STK, PO_GPR_TEMP,base_address++,NULL,1,0, NULL));
 }
 
 /*-----------------------------------------------------------------*
@@ -1347,7 +1332,7 @@ void pic16_writeUsedRegs(FILE *of)
   pic16_dump_isection(of, rel_idataSymSet, 0);
   pic16_dump_isection(of, fix_idataSymSet, 1);
 
-  if(!xinst) {
+  if(!pic16_options.xinst) {
     /* dump internal registers */
     pic16_dump_int_registers(of, pic16_int_regs);
   }
@@ -1395,7 +1380,7 @@ static int
 noSpilLoc (symbol * sym, eBBlock * ebp, iCode * ic)
 {
   debugLog ("%s\n", __FUNCTION__);
-  return (sym->usl.spillLoc ? 0 : 1);
+  return (SYM_SPIL_LOC (sym) ? 0 : 1);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1405,7 +1390,7 @@ static int
 hasSpilLoc (symbol * sym, eBBlock * ebp, iCode * ic)
 {
   debugLog ("%s\n", __FUNCTION__);
-  return (sym->usl.spillLoc ? 1 : 0);
+  return (SYM_SPIL_LOC (sym) ? 1 : 0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1415,8 +1400,8 @@ static int
 directSpilLoc (symbol * sym, eBBlock * ebp, iCode * ic)
 {
   debugLog ("%s\n", __FUNCTION__);
-  if (sym->usl.spillLoc &&
-      (IN_DIRSPACE (SPEC_OCLS (sym->usl.spillLoc->etype))))
+  if (SYM_SPIL_LOC (sym) &&
+      (IN_DIRSPACE (SPEC_OCLS (SYM_SPIL_LOC (sym)->etype))))
     return 1;
   else
     return 0;
@@ -1430,7 +1415,7 @@ static int
 hasSpilLocnoUptr (symbol * sym, eBBlock * ebp, iCode * ic)
 {
   debugLog ("%s\n", __FUNCTION__);
-  return ((sym->usl.spillLoc && !sym->uptr) ? 1 : 0);
+  return ((SYM_SPIL_LOC (sym) && !sym->uptr) ? 1 : 0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1649,7 +1634,7 @@ createStackSpil (symbol * sym)
   if (applyToSet (_G.stackSpil, isFree, &sloc, sym))
     {
       /* found a free one : just update & return */
-      sym->usl.spillLoc = sloc;
+      SYM_SPIL_LOC (sym) = sloc;
       sym->stackSpil = 1;
       sloc->isFree = 0;
       addSetHead (&sloc->usl.itmpStack, sym);
@@ -1708,7 +1693,7 @@ createStackSpil (symbol * sym)
 
   /* add it to the _G.stackSpil set */
   addSetHead (&_G.stackSpil, sloc);
-  sym->usl.spillLoc = sloc;
+  SYM_SPIL_LOC (sym) = sloc;
   sym->stackSpil = 1;
 
   /* add it to the set of itempStack set
@@ -1735,10 +1720,10 @@ isSpiltOnStack (symbol * sym)
 /*     if (sym->_G.stackSpil) */
 /*      return TRUE; */
 
-  if (!sym->usl.spillLoc)
+  if (!SYM_SPIL_LOC (sym))
     return FALSE;
 
-  etype = getSpec (sym->usl.spillLoc->type);
+  etype = getSpec (SYM_SPIL_LOC (sym)->type);
   if (IN_STACK (etype))
     return TRUE;
 
@@ -1757,7 +1742,7 @@ spillThis (symbol * sym)
   /* if this is rematerializable or has a spillLocation
      we are okay, else we need to create a spillLocation
      for it */
-  if (!(sym->remat || sym->usl.spillLoc))
+  if (!(sym->remat || SYM_SPIL_LOC (sym)))
     createStackSpil (sym);
 
 
@@ -1784,8 +1769,8 @@ spillThis (symbol * sym)
       spillLRWithPtrReg (sym);
     }
 
-  if (sym->usl.spillLoc && !sym->remat)
-    sym->usl.spillLoc->allocreq = 1;
+  if (SYM_SPIL_LOC (sym) && !sym->remat)
+    SYM_SPIL_LOC (sym)->allocreq = 1;
   return;
 }
 
@@ -1815,12 +1800,12 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
   if ((selectS = liveRangesWith (lrcs, directSpilLoc, ebp, ic)))
     {
       sym = leastUsedLR (selectS);
-      strcpy (sym->rname, (sym->usl.spillLoc->rname[0] ?
-                           sym->usl.spillLoc->rname :
-                           sym->usl.spillLoc->name));
+      strcpy (sym->rname, (SYM_SPIL_LOC (sym)->rname[0] ?
+                           SYM_SPIL_LOC (sym)->rname :
+                           SYM_SPIL_LOC (sym)->name));
       sym->spildir = 1;
       /* mark it as allocation required */
-      sym->usl.spillLoc->allocreq = 1;
+      SYM_SPIL_LOC (sym)->allocreq = 1;
       return sym;
     }
 
@@ -1864,7 +1849,7 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
 
       sym = leastUsedLR (selectS);
       /* mark this as allocation required */
-      sym->usl.spillLoc->allocreq = 1;
+      SYM_SPIL_LOC (sym)->allocreq = 1;
       return sym;
     }
 
@@ -1873,7 +1858,7 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
     {
 
       sym = leastUsedLR (selectS);
-      sym->usl.spillLoc->allocreq = 1;
+      SYM_SPIL_LOC (sym)->allocreq = 1;
       return sym;
     }
 
@@ -1885,7 +1870,7 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
 
       /* return a created spil location */
       sym = createStackSpil (leastUsedLR (selectS));
-      sym->usl.spillLoc->allocreq = 1;
+      SYM_SPIL_LOC (sym)->allocreq = 1;
       return sym;
     }
 
@@ -2073,7 +2058,7 @@ deassignLRs (iCode * ic, eBBlock * ebp)
         {
           if (sym->stackSpil)
             {
-              sym->usl.spillLoc->isFree = 1;
+              SYM_SPIL_LOC (sym)->isFree = 1;
               sym->stackSpil = 0;
             }
           continue;
@@ -2132,12 +2117,6 @@ deassignLRs (iCode * ic, eBBlock * ebp)
             )
             {
 
-
-//            for (i = 0; i < max (sym->nRegs, result->nRegs); i++)
-              /* the above does not free the unsued registers in sym,
-               * leaving them marked as used, and increasing register usage
-               * until the end of the function - VR 23/11/05 */
-
               for (i = 0; i < result->nRegs; i++)
                 if (i < sym->nRegs)
                   result->regs[i] = sym->regs[i];
@@ -2145,6 +2124,7 @@ deassignLRs (iCode * ic, eBBlock * ebp)
                   result->regs[i] = getRegGpr (ic, ebp, result);
 
               _G.regAssigned = bitVectSetBit (_G.regAssigned, result->key);
+
             }
 
           /* free the remaining */
@@ -2355,10 +2335,10 @@ serialRegAssign (eBBlock ** ebbs, int count)
               int ptrRegSet = 0;
 
               /* Make sure any spill location is definately allocated */
-              if (sym->isspilt && !sym->remat && sym->usl.spillLoc &&
-                  !sym->usl.spillLoc->allocreq)
+              if (sym->isspilt && !sym->remat && SYM_SPIL_LOC (sym) &&
+                  !SYM_SPIL_LOC (sym)->allocreq)
                 {
-                  sym->usl.spillLoc->allocreq++;
+                  SYM_SPIL_LOC (sym)->allocreq++;
                 }
 
               /* if it does not need or is spilt
@@ -2402,17 +2382,16 @@ serialRegAssign (eBBlock ** ebbs, int count)
                  have been allocated after sym->liveFrom but freed
                  before ic->seq. This is complicated, so spill this
                  symbol instead and let fillGaps handle the allocation. */
-#if 0
               if (sym->liveFrom < ic->seq)
                 {
                     spillThis (sym);
                     continue;
                 }
-#endif
+
               /* if it has a spillocation & is used less than
                  all other live ranges then spill this */
                 if (willCS) {
-                    if (sym->usl.spillLoc) {
+                    if (SYM_SPIL_LOC (sym)) {
                         symbol *leastUsed = leastUsedLR (liveRangesWith (spillable,
                                                                          allLRs, ebbs[i], ic));
                         if (leastUsed && leastUsed->used > sym->used) {
@@ -2688,38 +2667,21 @@ createRegMask (eBBlock ** ebbs, int count)
 static symbol *
 rematStr (symbol * sym)
 {
-  char *s = buffer;
   iCode *ic = sym->rematiCode;
   symbol *psym = NULL;
+  int offset = 0;
 
   debugLog ("%s\n", __FUNCTION__);
 
-  //printf ("%s\n", s);
+  while (ic->op == '+' || ic->op == '-') {
+    /* if plus or minus print the right hand side */
 
-  /* if plus or minus print the right hand side */
+    offset += (int) operandLitValue (IC_RIGHT (ic));
+    ic = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
+  } // while
 
-  if (ic->op == '+' || ic->op == '-') {
-
-    iCode *ric = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
-
-    sprintf (s, "(%s %c 0x%04x)",
-             OP_SYMBOL (IC_LEFT (ric))->rname,
-             ic->op,
-             (int) operandLitValue (IC_RIGHT (ic)));
-
-
-    //fprintf(stderr, "ralloc.c:%d OOPS %s\n",__LINE__,s);
-
-    psym = newSymbol (OP_SYMBOL (IC_LEFT (ric))->rname, 1);
-    psym->offset = (int) operandLitValue (IC_RIGHT (ic));
-
-    return psym;
-  }
-
-  sprintf (s, "%s", OP_SYMBOL (IC_LEFT (ic))->rname);
   psym = newSymbol (OP_SYMBOL (IC_LEFT (ic))->rname, 1);
-
-  //printf ("ralloc.c:%d %s\n", __LINE__,buffer);
+  psym->offset = offset;
   return psym;
 }
 
@@ -2841,7 +2803,7 @@ regTypeNum ()
           psym->psbase = ptrBaseRematSym (OP_SYMBOL (IC_LEFT (ic)));
           strcpy (psym->rname, psym->name);
           sym->isspilt = 1;
-          sym->usl.spillLoc = psym;
+          SYM_SPIL_LOC (sym) = psym;
           continue;
         }
 
@@ -3838,17 +3800,25 @@ packForPush (iCode * ic, eBBlock * ebp)
 
 
 
-  /* we now we know that it has one & only one def & use
-     and the that the definition is an assignment */
-  IC_LEFT (ic) = IC_RIGHT (dic);
+  /*
+   * The following code causes segfaults, e.g.,
+   *   #2496919 Internal error with pic16 sdcc
+   * and is thus disabled for now.
+   */
+  if (0)
+    {
+      /* we now we know that it has one & only one def & use
+         and the that the definition is an assignment */
+      IC_LEFT (ic) = IC_RIGHT (dic);
 
-  iLine = printILine(dic);
-  debugf("remiCodeFromeBBlock: %s\n", iLine);
-  dbuf_free(iLine);
+      iLine = printILine(dic);
+      debugf("remiCodeFromeBBlock: %s\n", iLine);
+      dbuf_free(iLine);
 
-  remiCodeFromeBBlock (ebp, dic);
-  bitVectUnSetBit(OP_SYMBOL(IC_RESULT(dic))->defs,dic->key);
-  hTabDeleteItem (&iCodehTab, dic->key, dic, DELETE_ITEM, NULL);
+      remiCodeFromeBBlock (ebp, dic);
+      bitVectUnSetBit(OP_SYMBOL(IC_RESULT(dic))->defs,dic->key);
+      hTabDeleteItem (&iCodehTab, dic->key, dic, DELETE_ITEM, NULL);
+    } // if
 }
 
 static void printSymType(char * str, sym_link *sl)
@@ -4046,7 +4016,7 @@ pic16_packRegisters (eBBlock * ebp)
 
         OP_SYMBOL (IC_RESULT (ic))->remat = 1;
         OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
-        OP_SYMBOL (IC_RESULT (ic))->usl.spillLoc = NULL;
+        SPIL_LOC (IC_RESULT (ic)) = NULL;
 
       }
 
@@ -4080,7 +4050,7 @@ pic16_packRegisters (eBBlock * ebp)
         operandLitValue (IC_RIGHT (ic));
         OP_SYMBOL (IC_RESULT (ic))->remat = 1;
         OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
-        OP_SYMBOL (IC_RESULT (ic))->usl.spillLoc = NULL;
+        SPIL_LOC (IC_RESULT (ic)) = NULL;
       }
 
 
@@ -4100,7 +4070,7 @@ pic16_packRegisters (eBBlock * ebp)
 #endif
 
     /* mark the pointer usages */
-    if (POINTER_SET (ic))
+    if (POINTER_SET (ic) && IS_SYMOP (IC_RESULT (ic)))
       {
         OP_SYMBOL (IC_RESULT (ic))->uptr = 1;
         debugLog ("  marking as a pointer (set) =>");

@@ -396,15 +396,15 @@ static void
 _vemit2 (const char *szFormat, va_list ap)
 {
   struct dbuf_s dbuf;
-  const char *buffer;
+  char *buffer;
 
   dbuf_init(&dbuf, INITIAL_INLINEASM);
 
   dbuf_tvprintf (&dbuf, szFormat, ap);
 
-  buffer = dbuf_c_str(&dbuf);
+  buffer = (char *)dbuf_c_str(&dbuf);
 
-  _tidyUp ((char *)buffer);
+  _tidyUp (buffer);
   _G.lines.current = (_G.lines.current ?
               connectLine (_G.lines.current, _newLineNode (buffer)) :
               (_G.lines.head = _newLineNode (buffer)));
@@ -432,6 +432,8 @@ emit2 (const char *szFormat,...)
 static void
 emitDebug (const char *szFormat,...)
 {
+  if (!options.verboseAsm)
+    return;
   if (!DISABLE_DEBUG)
     {
       va_list ap;
@@ -1383,28 +1385,61 @@ fetchLitPair (PAIR_ID pairId, asmop * left, int offset)
     {
       if (pairId == PAIR_HL || pairId == PAIR_IY)
         {
-          if (_G.pairs[pairId].last_type == left->type)
+          if (_G.pairs[pairId].last_type == AOP_IMMD && left->type == AOP_IMMD)
             {
               if (_G.pairs[pairId].base && !strcmp (_G.pairs[pairId].base, base))
                 {
                   if (pairId == PAIR_HL && abs (_G.pairs[pairId].offset - offset) < 3)
                     {
                       adjustPair (pair, &_G.pairs[pairId].offset, offset);
-                      return;
+                      goto adjusted;
                     }
                   if (pairId == PAIR_IY && (offset >= INT8MIN && offset <= INT8MAX))
                     {
-                      return;
+                       goto adjusted;
                     }
                 }
             }
         }
+
+      if (pairId == PAIR_HL && left->type == AOP_LIT && _G.pairs[pairId].last_type == AOP_LIT &&
+        !IS_FLOAT (left->aopu.aop_lit->type) && offset == 0 && _G.pairs[pairId].offset == 0)
+        {
+          unsigned new_low, new_high, old_low, old_high;
+          unsigned long v_new = ulFromVal (left->aopu.aop_lit);
+          unsigned long v_old = strtoul (_G.pairs[pairId].base, NULL, 0);
+          new_low = (v_new >> 0) & 0xff;
+          new_high = (v_new >> 8) & 0xff;
+          old_low = (v_old >> 0) & 0xff;
+          old_high = (v_old >> 8) & 0xff;
+
+          /* Change lower byte only. */
+          if(new_high == old_high)
+            {
+              emit2("ld l, %s", aopGet (left, 0, FALSE));
+              goto adjusted;
+            }
+          /* Change upper byte only. */
+          else if(new_low == old_low)
+            {
+              emit2("ld h, %s", aopGet (left, 1, FALSE));
+              goto adjusted;
+            }
+        }
+
+
       _G.pairs[pairId].last_type = left->type;
       _G.pairs[pairId].base = traceAlloc(&_G.trace.aops, Safe_strdup (base));
       _G.pairs[pairId].offset = offset;
     }
   /* Both a lit on the right and a true symbol on the left */
   emit2 ("ld %s,!hashedstr", pair, l);
+  return;
+
+adjusted:
+  _G.pairs[pairId].last_type = left->type;
+  _G.pairs[pairId].base = traceAlloc(&_G.trace.aops, Safe_strdup (base));
+  _G.pairs[pairId].offset = offset;
 }
 
 static PAIR_ID
@@ -1817,11 +1852,9 @@ aopGet (asmop * aop, int offset, bool bit16)
     case AOP_PAIRPTR:
       setupPair (aop->aopu.aop_pairId, aop, offset);
       if (aop->aopu.aop_pairId==PAIR_IX)
-        SNPRINTF (buffer, sizeof(buffer),
-                  "!*ixx", 0);
+        tsprintf (buffer, sizeof(buffer), "!*ixx", offset);
       else if (aop->aopu.aop_pairId==PAIR_IY)
-        SNPRINTF (buffer, sizeof(buffer),
-                  "!*iyx", 0);
+        tsprintf (buffer, sizeof(buffer), "!*iyx", offset);
       else
         SNPRINTF (buffer, sizeof(buffer),
                   "(%s)", _pairs[aop->aopu.aop_pairId].name);
@@ -2533,7 +2566,7 @@ assignResultValue (operand * oper)
           aopPut (AOP (oper), _fReturn[size], size-1);
           size--;
         }
-      while (size--)
+      while(size--)
         {
           aopPut (AOP (oper), _fReturn[size], size);
         }
@@ -2676,7 +2709,6 @@ genIpush (iCode * ic)
         {
           fetchHL (AOP (IC_LEFT (ic)));
           emit2 ("push hl");
-          spillPair (PAIR_HL);
           _G.stack.pushed += 2;
           goto release;
         }
@@ -2684,11 +2716,9 @@ genIpush (iCode * ic)
         {
           fetchPairLong (PAIR_HL, AOP (IC_LEFT (ic)), ic, 2);
           emit2 ("push hl");
-          spillPair (PAIR_HL);
           _G.stack.pushed += 2;
           fetchPairLong (PAIR_HL, AOP (IC_LEFT (ic)), ic, 0);
           emit2 ("push hl");
-          spillPair (PAIR_HL);
           _G.stack.pushed += 2;
           goto release;
         }
@@ -2956,19 +2986,6 @@ emitCall (iCode * ic, bool ispcall)
   /* Mark the registers as restored. */
   _G.saves.saved = FALSE;
 
-  /* if we need assign a result value */
-  if ((IS_ITEMP (IC_RESULT (ic)) &&
-       (OP_SYMBOL (IC_RESULT (ic))->nRegs ||
-        OP_SYMBOL (IC_RESULT (ic))->spildir)) ||
-      IS_TRUE_SYMOP (IC_RESULT (ic)))
-    {
-      aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
-
-      assignResultValue (IC_RESULT (ic));
-
-      freeAsmop (IC_RESULT (ic), NULL, ic);
-    }
-
   /* adjust the stack for parameters if required */
   if (ic->parmBytes)
     {
@@ -3001,6 +3018,19 @@ emitCall (iCode * ic, bool ispcall)
                 }
             }
         }
+    }
+
+  /* if we need assign a result value */
+  if ((IS_ITEMP (IC_RESULT (ic)) &&
+       (OP_SYMBOL (IC_RESULT (ic))->nRegs ||
+        OP_SYMBOL (IC_RESULT (ic))->spildir)) ||
+      IS_TRUE_SYMOP (IC_RESULT (ic)))
+    {
+      aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
+
+      assignResultValue (IC_RESULT (ic));
+
+      freeAsmop (IC_RESULT (ic), NULL, ic);
     }
 
   spillCached ();
@@ -3274,7 +3304,22 @@ genFunction (iCode * ic)
   else if (sym->stack && IS_GB && sym->stack > -INT8MIN)
     emit2 ("!enterxl", sym->stack);
   else if (sym->stack)
-    emit2 ("!enterx", sym->stack);
+    {
+      if ((optimize.codeSize && sym->stack <= 8) || sym->stack <= 4)
+        {
+          int stack = sym->stack;
+          emit2 ("!enter");
+          while (stack > 1)
+            {
+              emit2 ("push af");
+              stack -= 2;
+            }
+          if(stack > 0)
+            emit2 ("dec sp");
+        }
+      else
+        emit2 ("!enterx", sym->stack);
+    }
   else
     emit2 ("!enter");
 
@@ -3844,7 +3889,16 @@ genPlus (iCode * ic)
     {
       fetchPair (PAIR_HL, AOP (IC_LEFT (ic)));
       emit2 ("add hl,%s", getPairName (AOP (IC_RIGHT (ic))));
-      spillCached();
+      spillPair (PAIR_HL);
+      commitPair ( AOP (IC_RESULT (ic)), PAIR_HL);
+      goto release;
+    }
+
+  if (isPair (AOP (IC_LEFT (ic))) && AOP_TYPE (IC_RIGHT (ic)) == AOP_LIT && getPairId (AOP (IC_LEFT (ic))) != PAIR_HL)
+    {
+      fetchPair (PAIR_HL, AOP (IC_RIGHT (ic)));
+      emit2 ("add hl,%s", getPairName (AOP (IC_LEFT (ic))));
+      spillPair (PAIR_HL);
       commitPair ( AOP (IC_RESULT (ic)), PAIR_HL);
       goto release;
     }
@@ -3959,7 +4013,7 @@ genPlus (iCode * ic)
               emit2 ("ld a, b");
               emit2 ("pop bc");
             }
-          
+
         }
       emit2 ("adc a,%s", aopGet (AOP (IC_RIGHT (ic)), 1, FALSE));
       aopPut (AOP (IC_RESULT (ic)), "a", 1);
@@ -3970,7 +4024,12 @@ genPlus (iCode * ic)
     {
       _moveA (aopGet (AOP (IC_LEFT (ic)), offset, FALSE));
       if (offset == 0)
-        emit2 ("add a,%s", aopGet (AOP (IC_RIGHT (ic)), offset, FALSE));
+      {
+        if(size == 0 && AOP_TYPE (IC_RIGHT (ic)) == AOP_LIT && ulFromVal (AOP (IC_RIGHT (ic))->aopu.aop_lit) == 1)
+          emit2 ("inc a");
+        else
+          emit2 ("add a,%s", aopGet (AOP (IC_RIGHT (ic)), offset, FALSE));
+      }
       else
         emit2 ("adc a,%s", aopGet (AOP (IC_RIGHT (ic)), offset, FALSE));
       aopPut (AOP (IC_RESULT (ic)), "a", offset++);
@@ -4165,7 +4224,12 @@ genMinus (iCode * ic)
         {
           /* first add without previous c */
           if (!offset)
-            emit2 ("add a,!immedbyte", (unsigned int) (lit & 0x0FFL));
+            {
+              if (size == 0 && (unsigned int) (lit & 0x0FFL) == 0xFF)
+                emit2 ("dec a");
+              else
+                emit2 ("add a,!immedbyte", (unsigned int) (lit & 0x0FFL));
+            }
           else
             emit2 ("adc a,!immedbyte", (unsigned int) ((lit >> (offset * 8)) & 0x0FFL));
         }
@@ -4181,6 +4245,72 @@ genMinus (iCode * ic)
 
 release:
   _G.preserveCarry = FALSE;
+  freeAsmop (IC_LEFT (ic), NULL, ic);
+  freeAsmop (IC_RIGHT (ic), NULL, ic);
+  freeAsmop (IC_RESULT (ic), NULL, ic);
+}
+
+/*-----------------------------------------------------------------*/
+/* genMultChar - generates code for unsigned 8x8 multiplication    */
+/*-----------------------------------------------------------------*/
+static void
+genMultOneChar (iCode * ic)
+{
+  symbol *tlbl1, *tlbl2;
+  bool savedB = FALSE;
+
+  if(IS_GB)
+    {
+      wassertl (0, "Multiplication is handled through support function calls on gbz80");
+      return;
+    }
+
+  /* Save b into a if b is in use. */
+  if (bitVectBitValue (ic->rMask, B_IDX) &&
+    !(getPairId (AOP (IC_RESULT (ic))) == PAIR_BC))
+    {
+      emit2 ("ld a, b");
+      savedB = TRUE;
+    }
+  if (isPairInUse (PAIR_DE, ic) &&
+    !(getPairId (AOP (IC_RESULT (ic))) == PAIR_DE))
+  {
+    _push (PAIR_DE);
+    _G.stack.pushedDE = TRUE;
+  }
+
+  tlbl1 = newiTempLabel (NULL);
+  tlbl2 = newiTempLabel (NULL);
+
+  emit2 ("ld e,%s", aopGet (AOP (IC_RIGHT (ic)), LSB, FALSE));
+  emit2 ("ld h,%s", aopGet (AOP (IC_LEFT (ic)), LSB, FALSE));
+  emit2 ("ld l,#0x00");
+  emit2 ("ld d,l");
+  emit2 ("ld b,#0x08");
+  emitLabel (tlbl1->key + 100);
+  emit2 ("add hl,hl");
+  emit2 ("jp NC,!tlabel", tlbl2->key + 100);
+  emit2 ("add hl,de");
+  emitLabel (tlbl2->key + 100);
+  emit2 ("djnz !tlabel", tlbl1->key + 100);
+
+  spillPair(PAIR_HL);
+
+  if (IS_Z80 && _G.stack.pushedDE)
+    {
+      _pop (PAIR_DE);
+      _G.stack.pushedDE = FALSE;
+    }
+  if (savedB)
+    {
+      emit2 ("ld b, a");
+    }
+
+  if (AOP_SIZE (IC_RESULT (ic)) == 1)
+    aopPut (AOP (IC_RESULT (ic)), "l", 0);
+  else
+    commitPair ( AOP (IC_RESULT (ic)), PAIR_HL);
+
   freeAsmop (IC_LEFT (ic), NULL, ic);
   freeAsmop (IC_RIGHT (ic), NULL, ic);
   freeAsmop (IC_RESULT (ic), NULL, ic);
@@ -4218,6 +4348,12 @@ genMult (iCode * ic)
       operand *t = IC_RIGHT (ic);
       IC_RIGHT (ic) = IC_LEFT (ic);
       IC_LEFT (ic) = t;
+    }
+
+  if (AOP_TYPE (IC_RIGHT (ic)) != AOP_LIT)
+    {
+      genMultOneChar (ic);
+      return;
     }
 
   wassertl (AOP_TYPE (IC_RIGHT (ic)) == AOP_LIT, "Right must be a literal");
@@ -4284,7 +4420,7 @@ genMult (iCode * ic)
       i <<= 1;
     }
 
-  spillCached();
+  spillPair(PAIR_HL);
 
   if (IS_Z80 && _G.stack.pushedDE)
     {
@@ -4758,13 +4894,16 @@ genCmpGt (iCode * ic, iCode * ifx)
   letype = getSpec (operandType (left));
   retype = getSpec (operandType (right));
   sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
-  /* assign the amsops */
+  /* assign the asmops */
   aopOp (left, ic, FALSE, FALSE);
   aopOp (right, ic, FALSE, FALSE);
   aopOp (result, ic, TRUE, FALSE);
 
+  setupToPreserveCarry (ic);
+
   genCmp (right, left, result, ifx, sign);
 
+  _G.preserveCarry = FALSE;
   freeAsmop (left, NULL, ic);
   freeAsmop (right, NULL, ic);
   freeAsmop (result, NULL, ic);
@@ -4788,13 +4927,16 @@ genCmpLt (iCode * ic, iCode * ifx)
   retype = getSpec (operandType (right));
   sign = !(SPEC_USIGN (letype) | SPEC_USIGN (retype));
 
-  /* assign the amsops */
+  /* assign the asmops */
   aopOp (left, ic, FALSE, FALSE);
   aopOp (right, ic, FALSE, FALSE);
   aopOp (result, ic, TRUE, FALSE);
 
+  setupToPreserveCarry (ic);
+
   genCmp (left, right, result, ifx, sign);
 
+  _G.preserveCarry = FALSE;
   freeAsmop (left, NULL, ic);
   freeAsmop (right, NULL, ic);
   freeAsmop (result, NULL, ic);
@@ -5244,6 +5386,7 @@ genAnd (iCode * ic, iCode * ifx)
                   /* For the flags */
                   emit2 ("or a,a");
                 }
+          if (size || ifx)  /* emit jmp only, if it is actually used */
               emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
             }
               offset++;
@@ -5427,9 +5570,19 @@ genOr (iCode * ic, iCode * ifx)
           bytelit = (lit >> (offset * 8)) & 0x0FFL;
 
           _moveA (aopGet (AOP (left), offset, FALSE));
-          /* OR with any literal is the same as OR with itself. */
-          emit2 ("or a,a");
-          emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
+
+          if (bytelit != 0)
+            { /* FIXME, allways true, shortcut possible */
+              emit2 ("or a,%s", aopGet (AOP (right), offset, FALSE));
+            }
+          else
+            {
+              /* For the flags */
+              emit2 ("or a,a");
+            }
+
+          if (ifx)  /* emit jmp only, if it is actually used */
+            emit2 ("!shortjp NZ,!tlabel", tlbl->key + 100);
 
           offset++;
         }
@@ -7180,7 +7333,7 @@ genAddrOf (iCode * ic)
     {
       if (sym->onStack)
         {
-          spillCached ();
+          spillPair (PAIR_HL);
           if (sym->stack <= 0)
             {
               setupPairFromSP (PAIR_HL, sym->stack + _G.stack.pushed + _G.stack.offset);
@@ -7199,7 +7352,7 @@ genAddrOf (iCode * ic)
     }
   else
     {
-      spillCached ();
+      spillPair (PAIR_HL);
       if (sym->onStack)
         {
           /* if it has an offset  then we need to compute it */
@@ -7379,7 +7532,7 @@ genJumpTab (iCode * ic)
   emit2 ("ld e,%s", l);
   emit2 ("ld d,!zero");
   jtab = newiTempLabel (NULL);
-  spillCached ();
+  spillPair (PAIR_HL);
   emit2 ("ld hl,!immed!tlabel", jtab->key + 100);
   emit2 ("add hl,de");
   emit2 ("add hl,de");
@@ -7464,8 +7617,7 @@ genCast (iCode * ic)
   else
     {
       /* we need to extend the sign :{ */
-        const char *l = aopGet (AOP (right), AOP_SIZE (right) - 1,
-                        FALSE);
+      const char *l = aopGet (AOP (right), AOP_SIZE (right) - 1, FALSE);
       _moveA (l);
       emit2 ("rla ");
       emit2 ("sbc a,a");
@@ -7587,7 +7739,7 @@ genCritical (iCode *ic)
       //disable interrupt
       emit2 ("!di");
       //save P/O flag
-      emit2 ("push af");
+      _push (PAIR_AF);
     }
 }
 
@@ -7616,7 +7768,7 @@ genEndCritical (iCode *ic)
   else
     {
       //restore P/O flag
-      emit2 ("pop af");
+      _pop (PAIR_AF);
       //parity odd <==> P/O=0 <==> interrupt enable flag IFF2 was 0 <==>
       //don't enable interrupts as they were off before
       emit2 ("jp PO,!tlabel", tlbl->key + 100);
@@ -7893,67 +8045,12 @@ _swap (PAIR_ID one, PAIR_ID two)
     }
 }
 
-/* The problem is that we may have all three pairs used and they may
-   be needed in a different order.
-
-   Note: Have ex de,hl
-
-   Combinations:
-     hl = hl            => unity, fine
-     bc = bc
-     de = de
-
-     hl = hl            hl = hl, swap de <=> bc
-     bc = de
-     de = bc
-
-     hl = bc            Worst case
-     bc = de
-     de = hl
-
-     hl = bc            de = de, swap bc <=> hl
-     bc = hl
-     de = de
-
-     hl = de            Worst case
-     bc = hl
-     de = bc
-
-     hl = de            bc = bc, swap hl <=> de
-     bc = bc
-     de = hl
-
-   Break it down into:
-    * Any pair = pair are done last
-    * Any pair = iTemp are done last
-    * Any swaps can be done any time
-
-   A worst case:
-    push p1
-    p1 = p2
-    p2 = p3
-    pop  p3
-
-   So how do we detect the cases?
-   How about a 3x3 matrix?
-        source
-   dest x x x x
-        x x x x
-        x x x x (Fourth for iTemp/other)
-
-   First determin which mode to use by counting the number of unity and
-   iTemp assigns.
-     Three - any order
-     Two - Assign the pair first, then the rest
-     One - Swap the two, then the rest
-     Zero - Worst case.
-*/
 static void
-setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
+setupForMemcpy (iCode *ic, int nparams, operand **pparams)
 {
   PAIR_ID ids[NUM_PAIRS][NUM_PAIRS];
   PAIR_ID dest[3] = {
-    PAIR_BC, PAIR_HL, PAIR_DE
+    PAIR_DE, PAIR_HL, PAIR_BC
   };
   int i, j, nunity = 0;
   memset (ids, PAIR_INVALID, sizeof (ids));
@@ -7961,10 +8058,6 @@ setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
   /* Sanity checks */
   wassert (nparams == 3);
 
-  /* First save everything that needs to be saved. */
-  _saveRegsForCall (ic, 0);
-
-  /* Loading HL first means that DE is always fine. */
   for (i = 0; i < nparams; i++)
     {
       aopOp (pparams[i], ic, FALSE, FALSE);
@@ -7986,7 +8079,7 @@ setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
     }
   else if (nunity == 2)
     {
-      /* One is assigned.  Pull it out and assign. */
+      /* Two are OK.  Assign the other one. */
       for (i = 0; i < 3; i++)
         {
           for (j = 0; j < NUM_PAIRS; j++)
@@ -8009,7 +8102,7 @@ setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
     }
   else if (nunity == 1)
     {
-      /* Find the pairs to swap. */
+      /* One is OK. Find the other two. */
       for (i = 0; i < 3; i++)
         {
           for (j = 0; j < NUM_PAIRS; j++)
@@ -8018,12 +8111,22 @@ setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
                 {
                   if (j == PAIR_INVALID || j == dest[i])
                     {
-                      /* Keep looking. */
+                      /* This one is OK. */
                     }
                   else
                     {
-                      _swap (j, dest[i]);
-                      goto done;
+                      /* Found one. */
+                      if(ids[j][dest[i]] == TRUE)
+                        {
+                          /* Just swap. */
+                           _swap (j, dest[i]);
+                           goto done;
+                        }
+                      else
+                        {
+                          fetchPair (dest[i], AOP (pparams[i]));
+                          continue;
+                        }
                     }
                 }
             }
@@ -8058,51 +8161,25 @@ setupForBuiltin3 (iCode *ic, int nparams, operand **pparams)
 }
 
 static void
-genBuiltInStrcpy (iCode *ic, int nParams, operand **pparams)
-{
-  operand *from, *to;
-  symbol *label;
-  bool deInUse;
-
-  wassertl (nParams == 2, "Built-in strcpy must have two parameters");
-  to = pparams[0];
-  from = pparams[1];
-
-  deInUse = bitVectBitValue (ic->rMask, D_IDX) || bitVectBitValue(ic->rMask, E_IDX);
-
-  setupForBuiltin3 (ic, nParams, pparams);
-
-  label = newiTempLabel(NULL);
-
-  emitLabel (label->key);
-  emit2 ("ld a,(hl)");
-  emit2 ("ldi");
-  emit2 ("or a");
-  emit2 ("!shortjp NZ,!tlabel ; 1", label->key);
-
-  freeAsmop (from, NULL, ic->next);
-  freeAsmop (to, NULL, ic);
-}
-
-static void
 genBuiltInMemcpy (iCode *ic, int nParams, operand **pparams)
 {
   operand *from, *to, *count;
-  bool deInUse;
 
-  wassertl (nParams == 3, "Built-in memcpy must have two parameters");
+  wassertl (nParams == 3, "Built-in memcpy() must have three parameters");
   to = pparams[2];
   from = pparams[1];
   count = pparams[0];
 
-  deInUse = bitVectBitValue (ic->rMask, D_IDX) || bitVectBitValue(ic->rMask, E_IDX);
+  _saveRegsForCall (ic, 0);
 
-  setupForBuiltin3 (ic, nParams, pparams);
+  setupForMemcpy (ic, nParams, pparams);
 
   emit2 ("ldir");
 
   freeAsmop (count, NULL, ic->next->next);
   freeAsmop (from, NULL, ic);
+
+  spillPair (PAIR_HL);
 
   _restoreRegsAfterCall();
 
@@ -8137,11 +8214,7 @@ static void genBuiltIn (iCode *ic)
     /* which function is it */
     bif = OP_SYMBOL(IC_LEFT(bi_iCode));
 
-    if (strcmp(bif->name,"__builtin_strcpy")==0)
-      {
-        genBuiltInStrcpy(bi_iCode, nbi_parms, bi_parms);
-      }
-    else if (strcmp(bif->name,"__builtin_memcpy")==0)
+    if (strcmp(bif->name,"__builtin_memcpy")==0)
       {
         genBuiltInMemcpy(bi_iCode, nbi_parms, bi_parms);
       }

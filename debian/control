@@ -3,23 +3,19 @@ Section: electronics
 Priority: optional
 Maintainer: Gudjon I. Gudjonsson <gudjon@gudjon.org>
 Uploaders: Bdale Garbee <bdale@gag.com>
-Build-Depends: debhelper (>=5), autoconf, autotools-dev, libtool, flex, bison, 
- libncurses5-dev, gputils, lyx, texlive
-Standards-Version: 3.7.3
+Build-Depends: debhelper (>=7), autoconf, autotools-dev, libtool, flex, bison, 
+ libncurses5-dev, gputils, lyx, texlive, ghostscript
+Standards-Version: 3.8.1
 Homepage: http://sdcc.sourceforge.net
 
 Package: sdcc
 Architecture: any
-Depends: sdcc-libraries(= ${source:Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: sdcc-libraries (= ${source:Version}), ${shlibs:Depends}, ${misc:Depends}
 Recommends: sdcc-doc
 Suggests: sdcc-ucsim
-Description: Small Device C Compiler (DFSG version)
+Description: Small Device C Compiler
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.
- .
- Due to licensing issues, the mcs51, gbz80, z80, hc08, ds390
- and ds400 ports have been disabled in this version. These are provided
- in the non-free version, sdcc-nf.
  .
  This package includes the compiler, assemblers and linkers.
 
@@ -28,13 +24,9 @@ Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: gputils
 Conflicts: sdcc (<< 2.3.8+cvs20040218-1)
-Description: Small Device C Compiler (libraries, DFSG version)
+Description: Small Device C Compiler (libraries)
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.
- .
- Due to licensing issues, the mcs51, gbz80, z80, hc08, ds390
- and ds400 ports have been disabled in this version. These are provided
- in the non-free version, sdcc-libraries-nf.
  .
  This package contains the core library for SDCC.
 
@@ -43,14 +35,10 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Suggests: sdcc
 Replaces: sdcc-ucsim-snapshot
-Description: Micro-controller simulator for SDCC (DFSG version)
+Description: Micro-controller simulator for SDCC
  uCsim is a microcontroller simulator. It is extensible to support
  different microcontroller families. It currently supports Intel 
  MCS51 family, HC08 and Z80 microcontrollers.
- .
- Due to licensing issues, the mcs51, gbz80, z80, hc08, ds390
- and ds400 ports have been disabled in this version. These are provided
- in the non-free version, sdcc-libraries-nf.
 
 Package: sdcc-doc
 Section: doc
@@ -58,11 +46,9 @@ Architecture: all
 Depends: ${misc:Depends}
 Conflicts: sdcc (<= 2.3.3+cvs20030131-4)
 Suggests: sdcc
-Description: Small Device C Compiler (documentation, DFSG version)
+Description: Small Device C Compiler (documentation)
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.
  .
- Due to licensing issues, html documentation has been disabled in this
- version. It is however provided in sdcc-doc-nf.
- .
- This package provides the documentation for the SDCC compiler.
+ This package provides the documentation and examples for the
+ SDCC compiler.

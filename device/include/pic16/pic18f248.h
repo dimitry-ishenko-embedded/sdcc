@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18f248.h 4906 2007-09-03 09:17:13Z tecodev $
+ * $Id: pic18f248.h 5369 2009-02-09 23:45:54Z tecodev $
  *
  */
 
@@ -2496,6 +2496,16 @@ typedef union {
 		unsigned T0IE:1;
 		unsigned PEIE:1;
 		unsigned GIE:1;
+	};
+	struct {
+		unsigned :1;
+		unsigned INT0IF:1;
+		unsigned TMR0IF:1;
+		unsigned :1;
+		unsigned INT0IE:1;
+		unsigned TMR0IE:1;
+		unsigned GIEL:1;
+		unsigned GIEH:1;
 	};
 } __INTCONbits_t;
 

@@ -1,6 +1,6 @@
-debian/s51.1
-debian/savr.1
-debian/shc08.1
-debian/sdcdb.1
-debian/sz80.1
-debian/ucsim.1
+debian/manpages/s51.1
+debian/manpages/savr.1
+debian/manpages/shc08.1
+debian/manpages/sdcdb.1
+debian/manpages/sz80.1
+debian/manpages/ucsim.1

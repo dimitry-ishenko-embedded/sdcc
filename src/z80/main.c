@@ -112,11 +112,8 @@ extern PORT z80_port;
 #include "mappings.i"
 
 static builtins _z80_builtins[] = {
-  /* Disabled for now.
-    { "__builtin_strcpy", "v", 2, {"cg*", "cg*" } },
-    { "__builtin_memcpy", "cg*", 3, {"cg*", "cg*", "ui" } },
-  */
-    { NULL , NULL,0, {NULL}}
+    { "__builtin_memcpy", "vg*", 3, {"vg*", "vg*", "ui" } },
+    { NULL , NULL, 0, {NULL}}
 };
 
 static void
@@ -587,7 +584,7 @@ _setDefaultOptions (void)
   optimize.loopInduction = 1;
 }
 
-/* Mangaling format:
+/* Mangling format:
     _fun_policy_params
     where:
       policy is the function policy
@@ -598,7 +595,7 @@ _setDefaultOptions (void)
     where:
       r is 'r' for reentrant, 's' for static functions
       s is 'c' for callee saves, 'r' for caller saves
-      p is 'p' for profiling on, 'x' for profiling off
+      f is 'f' for profiling on, 'x' for profiling off
     examples:
       rr - reentrant, caller saves
    params format:
@@ -614,7 +611,7 @@ _mangleSupportFunctionName(char *original)
 
   sprintf(buffer, "%s_rr%s_%s", original,
           options.profile ? "f" : "x",
-          options.noRegParams ? "s" : "bds"
+          options.noRegParams ? "s" : "bds" /* MB: but the library only has hds variants ??? */
           );
 
   return Safe_strdup(buffer);
@@ -649,8 +646,15 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
     }
   else if ( IS_LITERAL (right))
     {
-      test = left;
+      test = right;
       val = OP_VALUE (IC_RIGHT (ic));
+    }
+  /* 8x8 unsigned multiplication code is shorter than
+     call overhead for the multiplication routine. */
+  else if ( IS_CHAR (right) && IS_UNSIGNED (right) &&
+    IS_CHAR (left) && IS_UNSIGNED(left) && !IS_GB)
+    {
+      return TRUE;
     }
   else
     {
@@ -714,7 +718,7 @@ PORT z80_port =
     MODEL_MEDIUM | MODEL_SMALL,
     MODEL_SMALL
   },
-  {
+  {                             /* Assembler */
     NULL,
     ASMCMD,
     "-plosgffc",                /* Options with debug */
@@ -722,15 +726,20 @@ PORT z80_port =
     0,
     ".asm"
   },
-  {
+  {                             /* Linker */
     NULL,
     LINKCMD,
     NULL,
     ".o",
     1
   },
-  {
-    _z80_defaultRules
+  {                             /* Peephole optimizer */
+    _z80_defaultRules,
+    0,
+    0,
+    0,
+    0,
+    z80notUsed
   },
   {
         /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
@@ -815,7 +824,7 @@ PORT z80_port =
   0,                            /* leave == */
   TRUE,                         /* Array initializer support. */
   0,                            /* no CSE cost estimation yet */
-  _z80_builtins,                /* no builtin functions */
+  _z80_builtins,                /* builtin functions */
   GPOINTER,                     /* treat unqualified pointers as "generic" pointers */
   1,                            /* reset labelKey to 1 */
   1,                            /* globals & local static allowed */

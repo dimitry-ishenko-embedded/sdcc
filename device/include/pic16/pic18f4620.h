@@ -18,7 +18,7 @@
  * originally designed by
  *     Vangelis Rokas <vrokas AT otenet.gr>
  * 
- * $Id: pic18f4620.h 5085 2008-03-09 22:12:13Z tecodev $
+ * $Id: pic18f4620.h 5369 2009-02-09 23:45:54Z tecodev $
  * 
  */
 
@@ -1069,11 +1069,11 @@ typedef union {
 	};
 	struct {
 		unsigned           	: 1;
+		unsigned INT0F     	: 1;
+		unsigned T0IF      	: 1;
 		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
-		unsigned           	: 1;
+		unsigned INT0E     	: 1;
+		unsigned T0IE      	: 1;
 		unsigned GIEL      	: 1;
 		unsigned GIEH      	: 1;
 	};

@@ -53,7 +53,6 @@ newiList (int type, void *ilist)
 {
   initList *nilist;
 
-
   nilist = Safe_alloc (sizeof (initList));
 
   nilist->type = type;
@@ -75,7 +74,7 @@ newiList (int type, void *ilist)
 }
 
 /*------------------------------------------------------------------*/
-/* revinit   - reverses the initial values for a value  chain        */
+/* revinit   - reverses the initial values for a value chain        */
 /*------------------------------------------------------------------*/
 initList *
 revinit (initList * val)
@@ -100,19 +99,20 @@ revinit (initList * val)
 }
 
 bool
-convertIListToConstList(initList *src, literalList **lList)
+convertIListToConstList(initList *src, literalList **lList, int size)
 {
+    int cnt = 0;
     initList    *iLoop;
     literalList *head, *last, *newL;
 
     head = last = NULL;
 
-    if (!src || src->type != INIT_DEEP)
+    if (src && src->type != INIT_DEEP)
     {
         return FALSE;
     }
 
-    iLoop =  src->init.deep;
+    iLoop = src ? src->init.deep : NULL;
 
     while (iLoop)
     {
@@ -126,14 +126,19 @@ convertIListToConstList(initList *src, literalList **lList)
             return FALSE;
         }
         iLoop = iLoop->next;
+        cnt++;
+    }
+    if (!size)
+    {
+        size = cnt;
     }
 
     /* We've now established that the initializer list contains only literal values. */
 
-    iLoop = src->init.deep;
-    while (iLoop)
+    iLoop = src ? src->init.deep : NULL;
+    while (size--)
     {
-        double val = AST_FLOAT_VALUE(iLoop->init.node);
+        double val = iLoop ? AST_FLOAT_VALUE(iLoop->init.node) : 0;
 
         if (last && last->literalValue == val)
         {
@@ -156,7 +161,7 @@ convertIListToConstList(initList *src, literalList **lList)
             }
             last = newL;
         }
-        iLoop = iLoop->next;
+        iLoop = iLoop ? iLoop->next : NULL;
     }
 
     if (!head)
@@ -201,7 +206,7 @@ copyLiteralList(literalList *src)
 
 
 /*------------------------------------------------------------------*/
-/* copyIlist - copy initializer list            */
+/* copyIlist - copy initializer list                                */
 /*------------------------------------------------------------------*/
 initList *
 copyIlist (initList * src)
@@ -262,6 +267,8 @@ list2val (initList * val)
 ast *
 list2expr (initList * ilist)
 {
+  if (!ilist)
+    return NULL;
   if (ilist->type == INIT_DEEP)
     return list2expr (ilist->init.deep);
   return ilist->init.node;
@@ -691,9 +698,9 @@ constFixed16x16Val (const char *s)
 value *constVal (const char *s)
 {
   value *val;
-  bool hex = FALSE, octal = FALSE;
   char *p;
   double dval;
+  bool is_integral = 0;
 
   val = newValue ();            /* alloc space for value   */
 
@@ -703,27 +710,22 @@ value *constVal (const char *s)
   SPEC_NOUN (val->type) = V_CHAR;
   SPEC_USIGN (val->type) = 0;
 
+  errno = 0;
   if (s[0] == '0')
     {
-      if (s[1] == 'x' || s[1] == 'X')
-        hex = TRUE;
-      else if (isdigit(s[1]))
-        octal = TRUE;
-    }
-
-  errno = 0;
-  if (hex || octal)
-    {
-      dval = strtoul (s, &p, 0);
-      if (errno)
-        {
-          dval = 4294967295.0;
-          werror (W_INVALID_INT_CONST, s, dval);
-        }
+      if (s[1] == 'b' || s[1] == 'B')
+        dval = strtoul (s + 2, &p, 2);
+      else
+        dval = strtoul (s, &p, 0);
+      is_integral = 1;
     }
   else
+    dval = strtod (s, &p);
+
+  if (errno)
     {
-      dval = strtod(s, &p);
+      dval = 4294967295.0;
+      werror (W_INVALID_INT_CONST, s, dval);
     }
 
   /* Setup the flags first */
@@ -772,7 +774,7 @@ value *constVal (const char *s)
             }
           else if (dval > 0x7fff && !SPEC_USIGN (val->type))
             { /* check if we have to promote to long int */
-              if ((hex || octal) && /* hex or octal constants may be stored in unsigned type */
+              if (is_integral && /* integral (hex, octal and binary)  constants may be stored in unsigned type */
                 dval <= 0xffff)
                 {
                   SPEC_USIGN (val->type) = 1;
@@ -1368,8 +1370,7 @@ valDiv (value * lval, value * rval)
 
   if (IS_FLOAT (val->type))
     SPEC_CVAL (val->type).v_float = floatFromVal (lval) / floatFromVal (rval);
-  else
-  if (IS_FIXED16X16 (val->type))
+  else if (IS_FIXED16X16 (val->type))
     SPEC_CVAL (val->type).v_fixed16x16 = fixed16x16FromDouble( floatFromVal (lval) / floatFromVal (rval) );
   else if (SPEC_LONG (val->type))
     {
