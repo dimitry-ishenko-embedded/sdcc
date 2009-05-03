@@ -13,6 +13,7 @@ Architecture: any
 Depends: sdcc-libraries (= ${source:Version}), ${shlibs:Depends}, ${misc:Depends}
 Recommends: sdcc-doc
 Suggests: sdcc-ucsim
+Conflicts: sdcc-libraries (<< 2.9.0)
 Description: Small Device C Compiler
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.

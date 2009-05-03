@@ -1,3 +1,9 @@
+sdcc (2.9.0-2) unstable; urgency=low
+
+  * Add conflict to sdcc-libraries (<<2.9.0) (Closes: #524864)
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sun, 03 May 2009 22:31:16 +0200
+
 sdcc (2.9.0-1) unstable; urgency=low
 
   [ Bdale Garbee ]
