@@ -1,3 +1,10 @@
+sdcc (2.9.0-3) unstable; urgency=low
+
+  * patch from Keith Packard to promote varargs pointers to RESULT_TYPE_GPTR,
+    accepted by upstream for 2.9.1
+
+ -- Bdale Garbee <bdale@gag.com>  Sun, 09 Aug 2009 15:00:31 -0600
+
 sdcc (2.9.0-2) unstable; urgency=low
 
   * Add conflict to sdcc-libraries (<<2.9.0) (Closes: #524864)
