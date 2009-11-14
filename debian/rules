@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 
+include /usr/share/quilt/quilt.make
 export DH_VERBOSE=1
 
 # These are used for cross-compiling and for saving the configure script
@@ -17,19 +18,27 @@ ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
 	INSTALL_PROGRAM += -s
 endif
 
-clean:
+clean: clean-patched unpatch
+clean-patched:
 	dh_testdir
 	dh_testroot
 	# Clean up files that Makefile should have cleaned
 	rm -rf $(CURDIR)/build
-	rm -f support/cpp/config{args.h,.log,.status}
-	rm -f sim/ucsim/config.{guess,sub,status,log}
+	rm -f support/cpp/configargs.h,.log
+	rm -f support/cpp/config.log
+	rm -f support/cpp/config.status
+	rm -f sim/ucsim/config.guess
+	rm -f sim/ucsim/config.sub
+	rm -f sim/ucsim/config.status
+	rm -f sim/ucsim/config.log
+	rm -f config.log
 	rm -f device/lib/small-stack-auto/Makefile
 	rm -f as/link/asxxxx_config.h
 	rm -f device/lib/large/*.asm
 	rm -f device/lib/medium/*.asm
 	rm -f device/lib/small/*.asm
 	rm -f device/lib/small-stack-auto/*.asm
+	rm -f support/cpp/configargs.h
 	find -type f -name '*.o' -exec rm -f {} \;
 	find -type f -name '.stamp' -exec rm -f {} \;
 	find . -name '*.rel' -exec rm -f {} \;
@@ -39,15 +48,19 @@ clean:
 	# Clean up the Debian specific files
 	rm -f config.status doc/sdccman.ps
 	rm -f build-stamp configure-stamp install-arch-stamp install-indep-stamp install-stamp
+	rm -f as/link/lk_readnl.c	# Remove in next version
+	rm -f as/link/lk_readnl.h	# Remove in next version
 	[ ! -f Makefile ] || $(MAKE) distclean
 	dh_clean
 
 configure: configure-stamp
-configure-stamp:
+configure-stamp: $(QUILT_STAMPFN)
 	dh_testdir
 	mkdir -p $(CURDIR)/build
 	cp /usr/share/misc/config.sub sim/ucsim/config.sub
 	cp /usr/share/misc/config.guess sim/ucsim/config.guess
+	cp debian/lk_readnl.h as/link/lk_readnl.h	# Remove in next version
+	cp debian/lk_readnl.c as/link/lk_readnl.c	# Remove in next version
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \

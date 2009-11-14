@@ -15,9 +15,9 @@ MANUAL = sdccman
 TSS = test_suite_spec
 CDB = cdbfileformat
 
-all: $(MANUAL).pdf $(MANUAL).txt \
-	$(TSS).pdf $(TSS).txt \
-	$(CDB).pdf $(CDB).txt
+all: $(MANUAL).pdf $(MANUAL).html/index.html $(MANUAL).txt \
+	$(TSS).pdf $(TSS).html/index.html $(TSS).txt \
+	$(CDB).pdf $(CDB).html/index.html $(CDB).txt
 
 install:
 	$(INSTALL) -d $(DESTDIR)$(docdir)

@@ -1,0 +1,35 @@
+--- a/src/SDCCast.c
++++ b/src/SDCCast.c
+@@ -863,6 +863,8 @@
+ 
+       ftype = (*actParm)->ftype;
+ 
++      resultType = RESULT_TYPE_NONE;
++
+       /* If it's a char, upcast to int. */
+       if (IS_INTEGRAL (ftype)
+           && (getSize (ftype) < (unsigned) INTSIZE))
+@@ -874,12 +876,14 @@
+         {
+           newType = newAst_LINK (copyLinkChain(ftype));
+           DCL_TYPE (newType->opval.lnk) = port->unqualified_pointer;
++         resultType = RESULT_TYPE_GPTR;
+         }
+ 
+       if (IS_AGGREGATE (ftype))
+         {
+           newType = newAst_LINK (copyLinkChain (ftype));
+           DCL_TYPE (newType->opval.lnk) = port->unqualified_pointer;
++          resultType = RESULT_TYPE_GPTR;
+         }
+ 
+       if (newType)
+@@ -890,7 +894,7 @@
+           (*actParm)->filename = (*actParm)->right->filename;
+           (*actParm)->lineno = (*actParm)->right->lineno;
+ 
+-          decorateType (*actParm, RESULT_TYPE_NONE);
++          decorateType (*actParm, resultType);
+         }
+       return 0;
+     } /* vararg */

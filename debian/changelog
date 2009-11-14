@@ -1,3 +1,14 @@
+sdcc (2.9.0-4) unstable; urgency=low
+
+  * Add patch 01_fix_ftbs (Closes: #552867)
+  * Bump standards version to 3.8.3, no changes needed
+  * Remove bashism from debian scripts (Closes: #535420)
+  * Add README.source file
+  * Add patch 02_result_type_gptr
+  * Add dependency on quilt
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sat, 14 Nov 2009 18:22:59 +0100
+
 sdcc (2.9.0-3) unstable; urgency=low
 
   * patch from Keith Packard to promote varargs pointers to RESULT_TYPE_GPTR,

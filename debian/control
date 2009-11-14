@@ -4,8 +4,8 @@ Priority: optional
 Maintainer: Gudjon I. Gudjonsson <gudjon@gudjon.org>
 Uploaders: Bdale Garbee <bdale@gag.com>
 Build-Depends: debhelper (>=7), autoconf, autotools-dev, libtool, flex, bison, 
- libncurses5-dev, gputils, lyx, texlive, ghostscript
-Standards-Version: 3.8.1
+ libncurses5-dev, gputils, lyx, texlive, ghostscript, quilt
+Standards-Version: 3.8.3
 Homepage: http://sdcc.sourceforge.net
 
 Package: sdcc

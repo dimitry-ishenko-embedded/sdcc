@@ -863,8 +863,6 @@ processParms (ast *func,
 
       ftype = (*actParm)->ftype;
 
-      resultType = RESULT_TYPE_NONE;
-
       /* If it's a char, upcast to int. */
       if (IS_INTEGRAL (ftype)
           && (getSize (ftype) < (unsigned) INTSIZE))
@@ -876,14 +874,12 @@ processParms (ast *func,
         {
           newType = newAst_LINK (copyLinkChain(ftype));
           DCL_TYPE (newType->opval.lnk) = port->unqualified_pointer;
-	  resultType = RESULT_TYPE_GPTR;
         }
 
       if (IS_AGGREGATE (ftype))
         {
           newType = newAst_LINK (copyLinkChain (ftype));
           DCL_TYPE (newType->opval.lnk) = port->unqualified_pointer;
-	  resultType = RESULT_TYPE_GPTR;
         }
 
       if (newType)
@@ -894,7 +890,7 @@ processParms (ast *func,
           (*actParm)->filename = (*actParm)->right->filename;
           (*actParm)->lineno = (*actParm)->right->lineno;
 
-          decorateType (*actParm, resultType);
+          decorateType (*actParm, RESULT_TYPE_NONE);
         }
       return 0;
     } /* vararg */
