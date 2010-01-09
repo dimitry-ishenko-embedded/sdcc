@@ -1,3 +1,13 @@
+sdcc (2.9.0-5) unstable; urgency=low
+
+  * Add patch 03_fix_cmdlex to fix compilation (Closes: #560520)
+  * Add patch 04_libtool_fix to fix CVE-2009-3736 local privilege escalation
+    After patching, ltld.c is equal to the ltld.c file in libtool 2.2.6B
+    (Closes: #559840)
+  * Add README.source file
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sat, 09 Jan 2010 05:47:41 +0100
+
 sdcc (2.9.0-4) unstable; urgency=low
 
   * Add patch 01_fix_ftbs (Closes: #552867)
