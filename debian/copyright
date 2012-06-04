@@ -54,10 +54,17 @@ License:
     or later.  Various files associated with support for specific processors carry
     other licenses, all of which appear to be compatible with both versions 2 and 3
     of the GPL.  On Debian systems, the complete text of both GPL versions can be 
-    found in the directory /usr/share/common-licenses.
+    found in the directory /usr/share/common-licenses/GPL-2.
 
-    The sdcc library is licenced either as GPL or LGPL.
+    The sdcc library is licenced either as GPL, GPL+LE or LGPL.
 
+    With GPL+LE the following special exception applies:
+    As a special exception, if you link this library with other files,
+    some of which are compiled with SDCC, to produce an executable,
+    this library does not by itself cause the resulting executable to
+    be covered by the GNU General Public License. This exception does
+    not however invalidate any other reasons why the executable file
+    might be covered by the GNU General Public License.
 
 ----- Example programs for Dallas Semiconductor MCU's ---------------------
 Copyright (C) 2000 Dallas Semiconductor Corporation, All Rights Reserved.

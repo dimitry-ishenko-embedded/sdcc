@@ -1,6 +1,0 @@
-This package uses the quilt patching system and 
-fakeroot debian/rules {un}patch can be used to unpatch/patch it.
-
-The lk_readnl.{c,h} must be copied from the debian directory into the source tree 
-(see rules file). These files are taken from the SVN version to fix compilation 
-of version 2.9.0.

@@ -1,14 +1,17 @@
-.TH ASxxxx 1 
+.TH ASXXXX 1 
 .SH NAME
 ASxxxx \- Series of microprocessor cross assemblers for SDCC.
 .SH SYNOPSIS
-.B asx8051
+.B sdas8051
 .I "[options] file1 [file2 file3 ... file6]"
 .br
-.B as-gbz80
+.B sdasgb
 .I "[options] file1 [file2 file3 ... file6]"
 .br
-.B as-z80
+.B sdasz80
+.I "[options] file1 [file2 file3 ... file6]"
+.br
+.B sdas6808
 .I "[options] file1 [file2 file3 ... file6]"
 .br
 .SH WARNING
@@ -29,17 +32,22 @@ a device specific section.
 .PP
 .B MCS51\c
 \& family is supported by 
-.B asx8051\c
+.B sdas8051\c
 \&.
 .br
 .B Z80\c 
 \&family is supported by
-.B as-z80\c
+.B sdasz80\c
 \&.
 .br
 .B GBZ80\c
 \& (GameBoy Z80-like CPU) is supported by
-.B as-gbz80\c
+.B sdasgb\c
+\&.
+.br
+.B Motorola 6808\c
+\& family is supported by
+.B sdas6808\c
 \&.
 .SH OPTIONS
 The  ASxxxx assemblers are command line oriented. The PC assemblers are 
@@ -75,6 +83,9 @@ create object output file1.rel.
 .BI "\-s"
 create symbol output file1.sym.
 .TP
+.BI "\-c"
+generate sdcdb debug information
+.TP
 .BI "\-p"
 disable listing pagination.
 .TP
@@ -89,6 +100,11 @@ flag relocatable references by ` in the listing file.
 .TP
 .BI "\-ff"
 flag relocatable reference by mode in the listing file.
+.TP
+.BI "\-I"
+add the named directory to the include file
+search path.  This option may be used more than once.
+Directories are searched in the order given.
 .PP
 The file name for the .lst, .rel, and .sym files is the first file name 
 specified in the command line. All output files are ascii text files which 

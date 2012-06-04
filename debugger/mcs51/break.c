@@ -22,6 +22,7 @@
 -------------------------------------------------------------------------*/
 
 #include "sdcdb.h"
+#undef DATADIR
 #include "symtab.h"
 #include "break.h"
 #include "cmd.h"
@@ -32,7 +33,7 @@ char doingSteps    = 0;
 char userBpPresent = 0;
 
 /* call stack can be 1024 deep */
-STACK_DCL(callStack,function *,1024);
+STACK_DCL(callStack,function *,1024)
 
 #ifdef SDCDB_DEBUG
 char *debug_bp_type_strings[] =
@@ -77,8 +78,8 @@ int setBreakPoint (unsigned addr, char addrType, char bpType,
 
     Dprintf(D_break, ("setBreakPoint: addr:%x atype:%s bpType:%s [%s:%d]\n",
         addr,
-        debug_bp_type_strings[addrType],
-        debug_bp_type_strings[bpType],
+        debug_bp_type_strings[(int)addrType],
+        debug_bp_type_strings[(int)bpType],
         fileName, lineno+1));
 
     /* allocate & init a new bp */
@@ -415,7 +416,7 @@ int dispatchCB (unsigned addr, context *ctxt)
     }
 
     if (rv == 0) {
-      Dprintf(D_break, ("break: dispatchCB: WARNING rv==0\n", rv));
+      Dprintf(D_break, ("break: dispatchCB: WARNING rv==0\n"));
     }
 
     return rv;

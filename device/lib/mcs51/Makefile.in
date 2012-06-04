@@ -4,14 +4,19 @@ srcdir = @srcdir@
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 
-LIB_TYPE     = @LIB_TYPE@
-SAS = $(top_builddir)/bin/asx8051
+AR_S            = @AR@ @AR_S_FLAG@
+
+LIB_TYPE        = @LIB_TYPE@
+SAS = $(top_builddir)/bin/sdas8051
 SCC = $(top_builddir)/bin/sdcc
 
-PORTDIR = ../build/$(PORT)
+# override PORTDIR defined by super (parent) makefile
+override PORTDIR = ../build/$(PORT)
 
-OBJ = crtstart.rel crtxinit.rel crtxclear.rel crtclear.rel crtxstack.rel \
-      crtpagesfr.rel crtbank.rel crtcall.rel
+OBJ = crtstart.rel crtxinit.rel crtxclear.rel crtclear.rel \
+      crtpagesfr.rel crtbank.rel crtcall.rel \
+      crtxstack.rel crtxpush.rel crtxpushr0.rel crtxpop.rel crtxpopr0.rel \
+      gptr_cmp.rel
 
 LIB = mcs51.lib
 
@@ -27,22 +32,26 @@ $(PORTDIR)/$(LIB): $(OBJ) Makefile
 ifeq ($(LIB_TYPE), SDCCLIB)
 	rm -f $@; \
 	../../../bin/sdcclib -a $@ $(OBJ)
-else ifeq ($(LIB_TYPE), AR)
-	ar -Scq $@ $(OBJ)
-else ifeq ($(LIB_TYPE), RANLIB)
-	ar -Scq $@ $(OBJ)
-	$(top_builddir)/bin/asranlib $@
 else
+  ifeq ($(LIB_TYPE), AR)
+	$(AR_S) -cq $@ $(OBJ)
+  else
+    ifeq ($(LIB_TYPE), RANLIB)
+	$(AR_S) -cq $@ $(OBJ)
+	$(top_builddir)/bin/sdranlib $@
+    else
 	rm -f $@
 	for i in $(basename $(OBJ)); do echo $$i >>$@; done
 	cp $(OBJ) $(PORTDIR)
+    endif
+  endif
 endif
 
 %.rel: %.c
 	$(CC) $(CFLAGS) -c $<
 
 %.rel: %.asm
-	@# TODO: asx8051 should place it's output in the current dir
+	@# TODO: asx8051 should place it\'s output in the current dir
 	test $(srcdir) = . || cp $< .
 	-$(AS) $(ASFLAGS) $(notdir $<)
 	test $(srcdir) = . || rm $(notdir $<)

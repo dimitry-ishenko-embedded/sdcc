@@ -1,10 +1,11 @@
 /* Dependency generator for Makefile fragments.
-   Copyright (C) 2000, 2001, 2003, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2003, 2007, 2008, 2009
+   Free Software Foundation, Inc.
    Contributed by Zack Weinberg, Mar 2000
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
 
 This program is distributed in the hope that it will be useful,
@@ -13,8 +14,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+along with this program; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.
 
  In other words, you are welcome to use, share and improve this program.
  You are forbidden to forbid anyone else to use, share and improve
@@ -30,8 +31,8 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 struct deps
 {
   const char **targetv;
-  unsigned int ntargets;	/* number of slots actually occupied */
-  unsigned int targets_size;	/* amt of allocated space - in words */
+  unsigned int ntargets;        /* number of slots actually occupied */
+  unsigned int targets_size;    /* amt of allocated space - in words */
 
   const char **depv;
   unsigned int ndeps;
@@ -80,6 +81,11 @@ munge (const char *filename)
 	  /* '$' is quoted by doubling it.  */
 	  len++;
 	  break;
+
+	case '#':
+	  /* '#' is quoted with a backslash.  */
+	  len++;
+	  break;
 	}
     }
 
@@ -99,6 +105,10 @@ munge (const char *filename)
 
 	case '$':
 	  *dst++ = '$';
+	  break;
+
+	case '#':
+	  *dst++ = '\\';
 	  break;
 
 	default:
@@ -232,28 +242,28 @@ deps_add_default_target (cpp_reader *pfile, const char *tgt)
 #endif
       const char *start = lbasename (tgt);
       char *o;
+
       char *suffix;
       const char *obj_ext;
 
       if (NULL == CPP_OPTION (pfile, obj_ext))
-        obj_ext = TARGET_OBJECT_SUFFIX;
+	obj_ext = TARGET_OBJECT_SUFFIX;
       else if (CPP_OPTION (pfile, obj_ext)[0] != '.')
-        {
-          char *t = alloca (strlen (CPP_OPTION (pfile, obj_ext)) + 2);
-          t[0] = '.';
-          strcpy (&t[1], CPP_OPTION (pfile, obj_ext));
-          obj_ext = t;
-        }
+	{
+	  char *t = alloca (strlen (CPP_OPTION (pfile, obj_ext)) + 2);
+	  t[0] = '.';
+	  strcpy (&t[1], CPP_OPTION (pfile, obj_ext));
+	  obj_ext = t;
+	}
       else
-        obj_ext = CPP_OPTION (pfile, obj_ext);
+	obj_ext = CPP_OPTION (pfile, obj_ext);
 
       o = (char *) alloca (strlen (start) + strlen (obj_ext) + 1);
-
       strcpy (o, start);
 
       suffix = strrchr (o, '.');
       if (!suffix)
-        suffix = o + strlen (o);
+	suffix = o + strlen (o);
       strcpy (suffix, obj_ext);
 
       deps_add_target (d, o, 1);
@@ -315,22 +325,24 @@ deps_write (const struct deps *d, FILE *fp, unsigned int colmax)
     {
       size = strlen (d->targetv[i]);
       column += size;
-      if (colmax && column > colmax)
-	{
-	  fputs (" \\\n ", fp);
-	  column = 1 + size;
-	}
       if (i)
 	{
-	  putc (' ', fp);
-	  column++;
+	  if (colmax && column > colmax)
+	    {
+	      fputs (" \\\n ", fp);
+	      column = 1 + size;
+	    }
+	  else
+	    {
+	      putc (' ', fp);
+	      column++;
+	    }
 	}
       fputs (d->targetv[i], fp);
     }
 
   putc (':', fp);
-  putc (' ', fp);
-  column += 2;
+  column++;
 
   for (i = 0; i < d->ndeps; i++)
     {
@@ -341,7 +353,7 @@ deps_write (const struct deps *d, FILE *fp, unsigned int colmax)
 	  fputs (" \\\n ", fp);
 	  column = 1 + size;
 	}
-      if (i)
+      else
 	{
 	  putc (' ', fp);
 	  column++;
@@ -385,9 +397,9 @@ deps_save (struct deps *deps, FILE *f)
     {
       size_t num_to_write = strlen (deps->depv[i]);
       if (fwrite (&num_to_write, sizeof (size_t), 1, f) != 1)
-          return -1;
+	  return -1;
       if (fwrite (deps->depv[i], num_to_write, 1, f) != 1)
-          return -1;
+	  return -1;
     }
 
   return 0;
@@ -427,7 +439,7 @@ deps_restore (struct deps *deps, FILE *fd, const char *self)
 
       /* Generate makefile dependencies from .pch if -nopch-deps.  */
       if (self != NULL && strcmp (buf, self) != 0)
-        deps_add_dep (deps, buf);
+	deps_add_dep (deps, buf);
     }
 
   free (buf);

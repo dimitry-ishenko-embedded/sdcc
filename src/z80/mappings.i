@@ -8,18 +8,18 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     { "*hl", "(hl)" },
     { "di", "di" },
     { "ei", "ei" },
-    { "ldahli", "ld a,(hl+)" },
-    { "ldahlsp", "lda hl,%d(sp)" },
+    /*{ "ldahli", "ldi\ta,(hl)" }, use when assembler update is complete*/
+    {"ldahli", "ld\ta,(hl)\ninc\thl"},
+    { "ldahlsp", "ldhl\tsp,#%d" },
     { "ldaspsp", "lda sp,%d(sp)" },
     { "*pair", "(%s)" },
-    { "shortjp", "jr" },
     { "enter", "" },
     { "enterx", 
       "lda sp,-%d(sp)" },
     { "enterxl",
                 "ld hl,#-%d\n"
-                "\tadd\thl,sp\n"
-                "\tld\tsp,hl"
+                "add\thl,sp\n"
+                "ld\tsp,hl"
     },
     { "leave", ""
     },
@@ -27,30 +27,30 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     },
     { "leavexl",
                 "ld hl,#%d\n"
-                "\tadd\thl,sp\n"
-                "\tld\tsp,hl"
+                "add\thl,sp\n"
+                "ld\tsp,hl"
     },
     { "pusha", 
       "push af\n"
-      "\tpush bc\n"
-      "\tpush de\n"
-      "\tpush hl"
+      "push bc\n"
+      "push de\n"
+      "push hl"
     },
     { "popa", 
       "pop hl\n"
-      "\tpop de\n"
-      "\tpop bc\n"
-      "\tpop af"
+      "pop de\n"
+      "pop bc\n"
+      "pop af"
     },
     { "adjustsp", "lda sp,-%d(sp)" },
     { "fileprelude", "" },
     { "profileenter",
                 "ld a,#3\n"
-                "\trst\t0x08"
+                "rst\t0x08"
     },
     { "profileexit",
                 "ld a,#4\n"
-                "\trst\t0x08"
+                "rst\t0x08"
     },
     { NULL, NULL }
 };
@@ -68,57 +68,123 @@ static const ASM_MAPPING _asxxxx_z80_mapping[] = {
     { "ei", "ei" },
     { "ldahli", 
 		"ld a,(hl)\n"
-		"\tinc\thl" },
+		"inc\thl" },
     { "ldahlsp", 
 		"ld hl,#%d\n"
-		"\tadd\thl,sp" },
+		"add\thl,sp" },
     { "ldaspsp", 
-		"ld hl,#%d\n"
-		"\tadd\thl,sp\n"
-		"\tld\tsp,hl" },
+		"ld iy,#%d\n"
+		"add\tiy,sp\n"
+		"ld\tsp,iy" },
     { "*pair", "(%s)" },
-    { "shortjp", "jp" },
     { "enter", 
 		"push\tix\n"
-		"\tld\tix,#0\n"
-		"\tadd\tix,sp" },
+		"ld\tix,#0\n"
+		"add\tix,sp" },
     { "enterx", 
 		"push\tix\n"
-		"\tld\tix,#0\n"
-		"\tadd\tix,sp\n"
-		"\tld\thl,#-%d\n"
-		"\tadd\thl,sp\n"
-		"\tld\tsp,hl" 
+		"ld\tix,#0\n"
+		"add\tix,sp\n"
+		"ld\thl,#-%d\n"
+		"add\thl,sp\n"
+		"ld\tsp,hl" 
         },
     { "leave", 
 		"pop\tix"
     },
     { "leavex", 
 		"ld sp,ix\n"
-		"\tpop\tix"
+		"pop\tix"
     },
     { "pusha", 
       		"push af\n"
-      		"\tpush\tbc\n"
-      		"\tpush\tde\n"
-      		"\tpush\thl\n"
-		"\tpush\tiy"
+      		"push\tbc\n"
+      		"push\tde\n"
+      		"push\thl\n"
+		"push\tiy"
     },
     { "popa",
 		"pop iy\n"
-		"\tpop\thl\n"
-		"\tpop\tde\n"
-		"\tpop\tbc\n"
-		"\tpop\taf"
+		"pop\thl\n"
+		"pop\tde\n"
+		"pop\tbc\n"
+		"pop\taf"
     },
     { "adjustsp", "lda sp,-%d(sp)" },
     { "profileenter",
                 "ld a,#3\n"
-                "\trst\t0x08"
+                "rst\t0x08"
     },
     { "profileexit",
                 "ld a,#4\n"
-                "\trst\t0x08"
+                "rst\t0x08"
+    },
+    { NULL, NULL }
+};
+
+static const ASM_MAPPING _asxxxx_r2k_mapping[] = {
+    /* We want to prepend the _ */
+    { "area", ".area _%s" },
+    { "areacode", ".area _%s" },
+    { "areadata", ".area _%s" },
+    { "areahome", ".area _%s" },
+    { "*ixx", "%d (ix)" },
+    { "*iyx", "%d (iy)" },
+    { "*hl", "(hl)" },
+    { "di", "ipset3" },
+    { "ei", "ipres" },
+    { "ldahli", 
+		"ld a,(hl)\n"
+		"inc\thl" },
+    { "ldahlsp", 
+		"ld hl,#%d\n"
+		"add\thl,sp" },
+    { "ldaspsp", 
+		"ld iy,#%d\n"
+		"add\tiy,sp\n"
+		"ld\tsp,iy" },
+    { "*pair", "(%s)" },
+    { "enter", 
+		"push\tix\n"
+		"ld\tix,#0\n"
+		"add\tix,sp" },
+    { "enterx", 
+		"push\tix\n"
+		"ld\tix,#0\n"
+		"add\tix,sp\n"
+		"ld\thl,#-%d\n"
+		"add\thl,sp\n"
+		"ld\tsp,hl" 
+        },
+    { "leave", 
+		"pop\tix"
+    },
+    { "leavex", 
+		"ld sp,ix\n"
+		"pop\tix"
+    },
+    { "pusha", 
+      		"push af\n"
+      		"push\tbc\n"
+      		"push\tde\n"
+      		"push\thl\n"
+		"push\tiy"
+    },
+    { "popa",
+		"pop iy\n"
+		"pop\thl\n"
+		"pop\tde\n"
+		"pop\tbc\n"
+		"pop\taf"
+    },
+    { "adjustsp", "lda sp,-%d(sp)" },
+    { "profileenter",
+                "ld a,#3\n"
+                "rst\t0x28"
+    },
+    { "profileexit",
+                "ld a,#4\n"
+                "rst\t0x28"
     },
     { NULL, NULL }
 };
@@ -132,7 +198,7 @@ static const ASM_MAPPING _rgbds_mapping[] = {
     { "tlabel", ".l%05d" },
     { "fileprelude", 
       "; Generated using the rgbds tokens.\n"
-      "\t; We have to define these here as sdcc dosnt make them global by default\n"
+      "\t; We have to define these here as sdcc doesn't make them global by default\n"
       "\tGLOBAL __mulschar\n"
       "\tGLOBAL __muluchar\n"
       "\tGLOBAL __mulint\n"
@@ -209,7 +275,6 @@ static const ASM_MAPPING _rgbds_gb_mapping[] = {
     { "ldahlsp", "ld hl,[sp+%d]" },
     { "ldaspsp", "add sp,%d" },
     { "*pair", "[%s]" },
-    { "shortjp", "jr" },
     { NULL, NULL }
 };
 
@@ -276,15 +341,15 @@ static const ASM_MAPPING _isas_mapping[] = {
 static const ASM_MAPPING _isas_gb_mapping[] = {
     { "pusha", 
       "push af\n"
-      "\tpush bc\n"
-      "\tpush de\n"
-      "\tpush hl"
+      "push bc\n"
+      "push de\n"
+      "push hl"
     },
     { "popa", 
       "pop hl\n"
-      "\tpop de\n"
-      "\tpop bc\n"
-      "\tpop af"
+      "pop de\n"
+      "pop bc\n"
+      "pop af"
     },
     { "di", "di" },
     { "ei", "ei" },
@@ -300,7 +365,6 @@ static const ASM_MAPPING _isas_gb_mapping[] = {
     { "ldahlsp", "ldhl sp,%d" },
     { "ldaspsp", "add sp,%d" },
     { "*pair", "(%s)" },
-    { "shortjp", "jr" },
     { NULL, NULL }
 };
 
@@ -368,57 +432,56 @@ static const ASM_MAPPING _z80asm_z80_mapping[] = {
     { "ei", "ei" },
     { "ldahli", 
 		"ld a,(hl)\n"
-		"\tinc\thl" },
+		"inc\thl" },
     { "ldahlsp", 
 		"ld hl,%d\n"
-		"\tadd\thl,sp" },
+		"add\thl,sp" },
     { "ldaspsp", 
-		"ld hl,%d\n"
-		"\tadd\thl,sp\n"
-		"\tld\tsp,hl" },
+		"ld iy,%d\n"
+		"add\tiy,sp\n"
+		"ld\tsp,iy" },
     { "*pair", "(%s)" },
-    { "shortjp", "jp" },
     { "enter", 
 		"push\tix\n"
-		"\tld\tix,0\n"
-		"\tadd\tix,sp" },
+		"ld\tix,0\n"
+		"add\tix,sp" },
     { "enterx", 
 		"push\tix\n"
-		"\tld\tix,0\n"
-		"\tadd\tix,sp\n"
-		"\tld\thl,-%d\n"
-		"\tadd\thl,sp\n"
-		"\tld\tsp,hl" 
+		"ld\tix,0\n"
+		"add\tix,sp\n"
+		"ld\thl,-%d\n"
+		"add\thl,sp\n"
+		"ld\tsp,hl" 
         },
     { "leave", 
 		"pop\tix"
     },
     { "leavex", 
 		"ld sp,ix\n"
-		"\tpop\tix"
+		"pop\tix"
     },
     { "pusha", 
       		"push af\n"
-      		"\tpush\tbc\n"
-      		"\tpush\tde\n"
-      		"\tpush\thl\n"
-		"\tpush\tiy"
+      		"push\tbc\n"
+      		"push\tde\n"
+      		"push\thl\n"
+		"push\tiy"
     },
     { "popa", 
 		"pop\tiy\n"
-		"\tpop\thl\n"
-		"\tpop\tde\n"
-		"\tpop\tbc\n"
-		"\tpop\taf"
+		"pop\thl\n"
+		"pop\tde\n"
+		"pop\tbc\n"
+		"pop\taf"
     },
     { "adjustsp", "lda sp,(sp%+d)" },
     { "profileenter",
                 "ld a,3\n"
-                "\trst\t$08"
+                "rst\t$08"
     },
     { "profileexit",
                 "ld a,4\n"
-                "\trst\t$08"
+                "rst\t$08"
     },
     { NULL, NULL }
 };
@@ -461,4 +524,9 @@ static const ASM_MAPPINGS _z80asm = {
 const ASM_MAPPINGS _z80asm_z80 = {
     &_z80asm,
     _z80asm_z80_mapping
+};
+
+const ASM_MAPPINGS _asxxxx_r2k = {
+    &asm_asxxxx_mapping,
+    _asxxxx_r2k_mapping
 };

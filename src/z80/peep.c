@@ -34,6 +34,8 @@
 /*#define D(_s) { printf _s; fflush(stdout); }*/
 #define D(_s)
 
+#define ISINST(l, i) (!strncmp((l), (i), sizeof(i) - 1))
+
 typedef enum
 {
   S4O_CONDJMP,
@@ -92,11 +94,11 @@ isReturned(const char *what)
         NOTUSEDERROR();
       spec = &(sym->etype->select.s);
       if(spec->noun == V_VOID)
-         size = 0;
-      else if(spec->noun == V_CHAR)
-         size = 1;
+        size = 0;
+      else if(spec->noun == V_CHAR || spec->noun == V_BOOL)
+        size = 1;
       else if(spec->noun == V_INT && !(spec->b_long))
-         size = 2;
+        size = 2;
       else
         size = 4;
 
@@ -203,21 +205,28 @@ z80MightRead(const lineNode *pl, const char *what)
 {
   if(strcmp(what, "iyl") == 0 || strcmp(what, "iyh") == 0)
     what = "iy";
+  if(strcmp(what, "ixl") == 0 || strcmp(what, "ixh") == 0)
+    what = "ix";
 
   if(strcmp(pl->line, "call\t__initrleblock") == 0)
+    return TRUE;
+
+  if(strcmp(pl->line, "call\t__sdcc_call_hl") == 0 && (strchr(what, 'h') != 0 || strchr(what, 'l') != 0))
     return TRUE;
 
   if(strncmp(pl->line, "call\t", 5) == 0 && strchr(pl->line, ',') == 0)
     return FALSE;
 
-  if(strncmp(pl->line, "ret", 3) == 0 && !isReturned(what))
+  if(ISINST(pl->line, "ret") && !isReturned(what))
     return FALSE;
 
-  if(strcmp(pl->line, "ex\tde,hl") == 0 && strchr(what, 'h') == 0 && strchr(what, 'l') == 0 && strchr(what, 'd') == 0&& strchr(what, 'e') == 0)
+  if(strcmp(pl->line, "ex\t(sp),hl") == 0 && strchr(what, 'h') == 0 && strchr(what, 'l') == 0)
     return FALSE;
-  if(strncmp(pl->line, "ld\t", 3) == 0)
+  if(strcmp(pl->line, "ex\tde,hl") == 0 && strchr(what, 'h') == 0 && strchr(what, 'l') == 0 && strchr(what, 'd') == 0 && strchr(what, 'e') == 0)
+    return FALSE;
+  if(ISINST(pl->line, "ld\t"))
     {
-      if(strstr(strchr(pl->line, ','), what) && strchr(pl->line, ',')[1] != '#')
+      if(strstr(strchr(pl->line, ','), what) && strchr(pl->line, ',')[1] != '#' && !(strchr(pl->line, ',')[1] == '(' && strchr(pl->line, ',')[2] == '#') && !(strchr(pl->line, ',')[1] == '(' && strchr(pl->line, ',')[3] != ')' && strchr(pl->line, ',')[4] != ')'))
         return TRUE;
       if(*(strchr(pl->line, ',') - 1) == ')' && strstr(pl->line + 3, what) && (strchr(pl->line, '#') == 0 || strchr(pl->line, '#') > strchr(pl->line, ',')))
         return TRUE;
@@ -227,12 +236,12 @@ z80MightRead(const lineNode *pl, const char *what)
   if(strcmp(pl->line, "xor\ta,a") == 0)
     return FALSE;
 
-  if(strncmp(pl->line, "adc\t", 4) == 0 ||
-    strncmp(pl->line, "add\t", 4) == 0 ||
-    strncmp(pl->line, "and\t", 4) == 0 ||
-    strncmp(pl->line, "sbc\t", 4) == 0 ||
-    strncmp(pl->line, "sub\t", 4) == 0 ||
-    strncmp(pl->line, "xor\t", 4) == 0)
+  if(ISINST(pl->line, "adc\t") ||
+    ISINST(pl->line, "add\t") ||
+    ISINST(pl->line, "and\t") ||
+    ISINST(pl->line, "sbc\t") ||
+    ISINST(pl->line, "sub\t") ||
+    ISINST(pl->line, "xor\t"))
     {
       if(argCont(pl->line + 4, what))
         return TRUE;
@@ -241,7 +250,7 @@ z80MightRead(const lineNode *pl, const char *what)
       return FALSE;
     }
 
-  if(strncmp(pl->line, "or\t", 3) == 0)
+  if(ISINST(pl->line, "or\t") || ISINST(pl->line, "cp\t") )
     {
       if(argCont(pl->line + 3, what))
         return TRUE;
@@ -250,41 +259,64 @@ z80MightRead(const lineNode *pl, const char *what)
       return FALSE;
     }
 
-  if(strncmp(pl->line, "pop\t", 4) == 0)
+  if(ISINST(pl->line, "neg"))
+    return(strcmp(what, "a") == 0);
+
+  if(ISINST(pl->line, "pop\t"))
     return FALSE;
 
-  if(strncmp(pl->line, "push\t", 5) == 0)
+  if(ISINST(pl->line, "push\t"))
     return(strstr(pl->line + 5, what) != 0);
 
   if(
-    strncmp(pl->line, "dec\t", 4) == 0 ||
-    strncmp(pl->line, "inc\t", 4) == 0 ||
-    strncmp(pl->line, "rl\t", 4) == 0 ||
-    strncmp(pl->line, "rr\t", 4) == 0 ||
-    strncmp(pl->line, "sla\t", 4) == 0 ||
-    strncmp(pl->line, "sra\t", 4) == 0 ||
-    strncmp(pl->line, "srl\t", 4) == 0)
+    ISINST(pl->line, "dec\t") ||
+    ISINST(pl->line, "inc\t"))
     {
-       return (argCont(pl->line + 4, what));
+      return(argCont(pl->line + 4, what));
     }
 
+  // Rotate and shift group (todo: rld rrd, maybe sll)
+  if(ISINST(pl->line, "rlca") ||
+     ISINST(pl->line, "rla") ||
+     ISINST(pl->line, "rrca") ||
+     ISINST(pl->line, "rra"))
+    return(strcmp(what, "a") == 0);
   if(
-    strncmp(pl->line, "rl\t", 3) == 0 ||
-    strncmp(pl->line, "rr\t", 3) == 0)
+    ISINST(pl->line, "rl\t") ||
+    ISINST(pl->line, "rr\t"))
     {
-       return (argCont(pl->line + 3, what));
+      return(argCont(pl->line + 3, what));
     }
+  if(
+    ISINST(pl->line, "rlc\t") ||
+    ISINST(pl->line, "sla\t") ||
+    ISINST(pl->line, "sra\t") ||
+    ISINST(pl->line, "srl\t"))
+    {
+      return(argCont(pl->line + 4, what));
+    }
+
+  // Bit set, reset and test group
+  if(
+    ISINST(pl->line, "bit\t") ||
+    ISINST(pl->line, "set\t") ||
+    ISINST(pl->line, "res\t"))
+    {
+      return(argCont(pl->line + 4, what));
+    }
+
+ if(ISINST(pl->line, "ccf"))
+    return FALSE;
 
   if(strncmp(pl->line, "jp\t", 3) == 0 ||
     (bool)(strncmp(pl->line, "jr\t", 3)) == 0)
     return FALSE;
 
-  if(strncmp(pl->line, "djnz\t", 5) == 0)
+  if(ISINST(pl->line, "djnz\t"))
     return(strchr(what, 'b') != 0);
 
-  if(strncmp(pl->line, "rla", 3) == 0 ||
-    strncmp(pl->line, "rlca", 4) == 0)
-    return(strcmp(what, "a") == 0);
+  if(ISINST(pl->line, "mlt\t"))
+    return(strstr(pl->line + 4, what) != 0);
 
   return TRUE;
 }
@@ -292,8 +324,8 @@ z80MightRead(const lineNode *pl, const char *what)
 static bool
 z80UncondJump(const lineNode *pl)
 {
-  if((strncmp(pl->line, "jp\t", 3) == 0 ||
-    strncmp(pl->line, "jr\t", 3) == 0) && strchr(pl->line, ',') == 0)
+  if((ISINST(pl->line, "jp\t") ||
+    ISINST(pl->line, "jr\t")) && strchr(pl->line, ',') == 0)
     return TRUE;
   return FALSE;
 }
@@ -301,9 +333,9 @@ z80UncondJump(const lineNode *pl)
 static bool
 z80CondJump(const lineNode *pl)
 {
-  if(((strncmp(pl->line, "jp\t", 3) == 0 ||
-    strncmp(pl->line, "jr\t", 3) == 0) && strchr(pl->line, ',') != 0) ||
-    strncmp(pl->line, "djnz\t", 5) == 0)
+  if(((ISINST(pl->line, "jp\t") ||
+    ISINST(pl->line, "jr\t")) && strchr(pl->line, ',') != 0) ||
+    ISINST(pl->line, "djnz\t"))
     return TRUE;
   return FALSE;
 }
@@ -311,24 +343,30 @@ z80CondJump(const lineNode *pl)
 static bool
 z80SurelyWrites(const lineNode *pl, const char *what)
 {
+  if(strcmp(what, "iyl") == 0 || strcmp(what, "iyh") == 0)
+    what = "iy";
+  if(strcmp(what, "ixl") == 0 || strcmp(what, "ixh") == 0)
+    what = "ix";
+
   if(strcmp(pl->line, "xor\ta,a") == 0 && strcmp(what, "a") == 0)
     return TRUE;
-  if(strncmp(pl->line, "ld\t", 3) == 0 && strncmp(pl->line + 3, "hl", 2) == 0 && (what[0] == 'h' || what[0] == 'l'))
+  if(ISINST(pl->line, "ld\t") && strncmp(pl->line + 3, "hl", 2) == 0 && (what[0] == 'h' || what[0] == 'l'))
     return TRUE;
-  if(strncmp(pl->line, "ld\t", 3) == 0 && strncmp(pl->line + 3, "de", 2) == 0 && (what[0] == 'd' || what[0] == 'e'))
+  if(ISINST(pl->line, "ld\t") && strncmp(pl->line + 3, "de", 2) == 0 && (what[0] == 'd' || what[0] == 'e'))
     return TRUE;
-  if(strncmp(pl->line, "ld\t", 3) == 0 && strncmp(pl->line + 3, "bc", 2) == 0 && (what[0] == 'b' || what[0] == 'c'))
+  if(ISINST(pl->line, "ld\t") && strncmp(pl->line + 3, "bc", 2) == 0 && (what[0] == 'b' || what[0] == 'c'))
     return TRUE;
-  if(strncmp(pl->line, "ld\t", 3) == 0 && strncmp(pl->line + 3, what, strlen(what)) == 0 && pl->line[3 + strlen(what)] == ',')
+  if(ISINST(pl->line, "ld\t") && strncmp(pl->line + 3, what, strlen(what)) == 0 && pl->line[3 + strlen(what)] == ',')
     return TRUE;
-  if(strncmp(pl->line, "pop\t", 4) == 0 && strstr(pl->line + 4, what))
+  if(ISINST(pl->line, "pop\t") && strstr(pl->line + 4, what))
     return TRUE;
-  if(strncmp(pl->line, "call\t", 5) == 0 && strchr(pl->line, ',') == 0)
+  if(ISINST(pl->line, "call\t") && strchr(pl->line, ',') == 0  && strcmp(what, "ix"))
     return TRUE;
   if(strcmp(pl->line, "ret") == 0)
     return TRUE;
-  if(strncmp(pl->line, "ld\tiy", 5) == 0 && strncmp(what, "iy", 2) == 0)
+  if(ISINST(pl->line, "ld\tiy") && strncmp(what, "iy", 2) == 0)
     return TRUE;
+
   return FALSE;
 }
 
@@ -388,10 +426,17 @@ scan4op (lineNode **pl, const char *what, const char *untilOp,
       /* don't optimize across inline assembler,
          e.g. isLabel doesn't work there */
       if ((*pl)->isInline)
-        return S4O_ABORT;
+        {
+          D(("S4O_RD_OP: Inline asm\n"));
+          return S4O_ABORT;
+        }
 
       if ((*pl)->visited)
-        return S4O_VISITED;
+        {
+          D(("S4O_VISITED\n"));
+          return S4O_VISITED;
+        }
+
       (*pl)->visited = TRUE;
 
       if(z80MightRead(*pl, what))
@@ -455,7 +500,7 @@ doTermScan (lineNode **pl, const char *what)
           case S4O_TERM:
           case S4O_VISITED:
           case S4O_WR_OP:
-            /* all these are terminating condtions */
+            /* all these are terminating conditions */
             return TRUE;
           case S4O_CONDJMP:
             /* two possible destinations: recurse */
@@ -475,11 +520,10 @@ doTermScan (lineNode **pl, const char *what)
     }
 }
 
+/* Regular 8 bit reg */
 static bool
 isReg(const char *what)
 {
-  if(strcmp(what, "iyl") == 0 || strcmp(what, "iyh") == 0)
-    return TRUE;
   if(strlen(what) != 1)
     return FALSE;
   switch(*what)
@@ -496,6 +540,17 @@ isReg(const char *what)
   return FALSE;
 }
 
+/* 8-Bit reg only accessible by 16-bit and undocumented instructions */
+static bool
+isUReg(const char *what)
+{
+  if(strcmp(what, "iyl") == 0 || strcmp(what, "iyh") == 0)
+    return TRUE;
+  if(strcmp(what, "ixl") == 0 || strcmp(what, "ixh") == 0)
+    return TRUE;
+  return FALSE;
+}
+
 static bool
 isRegPair(const char *what)
 {
@@ -506,6 +561,10 @@ isRegPair(const char *what)
   if(strcmp(what, "de") == 0)
     return TRUE;
   if(strcmp(what, "hl") == 0)
+    return TRUE;
+  if(strcmp(what, "sp") == 0)
+    return TRUE;
+  if(strcmp(what, "ix") == 0)
     return TRUE;
   if(strcmp(what, "iy") == 0)
     return TRUE;
@@ -527,11 +586,21 @@ z80notUsed (const char *what, lineNode *endPl, lineNode *head)
       low[1] = 0;
       high[1] = 0;
       if(strcmp(what, "iy") == 0)
-        return(z80notUsed("iyl", endPl, head) && z80notUsed("iyh", endPl, head));
+        {
+          if(IY_RESERVED)
+            return FALSE;
+          return(z80notUsed("iyl", endPl, head) && z80notUsed("iyh", endPl, head));
+        }
+      if(strcmp(what, "ix") == 0)
+        {
+          if(IY_RESERVED)
+            return FALSE;
+          return(z80notUsed("ixl", endPl, head) && z80notUsed("ixh", endPl, head));
+        }
       return(z80notUsed(low, endPl, head) && z80notUsed(high, endPl, head));
     }
 
-  if(!isReg(what))
+  if(!isReg(what) && !isUReg(what))
     return FALSE;
 
   _G.head = head;
@@ -543,5 +612,276 @@ z80notUsed (const char *what, lineNode *endPl, lineNode *head)
     return FALSE;
 
   return TRUE;
+}
+
+bool
+z80notUsedFrom (const char *what, const char *label, lineNode *head)
+{
+  lineNode *cpl;
+
+  for (cpl = _G.head; cpl; cpl = cpl->next)
+    {
+      if (cpl->isLabel && !strncmp (label, cpl->line, strlen(label)))
+        {
+          return z80notUsed (what, cpl, head);
+        }
+    }
+  return FALSE;
+}
+
+bool
+z80canAssign (const char *op1, const char *op2, const char *exotic)
+{
+  const char *dst, *src;
+
+  // Indexed accesses: One is the indexed one, the other one needs to be a reg or immediate.
+  if(exotic)
+  {
+    if(!strcmp(exotic, "ix") || !strcmp(exotic, "iy"))
+    {
+      if(isReg(op1))
+        return TRUE;
+    }
+    else if(!strcmp(op2, "ix") || !strcmp(op2, "iy"))
+    {
+      if(isReg(exotic) || exotic[0] == '#')
+        return TRUE;
+    }
+
+    return FALSE;
+  }
+
+  // Everything else.
+  dst = op1;
+  src = op2;
+
+  // 8-bit regs can be assigned to each other directly.
+  if(isReg(dst) && isReg(src))
+    return TRUE;
+
+  // Same if at most one of them is (hl).
+  if(isReg(dst) && !strcmp(src, "(hl)"))
+    return TRUE;
+  if(!strcmp(dst, "(hl)") && isReg(src))
+    return TRUE;
+
+  // Can assign between a and (bc), (de)
+  if(!strcmp(dst, "a") && (!strcmp(src, "(bc)") || ! strcmp(src, "(de)")))
+    return TRUE;
+  if((!strcmp(dst, "(bc)") || ! strcmp(dst, "(de)")) && !strcmp(src, "a"))
+    return TRUE;
+
+  // Can load immediate values directly into registers and register pairs.
+  if((isReg(dst) || isRegPair(dst)) && src[0] == '#')
+    return TRUE;
+
+  if((!strcmp(dst, "a") || isRegPair(dst)) && !strncmp(src, "(#", 2))
+    return TRUE;
+  if(!strncmp(dst, "(#", 2) && (!strcmp(src, "a") || isRegPair(src)))
+    return TRUE;
+
+  // Can load immediate values directly into (hl).
+  if(!strcmp(dst, "(hl)") && src[0] == '#')
+    return TRUE;
+
+  return FALSE;
+}
+
+int z80instructionSize(lineNode *pl)
+{
+  const char *op1start, *op2start;
+
+  op1start = strchr(pl->line, '\t');
+  if(op1start)
+    {
+      op1start++;
+      op2start = strchr(op1start, ',');
+      if(op2start)
+        do
+          op2start++;
+      while(op2start && (*op2start == ' ' || *op2start == '\t'));
+    }
+  else
+    op2start = 0;
+
+  /* All ld instructions */
+  if(ISINST(pl->line, "ld\t"))
+    {
+      /* These 3 are the only cases of 4 byte long ld instructions. */
+      if(!strncmp(op1start, "ix", 2) || !strncmp(op1start, "iy", 2))
+        return(4);
+      if((argCont(op1start, "(ix)") || argCont(op1start, "(iy)")) && op2start[0] == '#')
+        return(4);
+      if(op1start[0] == '(' && strncmp(op1start, "(bc)", 4) &&
+         strncmp(op1start, "(de)", 4) && strncmp(op1start, "(hl)", 4) &&
+         strncmp(op2start, "hl", 2) && strncmp(op2start, "a", 2))
+        return(4);
+
+      if(IS_R2K && !strncmp(op1start, "hl", 2) && (argCont(op2start, "(hl)") || argCont(op2start, "(iy)")))
+        return(4);
+      if(IS_R2K && !strncmp(op1start, "hl", 2) && (argCont(op2start, "(sp)") || argCont(op2start, "(ix)")))
+        return(3);
+
+      /* These 4 are the only remaining cases of 3 byte long ld instructions. */
+      if(argCont(op2start, "(ix)") || argCont(op2start, "(iy)"))
+        return(3);
+      if(argCont(op1start, "(ix)") || argCont(op1start, "(iy)"))
+        return(3);
+      if((op1start[0] == '(' && strncmp(op1start, "(bc)", 4) && strncmp(op1start, "(de)", 4) && strncmp(op1start, "(hl)", 4)) ||
+         (op2start[0] == '(' && strncmp(op1start, "(bc)", 4) && strncmp(op1start, "(de)", 4) && strncmp(op1start, "(hl)", 4)))
+        return(3);
+      if((op1start[1] == 'c' || op1start[1] == 'd' || op1start[1] == 'l' || op1start[1] == 'p') && op2start[0] == '#')
+        return(3);
+
+      /* These 3 are the only remaining cases of 2 byte long ld instructions. */
+      if(op2start[0] == '#')
+        return(2);
+      if(op1start[0] == 'i' || op1start[0] == 'r' || op2start[0] == 'i' || op2start[0] == 'r')
+        return(2);
+      if(!strncmp(op2start, "ix", 2) || !strncmp(op2start, "iy", 2))
+        return(2);
+
+      /* All other ld instructions */
+      return(1);
+    }
+
+  /* Exchange */
+  if(ISINST(pl->line, "exx"))
+    return(1);
+  if(ISINST(pl->line, "ex"))
+    {
+      if(!op2start)
+        {
+          fprintf(stderr, "Warning: z80instructionSize() failed to parse line node %s\n", pl->line);
+          return(4);
+        }
+      if(argCont(op1start, "(sp)") && (IS_R2K || !strncmp(op2start, "ix", 2) || !strncmp(op2start, "iy", 2)))
+        return(2);
+      return(1);
+    }
+
+  /* Push / pop */
+  if(ISINST(pl->line, "push") || ISINST(pl->line, "pop"))
+    {
+      if(!strncmp(op1start, "ix", 2) || !strncmp(op1start, "iy", 2))
+        return(2);
+      return(1);
+    }
+
+  /* 16 bit add / subtract / and */
+  if((ISINST(pl->line, "add") || ISINST(pl->line, "adc") || ISINST(pl->line, "sbc") || IS_R2K && ISINST(pl->line, "and")) && !strncmp(op1start, "hl", 2))
+    {
+      if(ISINST(pl->line, "add") || ISINST(pl->line, "and"))
+        return(1);
+      return(2);
+    }
+  if(ISINST(pl->line, "add") && (!strncmp(op1start, "ix", 2) || !strncmp(op1start, "iy", 2)))
+    return(2);
+
+  if(IS_R2K && ISINST(pl->line, "add") && !strncmp(op1start, "sp", 2))
+    return(2);
+
+  /* 8 bit arithmetic, two operands */
+  if(op2start &&  op1start[0] == 'a' && (ISINST(pl->line, "add") || ISINST(pl->line, "adc") || ISINST(pl->line, "sub") || ISINST(pl->line, "sbc") || ISINST(pl->line, "cp") || ISINST(pl->line, "and") || ISINST(pl->line, "or") || ISINST(pl->line, "xor")))
+    {
+      if(argCont(op2start, "(ix)") || argCont(op2start, "(iy)"))
+        return(3);
+      if(op2start[0] == '#')
+        return(2);
+      return(1);
+    }
+
+  if(ISINST(pl->line, "rlca") || ISINST(pl->line, "rla") || ISINST(pl->line, "rrca") || ISINST(pl->line, "rra"))
+    return(1);
+
+  /* Increment / decrement */
+  if(ISINST(pl->line, "inc") || ISINST(pl->line, "dec"))
+    {
+      if(!strncmp(op1start, "ix", 2) || !strncmp(op1start, "iy", 2))
+        return(2);
+      if(argCont(op1start, "(ix)") || argCont(op1start, "(iy)"))
+        return(3);
+      return(1);
+    }
+
+  if(ISINST(pl->line, "rlc") || ISINST(pl->line, "rl") || ISINST(pl->line, "rrc") || ISINST(pl->line, "rr") || ISINST(pl->line, "sla") || ISINST(pl->line, "sra") || ISINST(pl->line, "srl"))
+    {
+      if(argCont(op1start, "(ix)") || argCont(op1start, "(iy)"))
+        return(3);
+      return(2);
+    }
+
+  if(ISINST(pl->line, "rld") || ISINST(pl->line, "rrd"))
+    return(2);
+
+  /* Bit */
+  if(ISINST(pl->line, "bit") || ISINST(pl->line, "set") || ISINST(pl->line, "res"))
+    {
+      if(argCont(op1start, "(ix)") || argCont(op1start, "(iy)"))
+        return(4);
+      return(2);
+    }
+
+  if(ISINST(pl->line, "jr") || ISINST(pl->line, "djnz"))
+    return(2);
+
+  if(ISINST(pl->line, "jp"))
+    {
+      if(!strncmp(op1start, "(hl)", 4))
+        return(1);
+      if(!strncmp(op1start, "(ix)", 4) || !strncmp(op1start, "(iy)", 4))
+        return(2);
+      return(3);
+    }
+
+  if (TARGET_IS_R2K &&
+      (ISINST(pl->line, "ipset3") || ISINST(pl->line, "ipset2") ||
+       ISINST(pl->line, "ipset1") || ISINST(pl->line, "ipset0") ||
+       ISINST(pl->line, "ipres")))
+    return(2);
+  
+  if(ISINST(pl->line, "reti") || ISINST(pl->line, "retn"))
+    return(2);
+
+  if(ISINST(pl->line, "ret") || ISINST(pl->line, "rst"))
+    return(1);
+
+  if(ISINST(pl->line, "call"))
+    return(3);
+
+  if(ISINST(pl->line, "ldi") || ISINST(pl->line, "ldd") || ISINST(pl->line, "cpi") || ISINST(pl->line, "cpd"))
+    return(2);
+
+  if(ISINST(pl->line, "neg"))
+    return(2);
+
+  if(ISINST(pl->line, "daa") || ISINST(pl->line, "cpl") || ISINST(pl->line, "ccf") || ISINST(pl->line, "scf") || ISINST(pl->line, "nop") || ISINST(pl->line, "halt") || ISINST(pl->line,  "ei") || ISINST(pl->line, "di"))
+    return(1);
+
+  if(ISINST(pl->line, "im"))
+    return(2);
+
+  if(ISINST(pl->line, "in") || ISINST(pl->line, "out") || ISINST(pl->line, "ot"))
+    return(2);
+
+  if(ISINST(pl->line, "di") || ISINST(pl->line, "ei"))
+    return(1);
+
+  if(IS_Z180 && ISINST(pl->line, "mlt"))
+    return(2);
+
+  if(IS_R2K && ISINST(pl->line, "mul"))
+    return(1);
+
+  if(ISINST(pl->line, ".db"))
+    {
+      int i, j;
+      for(i = 1, j = 0; pl->line[j]; i += pl->line[j] == ',', j++);
+      return(i);
+    }
+
+  fprintf(stderr, "Warning: z80instructionSize() failed to parse line node %s\n", pl->line);
+
+  return(4);
 }
 

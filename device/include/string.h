@@ -1,65 +1,106 @@
 /*-------------------------------------------------------------------------
-   string.h - ANSI functions forward declarations    
-  
-       Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1998)
+   string.h - ISO header for string library functions
 
-   This program is free software; you can redistribute it and/or modify it
+   Copyright (C) 1998, Sandeep Dutta
+   Copyright (C) 2009-2011, Philipp Klaus Krause pkk@spth.de
+
+   This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2, or (at your option) any
+   Free Software Foundation; either version 2.1, or (at your option) any
    later version.
-   
-   This program is distributed in the hope that it will be useful,
+
+   This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
    GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-   
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!  
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
-
-#ifndef __SDC51_STRING_H
-#define __SDC51_STRING_H 1
+#ifndef __SDCC_STRING_H
+#define __SDCC_STRING_H 1
 
 #ifndef NULL
 # define NULL (void *)0
 #endif
 
-#ifndef _SIZE_T_DEFINED
-# define _SIZE_T_DEFINED
+#ifndef __SIZE_T_DEFINED
+# define __SIZE_T_DEFINED
   typedef unsigned int size_t;
 #endif
 
-extern char *strcpy (char *, char *)  ;
-extern char *strncpy(char *, char *, size_t )  ;
-extern char *strcat (char *, char *)  ;
-extern char *strncat(char *, char *, size_t )  ;
-extern int   strcmp (char *, char *)  ;
-extern int   strncmp(char *, char *, size_t )  ;
-extern char *strchr (char *, char  )  ;
-extern char *strrchr(char *, char  )  ;
-extern int   strspn (char *, char *)  ;
-extern int   strcspn(char *, char *)  ;
-extern char *strpbrk(char *, char *)  ;
-extern char *strstr (char *, char *)  ;
-extern int   strlen (char *  )  ;
-extern char *strtok (char *, char *)  ;
-extern void *memcpy (void *, void *, size_t )  ;
-extern int   memcmp (void *, void *, size_t )  ;
-extern void *memset (void *, unsigned char  , size_t )  ;
-extern void *memmove (void *, void *, size_t )  ;
+#if !defined(SDCC_z80) && !defined(SDCC_z180) && !defined(SDCC_gbz80)
+#define __SDCC_BROKEN_STRING_FUNCTIONS
+#endif
+
+/* The function prototypes are ordered as in the ISO C99 standard. */
+
+/* Todo: fix the "restrict" stuff for C99 compliance. */
+
+/* Copying functions: */
+extern void *memcpy (void * /*restrict */ dest, const void * /*restrict*/ src, size_t n);
+extern void *memmove (void *dest, const void *src, size_t n);
+extern char *strcpy (char * /*restrit*/ dest, const char * /*restrict*/ src);
+extern char *strncpy(char * /*restrict*/ dest, const char * /*restrict*/ src, size_t n);
+
+/* Concatenation functions: */
+extern char *strcat (char * /*restrict*/ dest, const char * /*restrict*/ src);
+extern char *strncat(char * /*restrict*/ dest, const char * /*restrict*/ src, size_t n);
+
+/* Comparison functions: */
+extern int memcmp (const void *s1, const void *s2, size_t n);
+extern int strcmp (const char *s1, const char *s2);
+#define strcoll(s1, s2) strcmp(s1, s2)
+/*int strcoll(const char *s1, const char *s2) {return strcmp(s1, s2);}*/
+extern int strncmp(const char *s1, const char *s2, size_t n);
+extern size_t strxfrm(char *dest, const char *src, size_t n);
+
+/* Search functions: */
+extern void *memchr (const void *s, int c, size_t n);
+#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
+extern char *strchr (const char *s, char c); /* c should be int according to standard. */
+#else
+extern char *strchr (const char *s, int c);
+#endif
+extern size_t strcspn(const char *s, const char *reject);
+extern char *strpbrk(const char *s, const char *accept);
+#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
+extern char *strrchr(const char *s, char c); /* c should be int according to standard. */
+#else
+extern char *strrchr(const char *s, int c);
+#endif
+extern size_t strspn (const char *s, const char *accept);
+extern char *strstr (const char *haystack, const char *needle);
+extern char *strtok (char * /* restrict*/ str, const char * /*restrict*/ delim);
+
+/* Miscanelleous functions: */
+#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
+extern void *memset (void *s, unsigned char c, size_t n); /* c should be int according to standard. */
+#else
+extern void *memset (void *s, int c, size_t n);
+#endif
+
+/* extern char *strerror(int errnum); */
+extern size_t strlen (const char *s);
 
 #ifdef SDCC_ds390
 extern void __xdata * memcpyx(void __xdata *, void __xdata *, int) __naked;
 #endif
 
-#ifdef SDCC_z80
+#if defined(SDCC_z80) || defined(SDCC_z180) || defined(SDCC_r2k)
 #define memcpy(dst, src, n) __builtin_memcpy(dst, src, n)
+#define memset(dst, c, n) __builtin_memset(dst, c, n)
 #endif
 
 #endif
+

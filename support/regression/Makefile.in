@@ -33,7 +33,7 @@
 # Each source suite is processesd producing multiple device specific test suites.
 # Each device specific test suite is compiled.
 # Each device specific test suite is run, and the output recorded.
-# The output from each device specific test suite derrived from a source
+# The output from each device specific test suite derived from a source
 # test suite are collated.
 
 # Uncomment this to show only errors and the summary.
@@ -43,16 +43,14 @@
 CC = @CC@
 CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@ -DNO_VARARGS
+EXEEXT = @EXEEXT@
 
-# support VPATH:
-VPATH        = @srcdir@
 srcdir       = @srcdir@
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 
 # All original tests live in TESTS_DIR and below
 TESTS_DIR = $(srcdir)/tests
-TESTS_NAME = $(TESTS_DIR)
 # All suite results go in RESULTS_DIR
 RESULTS_DIR = results
 # All data relating to supported ports live in their own directory
@@ -77,6 +75,9 @@ CLEAN_PORTS = $(filter-out .svn mcs51-common,$(notdir $(wildcard $(PORTS_DIR)/*)
 
 MAKE_LIBRARY =
 
+# support VPATH:
+vpath %.c $(CASES_DIR):$(TESTS_DIR)
+
 all: test-ports
 
 # Test all of the ports
@@ -92,7 +93,7 @@ test-gbz80:
 	$(MAKE) test-port PORT=gbz80
 
 # Helper rule for testing the mcs51 port only
-test-mcs51: test-mcs51-small test-mcs51-medium test-mcs51-large test-mcs51-stack-auto test-mcs51-xstack-auto
+test-mcs51: test-mcs51-small test-mcs51-medium test-mcs51-large test-mcs51-huge test-mcs51-stack-auto test-mcs51-xstack-auto
 
 test-mcs51-small:
 	$(MAKE) test-port PORT=mcs51-small
@@ -102,6 +103,9 @@ test-mcs51-medium:
 
 test-mcs51-large:
 	$(MAKE) test-port PORT=mcs51-large
+
+test-mcs51-huge:
+	$(MAKE) make_library test-port PORT=mcs51-huge
 
 test-mcs51-stack-auto:
 	$(MAKE) test-port PORT=mcs51-stack-auto
@@ -116,6 +120,14 @@ test-ds390:
 # Helper rule for testing the z80 port only(use ucSim simulator)
 test-ucz80:
 	$(MAKE) test-port PORT=ucz80
+
+# Helper rule for testing the z180 port only(use ucSim simulator)
+test-ucz180:
+	$(MAKE) test-port PORT=ucz180
+
+# Helper rule for testing the r2k port only(use ucSim simulator)
+test-ucr2k:
+	$(MAKE) test-port PORT=ucr2k
 
 # Helper rule for testing the hc08 port only(use ucSim simulator)
 test-hc08:
@@ -142,36 +154,44 @@ test-host2:
 
 # Begin per-port rules
 # List of all of the known source test suites.
-ALL_TESTS = $(shell find $(TESTS_DIR) -name "*.c" | sort)
+ALL_C_TESTS = $(shell find $(TESTS_DIR) -name "*.c")
+ALL_M_TESTS = $(shell find $(TESTS_DIR) -name "*.m4")
+
+M_CASES = $(ALL_M_TESTS:$(TESTS_DIR)/%.m4=$(CASES_DIR)/%.c)
 
 # Intermediate directory
 PORT_CASES_DIR = $(CASES_DIR)/$(PORT)
 PORT_RESULTS_DIR = $(RESULTS_DIR)/$(PORT)
 # Each test generates a result log file
-PORT_RESULTS = $(ALL_TESTS:$(TESTS_DIR)/%.c=$(PORT_RESULTS_DIR)/%.out)
+PORT_RESULTS = $(sort $(ALL_C_TESTS:$(TESTS_DIR)/%.c=$(PORT_RESULTS_DIR)/%.out) $(ALL_M_TESTS:$(TESTS_DIR)/%.m4=$(PORT_RESULTS_DIR)/%.out))
 
 SDCC_EXTRA_DIR = $(top_builddir)/../sdcc-extra
 
 # Defaults.  Override in spec.mk if required.
 # Path to SDCC
 ifdef SDCC_BIN_PATH
-  SDCC = $(SDCC_BIN_PATH)/sdcc
+  SDCC = $(SDCC_BIN_PATH)/sdcc$(EXEEXT)
 else
-  SDCC = $(top_builddir)/bin/sdcc
+  SDCC = $(top_builddir)/bin/sdcc$(EXEEXT)
   INC_DIR ?= $(top_srcdir)/device/include
 endif
 # Base flags.
 SDCCFLAGS += --fverbose-asm -DNO_VARARGS
 # Extension of object intermediate files
-OBJEXT = .o
+OBJEXT = .rel
 # Extension of files that can be run in the emulator
-EXEEXT = .bin
+BINEXT = .bin
 # Currently unused.  Extension to append to intermediate directories.
 DIREXT =
 
 # Only include if we're in a per-port call.
 ifdef PORT
-include $(PORTS_DIR)/$(PORT)/spec.mk
+  # include ./$(PORT)/spec.mk if exists, else include $(PORTS_DIR)/$(PORT)/spec.mk
+  ifeq ($(shell if test -f ./ports/$(PORT)/spec.mk; then echo OK; fi),OK)
+    include ./ports/$(PORT)/spec.mk
+  else
+    include $(PORTS_DIR)/$(PORT)/spec.mk
+  endif
 endif
 
 make_library: $(MAKE_LIBRARY)
@@ -183,22 +203,29 @@ endif
 
 # List of intermediate files to keep.  Pretty much keep everything as
 # disk space is free.
-.PRECIOUS: $(PORT_CASES_DIR)/% %$(OBJEXT) %$(EXEEXT)
+.PRECIOUS: $(PORT_CASES_DIR)/% %$(OBJEXT) %$(EXEEXT) %$(BINEXT)
 
-# Rule to generate the iterations of a test suite off the soure suite.
-$(PORT_CASES_DIR)/%/iterations.stamp: $(TESTS_DIR)/%.c $(GENERATE_CASES)
-	echo Processing $(notdir $<)
+$(CASES_DIR):
+	mkdir -p $@
+
+# Rule to generate .c files from .m4 files
+$(CASES_DIR)/%.c: $(TESTS_DIR)/%.m4
+	m4 -I $(srcdir)/m4include rtmacros.m4 $< > $@
+
+# Rule to generate the iterations of a test suite off the source suite.
+$(PORT_CASES_DIR)/%/iterations.stamp: %.c $(GENERATE_CASES)
 	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
-	python $(GENERATE_CASES) $< $(dir $@) > /dev/null
+	python $(GENERATE_CASES) $< $(dir $@)
 	touch $@
 
 # Rule linking the combined results log to all of the files in the
 # iteration directory.
 $(PORT_RESULTS_DIR)/%.out: $(PORT_CASES_DIR)/%/iterations.stamp
 	$(MAKE) iterations PORT=$(PORT) CASES=$(dir $<)
+	python $(srcdir)/compact-results.py < $@
 
-# Rule to summaries the results for one port after all of the tests
+# Rule to summarise the results for one port after all of the tests
 # have been run.
 port-results: port-dirs $(PORT_RESULTS)
 	echo Summary for \'$(PORT)\': `cat $(PORT_RESULTS) | python $(srcdir)/collate-results.py`
@@ -208,7 +235,9 @@ port-dirs:
 	mkdir -p $(PORT_CASES_DIR) $(PORT_RESULTS_DIR)
 	echo Running $(PORT) regression tests
 
-test-port: port-results
+test-port: $(CASES_DIR) $(M_CASES)
+	# recurse: force vpath to re-read the $(CASES_DIR)
+	$(MAKE) port-results PORT=$(PORT)
 
 # Begin rules that process each iteration generated from the source
 # test
@@ -241,7 +270,7 @@ $(RESULTS): $(SUB_RESULTS)
 
 clean:
 	rm -rf $(CASES_DIR) $(RESULTS_DIR) *.pyc
-	for i in $(CLEAN_PORTS); do $(MAKE) -f $(PORTS_DIR)/$$i/spec.mk _clean PORTS_DIR=$(PORTS_DIR) PORT=$$i; done
+	for i in $(CLEAN_PORTS); do $(MAKE) -f $(PORTS_DIR)/$$i/spec.mk _clean PORTS_DIR=$(PORTS_DIR) PORT=$$i srcdir=$(srcdir); done
 
 distclean: clean
 	rm -f Makefile

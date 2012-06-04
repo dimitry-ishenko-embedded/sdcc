@@ -75,7 +75,7 @@ void AddRegToFlow(regs *reg, pCodeFlow *pcfl)
 #if HAVE_DBGREGUSAGE
 static void dbg_regusage(set *fregs)
 {
-  regs *reg;
+  reg_info *reg;
   pCode *pcfl;
   pCode *pc;
 
@@ -160,7 +160,7 @@ static void pCodeRegMapLiveRangesInFlow(pCodeFlow *pcfl)
   pCode *pc=NULL;
   pCode *pcprev=NULL;
 
-  regs *reg;
+  reg_info *reg;
 
   if(!pcfl)
     return;
@@ -274,7 +274,7 @@ void pic16_pCodeRegMapLiveRanges(pBlock *pb)
 /*-----------------------------------------------------------------*
  *
  *-----------------------------------------------------------------*/
-static void Remove1pcode(pCode *pc, regs *reg)
+static void Remove1pcode(pCode *pc, reg_info *reg)
 {
   pCode *pcn=NULL;
 
@@ -323,7 +323,7 @@ static void Remove1pcode(pCode *pc, regs *reg)
  *-----------------------------------------------------------------*/
 static void  RemoveRegsFromSet(set *regset)
 {
-  regs *reg;
+  reg_info *reg;
   int used;
 
   while(regset) {
@@ -364,12 +364,13 @@ static void  RemoveRegsFromSet(set *regset)
 	    } 
 	    /* Move the label to the next instruction */
 
+            assert (PCI(pcn) != NULL);
 	    PCI(pcn)->label = PCI(pc)->label;
 
 	  }
 
 	  if(isPCI_SKIP(pc)) {
-	    regs *r = pic16_getRegFromInstruction(pc);
+	    reg_info *r = pic16_getRegFromInstruction(pc);
 	    fprintf(stderr, "WARNING, a skip instruction is being optimized out\n");
 	    pc->print(stderr,pc);
 	    fprintf(stderr,"reg %s, type =%d\n",r->name, r->type);
@@ -441,7 +442,7 @@ static int insideLRBlock(pCode *pc)
 }
 
     
-static void RemoveRegFromLRBlock(regs *reg)
+static void RemoveRegFromLRBlock(reg_info *reg)
 {
   if(elementsInSet(reg->reglives.usedpCodes) == 2) {
     pCode *pc1;
@@ -476,7 +477,7 @@ static void RemoveRegFromLRBlock(regs *reg)
 /*-----------------------------------------------------------------*
  *
  *-----------------------------------------------------------------*/
-static void Remove2pcodes(pCode *pcflow, pCode *pc1, pCode *pc2, regs *reg, int can_free)
+static void Remove2pcodes(pCode *pcflow, pCode *pc1, pCode *pc2, reg_info *reg, int can_free)
 {
   if(!reg)
     return;
@@ -516,10 +517,10 @@ static void Remove2pcodes(pCode *pcflow, pCode *pc1, pCode *pc2, regs *reg, int 
 /*-----------------------------------------------------------------*
  *
  *-----------------------------------------------------------------*/
-static int regUsedinRange(pCode *pc1, pCode *pc2, regs *reg)
+static int regUsedinRange(pCode *pc1, pCode *pc2, reg_info *reg)
 {
   int i=0;
-  regs *testreg;
+  reg_info *testreg;
 
   do {
     testreg = pic16_getRegFromInstruction(pc1);
@@ -555,10 +556,10 @@ static int regUsedinRange(pCode *pc1, pCode *pc2, regs *reg)
  * 
  *
  *-----------------------------------------------------------------*/
-static int pCodeOptime2pCodes(pCode *pc1, pCode *pc2, pCode *pcfl_used, regs *reg, int can_free, int optimize_level)
+static int pCodeOptime2pCodes(pCode *pc1, pCode *pc2, pCode *pcfl_used, reg_info *reg, int can_free, int optimize_level)
 {
   pCode *pct1, *pct2;
-  regs  *reg1, *reg2;
+  reg_info  *reg1, *reg2;
 
   int t = total_registers_saved;
 
@@ -786,7 +787,7 @@ static int pCodeOptime2pCodes(pCode *pc1, pCode *pc2, pCode *pcfl_used, regs *re
  *-----------------------------------------------------------------*/
 static void OptimizeRegUsage(set *fregs, int optimize_multi_uses, int optimize_level)
 {
-  regs *reg;
+  reg_info *reg;
   int used;
   pCode *pc1=NULL, *pc2=NULL;
 
@@ -988,7 +989,7 @@ void pic16_pCodeRegOptimizeRegUsage(int level)
  *-----------------------------------------------------------------*/
 static void  RegsSetUnMapLiveRanges(set *regset)
 {
-  regs *reg;
+  reg_info *reg;
 
   while(regset) {
     reg = regset->item;

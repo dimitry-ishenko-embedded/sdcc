@@ -1,3 +1,54 @@
+sdcc (3.1.0+dfsg-1) unstable; urgency=low
+
+  * New upstream release (Closes: #647036)
+  * Switch to dpkg-source 3.0 (quilt) format
+  * Remove lk_readnl fix from rules file
+  * Bump standards version to 3.9.3
+  * Change Conflicts to Breaks in control file
+  * Suggest python for sdcc
+  * Add arch-dependent-file-in-usr-share to overrides file
+  * Add recommended target build arch (Closes: #459877)
+  * Fix whatis entry for as2xxxx.1 manpage
+  * Add manpage for as2gbmap
+  * Add a get-orig-source target to rules file
+  * Exclude non-free sources from source package (Closes: #597933)
+  * Add +dfsg to source package name
+  * Add version mangling to watch file
+  * Add Vcs fields
+  * Change all references to asranlib to sdranlib
+  * Remove patches 01_fix_getline  02_result_type_gptr  03_fix_cmdlex
+  * Remove sim/ucsim/libltdl in get-orig-source
+  * Remove patch 04_libtool_fix
+  * Rename other patches from 05, 06 to 01, 02
+  * Add GPL+LE to copyright file
+  * Fix sdcc manpage (Closes: #658188)
+  * Bump compat to 8
+  * Add build dependency on libboost-dev
+  * Change texlive dependency to texlive-full. I clould not find minimum set
+    of texlive packages needed to compile the package.
+  * Remove go.bat from sdcc-doc
+  * Add Build-Depends-Indep field (Thanks to Aron Xu)
+  * Fix build/install arch/indep (Thanks to Aron Xu)
+  * Fix lintian override file
+  * Fix cleaning of .asm files, too many were removed
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Mon, 04 Jun 2012 09:29:53 +0000
+
+sdcc (2.9.0+dfsg-1) unstable; urgency=low
+
+  * Remove all pic header and library files (Closes: #597933)
+  * Add patch 05_exclude_pic_lib
+  * Bump standards version to 3.9.1
+  * Switch to dpkg-source 3.0 (quilt) format
+  * Remove Conflicts: sdcc (<= 2.3.3+cvs20030131-4)
+  * Remove Conflicts: sdcc (<< 2.3.8+cvs20040218-1)
+  * Change hypen to minus in ucsim.1
+  * Add description to all patches
+  * Fixed watch file
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Fri, 17 Dec 2010 07:42:20 +0100
+
+
 sdcc (2.9.0-5) unstable; urgency=low
 
   * Add patch 03_fix_cmdlex to fix compilation (Closes: #560520)

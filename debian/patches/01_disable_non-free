@@ -1,0 +1,90 @@
+Removes all references to the non-free directory. Needed in order to 
+compile the source files stripped of non-free files.
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -58,7 +58,7 @@
+ 
+ ifeq ($(OPT_DISABLE_DEVICE_LIB), 0)
+ TARGETS         += sdcc-device-lib
+-PKGS            += device/lib device/non-free/lib
++PKGS            += device/lib
+ endif
+ 
+ ifeq ($(OPT_DISABLE_PACKIHX), 0)
+@@ -78,10 +78,10 @@
+ 
+ TARGETS         += sdcc-libs sdcc-cc sdcc-device-inc sdcc-as sdcc-ld sdcc-scripts
+ 
+-PKGS            += $(SDCC_LIBS) src device/include device/non-free/include $(SDCC_AS) sdas/linksrc $(SDCC_LIBRARIAN) $(SDCC_SDRANLIB) $(SDCC_SCRIPTS)
++PKGS            += $(SDCC_LIBS) src device/include $(SDCC_AS) sdas/linksrc $(SDCC_LIBRARIAN) $(SDCC_SDRANLIB) $(SDCC_SCRIPTS)
+ 
+ PKGS_TINI       = $(SDCC_LIBS) $(SDCC_AS) sdas/linksrc \
+-                  src device/include device/non-free/include $(SDCC_PACKIHX) $(SDCC_LIBRARIAN)
++                  src device/include $(SDCC_PACKIHX) $(SDCC_LIBRARIAN)
+ PORTS           = $(shell cat ports.build)
+ ALLPORTS        = $(shell cat ports.all)
+ 
+@@ -120,15 +120,12 @@
+ 
+ sdcc-device-inc:
+ 	$(MAKE) -C device/include
+-	$(MAKE) -C device/non-free/include
+ 
+ sdcc-device-lib: sdcc-cc sdcc-as sdcc-ld
+ 	$(MAKE) -C device/lib
+-	$(MAKE) -C device/non-free/lib
+ 
+ sdcc-device-tini:
+ 	$(MAKE) -C device/include
+-	$(MAKE) -C device/non-free/include
+ 	$(MAKE) -C device/lib model-ds390 model-ds400
+ 
+ # doc depends on latex and latex2html
+--- a/configure
++++ b/configure
+@@ -747,9 +747,7 @@
+ ac_subdirs_all='support/cpp
+ support/packihx
+ sim/ucsim
+-debugger/mcs51
+-device/lib/pic14 device/non-free/lib/pic14
+-device/lib/pic16 device/non-free/lib/pic16'
++debugger/mcs51'
+ 
+ # Initialize some variables set by options.
+ ac_init_help=
+@@ -5601,9 +5599,6 @@
+ # *nix default: "sdcc/non-free/include"
+ 
+ 
+-if test "${non_free_include_dir_suffix}" = ""; then
+-    non_free_include_dir_suffix="sdcc/non-free/include"
+-fi
+ 
+ # lib_dir_suffix:
+ # *nix default: "sdcc/lib"
+@@ -7089,10 +7084,10 @@
+ 
+ fi
+ 
+-test $OPT_DISABLE_DEVICE_LIB = 0 && ac_config_files="$ac_config_files device/lib/Makefile device/non-free/lib/Makefile"
++test $OPT_DISABLE_DEVICE_LIB = 0 && ac_config_files="$ac_config_files device/lib/Makefile"
+ 
+ 
+-ac_config_files="$ac_config_files main.mk:main_in.mk src/Makefile device/include/Makefile device/non-free/include/Makefile sdas/linksrc/Makefile support/sdranlib/Makefile support/librarian/Makefile support/makebin/Makefile support/regression/Makefile support/valdiag/Makefile support/scripts/Makefile support/regression/ports/host/spec.mk:support/regression/ports/host/spec.mk.in Makefile Makefile.common:Makefile.common.in"
++ac_config_files="$ac_config_files main.mk:main_in.mk src/Makefile device/include/Makefile sdas/linksrc/Makefile support/sdranlib/Makefile support/librarian/Makefile support/makebin/Makefile support/regression/Makefile support/valdiag/Makefile support/scripts/Makefile support/regression/ports/host/spec.mk:support/regression/ports/host/spec.mk.in Makefile Makefile.common:Makefile.common.in"
+ 
+ cat >confcache <<\_ACEOF
+ # This file is a shell script that caches the results of configure
+@@ -7816,11 +7811,9 @@
+     "sdas/asrab/Makefile") CONFIG_FILES="$CONFIG_FILES sdas/asrab/Makefile" ;;
+     "device/lib/r2k/Makefile") CONFIG_FILES="$CONFIG_FILES device/lib/r2k/Makefile" ;;
+     "device/lib/Makefile") CONFIG_FILES="$CONFIG_FILES device/lib/Makefile" ;;
+-    "device/non-free/lib/Makefile") CONFIG_FILES="$CONFIG_FILES device/non-free/lib/Makefile" ;;
+     "main.mk") CONFIG_FILES="$CONFIG_FILES main.mk:main_in.mk" ;;
+     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
+     "device/include/Makefile") CONFIG_FILES="$CONFIG_FILES device/include/Makefile" ;;
+-    "device/non-free/include/Makefile") CONFIG_FILES="$CONFIG_FILES device/non-free/include/Makefile" ;;
+     "sdas/linksrc/Makefile") CONFIG_FILES="$CONFIG_FILES sdas/linksrc/Makefile" ;;
+     "support/sdranlib/Makefile") CONFIG_FILES="$CONFIG_FILES support/sdranlib/Makefile" ;;
+     "support/librarian/Makefile") CONFIG_FILES="$CONFIG_FILES support/librarian/Makefile" ;;

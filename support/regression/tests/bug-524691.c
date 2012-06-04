@@ -1,6 +1,7 @@
 /* Division by powers of two.
  */
 #include <testfwk.h>
+#include <stddef.h>
 
 typedef unsigned int UINT;
 
@@ -10,7 +11,8 @@ typedef struct _HeapEntryState
   UINT uFlags;
 } HeapEntryState;
 
-static HeapEntryState *_getHeapEntryState(void *p, HeapEntryState *pStates, UINT nStateEntries)
+static HeapEntryState *
+_getHeapEntryState (void *p, HeapEntryState *pStates, UINT nStateEntries)
 {
   int uLeft = -1, uRight = nStateEntries, uMiddle;
 
@@ -40,15 +42,15 @@ static HeapEntryState *_getHeapEntryState(void *p, HeapEntryState *pStates, UINT
 }
 
 void
-testDivByZero(void)
+testDivByZero (void)
 {
   HeapEntryState aStates[] = {
-    { (void xdata *)1, 0 }
+    { (void __xdata *)1, 0 }
   };
-  void *p = (void xdata *)0x1234;
+  void *p = (void __xdata *)0x1234;
 
-  ASSERT(_getHeapEntryState(p, aStates, 1) == NULL);
+  ASSERT (_getHeapEntryState (p, aStates, 1) == NULL);
 
   aStates[0].pBase = p;
-  ASSERT(_getHeapEntryState(p, aStates, 1) == aStates + 0);
+  ASSERT (_getHeapEntryState (p, aStates, 1) == aStates + 0);
 }

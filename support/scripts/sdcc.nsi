@@ -1,6 +1,6 @@
 # sdcc.nsi - NSIS installer script for SDCC
 #
-# Copyright (c) 2003-2009 Borut Razem
+# Copyright (c) 2003-2011 Borut Razem
 #
 # This file is part of sdcc.
 #
@@ -34,14 +34,16 @@
 #   rename it to COPYING.txt and COPYING3.txt and convert it to DOS format:
 #   unix2dos COPYING.txt
 #   unix2dos COPYING3.txt
-# - copy readline5.dll to PKGDIR/bin/readline5.dll
+#   unix2dos doc/ChangeLog_head.txt
+#   unix2dos doc/README.TXT
 # - run NSIS installer from PKGDIR directory:
 #   "c:\Program Files\NSIS\makensis.exe" -DVER_MAJOR=<SDCC_VER_MAJOR> -DVER_MINOR=<SDCC_VER_MINOR> -DVER_REVISION=<SDCC_VER_DEVEL> -DVER_BUILD=<SDCC_REVISION> sdcc.nsi
 #   replace <VER_XXX> with the appropriate values, for example for SDCC 2.7.4:
 #   <SDCC_VER_MAJOR> = 2
 #   <SDCC_VER_MINOR> = 7
 #   <SDCC_VER_DEVEL> = 4
-#   replace <SDCC_REVISION> with the current svn revision number
+#   replace <SDCC_REVISION> with the current svn revision number.
+#   Define -DWIN64 if createing a 64bit package.
 # - A setup file setup.exe is created in PKGDIR directory.
 #   Rename it to sdcc-yyyymmdd-rrrr-setup.exe and upload it
 #   to sdcc download repository at sourceforge.net
@@ -60,20 +62,19 @@
 #   rename it to COPYING.txt and COPYING3.txt and convert it to DOS format:
 #   unix2dos COPYING.txt
 #   unix2dos COPYING3.txt
-# - copy readline5.dll to PKGDIR/bin/readline5.dll
+#   unix2dos doc/ChangeLog.txt
+#   unix2dos doc/README.TXT
 # - run NSIS installer from PKGDIR directory:
 #   "c:\Program Files\NSIS\makensis.exe" -DFULL_DOC -DVER_MAJOR=<VER_MAJOR> -DVER_MINOR=<VER_MINOR> -DVER_REVISION=<VER_PATCH> -DVER_BUILD=<REVISION> sdcc.nsi
+#   replace <VER_XXX> with the appropriate values, for example for SDCC 3.0.0:
+#   <SDCC_VER_MAJOR> = 3
+#   <SDCC_VER_MINOR> = 0
+#   <SDCC_VER_DEVEL> = 0
+#   replace <SDCC_REVISION> with the current svn revision number.
+#   Define -DWIN64 if createing a 64bit package.
 # - A setup file setup.exe is created in PKGDIR directory.
 #   Rename it to sdcc-x.x.x-setup.exe and upload it
 #   to sdcc download repository at sourceforge.net
-#
-# How to upload secc setup.exe tosourceforge.net
-#
-# Execute following commands from the cmd prompt:
-# - sftp sdcc.sourceforge.net
-# - cd /home/groups/s/sd/sdcc/htdocs/snapshots/i586-mingw32msvc-setup
-# - put sdcc_yyyymmdd_setup.exe
-# - quit
 #
 # For debugging define -DSDCC.DEBUG command line option
 
@@ -171,13 +172,6 @@ SetCompressor /SOLID lzma
 
 !define DEV_ROOT "${SDCC_ROOT}"
 
-!ifdef FULL_DOC
-!system "unix2dos ${SDCC_ROOT}\doc\ChangeLog.txt" = 0
-!else
-!system "unix2dos ${SDCC_ROOT}\doc\ChangeLog_head.txt" = 0
-!endif
-!system "unix2dos ${SDCC_ROOT}\doc\README.TXT" = 0
-
 InstType "Full (Bin, ucSim, SDCDB, Doc, Lib, Src)"
 InstType "Medium (Bin, ucSim, SDCDB, Doc, Lib)"
 InstType "Compact (Bin, ucSim, SDCDB, Doc)"
@@ -195,6 +189,8 @@ InstType "Compact (Bin, ucSim, SDCDB, Doc)"
 !include MUI2.nsh
 !include WordFunc.nsh
 !include StrFunc.nsh
+!include WinVer.nsh
+!include x64.nsh
 ${StrStr}
 ${UnStrStr}
 
@@ -218,6 +214,7 @@ Var SDCC.PathToRemove
 !define MUI_ICON ".\sdcc.ico"
 
 ; Welcome page
+!define MUI_WELCOMEPAGE_TEXT "$(^NameDA) release is dedicated to the memory of Dennis M. Ritchie, father of the C programming language.$\r$\n$\r$\nThis wizard will guide you through the installation of $(^NameDA).$\r$\n$\r$\nIt is recommended that you close all other applications before starting Setup. This will make it possible to update relevant system files without having to reboot your computer.$\r$\n$\r$\n$_CLICK"
 !insertmacro MUI_PAGE_WELCOME
 
 ; License page
@@ -286,7 +283,6 @@ ${FunctionEnd}
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 BrandingText ""
 OutFile "setup.exe"
-InstallDir "$PROGRAMFILES\SDCC"
 ;;;;ShowInstDetails show
 ;;;;ShowUnInstDetails show
 
@@ -294,31 +290,37 @@ InstallDir "$PROGRAMFILES\SDCC"
 ${Function} .onInit
   ${DebugMsg} "Pre INSTDIR = $INSTDIR"
 
+  ${If} ${RunningX64}
+    StrCpy $INSTDIR "$PROGRAMFILES64\${PRODUCT_NAME}"
+    SetRegView 64
+  ${Else}
+  !ifdef WIN64
+    MessageBox MB_OK|MB_ICONSTOP \
+      "This installation package is not supported on this platform. Contact your application vendor."
+    Abort
+  !endif
+    StrCpy $INSTDIR "$PROGRAMFILES\${PRODUCT_NAME}"
+  ${Endif}
+
 !ifndef VER_MAJOR & VER_MINOR & VER_REVISION & VER_BUILD
   ; Old unistallation method
   ; Uninstall the old version, if present
   ReadRegStr $R0 ${UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString"
-  StrCmp $R0 "" inst
+  ${If} $R0 != ""
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
+      "$(^Name) is already installed. $\n$\nClick 'OK' to remove the previous version or 'Cancel' to cancel this upgrade." \
+      IDOK +2
+    Abort
 
-  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
-  "$(^Name) is already installed. $\n$\nClick 'OK' to remove the \
-  previous version or 'Cancel' to cancel this upgrade." \
-  IDOK uninst
-  Abort
-
-uninst:
-  ; Run the uninstaller
-  ClearErrors
-  ExecWait '$R0'
-
-  Goto done
-inst:
-
-  ; Install the new version
-  MessageBox MB_YESNO|MB_ICONQUESTION "This will install $(^Name). Do you wish to continue?" IDYES +2
-  Abort
-
-done:
+    ; Run the uninstaller
+    ClearErrors
+    ExecWait '$R0'
+  ${Else}
+    ; Install the new version
+    MessageBox MB_YESNO|MB_ICONQUESTION "This will install $(^Name). Do you wish to continue?" \
+      IDYES +2
+    Abort
+  ${Endif}
 !else
   ; If the registry key exists it is an uninstallation or reinstallation:
   ;  take the old installation directory
@@ -336,8 +338,11 @@ done:
 ${FunctionEnd}
 
 ${Function} un.onInit
-
   ${DebugMsg} "Pre INSTDIR = $INSTDIR"
+
+  ${If} ${RunningX64}
+    SetRegView 64
+  ${Endif}
 
   Push $R0
   ReadRegStr $R0 ${UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "InstallLocation"
@@ -360,21 +365,27 @@ ${SectionEnd}
 ${Section} "SDCC application files" SEC01
   SectionIn 1 2 3 RO
   SetOutPath "$INSTDIR\bin"
-  File "${SDCC_ROOT}\bin\as-gbz80.exe"
-  File "${SDCC_ROOT}\bin\as-hc08.exe"
-  File "${SDCC_ROOT}\bin\as-z80.exe"
-  File "${SDCC_ROOT}\bin\asx8051.exe"
-  File "${SDCC_ROOT}\bin\aslink.exe"
-  File "${SDCC_ROOT}\bin\asranlib.exe"
-  File "${SDCC_ROOT}\bin\link-gbz80.exe"
-  File "${SDCC_ROOT}\bin\link-hc08.exe"
-  File "${SDCC_ROOT}\bin\link-z80.exe"
+  File "${SDCC_ROOT}\bin\sdasgb.exe"
+  File "${SDCC_ROOT}\bin\sdas6808.exe"
+  File "${SDCC_ROOT}\bin\sdasz80.exe"
+  File "${SDCC_ROOT}\bin\sdas8051.exe"
+  File "${SDCC_ROOT}\bin\sdasrab.exe"
+  File "${SDCC_ROOT}\bin\sdld.exe"
+  File "${SDCC_ROOT}\bin\sdldgb.exe"
+  File "${SDCC_ROOT}\bin\sdld6808.exe"
+  File "${SDCC_ROOT}\bin\sdldz80.exe"
+  File "${SDCC_ROOT}\bin\sdranlib.exe"
   File "${SDCC_ROOT}\bin\makebin.exe"
   File "${SDCC_ROOT}\bin\packihx.exe"
   File "${SDCC_ROOT}\bin\sdcc.exe"
   File "${SDCC_ROOT}\bin\sdcclib.exe"
   File "${SDCC_ROOT}\bin\sdcpp.exe"
+  File "${SDCC_ROOT}\bin\as2gbmap.cmd"
   File "${SDCC_ROOT}\bin\readline5.dll"
+!ifdef WIN64
+  File "${SDCC_ROOT}\bin\libgcc_s_sjlj-1.dll"
+  File "${SDCC_ROOT}\bin\libstdc++-6.dll"
+!endif
 ${SectionEnd}
 
 ${Section} "ucSim application files" SEC02
@@ -414,27 +425,42 @@ ${Section} "SDCC include files" SEC05
   File "${DEV_ROOT}\include\asm\gbz80\features.h"
   SetOutPath "$INSTDIR\include\asm\mcs51"
   File "${DEV_ROOT}\include\asm\mcs51\features.h"
-  SetOutPath "$INSTDIR\include\asm\pic"
-  File "${DEV_ROOT}\include\asm\pic\features.h"
+  SetOutPath "$INSTDIR\include\asm\pic14"
+  File "${DEV_ROOT}\include\asm\pic14\features.h"
   SetOutPath "$INSTDIR\include\asm\pic16"
   File "${DEV_ROOT}\include\asm\pic16\features.h"
   SetOutPath "$INSTDIR\include\asm\z80"
   File "${DEV_ROOT}\include\asm\z80\features.h"
+  SetOutPath "$INSTDIR\include\asm\z180"
+  File "${DEV_ROOT}\include\asm\z180\features.h"
+  SetOutPath "$INSTDIR\include\asm\r2k"
+  File "${DEV_ROOT}\include\asm\r2k\features.h"
+
+  SetOutPath "$INSTDIR\include\ds390"
+  File "${DEV_ROOT}\include\ds390\*.h"
+  SetOutPath "$INSTDIR\include\ds400"
+  File "${DEV_ROOT}\include\ds400\*.h"
   SetOutPath "$INSTDIR\include\hc08"
   File "${DEV_ROOT}\include\hc08\*.h"
   SetOutPath "$INSTDIR\include\mcs51"
   File "${DEV_ROOT}\include\mcs51\*.h"
-  SetOutPath "$INSTDIR\include\pic"
-  File "${DEV_ROOT}\include\pic\*.h"
-  File "${DEV_ROOT}\include\pic\*.txt"
-  File "${DEV_ROOT}\include\pic\*.inc"
+  SetOutPath "$INSTDIR\include\pic14"
+  File "${DEV_ROOT}\include\pic14\*.h"
+  File "${DEV_ROOT}\include\pic14\*.txt"
+  File "${DEV_ROOT}\include\pic14\*.inc"
   SetOutPath "$INSTDIR\include\pic16"
   File "${DEV_ROOT}\include\pic16\*.h"
   File "${DEV_ROOT}\include\pic16\*.txt"
-  SetOutPath "$INSTDIR\include\z80"
-  File "${DEV_ROOT}\include\z80\*.h"
+  SetOutPath "$INSTDIR\include\z180"
+  File "${DEV_ROOT}\include\z180\*.h"
+
   SetOutPath "$INSTDIR\include"
   File "${DEV_ROOT}\include\*.h"
+
+  SetOutPath "$INSTDIR\non-free\include\pic14"
+  File "${DEV_ROOT}\non-free\include\pic14\*.h"
+  SetOutPath "$INSTDIR\non-free\include\pic16"
+  File "${DEV_ROOT}\non-free\include\pic16\*.h"
 ${SectionEnd}
 
 ${Section} "SDCC DS390 library" SEC06
@@ -455,56 +481,74 @@ ${Section} "SDCC GBZ80 library" SEC08
   File "${DEV_ROOT}\lib\gbz80\*.*"
 ${SectionEnd}
 
-${Section} "SDCC Z80 library" SEC09
+${Section} "SDCC Z180 library" SEC09
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\z180"
+  File "${DEV_ROOT}\lib\z180\*.*"
+${SectionEnd}
+
+${Section} "SDCC Rabbit 2000 library" SEC10
+  SectionIn 1 2
+  SetOutPath "$INSTDIR\lib\r2k"
+  File "${DEV_ROOT}\lib\r2k\*.*"
+${SectionEnd}
+
+${Section} "SDCC Z80 library" SEC11
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\z80"
   File "${DEV_ROOT}\lib\z80\*.*"
 ${SectionEnd}
 
-${Section} "SDCC small model library" SEC10
+${Section} "SDCC small model library" SEC12
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\small"
   File "${DEV_ROOT}\lib\small\*.*"
 ${SectionEnd}
 
-${Section} "SDCC medium model library" SEC11
+${Section} "SDCC medium model library" SEC13
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\medium"
   File "${DEV_ROOT}\lib\medium\*.*"
 ${SectionEnd}
 
-${Section} "SDCC large model library" SEC12
+${Section} "SDCC large model library" SEC14
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\large"
   File "${DEV_ROOT}\lib\large\*.*"
 ${SectionEnd}
 
-${Section} "SDCC small-stack-auto model library" SEC13
+${Section} "SDCC small-stack-auto model library" SEC15
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\small-stack-auto"
   File "${DEV_ROOT}\lib\small-stack-auto\*.*"
 ${SectionEnd}
 
-${Section} "SDCC HC08 library" SEC14
+${Section} "SDCC HC08 library" SEC16
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\hc08"
   File "${DEV_ROOT}\lib\hc08\*.*"
 ${SectionEnd}
 
-${Section} "SDCC PIC16 library" SEC15
+${Section} "SDCC PIC16 library" SEC17
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\pic16"
   File "${DEV_ROOT}\lib\pic16\*.o"
   File "${DEV_ROOT}\lib\pic16\*.lib"
+
+  SetOutPath "$INSTDIR\non-free\lib\pic16"
+  File "${DEV_ROOT}\non-free\lib\pic16\*.lib"
 ${SectionEnd}
 
-${Section} "SDCC PIC library" SEC16
+${Section} "SDCC PIC14 library" SEC18
   SectionIn 1 2
-  SetOutPath "$INSTDIR\lib\pic"
-  File "${DEV_ROOT}\lib\pic\*.lib"
+  SetOutPath "$INSTDIR\lib\pic14"
+  File "${DEV_ROOT}\lib\pic14\*.lib"
+
+  SetOutPath "$INSTDIR\non-free\lib\pic14"
+  File "${DEV_ROOT}\non-free\lib\pic14\*.lib"
 ${SectionEnd}
 
-${Section} "SDCC library sources" SEC17
+${Section} "SDCC library sources" SEC19
   SectionIn 1
   SetOutPath "$INSTDIR\lib\src\ds390\examples"
   File "${DEV_ROOT}\lib\src\ds390\examples\MOVED"
@@ -518,13 +562,20 @@ ${Section} "SDCC library sources" SEC17
 #  File "${DEV_ROOT}\lib\src\ds400\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\gbz80"
-  File "${DEV_ROOT}\lib\src\gbz80\*.c"
   File "${DEV_ROOT}\lib\src\gbz80\*.s"
 #  File "${DEV_ROOT}\lib\src\gbz80\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\z80"
   File "${DEV_ROOT}\lib\src\z80\*.s"
 #  File "${DEV_ROOT}\lib\src\z80\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\z180"
+  File "${DEV_ROOT}\lib\src\z180\*.s"
+#  File "${DEV_ROOT}\lib\src\z180\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\r2k"
+  File "${DEV_ROOT}\lib\src\r2k\*.s"
+#  File "${DEV_ROOT}\lib\src\z180\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\hc08"
   File "${DEV_ROOT}\lib\src\hc08\*.c"
@@ -543,33 +594,38 @@ ${Section} "SDCC library sources" SEC17
   SetOutPath "$INSTDIR\lib\src\large"
 #  File "${DEV_ROOT}\lib\src\large\Makefile"
 
-  SetOutPath "$INSTDIR\lib\src\pic"
-#  File "${DEV_ROOT}\lib\src\pic\configure"
-#  File "${DEV_ROOT}\lib\src\pic\configure.in"
-#  File "${DEV_ROOT}\lib\src\pic\GPL"
-#  File "${DEV_ROOT}\lib\src\pic\LGPL"
-#  File "${DEV_ROOT}\lib\src\pic\Makefile"
-#  File "${DEV_ROOT}\lib\src\pic\Makefile.common"
-#  File "${DEV_ROOT}\lib\src\pic\Makefile.common.in"
-#  File "${DEV_ROOT}\lib\src\pic\Makefile.rules"
-#  File "${DEV_ROOT}\lib\src\pic\Makefile.subdir"
-#  File "${DEV_ROOT}\lib\src\pic\NEWS"
-#  File "${DEV_ROOT}\lib\src\pic\README"
-  File "${DEV_ROOT}\lib\src\pic\TEMPLATE.c"
-  File "${DEV_ROOT}\lib\src\pic\TEMPLATE.S"
+  SetOutPath "$INSTDIR\lib\src\pic14"
+#  File "${DEV_ROOT}\lib\src\pic14\configure"
+#  File "${DEV_ROOT}\lib\src\pic14\configure.in"
+#  File "${DEV_ROOT}\lib\src\pic14\GPL"
+#  File "${DEV_ROOT}\lib\src\pic14\LGPL"
+#  File "${DEV_ROOT}\lib\src\pic14\Makefile"
+#  File "${DEV_ROOT}\lib\src\pic14\Makefile.common"
+#  File "${DEV_ROOT}\lib\src\pic14\Makefile.common.in"
+#  File "${DEV_ROOT}\lib\src\pic14\Makefile.rules"
+#  File "${DEV_ROOT}\lib\src\pic14\Makefile.subdir"
+#  File "${DEV_ROOT}\lib\src\pic14\NEWS"
+#  File "${DEV_ROOT}\lib\src\pic14\README"
+  File "${DEV_ROOT}\lib\src\pic14\TEMPLATE.c"
+  File "${DEV_ROOT}\lib\src\pic14\TEMPLATE.S"
 
-  SetOutPath "$INSTDIR\lib\src\pic\libsdcc"
-  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.c"
-  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.S"
-  File "${DEV_ROOT}\lib\src\pic\libsdcc\*.inc"
-#  File "${DEV_ROOT}\lib\src\pic\libsdcc\Makefile"
-  
-  SetOutPath "$INSTDIR\lib\src\pic\libdev"
-  File "${DEV_ROOT}\lib\src\pic\libdev\*.c"
-#  File "${DEV_ROOT}\lib\src\pic\libdev\Makefile"
+  SetOutPath "$INSTDIR\lib\src\pic14\libsdcc\regular"
+  File "${DEV_ROOT}\lib\src\pic14\libsdcc\regular\*.c"
+  File "${DEV_ROOT}\lib\src\pic14\libsdcc\regular\*.S"
+  File "${DEV_ROOT}\lib\src\pic14\libsdcc\regular\*.inc"
+#  File "${DEV_ROOT}\lib\src\pic14\libsdcc\Makefile"
 
-  SetOutPath "$INSTDIR\lib\src\pic\libm"
-  File "${DEV_ROOT}\lib\src\pic\libm\*.c"
+  SetOutPath "$INSTDIR\lib\src\pic14\libsdcc\enhanced"
+  File "${DEV_ROOT}\lib\src\pic14\libsdcc\enhanced\*.S"
+  File "${DEV_ROOT}\lib\src\pic14\libsdcc\enhanced\*.inc"
+#  File "${DEV_ROOT}\lib\src\pic14\libsdcc\Makefile"
+
+  SetOutPath "$INSTDIR\non-free\lib\src\pic14\libdev"
+  File "${DEV_ROOT}\non-free\lib\src\pic14\libdev\*.c"
+#  File "${DEV_ROOT}\non-free\lib\src\pic14\libdev\Makefile"
+
+  SetOutPath "$INSTDIR\lib\src\pic14\libm"
+  File "${DEV_ROOT}\lib\src\pic14\libm\*.c"
 
   SetOutPath "$INSTDIR\lib\src\pic16"
 #  File "${DEV_ROOT}\lib\src\pic16\configure"
@@ -619,9 +675,9 @@ ${Section} "SDCC library sources" SEC17
   File "${DEV_ROOT}\lib\src\pic16\libc\utils\*.S"
 #  File "${DEV_ROOT}\lib\src\pic16\libc\utils\Makefile"
 
-  SetOutPath "$INSTDIR\lib\src\pic16\libdev"
-  File "${DEV_ROOT}\lib\src\pic16\libdev\*.c"
-#  File "${DEV_ROOT}\lib\src\pic16\libdev\Makefile"
+  SetOutPath "$INSTDIR\non-free\lib\src\pic16\libdev"
+  File "${DEV_ROOT}\non-free\lib\src\pic16\libdev\*.c"
+#  File "${DEV_ROOT}\non-free\lib\src\pic16\libdev\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\pic16\libio"
   File "${DEV_ROOT}\lib\src\pic16\libio\*.ignore"
@@ -699,15 +755,17 @@ LangString DESC_SEC05 ${LANG_ENGLISH} "SDCC include files"
 LangString DESC_SEC06 ${LANG_ENGLISH} "SDCC DS390 library"
 LangString DESC_SEC07 ${LANG_ENGLISH} "SDCC DS400 library"
 LangString DESC_SEC08 ${LANG_ENGLISH} "SDCC GBZ80 library"
-LangString DESC_SEC09 ${LANG_ENGLISH} "SDCC Z80 library"
-LangString DESC_SEC10 ${LANG_ENGLISH} "SDCC small model library"
-LangString DESC_SEC11 ${LANG_ENGLISH} "SDCC medium model library"
-LangString DESC_SEC12 ${LANG_ENGLISH} "SDCC large model library"
-LangString DESC_SEC13 ${LANG_ENGLISH} "SDCC small-stack-auto model library"
-LangString DESC_SEC14 ${LANG_ENGLISH} "SDCC HC08 library"
-LangString DESC_SEC15 ${LANG_ENGLISH} "SDCC PIC16 library"
-LangString DESC_SEC16 ${LANG_ENGLISH} "SDCC PIC library"
-LangString DESC_SEC17 ${LANG_ENGLISH} "SDCC library sources"
+LangString DESC_SEC09 ${LANG_ENGLISH} "SDCC Z180 library"
+LangString DESC_SEC10 ${LANG_ENGLISH} "SDCC Rabbit 2000 library"
+LangString DESC_SEC11 ${LANG_ENGLISH} "SDCC Z80 library"
+LangString DESC_SEC12 ${LANG_ENGLISH} "SDCC small model library"
+LangString DESC_SEC13 ${LANG_ENGLISH} "SDCC medium model library"
+LangString DESC_SEC14 ${LANG_ENGLISH} "SDCC large model library"
+LangString DESC_SEC15 ${LANG_ENGLISH} "SDCC small-stack-auto model library"
+LangString DESC_SEC16 ${LANG_ENGLISH} "SDCC HC08 library"
+LangString DESC_SEC17 ${LANG_ENGLISH} "SDCC PIC16 library"
+LangString DESC_SEC18 ${LANG_ENGLISH} "SDCC PIC14 library"
+LangString DESC_SEC19 ${LANG_ENGLISH} "SDCC library sources"
 
 ;Assign language strings to sections
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -728,6 +786,8 @@ LangString DESC_SEC17 ${LANG_ENGLISH} "SDCC library sources"
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC15} $(DESC_SEC15)
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC16} $(DESC_SEC16)
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC17} $(DESC_SEC17)
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC18} $(DESC_SEC18)
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC18} $(DESC_SEC19)
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 ;--------------------------------
 
@@ -755,6 +815,11 @@ ${Section} -INI SECINI
 ${SectionEnd}
 
 ${Section} -PostInstall SECPOSTINSTALL
+; Add SDCC bin directory to path if silent mode
+  ${If} ${Silent}
+    Call SDCC.AddBinToPath
+  ${EndIf}
+
   WriteRegStr ${SDCC_ROOT_KEY} "Software\${PRODUCT_NAME}" "" $INSTDIR
 !ifdef VER_MAJOR & VER_MINOR & VER_REVISION & VER_BUILD
   WriteRegDword ${SDCC_ROOT_KEY} "Software\${PRODUCT_NAME}" "VersionMajor" "${VER_MAJOR}"
@@ -819,11 +884,17 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\lib\src\z80\README"
   Delete "$INSTDIR\lib\src\z80\Makefile"
 
-  Delete "$INSTDIR\lib\src\gbz80\*.c"
+  Delete "$INSTDIR\lib\src\z180\*.s"
+  Delete "$INSTDIR\lib\src\z180\z80.lib"
+  Delete "$INSTDIR\lib\src\z180\README"
+  Delete "$INSTDIR\lib\src\z180\Makefile"
+
   Delete "$INSTDIR\lib\src\gbz80\*.s"
   Delete "$INSTDIR\lib\src\gbz80\gbz80.lib"
   Delete "$INSTDIR\lib\src\gbz80\README"
   Delete "$INSTDIR\lib\src\gbz80\Makefile"
+
+  Delete "$INSTDIR\lib\src\r2k\*.s"
 
   Delete "$INSTDIR\lib\src\ds390\*.c"
   Delete "$INSTDIR\lib\src\ds390\libds390.lib"
@@ -838,15 +909,25 @@ ${Section} Uninstall SECUNINSTALL
 
   Delete "$INSTDIR\lib\src\*.c"
 
-  Delete "$INSTDIR\lib\pic\*.lib"
+  Delete "$INSTDIR\lib\pic14\*.lib"
+
+  Delete "$INSTDIR\non-free\lib\pic14\*.lib"
 
   Delete "$INSTDIR\lib\pic16\*.o"
   Delete "$INSTDIR\lib\pic16\*.lib"
 
+  Delete "$INSTDIR\non-free\lib\pic16\*.lib"
+
   Delete "$INSTDIR\lib\hc08\*.lib"
 
-  Delete "$INSTDIR\lib\z80\*.o"
+  Delete "$INSTDIR\lib\z80\*.rel"
   Delete "$INSTDIR\lib\z80\*.lib"
+
+  Delete "$INSTDIR\lib\z180\*.rel"
+  Delete "$INSTDIR\lib\z180\*.lib"
+
+  Delete "$INSTDIR\lib\r2k\*.rel"
+  Delete "$INSTDIR\lib\r2k\*.lib"
 
   Delete "$INSTDIR\lib\small\*.lib"
 
@@ -856,6 +937,7 @@ ${Section} Uninstall SECUNINSTALL
 
   Delete "$INSTDIR\lib\small-stack-auto\*.lib"
 
+  Delete "$INSTDIR\lib\gbz80\*.rel"
   Delete "$INSTDIR\lib\gbz80\*.lib"
 
   Delete "$INSTDIR\lib\ds390\*.lib"
@@ -863,20 +945,26 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\lib\ds400\*.lib"
 
   Delete "$INSTDIR\include\asm\z80\*.h"
+  Delete "$INSTDIR\include\asm\z180\*.h"
+  Delete "$INSTDIR\include\asm\r2k\*.h"
   Delete "$INSTDIR\include\asm\pic16\*.h"
-  Delete "$INSTDIR\include\asm\pic\*.h"
+  Delete "$INSTDIR\include\asm\pic14\*.h"
   Delete "$INSTDIR\include\asm\mcs51\*.h"
   Delete "$INSTDIR\include\asm\gbz80\*.h"
   Delete "$INSTDIR\include\asm\ds390\*.h"
   Delete "$INSTDIR\include\asm\default\*.h"
-  Delete "$INSTDIR\include\z80\*.h"
-  Delete "$INSTDIR\include\pic\*.h"
-  Delete "$INSTDIR\include\pic\*.txt"
-  Delete "$INSTDIR\include\pic\*.inc"
+  Delete "$INSTDIR\include\z180\*.h"
+  Delete "$INSTDIR\include\pic14\*.h"
+  Delete "$INSTDIR\include\pic14\*.txt"
+  Delete "$INSTDIR\include\pic14\*.inc"
+  Delete "$INSTDIR\non-free\include\pic14\*.h"
   Delete "$INSTDIR\include\pic16\*.h"
+  Delete "$INSTDIR\non-free\include\pic16\*.h"
   Delete "$INSTDIR\include\pic16\*.txt"
   Delete "$INSTDIR\include\mcs51\*.h"
   Delete "$INSTDIR\include\hc08\*.h"
+  Delete "$INSTDIR\include\ds400\*.h"
+  Delete "$INSTDIR\include\ds390\*.h"
   Delete "$INSTDIR\include\*.h"
 
 !ifndef FULL_DOC
@@ -884,21 +972,27 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\doc\ChangeLog_head.txt"
 !endif
 
-  Delete "$INSTDIR\bin\as-gbz80.exe"
-  Delete "$INSTDIR\bin\as-hc08.exe"
-  Delete "$INSTDIR\bin\as-z80.exe"
-  Delete "$INSTDIR\bin\asx8051.exe"
-  Delete "$INSTDIR\bin\aslink.exe"
-  Delete "$INSTDIR\bin\asranlib.exe"
-  Delete "$INSTDIR\bin\link-gbz80.exe"
-  Delete "$INSTDIR\bin\link-hc08.exe"
-  Delete "$INSTDIR\bin\link-z80.exe"
+  Delete "$INSTDIR\bin\sdasgb.exe"
+  Delete "$INSTDIR\bin\sdas6808.exe"
+  Delete "$INSTDIR\bin\sdasz80.exe"
+  Delete "$INSTDIR\bin\sdas8051.exe"
+  Delete "$INSTDIR\bin\sdasrab.exe"
+  Delete "$INSTDIR\bin\sdld.exe"
+  Delete "$INSTDIR\bin\sdldgb.exe"
+  Delete "$INSTDIR\bin\sdld6808.exe"
+  Delete "$INSTDIR\bin\sdldz80.exe"
+  Delete "$INSTDIR\bin\sdranlib.exe"
   Delete "$INSTDIR\bin\makebin.exe"
   Delete "$INSTDIR\bin\packihx.exe"
   Delete "$INSTDIR\bin\sdcc.exe"
   Delete "$INSTDIR\bin\sdcclib.exe"
   Delete "$INSTDIR\bin\sdcpp.exe"
+  Delete "$INSTDIR\bin\as2gbmap.cmd"
   Delete "$INSTDIR\bin\readline5.dll"
+!ifdef WIN64
+  Delete "$INSTDIR\bin\libgcc_s_sjlj-1.dll"
+  Delete "$INSTDIR\bin\libstdc++-6.dll"
+!endif
 
 
   Delete "$INSTDIR\bin\s51.exe"
@@ -915,23 +1009,32 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\sdcc.ico"
   Delete "$INSTDIR\uninstall.exe"
 
-  RMDir /r "$INSTDIR\lib\src\pic"
+  RMDir /r "$INSTDIR\lib\src\pic14"
+  RMDir /r "$INSTDIR\non-free\lib\src\pic14"
   RMDir /r "$INSTDIR\lib\src\pic16"
+  RMDir /r "$INSTDIR\non-free\lib\src\pic16"
   RMDir "$INSTDIR\lib\src\small"
   RMDir "$INSTDIR\lib\src\medium"
   RMDir "$INSTDIR\lib\src\large"
   RMDir "$INSTDIR\lib\src\mcs51"
   RMDir "$INSTDIR\lib\src\z80"
+  RMDir "$INSTDIR\lib\src\z180"
   RMDir "$INSTDIR\lib\src\gbz80"
+  RMDir "$INSTDIR\lib\src\r2k"
   RMDir "$INSTDIR\lib\src\ds390\examples"
   RMDir "$INSTDIR\lib\src\ds390"
   RMDir "$INSTDIR\lib\src\ds400"
   RMDir "$INSTDIR\lib\src\hc08"
   RMDir "$INSTDIR\lib\src"
+  RMDir "$INSTDIR\non-free\lib\src"
 
-  RMDir "$INSTDIR\lib\pic"
+  RMDir "$INSTDIR\lib\pic14"
+  RMDir "$INSTDIR\non-free\lib\pic14"
   RMDir "$INSTDIR\lib\pic16"
+  RMDir "$INSTDIR\non-free\lib\pic16"
   RMDir "$INSTDIR\lib\z80"
+  RMDir "$INSTDIR\lib\z180"
+  RMDir "$INSTDIR\lib\r2k"
   RMDir "$INSTDIR\lib\small"
   RMDir "$INSTDIR\lib\medium"
   RMDir "$INSTDIR\lib\large"
@@ -941,21 +1044,33 @@ ${Section} Uninstall SECUNINSTALL
   RMDir "$INSTDIR\lib\ds400"
   RMDir "$INSTDIR\lib\hc08"
   RMDir "$INSTDIR\lib"
+  RMDir "$INSTDIR\non-free\lib"
 
   RMDir "$INSTDIR\include\asm\z80"
+  RMDir "$INSTDIR\include\asm\z180"
+  RMDir "$INSTDIR\include\asm\r2k"
   RMDir "$INSTDIR\include\asm\pic16"
-  RMDir "$INSTDIR\include\asm\pic"
+  RMDir "$INSTDIR\non-free\include\asm\pic16"
+  RMDir "$INSTDIR\include\asm\pic14"
+  RMDir "$INSTDIR\non-free\include\asm\pic14"
   RMDir "$INSTDIR\include\asm\mcs51"
   RMDir "$INSTDIR\include\asm\gbz80"
   RMDir "$INSTDIR\include\asm\ds390"
   RMDir "$INSTDIR\include\asm\default"
   RMDir "$INSTDIR\include\asm"
-  RMDir "$INSTDIR\include\z80"
-  RMDir "$INSTDIR\include\pic"
+  RMDir "$INSTDIR\include\z180"
+  RMDir "$INSTDIR\include\pic14"
+  RMDir "$INSTDIR\non-free\include\pic14"
   RMDir "$INSTDIR\include\pic16"
+  RMDir "$INSTDIR\non-free\include\pic16"
   RMDir "$INSTDIR\include\mcs51"
   RMDir "$INSTDIR\include\hc08"
+  RMDir "$INSTDIR\include\ds400"
+  RMDir "$INSTDIR\include\ds390"
   RMDir "$INSTDIR\include"
+  RMDir "$INSTDIR\non-free\include"
+
+  RMDir "$INSTDIR\non-free"
 
 !ifdef FULL_DOC
   RMDir /r "$INSTDIR\doc"
@@ -986,18 +1101,15 @@ ${Function} SDCC.AddToPath
   Push $1
   Push $2
   Push $3
-  Push $4
 
   ; don't add if the path doesn't exist
   ${If} ${FileExists} $0
-    Call SDCC.IsNT
-    Pop $4
-    ${If} $4 != 1
-      ; Not on NT: read PATH from environment variable
-      ReadEnvStr $1 PATH
-    ${Else}
+    ${If} ${IsNT}
       ; On NT: read PATH from registry
       ReadRegStr $1 HKCU "Environment" "PATH"
+    ${Else}
+      ; Not on NT: read PATH from environment variable
+      ReadEnvStr $1 PATH
     ${EndIf}
 
     ${StrStr} $2 "$1;" "$0;"
@@ -1009,7 +1121,20 @@ ${Function} SDCC.AddToPath
         ${If} $2 == ""
           ${StrStr} $2 "$1;" "$03\;"
           ${If} $2 == ""
-            ${If} $4 != 1
+            ${If} ${IsNT}
+              ;System PATH variable is at:
+              ;HKLM "/SYSTEM/CurrentControlSet/Control/Session Manager/Environment" "Path"
+              ReadRegStr $1 HKCU "Environment" "PATH"
+              StrCpy $2 $1 1 -1  ; copy last char
+              ${If} $2 == ";"    ; if last char == ;
+                StrCpy $1 $1 -1  ; remove last char
+              ${Endif}
+              ${If} $1 != ""
+                StrCpy $0 "$1;$0"
+              ${Endif}
+              WriteRegExpandStr HKCU "Environment" "PATH" $0
+              SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+            ${Else}
               ; Not on NT
               StrCpy $1 $WINDIR 2
               FileOpen $1 "$1\autoexec.bat" a
@@ -1023,19 +1148,6 @@ ${Function} SDCC.AddToPath
               FileClose $1
               ${DebugMsg} "SetRebootFlag true"
               SetRebootFlag true
-            ${Else}
-              ;System PATH variable is at:
-              ;HKLM "/SYSTEM/CurrentControlSet/Control/Session Manager/Environment" "Path"
-              ReadRegStr $1 HKCU "Environment" "PATH"
-              StrCpy $2 $1 1 -1  ; copy last char
-              ${If} $2 == ";"    ; if last char == ;
-                StrCpy $1 $1 -1  ; remove last char
-              ${Endif}
-              ${If} $1 != ""
-                StrCpy $0 "$1;$0"
-              ${Endif}
-              WriteRegExpandStr HKCU "Environment" "PATH" $0
-              SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
             ${Endif}
           ${Endif}
         ${Endif}
@@ -1043,7 +1155,6 @@ ${Function} SDCC.AddToPath
     ${Endif}
   ${EndIf}
 
-  Pop $4
   Pop $3
   Pop $2
   Pop $1
@@ -1065,9 +1176,42 @@ ${Function} ${un}SDCC.RemoveFromPath
 
   IntFmt $6 "%c" 26 ; DOS EOF
 
-  Call ${un}SDCC.IsNT
-  Pop $1
-  ${If} $1 != 1
+  ${If} ${IsNT}
+    ;System PATH variable is at:
+    ;HKLM "/SYSTEM/CurrentControlSet/Control/Session Manager/Environment" "Path"
+    ReadRegStr $1 HKCU "Environment" "PATH"
+    StrCpy $5 $1 1 -1 ; copy last char
+    ${If} $5 != ";"   ; if last char != ;
+      StrCpy $1 "$1;" ; append ;
+    ${EndIf}
+    Push $1
+    Push "$0;"
+    Call ${un}StrStr  ; Find `$0;` in $1
+    Pop $2            ; pos of our dir
+    ${If} $2 != ""
+      ; it is in path:
+      ; $0 - path to add
+      ; $1 - path var
+      StrLen $3 "$0;"
+      StrLen $4 $2
+      StrCpy $5 $1 -$4   ; $5 is now the part before the path to remove
+      StrCpy $6 $2 "" $3 ; $6 is now the part after the path to remove
+      StrCpy $3 $5$6
+
+      StrCpy $5 $3 1 -1  ; copy last char
+      ${If} $5 == ";"    ; if last char == ;
+        StrCpy $3 $3 -1  ; remove last char
+      ${EndIf}
+      ${If} $3 != ""
+        ; New PATH not empty: update the registry
+        WriteRegExpandStr HKCU "Environment" "PATH" $3
+      ${Else}
+        ; New PATH empty: remove from the registry
+        DeleteRegValue HKCU "Environment" "PATH"
+      ${EndIf}
+      SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
+    ${Endif}
+  ${Else}
     ; Not on NT
     StrCpy $1 $WINDIR 2
     FileOpen $1 "$1\autoexec.bat" r
@@ -1107,41 +1251,6 @@ ${Function} ${un}SDCC.RemoveFromPath
     Delete "$1\autoexec.bat"
     CopyFiles /SILENT $4 "$1\autoexec.bat"
     Delete $4
-  ${Else}
-    ;System PATH variable is at:
-    ;HKLM "/SYSTEM/CurrentControlSet/Control/Session Manager/Environment" "Path"
-    ReadRegStr $1 HKCU "Environment" "PATH"
-    StrCpy $5 $1 1 -1 ; copy last char
-    ${If} $5 != ";"   ; if last char != ;
-      StrCpy $1 "$1;" ; append ;
-    ${EndIf}
-    Push $1
-    Push "$0;"
-    Call ${un}StrStr  ; Find `$0;` in $1
-    Pop $2            ; pos of our dir
-    ${If} $2 != ""
-      ; it is in path:
-      ; $0 - path to add
-      ; $1 - path var
-      StrLen $3 "$0;"
-      StrLen $4 $2
-      StrCpy $5 $1 -$4   ; $5 is now the part before the path to remove
-      StrCpy $6 $2 "" $3 ; $6 is now the part after the path to remove
-      StrCpy $3 $5$6
-
-      StrCpy $5 $3 1 -1  ; copy last char
-      ${If} $5 == ";"    ; if last char == ;
-        StrCpy $3 $3 -1  ; remove last char
-      ${EndIf}
-      ${If} $3 != ""
-        ; New PATH not empty: update the registry
-        WriteRegExpandStr HKCU "Environment" "PATH" $3
-      ${Else}
-        ; New PATH empty: remove from the registry
-        DeleteRegValue HKCU "Environment" "PATH"
-      ${EndIf}
-      SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
-    ${Endif}
   ${Endif}
 
   Pop $6
@@ -1155,37 +1264,6 @@ ${FunctionEnd}
 !macroend
 !insertmacro SDCC.RemoveFromPath ""
 !insertmacro SDCC.RemoveFromPath "un."
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Utility Functions                                                           ;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; IsNT
-; no input
-; output, top of the stack = 1 if NT or 0 if not
-;
-; Usage:
-;   Call IsNT
-;   Pop $R0
-;  ($R0 at this point is 1 or 0)
-
-!macro SDCC.IsNT un
-${Function} ${un}SDCC.IsNT
-  Push $R0
-  ReadRegStr $R0 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion" CurrentVersion
-  ${If} $R0 == ""
-    ; we are not NT.
-    Pop $R0
-    Push 0
-  ${Else}
-    ; NT!!!
-    Pop $R0
-    Push 1
-  ${EndIf}
-${FunctionEnd}
-!macroend
-!insertmacro SDCC.IsNT ""
-!insertmacro SDCC.IsNT "un."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;  Uninstall/Reinstall page functions                                         ;

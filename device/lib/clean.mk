@@ -1,4 +1,4 @@
-CLEANALLPORTS = ds390 ds400 gbz80 hc08 large mcs51 medium pic pic16 small z80
+CLEANALLPORTS = ds390 ds400 gbz80 hc08 huge large mcs51 medium pic pic16 small z80
 include $(srcdir)/incl.mk
 
 # Deleting all files created by building the program
@@ -8,10 +8,11 @@ clean:
 	rm -f .[a-z]*~
 	rm -f *.dump*
 	rm -rf build
-	for model in $(MODELS); do \
-	  if [ -d $$model ]; then \
-	    cd $$model && for name in *; do if [ -f $$name -a $$name != Makefile -a $$name != Makefile.in ]; then rm $$name; fi; done; \
+	for model in $(MODELS); do\
+	  if [ -d $$model ]; then\
+	    $(MAKE) -C $$model clean ;\
 	  fi;\
+	  rm -rf $${model}-xstack-auto $${model}-stack-auto ;\
 	done
 	for port in $(CLEANALLPORTS) ; do\
 	  if [ -f $$port/Makefile ]; then\

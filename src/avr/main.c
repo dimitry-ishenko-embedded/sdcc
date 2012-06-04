@@ -179,7 +179,8 @@ PORT avr_port = {
          glue,
 	 TRUE,			/* Emit glue around main */
 	 MODEL_LARGE | MODEL_SMALL,
-	 MODEL_SMALL
+	 MODEL_SMALL,
+         NULL,                       /* model == target */
 	},
 	{
 	 _asmCmd,
@@ -199,8 +200,8 @@ PORT avr_port = {
 	{
 	 _defaultRules},
 	{
-	 /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-	 1, 2, 2, 4, 2, 2, 3, 1, 4, 4},
+	 /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+	 1, 2, 2, 4, 8, 2, 2, 3, 1, 4, 4},
 	
 	 /* tags for generic pointers */
 	{ 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */

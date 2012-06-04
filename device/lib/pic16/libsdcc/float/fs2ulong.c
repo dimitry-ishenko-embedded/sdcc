@@ -1,3 +1,30 @@
+/*-------------------------------------------------------------------------
+   fs2ulong.c
+
+   Copyright (C) 1991, Pipeline Associates, Inc
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 /*
 ** libgcc support for software floating point.
 ** Copyright (C) 1991 by Pipeline Associates, Inc.  All rights reserved.
@@ -14,10 +41,6 @@
 ** uunet!motown!pipeline!phw
 */
 
-/*
-** $Id: fs2ulong.c 3711 2005-03-31 16:25:17Z vrokas $
-*/
-
 /* (c)2000/2001: hacked a little by johan.knol@iduna.nl for sdcc */
 
 #include <float.h>
@@ -28,19 +51,18 @@ union float_long
   long l;
 };
 
-#define volatile
-
 /* convert float to unsigned long */
-unsigned long __fs2ulong (float a1) _FS_REENTRANT
+unsigned long
+__fs2ulong (float a1) _FS_REENTRANT
 {
   volatile union float_long fl1;
-  volatile int exp;
-  volatile long l;
+  int exp;
+  unsigned long l;
   
   fl1.f = a1;
   
-  if (!fl1.l || SIGN(fl1.l))
-    return (0);
+  if (!fl1.l || SIGN (fl1.l))
+    return 0;
 
   exp = EXP (fl1.l) - EXCESS - 24;
   l = MANT (fl1.l);

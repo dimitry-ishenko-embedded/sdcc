@@ -3,17 +3,20 @@ Section: electronics
 Priority: optional
 Maintainer: Gudjon I. Gudjonsson <gudjon@gudjon.org>
 Uploaders: Bdale Garbee <bdale@gag.com>
-Build-Depends: debhelper (>=7), autoconf, autotools-dev, libtool, flex, bison, 
- libncurses5-dev, gputils, lyx, texlive, ghostscript, quilt
-Standards-Version: 3.8.3
+Build-Depends: debhelper (>=8), autoconf, autotools-dev, libtool, flex, bison, 
+ libncurses5-dev, gputils, libboost-dev
+Build-Depends-Indep: lyx, texlive-full, ghostscript,
+Standards-Version: 3.9.3
 Homepage: http://sdcc.sourceforge.net
+Vcs-Git: git://anonscm.debian.org/collab-maint/sdcc.git
+Vcs-Browser: http://anonscm.debian.org/git/collab-maint/sdcc.git
 
 Package: sdcc
 Architecture: any
 Depends: sdcc-libraries (= ${source:Version}), ${shlibs:Depends}, ${misc:Depends}
 Recommends: sdcc-doc
-Suggests: sdcc-ucsim
-Conflicts: sdcc-libraries (<< 2.9.0)
+Suggests: sdcc-ucsim, python
+Breaks: sdcc-libraries (<< 2.9.0)
 Description: Small Device C Compiler
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.
@@ -24,7 +27,6 @@ Package: sdcc-libraries
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: gputils
-Conflicts: sdcc (<< 2.3.8+cvs20040218-1)
 Description: Small Device C Compiler (libraries)
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC
  and Z80 microcontrollers.
@@ -45,7 +47,6 @@ Package: sdcc-doc
 Section: doc
 Architecture: all
 Depends: ${misc:Depends}
-Conflicts: sdcc (<= 2.3.3+cvs20030131-4)
 Suggests: sdcc
 Description: Small Device C Compiler (documentation)
  SDCC is a C compiler for the Intel MCS51 family, AVR, HC08, PIC

@@ -15,11 +15,21 @@ SDCC Compiler User Guide\c
 \&.
 
 .SH "DESCRIPTION"
-.B SDCC
-is a Freeware, retargettable, optimizing ANSI-C compiler. The current 
-version targets Intel MCS51 based Microprocessors(8051, 8052, etc), Zilog 
-Z80 based MCUs, and the Dallas DS80C390 variant. It can be retargetted for 
-other microprocessors, support for PIC, AVR and 186 is under development. 
+.B SDCC 
+is free open source, retargettable, optimizing ANSI-C compiler designed for 
+8 bit Microprocessors. The current version targets Intel MCS51 based 
+Microprocessors (8031, 8032, 8051, 8052, etc.), Dallas DS80C390 variants, 
+Freescale (formerly Motorola) HC08 and Zilog Z80 based MCUs (z80, z180, gbz80, 
+Rabbit 2000/3000). It can be retargeted for other microprocessors, support for 
+Microchip PIC is under development. 
+
+.B SDCC 
+uses a modified version of ASXXXX & ASLINK, free open source retargetable 
+assembler & linker. 
+
+.B SDCC 
+has extensive language extensions suitable for utilizing various 
+microcontrollers and underlying hardware effectively. 
 .PP
 .B SDCC\c
 \& uses 
@@ -49,25 +59,32 @@ Generate code for the DS80C400 processor.
 .BI "\-mz80"
 Generate code for the Z80 family of processors.
 .TP
-.BI "\-mgbz80"
+.BI "\-mhc08"
 Generate code for the GameBoy Z80 processor.
 .TP
-.BI "\-mavr"
-Generate code for the Atmel AVR processor (In development, not complete).
+.BI "\-mz80"
+Generate code for the Zilog Z80 family of processors.
+.TP
+.BI "\-mz180"
+Generate code for the Zilog Z180 family of processors.
+.TP
+.BI "\-mr2k"
+Generate code for the Rabbit 2000 / Rabbit 3000 family of processors.-mavr"
+.TP
+.BI "\-mgbz80"
+Generate code for the GameBoy Z80 processor (Not actively maintained).
 .TP
 .BI "\-mpic14"
-Generate code for the PIC 14-bit processors (In development, not complete).
+Generate code for the Microchip PIC 14-bit processors (p16f84 and variants. In development, not complete).
 .TP
 .BI "\-mpic16"
-Generate code for the PIC 14-bit processors (In development, not complete).
+Generate code for the Microchip PIC 16-bit processors (p18f452 and variants. In development, not complete).
 .TP
 .BI "\-mtlcs900h"
-Generate code for the Toshiba TLCS-900H processor (In development, not 
-complete).
+Generate code for the Toshiba TLCS-900H processor (Not maintained, not complete).
+.TP
 .BI "\-mxa51"
-Generate code for the Phillips XA51 processor (In development, not 
-complete).
-
+Generate code for the Phillips XA51 processor (Not maintained, not complete).
 .SH PREPROCESSOR OPTIONS
 .TP
 .BI "\-I" "<path>"
@@ -82,7 +99,7 @@ Tell the preprocessor to output a rule suitable for make describing the
 dependencies of each object file. For each source file, the preprocessor 
 outputs one make-rule whose target is the object file name for that source 
 file and whose dependencies are all the files `#include'd in it. This rule 
-may be a single line or may be continued with `\\'-newline if it is long. 
+may be a single line or may be continued with `\\'\-newline if it is long. 
 The list of rules is printed on standard output instead of the preprocessed 
 C program. 
 .B `-M'\c

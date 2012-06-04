@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
-  ctype.h - ANSI functions forward declarations
+   ctype.h - ANSI functions forward declarations
 
-             Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1998)
+   Copyright (C) 1998, Sandeep Dutta . sandeep.dutta@usa.net
 
    Revisions:
    1.0 - June.1.2000 1.0 - Bela Torok / bela.torok@kssg.ch
@@ -9,44 +9,33 @@
    corretced macro: isalpha(c)
    added macros: _tolower(c), _toupper(c), tolower(c), toupper(c) toascii(c)
 
-
-   This program is free software; you can redistribute it and/or modify it
+   This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2, or (at your option) any
+   Free Software Foundation; either version 2.1, or (at your option) any
    later version.
 
-   This program is distributed in the hope that it will be useful,
+   This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
    GNU General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
 
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
 #ifndef __SDC51_CTYPE_H
 #define __SDC51_CTYPE_H 1
 
 #include <sdcc-lib.h>
-
-#ifdef SDCC_STACK_AUTO
-
-extern char  iscntrl   (unsigned char ) _REENTRANT ;
-extern char  isdigit   (unsigned char ) _REENTRANT ;
-extern char  isgraph   (unsigned char ) _REENTRANT ;
-extern char  islower   (unsigned char ) _REENTRANT ;
-extern char  isupper   (unsigned char ) _REENTRANT ;
-extern char  isprint   (unsigned char ) _REENTRANT ;
-extern char  ispunct   (unsigned char ) _REENTRANT ;
-extern char  isspace   (unsigned char ) _REENTRANT ;
-extern char  isxdigit  (unsigned char ) _REENTRANT ;
-
-#else
 
 extern char  iscntrl   (unsigned char )  ;
 extern char  isdigit   (unsigned char )  ;
@@ -58,8 +47,6 @@ extern char  ispunct   (unsigned char )  ;
 extern char  isspace   (unsigned char )  ;
 extern char  isxdigit  (unsigned char )  ;
 
-#endif
-
 #define isalnum(c)   (isalpha(c) || isdigit(c))
 #define isalpha(c)   (isupper(c) || islower(c))
 
@@ -70,8 +57,8 @@ extern char  isxdigit  (unsigned char )  ;
 
 /* The _tolower & _toupper functions below can applied to any
    alpha characters regardless of the case (upper or lower) */
-#define _tolower(c)  ((c) | ('a' - 'A'))
-#define _toupper(c)  ((c) & ~('a' - 'A'))
+#define _tolower(c)  (char)(((c) |  (char)('a' - 'A')))
+#define _toupper(c)  (char)(((c) & ~(char)('a' - 'A')))
 
 #define tolower(c)  ((isupper(c)) ? _tolower(c) : (c))
 #define toupper(c)  ((islower(c)) ? _toupper(c) : (c))

@@ -2,15 +2,18 @@ VPATH  = @srcdir@
 srcdir = @srcdir@
 top_builddir = @top_builddir@
 
+AR_S            = @AR@ @AR_S_FLAG@
+
 LIB_TYPE        = @LIB_TYPE@
 
 CC = ../../../bin/sdcc
 
-PORTDIR = ../build/ds390
+# override PORTDIR defined by super (parent) makefile
+override PORTDIR = ../build/ds390
 
 #VERBOSE = --verbose
 
-OBJECTS = tinibios.rel memcpyx.rel  lcd390.rel i2c390.rel rtc390.rel putchar.rel
+OBJECTS = tinibios.rel memcpyx.rel  lcd390.rel i2c390.rel rtc390.rel putchar.rel gptr_cmp.rel
 
 SOURCES = $(patsubst %.rel,%.c,$(OBJECTS))
 
@@ -30,15 +33,19 @@ $(PORTDIR)/libds390.lib: $(OBJECTS)
 ifeq ($(LIB_TYPE), SDCCLIB)
 	rm -f $@; \
 	../../../bin/sdcclib -a $@ $(OBJECTS)
-else ifeq ($(LIB_TYPE), AR)
-	ar -Scq $@ $(OBJECTS)
-else ifeq ($(LIB_TYPE), RANLIB)
-	ar -Scq $@ $(OBJECTS)
-	$(top_builddir)/bin/asranlib $@
 else
+  ifeq ($(LIB_TYPE), AR)
+	$(AR_S) -cq $@ $(OBJECTS)
+  else
+    ifeq ($(LIB_TYPE), RANLIB)
+	$(AR_S) -cq $@ $(OBJECTS)
+	$(top_builddir)/bin/sdranlib $@
+    else
 	rm -f $@;
 	for libfile in $(basename $(OBJECTS)); do echo $$libfile >>$@; done
 	cp $(OBJECTS) $(PORTDIR)
+    endif
+  endif
 endif
 
 %.rel: %.c

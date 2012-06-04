@@ -1,20 +1,30 @@
-/*  expf.c: Computes e**x of a 32-bit float as outlined in [1]
+/*-------------------------------------------------------------------------
+   expf.c - Computes e**x of a 32-bit float as outlined in [1]
 
-    Copyright (C) 2001, 2002  Jesus Calvino-Fraga, jesusc@ieee.org
+   Copyright (C) 2001, 2002, Jesus Calvino-Fraga, jesusc@ieee.org
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA */
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 /* [1] William James Cody and W.  M.  Waite.  _Software manual for the
    elementary functions_, Englewood Cliffs, N.J.:Prentice-Hall, 1980. */
@@ -26,6 +36,9 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#ifndef BOOL
+#define BOOL _Bool
+#endif
 
 #ifdef MATH_ASM_MCS51
 
@@ -54,7 +67,7 @@ float expf(float x)
 	mov	dptr, #0
 	mov	b, #0x80
 	mov	a, #0x3F
-	ret
+	ljmp	expf_exit
 expf_not_zero:
 	// TODO: check exponent for very small values, and return zero
 	mov	_n, #0
@@ -91,7 +104,8 @@ expf_range_reduction:
 	mov	_n, a
 	add	a, #128
 	jnc	expf_range_ok
-	ljmp	fs_return_inf	// exponent overflow
+	lcall	fs_return_inf	// exponent overflow
+	ljmp	expf_exit
 expf_range_ok:
 	mov     r0,#0x00
 	mov     r1,#0x80
@@ -234,6 +248,7 @@ exp_cordic_skip:
 	dec	sp
 expf_done:
 	clr	acc.7		// Result is always positive!
+expf_exit:
 	__endasm;
 #pragma less_pedantic
 }
@@ -364,3 +379,4 @@ float expf(const float x)
 }
 
 #endif
+

@@ -1,0 +1,45 @@
+Fixes spelling errors in programs, minor lintian warnings
+--- a/sim/ucsim/pobj.cc
++++ b/sim/ucsim/pobj.cc
+@@ -157,7 +157,7 @@
+     {
+       char *s;
+       s= (char*)malloc(strlen(get_name("?"))+100);
+-      sprintf(s, "childs of %s", get_name("?"));
++      sprintf(s, "children of %s", get_name("?"));
+       children= new cl_list(1, 1, s);
+       free(s);
+     }
+--- a/src/pic16/ralloc.c
++++ b/src/pic16/ralloc.c
+@@ -311,7 +311,7 @@
+                 case SEND:              return "SEND";
+                 case DUMMY_READ_VOLATILE:       return "DUMMY_READ_VOLATILE";
+         }
+-        sprintf (buffer, "unkown op %d %c", op, op & 0xff);
++        sprintf (buffer, "unknown op %d %c", op, op & 0xff);
+ 
+   return buffer;
+ }
+--- a/sim/ucsim/utils.cc
++++ b/sim/ucsim/utils.cc
+@@ -142,7 +142,7 @@
+     name= o->get_name();
+   if (name && *name)
+     return(name);
+-  return("(unkown)");
++  return("(unknown)");
+ }
+ 
+ 
+--- a/sdas/linksrc/lkmain.c
++++ b/sdas/linksrc/lkmain.c
+@@ -1100,7 +1100,7 @@
+ 				default:
+ 				err:
+ 					fprintf(stderr,
+-					    "Unkown option -%c ignored\n", c);
++					    "Unknown option -%c ignored\n", c);
+ 					break;
+ 				}
+ 			}

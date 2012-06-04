@@ -72,9 +72,9 @@ typedef struct asmop
     union
       {
 	value *aop_lit;		/* if literal */
-	regs *aop_reg[4];	/* array of registers */
+	reg_info *aop_reg[4];	/* array of registers */
 	char *aop_dir;		/* if direct  */
-	regs *aop_ptr;		/* either -> to r0 or r1 */
+	reg_info *aop_ptr;		/* either -> to r0 or r1 */
 	int aop_stk;		/* stack offset when AOP_STK */
 	char *aop_str[4];	/* just a string array containing the location */
 /*	regs *aop_alloc_reg;     * points to a dynamically allocated register */
@@ -147,7 +147,7 @@ void pic16_emitpcode_real(PIC_OPCODE poc, pCodeOp *pcop);
 void pic16_emitpLabel(int key);
 void pic16_emitcode (char *inst,char *fmt, ...);
 void DEBUGpic16_emitcode (char *inst,char *fmt, ...);
-void pic16_emitDebuggerSymbol (char *);
+void pic16_emitDebuggerSymbol (const char *);
 bool pic16_sameRegs (asmop *aop1, asmop *aop2 );
 char *pic16_aopGet (asmop *aop, int offset, bool bit16, bool dname);
 void DEBUGpic16_pic16_AopType(int line_no, operand *left, operand *right, operand *result);

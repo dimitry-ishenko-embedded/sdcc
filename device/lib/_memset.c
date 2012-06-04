@@ -1,47 +1,56 @@
 /*-------------------------------------------------------------------------
-  _memset.c - part of string library functions
+   _memset.c - part of string library functions
 
-             Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1999)
-                           mcs51 assembler by Frieder Ferlemann (2007)
+   Copyright (C) 1999, Sandeep Dutta . sandeep.dutta@usa.net
+   mcs51 assembler by Frieder Ferlemann (2007)
 
    This library is free software; you can redistribute it and/or modify it
-   under the terms of the GNU Library General Public License as published by the
-   Free Software Foundation; either version 2, or (at your option) any
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
    later version.
-   
+
    This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Library General Public License for more details.
-   
-   You should have received a copy of the GNU Library General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-   
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!  
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
+
 #include "string.h" 
+
+#undef memset /* Avoid conflict with builtin memset() in Z80 and some related ports */
 
 #if defined (_SDCC_NO_ASM_LIB_FUNCS) || !defined (SDCC_mcs51) || \
     (!defined (SDCC_MODEL_SMALL) && !defined (SDCC_MODEL_LARGE)) || \
      (defined (SDCC_STACK_AUTO) || defined (SDCC_PARMS_IN_BANK1) )
 
-  void * memset (
-          void * buf,
-          unsigned char ch ,
-          size_t count) 
-  {
-          register unsigned char * ret = buf;
+#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
+void *memset (void *s, unsigned char c, size_t n)
+#else
+void *memset (void *s, int c, size_t n)
+#endif
+{
+ register unsigned char *ret = s;
 
-          while (count--) {
-                  *(unsigned char *) ret = ch;
-                  ret = ((unsigned char *) ret) + 1;
-          }
+ while (n--)
+   {
+      *(unsigned char *) ret = c;
+      ret = ((unsigned char *) ret) + 1;
+   }
 
-          return buf ;
-  }
+   return s;
+}
 
 #else
 
@@ -172,3 +181,4 @@
   }
 
 #endif
+

@@ -1,10 +1,10 @@
 /* Part of CPP library.
-   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007
-   Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007,
+   2008, 2009, 2010 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2, or (at your option) any
+Free Software Foundation; either version 3, or (at your option) any
 later version.
 
 This program is distributed in the hope that it will be useful,
@@ -13,8 +13,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+along with this program; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
 
 /* This header defines all the internal data structures and functions
    that need to be visible across files.  It should not be used outside
@@ -26,15 +26,15 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include "symtab.h"
 #include "cpp-id-data.h"
 
-#ifndef HAVE_ICONV_H
-#undef HAVE_ICONV
-#endif
-
 #if HAVE_ICONV
 #include <iconv.h>
 #else
 #define HAVE_ICONV 0
 typedef int iconv_t;  /* dummy */
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 struct directive;               /* Deliberately incomplete.  */
@@ -48,6 +48,7 @@ struct cset_converter
 {
   convert_f func;
   iconv_t cd;
+  int width;
 };
 
 #define BITS_PER_CPPCHAR_T (CHAR_BIT * sizeof (cppchar_t))
@@ -67,7 +68,7 @@ struct cset_converter
 #define CPP_INCREMENT_LINE(PFILE, COLS_HINT) do { \
     const struct line_maps *line_table = PFILE->line_table; \
     const struct line_map *map = &line_table->maps[line_table->used-1]; \
-    unsigned int line = SOURCE_LINE (map, line_table->highest_line); \
+    linenum_type line = SOURCE_LINE (map, line_table->highest_line); \
     linemap_line_start (PFILE->line_table, line + 1, COLS_HINT); \
   } while (0)
 
@@ -230,7 +231,10 @@ struct spec_nodes
   cpp_hashnode *n_false;                /* C++ keyword false */
   cpp_hashnode *n__VA_ARGS__;           /* C99 vararg macros */
   /* SDCC _asm specific */
-  cpp_hashnode *n__asm;                 /* _asm ... _endasm ; */
+  cpp_hashnode *n__asm1;                /* _asm ... _endasm ; */
+  cpp_hashnode *n__asm;                 /* __asm ... __endasm ; */
+  cpp_hashnode *n__endasm1;             /* _asm ... _endasm ; */
+  cpp_hashnode *n__endasm;              /* __asm ... __endasm ; */
 };
 
 typedef struct _cpp_line_note _cpp_line_note;
@@ -241,7 +245,8 @@ struct _cpp_line_note
 
   /* Type of note.  The 9 'from' trigraph characters represent those
      trigraphs, '\\' an escaped newline, ' ' an escaped newline with
-     intervening space, and anything else is invalid.  */
+     intervening space, 0 represents a note that has already been handled,
+     and anything else is invalid.  */
   unsigned int type;
 };
 
@@ -304,6 +309,26 @@ struct cpp_buffer
   /* Descriptor for converting from the input character set to the
      source character set.  */
   struct cset_converter input_cset_desc;
+};
+
+/* The list of saved macros by push_macro pragma.  */
+struct def_pragma_macro {
+  /* Chain element to previous saved macro.  */
+  struct def_pragma_macro *next;
+  /* Name of the macro.  */
+  char *name;
+  /* The stored macro content.  */
+  unsigned char *definition;
+
+  /* Definition line number.  */
+  source_location line;
+  /* If macro defined in system header.  */
+  unsigned int syshdr   : 1;
+  /* Nonzero if it has been expanded or had its existence tested.  */
+  unsigned int used     : 1;
+
+  /* Mark if we save an undefined macro.  */
+  unsigned int is_undef : 1;
 };
 
 /* A cpp_reader encapsulates the "state" of a pre-processor run.
@@ -389,9 +414,6 @@ struct cpp_reader
   /* Nonzero prevents the lexer from re-using the token runs.  */
   unsigned int keep_tokens;
 
-  /* Error counter for exit code.  */
-  unsigned int errors;
-
   /* Buffer to hold macro definition string.  */
   unsigned char *macro_buffer;
   unsigned int macro_buffer_len;
@@ -399,6 +421,18 @@ struct cpp_reader
   /* Descriptor for converting from the source character set to the
      execution character set.  */
   struct cset_converter narrow_cset_desc;
+
+  /* Descriptor for converting from the source character set to the
+     UTF-8 execution character set.  */
+  struct cset_converter utf8_cset_desc;
+
+  /* Descriptor for converting from the source character set to the
+     UTF-16 execution character set.  */
+  struct cset_converter char16_cset_desc;
+
+  /* Descriptor for converting from the source character set to the
+     UTF-32 execution character set.  */
+  struct cset_converter char32_cset_desc;
 
   /* Descriptor for converting from the source character set to the
      wide execution character set.  */
@@ -464,6 +498,12 @@ struct cpp_reader
 
   /* Next value of __COUNTER__ macro. */
   unsigned int counter;
+
+  /* Table of comments, when state.save_comments is true.  */
+  cpp_comment_table comments;
+
+  /* List of saved macros by push_macro.  */
+  struct def_pragma_macro *pushed_macros;
 };
 
 /* Character classes.  Based on the more primitive macros in safe-ctype.h.
@@ -501,8 +541,8 @@ cpp_in_system_header (cpp_reader *pfile)
 {
   return pfile->buffer ? pfile->buffer->sysp : 0;
 }
-#define CPP_PEDANTIC(PF) CPP_OPTION (PF, pedantic)
-#define CPP_WTRADITIONAL(PF) CPP_OPTION (PF, warn_traditional)
+#define CPP_PEDANTIC(PF) CPP_OPTION (PF, cpp_pedantic)
+#define CPP_WTRADITIONAL(PF) CPP_OPTION (PF, cpp_warn_traditional)
 
 static inline int cpp_in_primary_file (cpp_reader *);
 static inline int
@@ -510,10 +550,6 @@ cpp_in_primary_file (cpp_reader *pfile)
 {
   return pfile->line_table->depth == 1;
 }
-
-/* In errors.c  */
-extern int _cpp_begin_message (cpp_reader *, int,
-                               source_location, unsigned int);
 
 /* In macro.c */
 extern void _cpp_free_definition (cpp_hashnode *);
@@ -529,6 +565,7 @@ extern const unsigned char *_cpp_builtin_macro_text (cpp_reader *,
 extern int _cpp_warn_if_unused_macro (cpp_reader *, cpp_hashnode *, void *);
 extern void _cpp_push_token_context (cpp_reader *, cpp_hashnode *,
                                      const cpp_token *, unsigned int);
+extern void _cpp_backup_tokens_direct (cpp_reader *, unsigned int);
 
 /* In identifiers.c */
 extern void _cpp_init_hashtable (cpp_reader *, hash_table *);
@@ -554,11 +591,11 @@ extern bool _cpp_read_file_entries (cpp_reader *, FILE *);
 extern struct stat *_cpp_get_file_stat (_cpp_file *);
 
 /* In expr.c */
-extern bool _cpp_parse_expr (cpp_reader *);
+extern bool _cpp_parse_expr (cpp_reader *, bool);
 extern struct op *_cpp_expand_op_stack (cpp_reader *);
 
 /* In lex.c */
-extern void _cpp_process_line_notes (cpp_reader *, int);
+extern int _cpp_process_line_notes (cpp_reader *, int);
 extern void _cpp_clean_line (cpp_reader *);
 extern bool _cpp_get_fresh_line (cpp_reader *);
 extern bool _cpp_skip_block_comment (cpp_reader *);
@@ -567,9 +604,11 @@ extern const cpp_token *_cpp_lex_token (cpp_reader *);
 extern cpp_token *_cpp_lex_direct (cpp_reader *);
 extern int _cpp_equiv_tokens (const cpp_token *, const cpp_token *);
 extern void _cpp_init_tokenrun (tokenrun *, unsigned int);
+extern cpp_hashnode *_cpp_lex_identifier (cpp_reader *, const char *);
 
 /* In init.c.  */
 extern void _cpp_maybe_push_include_file (cpp_reader *);
+extern const char *cpp_named_operator2name (enum cpp_ttype type);
 
 /* In directives.c */
 extern int _cpp_test_assertion (cpp_reader *, unsigned int *);
@@ -581,7 +620,7 @@ extern int _cpp_do__Pragma (cpp_reader *);
 extern void _cpp_init_directives (cpp_reader *);
 extern void _cpp_init_internal_pragmas (cpp_reader *);
 extern void _cpp_do_file_change (cpp_reader *, enum lc_reason, const char *,
-                                 unsigned int, unsigned int);
+                                 linenum_type, unsigned int);
 extern void _cpp_pop_buffer (cpp_reader *);
 
 /* In directives.c */
@@ -614,7 +653,7 @@ extern size_t _cpp_replacement_text_len (const cpp_macro *);
    It starts initialized to all zeros, and at the end
    'level' is the normalization level of the sequence.  */
 
-struct normalize_state
+struct normalize_state 
 {
   /* The previous character.  */
   cppchar_t previous;
@@ -637,7 +676,7 @@ extern cppchar_t _cpp_valid_ucn (cpp_reader *, const unsigned char **,
 extern void _cpp_destroy_iconv (cpp_reader *);
 extern unsigned char *_cpp_convert_input (cpp_reader *, const char *,
                                           unsigned char *, size_t, size_t,
-                                          off_t *);
+                                          const unsigned char **, off_t *);
 extern const char *_cpp_default_encoding (void);
 extern cpp_hashnode * _cpp_interpret_identifier (cpp_reader *pfile,
                                                  const unsigned char *id,
@@ -700,5 +739,9 @@ ufputs (const unsigned char *s, FILE *f)
 {
   return fputs ((const char *)s, f);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ! LIBCPP_INTERNAL_H */

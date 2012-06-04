@@ -23,6 +23,8 @@
 
 #define INCLUDE_DIR_SUFFIX    "\\include"
 #define LIB_DIR_SUFFIX        "\\lib"
+#define NON_FREE_INCLUDE_DIR_SUFFIX   "\\non-free\\include"
+#define NON_FREE_LIB_DIR_SUFFIX       "\\non-free\\lib"
 
 #define BIN2DATA_DIR          "\\.."
 #define PREFIX2BIN_DIR        "\\bin"
@@ -41,7 +43,7 @@
 #define STD_FP_LIB            "libfloat"
 #define STD_DS390_LIB         "libds390"
 #define STD_DS400_LIB         "libds400"
-/* #undef STD_XA51_LIB */
+#define STD_XA51_LIB          NULL
 
 /* #undef HAVE_SYS_SOCKET_H */
 
@@ -70,10 +72,11 @@
 #undef OPT_DISABLE_MCS51
 #undef OPT_DISABLE_GBZ80
 #undef OPT_DISABLE_Z80
-#undef OPT_DISABLE_AVR
+#define OPT_DISABLE_AVR	1
 #undef OPT_DISABLE_TININative
-#undef OPT_DISABLE_PIC
-#undef OPT_DISABLE_XA51
+#undef OPT_DISABLE_PIC14
+#undef OPT_DISABLE_PIC16
+#define OPT_DISABLE_XA51	1
 
 #endif  /* SDCC_VC_HEADER */
 

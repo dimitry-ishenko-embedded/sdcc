@@ -15,6 +15,9 @@ INCLUDEFLAGS = -I$(srcdir)/.. -I..
 ifndef SOURCES
 SOURCES = $(notdir $(wildcard $(srcdir)/*.c))
 endif
+ifndef CXXSOURCES
+CXXSOURCES = $(notdir $(wildcard $(srcdir)/*.cc))
+endif
 
 # If the peephole rules aren't specified, assume all.
 ifndef PEEPRULES
@@ -30,7 +33,7 @@ include $(top_builddir)/Makefile.common
 
 $(LIB): $(OBJ)
 	rm -f $(LIB)
-	$(AR) r $(LIB) $(OBJ)
+	$(AR) rc $(LIB) $(OBJ)
 	$(RANLIB) $(LIB)
 
 %.rul: %.def
@@ -38,8 +41,8 @@ $(LIB): $(OBJ)
 
 dep: Makefile.dep
 
-Makefile.dep: $(PREBUILD) Makefile $(SOURCES) $(SPECIAL)
-	$(CPP) $(CPPFLAGS) $(M_OR_MM) $(filter %.c,$^) >Makefile.dep
+Makefile.dep: $(PREBUILD) Makefile $(SOURCES) $(CXXSOURCES) $(SPECIAL)
+	$(MAKEDEP) $(CPPFLAGS) $(filter %.c %.cc,$^) >Makefile.dep
 
 # don't include Makefile.dep for the listed targets:
 ifeq "$(findstring $(MAKECMDGOALS),clean distclean)" ""
