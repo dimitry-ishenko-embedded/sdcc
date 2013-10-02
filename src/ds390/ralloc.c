@@ -2608,7 +2608,7 @@ packRegsDPTRuse (operand * op)
   int i, key;
   symbol *sym;
   iCode *ic, *dic;
-  sym_link *type, *etype;
+  sym_link *type;
 
   if (!IS_SYMOP (op) || !IS_ITEMP (op))
     return NULL;
@@ -2652,7 +2652,7 @@ packRegsDPTRuse (operand * op)
         {
           if (OP_SYMBOL (IC_RESULT (ic))->liveTo == OP_SYMBOL (IC_RESULT (ic))->liveFrom)
             continue;
-          etype = getSpec (type = operandType (IC_RESULT (ic)));
+          type = operandType (IC_RESULT (ic));
           if (getSize (type) == 0 || isOperandEqual (op, IC_RESULT (ic)))
             continue;
           return NULL;
@@ -2881,6 +2881,7 @@ packForPush (iCode * ic, eBBlock ** ebpp, int blockno)
   iCode *dic, *lic;
   bitVect *dbv;
   struct eBBlock *ebp = ebpp[blockno];
+  int disallowHiddenAssignment = 0;
 
   if ((ic->op != IPUSH && ic->op != SEND) || !IS_ITEMP (IC_LEFT (ic)))
     return;
@@ -2899,12 +2900,20 @@ packForPush (iCode * ic, eBBlock ** ebpp, int blockno)
   if (dic->eBBlockNum != ic->eBBlockNum)
     return;
 
+  if (IS_OP_VOLATILE (IC_RIGHT (dic)))
+    return;
+
+  if ((IS_SYMOP (IC_RIGHT (dic)) && OP_SYMBOL (IC_RIGHT (dic))->addrtaken) || isOperandGlobal (IC_RIGHT (dic)))
+    disallowHiddenAssignment = 1;
+
   /* make sure the right side does not have any definitions
      inbetween */
   dbv = OP_DEFS (IC_RIGHT (dic));
   for (lic = ic; lic && lic != dic; lic = lic->prev)
     {
       if (bitVectBitValue (dbv, lic->key))
+        return;
+      if (disallowHiddenAssignment && (lic->op == CALL || lic->op == PCALL || POINTER_SET (lic)))
         return;
     }
   /* make sure they have the same type */
@@ -2929,6 +2938,8 @@ packForPush (iCode * ic, eBBlock ** ebpp, int blockno)
       if (IS_ITEMP (IC_RIGHT (dic)))
         bitVectSetBit (lic->rlive, IC_RIGHT (dic)->key);
     }
+  if (IS_ITEMP (IC_RIGHT (dic)))
+    OP_USES (IC_RIGHT (dic)) = bitVectSetBit (OP_USES (IC_RIGHT (dic)), ic->key);
   /* we now we know that it has one & only one def & use
      and the that the definition is an assignment */
   IC_LEFT (ic) = IC_RIGHT (dic);
@@ -3241,7 +3252,6 @@ packRegisters (eBBlock ** ebpp, int blockno)
         {
           packForPush (ic, ebpp, blockno);
         }
-
 
       /* pack registers for accumulator use, when the
          result of an arithmetic or bit wise operation

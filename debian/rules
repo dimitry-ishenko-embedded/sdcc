@@ -1,11 +1,19 @@
 #!/usr/bin/make -f
 
 export DH_VERBOSE=1
+export DEB_BUILD_HARDENING=1
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
 
 # These are used for cross-compiling and for saving the configure script
 # from having to guess our platform (since we know it already)
 DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+	NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
 
 export HOME=$(CURDIR)/build
 
@@ -38,6 +46,9 @@ clean:
 	rm -f support/cpp/configargs.h,.log
 	rm -f support/cpp/config.log
 	rm -f support/cpp/config.status
+	rm -f support/sdbinutils/binutils/arlex.c
+	rm -f support/sdbinutils/binutils/arparse.c
+	rm -f support/sdbinutils/binutils/arparse.h
 	rm -f sim/ucsim/config.guess
 	rm -f sim/ucsim/config.sub
 	rm -f sim/ucsim/config.log
@@ -78,7 +89,7 @@ build: build-arch build-indep
 build-arch: build-arch-stamp
 build-arch-stamp: configure-stamp 
 	dh_testdir
-	$(MAKE)
+	$(MAKE) $(NJOBS)
 	touch $@
 
 build-indep: build-indep-stamp
@@ -112,6 +123,7 @@ install-indep: build
 	# Install examples
 	cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
 	rm -f $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/examples/mcs51/simple*/go*
+
 	touch $@
 
 install-arch: build-arch
@@ -120,17 +132,18 @@ install-arch: build-arch
 	dh_installdirs 
 	dh_prep
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
-	# Add some scripts
-	mkdir -p debian/tmp/usr/share/sdcc/scripts
-	install -o root -g root -m 755  support/scripts/inc2h-pic16.pl debian/tmp/usr/share/sdcc/scripts
-	install -o root -g root -m 755  support/scripts/inc2h.pl       debian/tmp/usr/share/sdcc/scripts
-	install -o root -g root -m 755  support/scripts/keil2sdcc.pl   debian/tmp/usr/share/sdcc/scripts
 
 	# Remove empty dirs:
 	find $(CURDIR)/debian/tmp -type d -empty -delete
 
 	#Clean up unnecessary directories
 	rm -rf `find $(CURDIR)/debian/tmp -type d -name .deps`
+	# Add some scripts
+	mkdir -p debian/tmp/usr/share/sdcc/scripts
+	install -o root -g root -m 755  support/scripts/*.pl debian/tmp/usr/share/sdcc/scripts
+	install -o root -g root -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
+	# Remove an unnecessary script 
+	rm -f debian/tmp/usr/share/sdcc/scripts/gen_known_bugs.pl
 
 	dh_install -a --sourcedir=debian/tmp
 
@@ -169,7 +182,7 @@ get-orig-source:
 	VER=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^-+~]+).*,\1,p'); \
 	uscan --force-download --rename --download-version=$$VER --destdir=. && (\
 	tar -xj --exclude device/non-free --exclude sim/ucsim/libltdl -f sdcc_$$VER.orig.tar.bz2 ; \
-	mv sdcc sdcc-$$VER+dfsg;\
+	mv sdcc-$$VER sdcc-$$VER+dfsg;\
 	tar -czf sdcc_$$VER+dfsg.orig.tar.gz sdcc-$$VER+dfsg; \
 	rm -rf sdcc-$$VER+dfsg ;\
 	rm -f sdcc_$$VER.orig.tar.bz2);

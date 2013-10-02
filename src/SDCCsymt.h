@@ -1,24 +1,21 @@
 /*-------------------------------------------------------------------------
-   SDCCsymt.h - Header file for Symbols table related structures and MACRO's.
-   Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1998)
+  SDCCsymt.h - Header file for Symbols table related structures and MACRO's.
 
-   This program is free software; you can redistribute it and/or modify it
-   under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2, or (at your option) any
-   later version.
+  Copyright (C) 1998 Sandeep Dutta . sandeep.dutta@usa.net
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+  This program is free software; you can redistribute it and/or modify it
+  under the terms of the GNU General Public License as published by the
+  Free Software Foundation; either version 2, or (at your option) any
+  later version.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
 
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
 #ifndef  SDCCSYMT_H
@@ -94,11 +91,13 @@ typedef struct structdef
 {
   char tag[SDCC_NAME_MAX + 1];  /* tag part of structure      */
   unsigned char level;          /* Nesting level              */
+  int block;                    /* belongs to which block     */
   struct symbol *fields;        /* pointer to fields          */
   unsigned size;                /* sizeof the table in bytes  */
   int type;                     /* STRUCT or UNION            */
   bool b_flexArrayMember;       /* has got a flexible array member,
                                    only needed for syntax checks */
+  struct symbol *tagsym;        /* tag symbol (NULL if no tag) */
 }
 structdef;
 
@@ -148,6 +147,8 @@ STORAGE_CLASS;
 #define TYPE_TARGET_UCHAR TYPE_UBYTE
 #define TYPE_TARGET_UINT  TYPE_UWORD
 #define TYPE_TARGET_ULONG TYPE_UDWORD
+#define TYPE_TARGET_LONGLONG TYPE_QWORD
+#define TYPE_TARGET_ULONGLONG TYPE_UQWORD
 
 /* specifier is the last in the type-chain */
 typedef struct specifier
@@ -163,10 +164,13 @@ typedef struct specifier
   unsigned b_static:1;              /* 1=static keyword found     */
   unsigned b_extern:1;              /* 1=extern found             */
   unsigned b_inline:1;              /* inline function requested  */
+  unsigned b_noreturn:1;            /* promised not to return     */
+  unsigned b_alignas:1;             /* alignment                  */
   unsigned b_absadr:1;              /* absolute address specfied  */
   unsigned b_volatile:1;            /* is marked as volatile      */
   unsigned b_const:1;               /* is a constant              */
   unsigned b_restrict:1;            /* is restricted              */
+  struct symbol *addrspace;         /* is in named address space  */
   unsigned b_typedef:1;             /* is typedefed               */
   unsigned b_isregparm:1;           /* is the first parameter     */
   unsigned b_isenum:1;              /* is an enumerated type      */
@@ -177,15 +181,17 @@ typedef struct specifier
   unsigned _stack;                  /* stack offset for stacked v */
   int argreg;                       /* reg no for regparm         */
   union
-  {                                 /* Values if constant or enum */
-    TYPE_TARGET_INT v_int;          /* 2 bytes: int and char values           */
-    char *v_char;                   /*          character string              */
-    TYPE_TARGET_UINT v_uint;        /* 2 bytes: unsigned int const value      */
-    TYPE_TARGET_LONG v_long;        /* 4 bytes: long constant value           */
-    TYPE_TARGET_ULONG v_ulong;      /* 4 bytes: unsigned long constant value  */
-    double v_float;                 /*          floating point constant value */
-    TYPE_TARGET_ULONG v_fixed16x16; /* 4 bytes: fixed point constant value    */
-    struct symbol *v_enum;          /* ptr to enum_list if enum==1            */
+  {                                   /* Values if constant or enum */
+    TYPE_TARGET_INT v_int;            /* 2 bytes: int and char values            */
+    const char *v_char;               /*          character string               */
+    TYPE_TARGET_UINT v_uint;          /* 2 bytes: unsigned int const value       */
+    TYPE_TARGET_LONG v_long;          /* 4 bytes: long constant value            */
+    TYPE_TARGET_ULONG v_ulong;        /* 4 bytes: unsigned long constant value   */
+    TYPE_TARGET_LONGLONG v_longlong;  /* 8 bytes: long long constant value       */
+    TYPE_TARGET_ULONGLONG v_ulonglong;/* 8 bytes: unsigned long long const value */
+    double v_float;                   /*          floating point constant value  */
+    TYPE_TARGET_ULONG v_fixed16x16;   /* 4 bytes: fixed point constant value     */
+    struct symbol *v_enum;            /* ptr to enum_list if enum==1             */
   }
   const_val;
   struct structdef *v_struct;       /* structure pointer      */
@@ -211,11 +217,13 @@ DECLARATOR_TYPE;
 typedef struct declarator
 {
   DECLARATOR_TYPE dcl_type;         /* POINTER,ARRAY or FUNCTION  */
-  unsigned int num_elem;            /* # of elems if type==array, */
+  size_t num_elem;                  /* # of elems if type==array, */
   /* always 0 for flexible arrays */
   unsigned ptr_const:1;             /* pointer is constant        */
   unsigned ptr_volatile:1;          /* pointer is volatile        */
   unsigned ptr_restrict:1;          /* pointer is resticted       */
+  struct symbol *ptr_addrspace;     /* pointer is in named address space  */
+
   struct sym_link *tspec;           /* pointer type specifier     */
 }
 declarator;
@@ -229,9 +237,9 @@ typedef enum
 
 typedef struct sym_link
 {
-  SYM_LINK_CLASS xclass;            /* DECLARATOR or SPECIFIER    */
-  unsigned tdef:1;                  /* current link created by    */
-  /* typedef if this flag is set */
+  SYM_LINK_CLASS xclass;            /* DECLARATOR or SPECIFIER     */
+  unsigned tdef:1;                  /* current link created by     */
+                                    /* typedef if this flag is set */
   union
   {
     specifier s;                    /* if CLASS == SPECIFIER      */
@@ -257,6 +265,7 @@ typedef struct sym_link
     unsigned intrtn:1;              /* this is an interrupt routine         */
     unsigned rbank:1;               /* seperate register bank               */
     unsigned inlinereq:1;           /* inlining requested                   */
+    unsigned noreturn:1;            /* promised not to return               */
     unsigned smallc:1;              /* Parameters on stack are passed in reverse order */
     unsigned intno;                 /* 1=Interrupt service routine          */
     short regbank;                  /* register bank 2b used                */
@@ -277,6 +286,7 @@ typedef struct symbol
 
   short level;                      /* declaration lev,fld offset */
   short block;                      /* sequential block # of definition */
+  int seqPoint;                     /* sequence point defined or, if unbound, used */
   int key;
   unsigned flexArrayLength;         /* if the symbol specifies a struct
                                        with a "flexible array member", then the additional length in bytes for
@@ -298,6 +308,7 @@ typedef struct symbol
   unsigned isreqv:1;                /* is the register equivalent of a symbol */
   unsigned udChked:1;               /* use def checking has been already done */
   unsigned generated:1;             /* code generated (function symbols only) */
+  unsigned isinscope:1;             /* is in scope */
 
   /* following flags are used by the backend
      for code generation and can be changed
@@ -334,7 +345,7 @@ typedef struct symbol
   short nRegs;                      /* number of registers required */
   short regType;                    /* type of register required    */
 
-  struct reg_info *regs[4];         /* can have at the most 4 registers */
+  struct reg_info *regs[8];         /* can have at the most 8 registers */
   struct asmop *aop;                /* asmoperand for this symbol */
   struct iCode *fuse;               /* furthest use */
   struct iCode *rematiCode;         /* rematerialise with which instruction */
@@ -347,7 +358,7 @@ typedef struct symbol
     struct set *itmpStack;          /* symbols spilt @ this stack location */
   }
   usl;
-  char bitVar;                      /* if bitVar != 0: this is a bit variable, bitVar is the size in bits */
+  signed char bitVar;               /* if bitVar != 0: this is a bit variable, bitVar is the size in bits */
   char bitUnnamed:1;                /* unnamed bit variable */
   unsigned offset;                  /* offset from top if struct */
 
@@ -368,6 +379,7 @@ typedef struct symbol
   int recvSize;                     /* size of first argument  */
   struct bitVect *clashes;          /* overlaps with what other symbols */
   struct ast *funcTree;             /* function body ast if inlined */
+  struct symbol *addressmod[2];     /* access functions for named address spaces */
 
   bool for_newralloc;
 }
@@ -384,6 +396,7 @@ extern sym_link *validateLink (sym_link * l,
 #define DCL_PTR_CONST(l) validateLink(l, "DCL_PTR_CONST", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_const
 #define DCL_PTR_VOLATILE(l) validateLink(l, "DCL_PTR_VOLATILE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_volatile
 #define DCL_PTR_RESTRICT(l) validateLink(l, "DCL_PTR_RESTRICT", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_restrict
+#define DCL_PTR_ADDRSPACE(l) validateLink(l, "DCL_PTR_ADDRSPACE", #l, DECLARATOR, __FILE__, __LINE__)->select.d.ptr_addrspace
 #define DCL_TSPEC(l) validateLink(l, "DCL_TSPEC", #l, DECLARATOR, __FILE__, __LINE__)->select.d.tspec
 
 #define FUNC_DEBUG              //assert(IS_FUNC(x));
@@ -404,6 +417,8 @@ extern sym_link *validateLink (sym_link * l,
 #define FUNC_HASSTACKPARM(x) (x->funcAttrs.hasStackParms)
 #define FUNC_ISINLINE(x) (x->funcAttrs.inlinereq)
 #define IFFUNC_ISINLINE(x) (IS_FUNC(x) && FUNC_ISINLINE(x))
+#define FUNC_ISNORETURN(x) (x->funcAttrs.noreturn)
+#define IFFUNC_ISNORETURN(x) (IS_FUNC(x) && FUNC_ISNORETURN(x))
 
 #define FUNC_ISREENT(x) (x->funcAttrs.reent)
 #define IFFUNC_ISREENT(x) (IS_FUNC(x) && FUNC_ISREENT(x))
@@ -463,11 +478,14 @@ extern sym_link *validateLink (sym_link * l,
 #define SPEC_VOLATILE(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_volatile
 #define SPEC_CONST(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_const
 #define SPEC_RESTRICT(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_restrict
+#define SPEC_ADDRSPACE(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.addrspace
 #define SPEC_STRUCT(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.v_struct
 #define SPEC_TYPEDEF(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_typedef
 #define SPEC_REGPARM(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_isregparm
 #define SPEC_ARGREG(x) validateLink(x, "SPEC_NOUN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.argreg
 #define SPEC_INLINE(x) validateLink(x, "SPEC_INLINE", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_inline
+#define SPEC_NORETURN(x) validateLink(x, "SPEC_NORETURN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_noreturn
+#define SPEC_ALIGNAS(x) validateLink(x, "SPEC_ALIGNAS", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_alignas
 
 /* type check macros */
 #define IS_DECL(x)       ( x && x->xclass == DECLARATOR )
@@ -505,29 +523,30 @@ extern sym_link *validateLink (sym_link * l,
 #define IS_RENT(x)       (IS_SPEC(x) && x->select.s._reent )
 #define IS_STATIC(x)     (IS_SPEC(x) && SPEC_STAT(x))
 #define IS_INLINE(x)     (IS_SPEC(x) && SPEC_INLINE(x))
+#define IS_NORETURN(x)   (IS_SPEC(x) && SPEC_NORETURN(x))
 #define IS_INT(x)        (IS_SPEC(x) && x->select.s.noun == V_INT)
 #define IS_VOID(x)       (IS_SPEC(x) && x->select.s.noun == V_VOID)
 #define IS_BOOL(x)       (IS_SPEC(x) && x->select.s.noun == V_BOOL)
 #define IS_CHAR(x)       (IS_SPEC(x) && x->select.s.noun == V_CHAR)
 #define IS_EXTERN(x)     (IS_SPEC(x) && x->select.s.b_extern)
 #define IS_VOLATILE(x)   (isVolatile (x))
-#define IS_INTEGRAL(x)   (IS_SPEC(x) && (x->select.s.noun == V_INT ||  \
-                                         x->select.s.noun == V_BOOL || \
-                                         x->select.s.noun == V_CHAR || \
-                                         x->select.s.noun == V_BITFIELD || \
+#define IS_INTEGRAL(x)   (IS_SPEC(x) && (x->select.s.noun == V_INT       || \
+                                         x->select.s.noun == V_BOOL      || \
+                                         x->select.s.noun == V_CHAR      || \
+                                         x->select.s.noun == V_BITFIELD  || \
                                          x->select.s.noun == V_BBITFIELD || \
-                                         x->select.s.noun == V_BIT ||  \
+                                         x->select.s.noun == V_BIT       || \
                                          x->select.s.noun == V_SBIT ))
-#define IS_BITFIELD(x)   (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD || \
+#define IS_BITFIELD(x)   (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD  || \
                                          x->select.s.noun == V_BBITFIELD ))
-#define IS_BITVAR(x)     (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD || \
+#define IS_BITVAR(x)     (IS_SPEC(x) && (x->select.s.noun == V_BITFIELD  || \
                                          x->select.s.noun == V_BBITFIELD || \
-                                         x->select.s.noun == V_BIT || \
+                                         x->select.s.noun == V_BIT       || \
                                          x->select.s.noun == V_SBIT ))
-#define IS_BIT(x)        (IS_SPEC(x) && (x->select.s.noun  == V_BIT ||   \
+#define IS_BIT(x)        (IS_SPEC(x) && (x->select.s.noun == V_BIT       || \
                                          x->select.s.noun == V_SBIT ))
-#define IS_BOOLEAN(x)    (IS_SPEC(x) && (x->select.s.noun  == V_BIT ||   \
-                                         x->select.s.noun == V_SBIT ||   \
+#define IS_BOOLEAN(x)    (IS_SPEC(x) && (x->select.s.noun == V_BIT       || \
+                                         x->select.s.noun == V_SBIT      || \
                                          x->select.s.noun == V_BBITFIELD || \
                                          x->select.s.noun == V_BOOL ))
 #define IS_FLOAT(x)      (IS_SPEC(x) && x->select.s.noun == V_FLOAT)
@@ -550,6 +569,7 @@ extern bucket *StructTab[];
 extern bucket *TypedefTab[];
 extern bucket *LabelTab[];
 extern bucket *enumTab[];
+extern bucket *AddrspaceTab[];
 extern symbol *fsadd;
 extern symbol *fssub;
 extern symbol *fsmul;
@@ -572,16 +592,16 @@ extern symbol *fps16x16_lteq;
 extern symbol *fps16x16_gt;
 extern symbol *fps16x16_gteq;
 
-/* Dims: mul/div/mod, BYTE/WORD/DWORD, SIGNED/UNSIGNED/BOTH */
-extern symbol *muldiv[3][3][4];
-/* Dims: BYTE/WORD/DWORD SIGNED/UNSIGNED */
-extern sym_link *multypes[3][2];
-/* Dims: to/from float, BYTE/WORD/DWORD, SIGNED/USIGNED */
-extern symbol *conv[2][3][2];
-/* Dims: to/from fixed16x16, BYTE/WORD/DWORD/FLOAT, SIGNED/USIGNED */
-extern symbol *fp16x16conv[2][4][2];
-/* Dims: shift left/shift right, BYTE/WORD/DWORD, SIGNED/UNSIGNED */
-extern symbol *rlrr[2][3][2];
+/* Dims: mul/div/mod, BYTE/WORD/DWORD/QWORD, SIGNED/UNSIGNED/BOTH */
+extern symbol *muldiv[3][4][4];
+/* Dims: BYTE/WORD/DWORD/QWORD SIGNED/UNSIGNED */
+extern sym_link *multypes[4][2];
+/* Dims: to/from float, BYTE/WORD/DWORD/QWORD, SIGNED/USIGNED */
+extern symbol *conv[2][4][2];
+/* Dims: to/from fixed16x16, BYTE/WORD/DWORD/QWORD/FLOAT, SIGNED/USIGNED */
+extern symbol *fp16x16conv[2][5][2];
+/* Dims: shift left/shift right, BYTE/WORD/DWORD/QWORD, SIGNED/UNSIGNED */
+extern symbol *rlrr[2][4][2];
 
 #define SCHARTYPE       multypes[0][0]
 #define UCHARTYPE       multypes[0][1]
@@ -589,6 +609,8 @@ extern symbol *rlrr[2][3][2];
 #define UINTTYPE        multypes[1][1]
 #define LONGTYPE        multypes[2][0]
 #define ULONGTYPE       multypes[2][1]
+#define LONGLONGTYPE    multypes[3][0]
+#define ULONGLONGTYPE   multypes[3][1]
 
 extern sym_link *floatType;
 extern sym_link *fixed16x16Type;
@@ -598,7 +620,7 @@ extern sym_link *fixed16x16Type;
 typedef enum
 {
   RESULT_TYPE_NONE = 0,         /* operands will be promoted to int */
-  RESULT_TYPE_BIT,
+  RESULT_TYPE_BOOL,
   RESULT_TYPE_CHAR,
   RESULT_TYPE_INT,
   RESULT_TYPE_OTHER,            /* operands will be promoted to int */
@@ -638,11 +660,14 @@ sym_link *newIntLink ();
 sym_link *newCharLink ();
 sym_link *newLongLink ();
 sym_link *newBoolLink ();
+sym_link *newVoidLink ();
 int compareType (sym_link *, sym_link *);
 int compareTypeExact (sym_link *, sym_link *, int);
+int compareTypeInexact (sym_link *, sym_link *);
 int checkFunction (symbol *, symbol *);
 void cleanUpLevel (bucket **, int);
 void cleanUpBlock (bucket **, int);
+symbol *getAddrspace (sym_link *type);
 int funcInChain (sym_link *);
 void addSymChain (symbol **);
 sym_link *structElemType (sym_link *, value *);
@@ -675,6 +700,7 @@ void promoteAnonStructs (int, structdef *);
 int isConstant (sym_link * type);
 int isVolatile (sym_link * type);
 int isRestrict (sym_link * type);
+value *aggregateToPointer (value *);
 
 
 extern char *nounName (sym_link *);     /* noun strings */

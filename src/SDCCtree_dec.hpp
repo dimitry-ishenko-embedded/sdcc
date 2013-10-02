@@ -23,7 +23,7 @@
 //
 // struct tree_dec_node
 // {
-//	std::set<unsigned int> bag;
+//  std::set<unsigned int> bag;
 // };
 // typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, tree_dec_node> tree_dec_t;
 //
@@ -52,6 +52,14 @@
 #include <boost/graph/properties.hpp>
 #include <boost/graph/copy.hpp>
 #include <boost/graph/adjacency_list.hpp>
+
+struct forget_properties
+{
+  template<class T1, class T2>
+  void operator()(const T1&, const T2&) const
+  {
+  }
+};
 
 // Thorup algorithm D.
 // The use of the multimap makes the complexity of this O(|I|log|I|), which could be reduced to O(|I|).
@@ -138,8 +146,8 @@ void thorup_E(std::multimap<unsigned int, unsigned int> &M, const I_t &I)
     // Not in Thorup's paper, but without this the algorithm gives incorrect results.
     while(s.size() > 1)
     {
-    	M.insert(std::pair<unsigned int, unsigned int>(s.top().second, s.top().first));
-    	s.pop();
+        M.insert(std::pair<unsigned int, unsigned int>(s.top().second, s.top().first));
+        s.pop();
     }
 }
 
@@ -152,7 +160,7 @@ void thorup_elimination_ordering(l_t &l, const G_t &G)
 {
   // Should we do this? Or just use G as J? The Thorup paper seems unclear, it speaks of statements that contain jumps to other statements, but does it count as a jump, when they're just subsequent?
   boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS> J;
-  boost::copy_graph(G, J);
+  boost::copy_graph(G, J, boost::vertex_copy(forget_properties()).edge_copy(forget_properties()));
   for (unsigned int i = 0; i < boost::num_vertices(J) - 1; i++)
     remove_edge(i, i + 1, J);
 
@@ -189,7 +197,7 @@ typename boost::graph_traits<T_t>::vertex_iterator find_bag(const std::set<unsig
         t_found = t;
     }
 
-  if (t_found == t_end)	// Todo: Better error handling (throw exception?)
+  if (t_found == t_end) // Todo: Better error handling (throw exception?)
     {
       std::cerr << "find_bag() failed.\n";
       std::cerr.flush();
@@ -256,7 +264,7 @@ void tree_decomposition_from_elimination_ordering(T_t &T, const std::list<unsign
 
   // Todo: Implement a graph adaptor for boost that allows to treat directed graphs as undirected graphs.
   boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> G_sym;
-  boost::copy_graph(G, G_sym);
+  boost::copy_graph(G, G_sym, boost::vertex_copy(forget_properties()).edge_copy(forget_properties()));
 
   std::vector<bool> active(boost::num_vertices(G), true);
 
@@ -461,9 +469,16 @@ void nicify(T_t &T)
 
   t = find_root(T);
 
+  // Ensure we have an empty bag at the root.
+  if(T[t].bag.size())
+  {
+    typename boost::graph_traits<T_t>::vertex_descriptor d = t;
+    t = add_vertex(T);
+    boost::add_edge(t, d, T);
+  }
+
   nicify_joins(T, t);
   nicify_diffs(T, t);
   nicify_diffs_more(T, t);
 }
-
 

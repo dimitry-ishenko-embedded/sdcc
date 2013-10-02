@@ -34,6 +34,7 @@ cseDef *
 newCseDef (operand * sym, iCode * ic)
 {
   cseDef *cdp;
+  memmap *map;
 
   assert (sym);
   cdp = Safe_alloc (sizeof (cseDef));
@@ -45,18 +46,28 @@ newCseDef (operand * sym, iCode * ic)
   cdp->fromGlobal = 0;
   cdp->fromAddrTaken = 0;
 
-  if (ic->op!=IF && ic->op!=JUMPTABLE)
+  if (ic->op != IF && ic->op != JUMPTABLE)
     {
-      if (IC_LEFT (ic) && IS_SYMOP (IC_LEFT (ic)))
+      if (ic->op != ADDRESS_OF && IC_LEFT (ic) && IS_SYMOP (IC_LEFT (ic)))
         {
           bitVectSetBit (cdp->ancestors, IC_LEFT (ic)->key);
-          cdp->fromGlobal |= isOperandGlobal (IC_LEFT (ic));
+          if (isOperandGlobal (IC_LEFT (ic)))
+            {
+              map = SPEC_OCLS (getSpec (operandType (IC_LEFT (ic))));
+              if (map)
+                cdp->fromGlobal |= (1 << map->ptrType);
+            }
           cdp->fromAddrTaken |= OP_SYMBOL (IC_LEFT (ic))->addrtaken;
         }
       if (IC_RIGHT (ic) && IS_SYMOP (IC_RIGHT (ic)))
         {
           bitVectSetBit (cdp->ancestors, IC_RIGHT (ic)->key);
-          cdp->fromGlobal |= isOperandGlobal (IC_RIGHT (ic));
+          if (isOperandGlobal (IC_RIGHT (ic)))
+            {
+              map = SPEC_OCLS (getSpec (operandType (IC_RIGHT (ic))));
+              if (map)
+                cdp->fromGlobal |= (1 << map->ptrType);
+            }
           cdp->fromAddrTaken |= OP_SYMBOL (IC_RIGHT (ic))->addrtaken;
         }
     }
@@ -73,7 +84,7 @@ updateCseDefAncestors(cseDef *cdp, set * cseSet)
 
   if (ic->op!=IF && ic->op!=JUMPTABLE)
     {
-      if (IC_LEFT (ic) && IS_SYMOP (IC_LEFT (ic)))
+      if (ic->op != ADDRESS_OF && IC_LEFT (ic) && IS_SYMOP (IC_LEFT (ic)))
         {
           bitVectSetBit (cdp->ancestors, IC_LEFT (ic)->key);
           for (sl = cseSet; sl; sl = sl->next)
@@ -121,7 +132,6 @@ isCseDefEqual (void *vsrc, void *vdest)
 
   return (src->key == dest->key &&
           src->diCode == dest->diCode);
-
 }
 
 /*-----------------------------------------------------------------*/
@@ -345,7 +355,7 @@ DEFSETFUNC (findCheaperOp)
 
   /* not found it yet check if this is the one */
   /* and this is not the defining one          */
-  if (cop->key == cdp->key)
+  if (cop->key && cop->key == cdp->key)
     {
       /* do a special check this will help in */
       /* constant propagation & dead code elim */
@@ -482,6 +492,7 @@ DEFSETFUNC (findPointerSet)
   V_ARG (operand *, rop);
 
   if (POINTER_SET (cdp->diCode) &&
+      op->key &&
       IC_RESULT (cdp->diCode)->key == op->key &&
       !isOperandVolatile (IC_RESULT (cdp->diCode), TRUE) &&
       !isOperandVolatile (IC_RIGHT (cdp->diCode), TRUE) &&
@@ -530,7 +541,7 @@ DEFSETFUNC (findPrevIc)
   /* if iCodes are not the same */
   /* see the operands maybe interchanged */
   if (ic->op == cdp->diCode->op &&
-      IS_ASSOCIATIVE(ic) &&
+      IS_COMMUTATIVE (ic) &&
       isOperandEqual (IC_LEFT (ic), IC_RIGHT (cdp->diCode)) &&
       isOperandEqual (IC_RIGHT (ic), IC_LEFT (cdp->diCode)))
     {
@@ -565,6 +576,23 @@ DEFSETFUNC (ifFromGlobal)
   return cdp->fromGlobal;
 }
 
+/*-------------------------------------------------------------------*/
+/* ifFromGlobalAliasableByPtr - if definition is derived from global */
+/*   that may be aliasble by a particular pointer type               */
+/*-------------------------------------------------------------------*/
+DEFSETFUNC (ifFromGlobalAliasableByPtr)
+{
+  cseDef *cdp = item;
+  V_ARG (DECLARATOR_TYPE, decl);
+
+  if (decl == GPOINTER && cdp->fromGlobal)
+    return 1;
+  else if (cdp->fromGlobal & (1 << decl))
+    return 1;
+  else
+    return 0;
+}
+
 /*-----------------------------------------------------------------*/
 /* ifDefGlobal - if definition is global                           */
 /*-----------------------------------------------------------------*/
@@ -573,6 +601,24 @@ DEFSETFUNC (ifDefGlobal)
   cseDef *cdp = item;
 
   return (isOperandGlobal (cdp->sym));
+}
+
+/*-----------------------------------------------------------------*/
+/* ifDefGlobalAliasableByPtr - if definition is global             */
+/*   and may be aliasble by a particular pointer type              */
+/*-----------------------------------------------------------------*/
+DEFSETFUNC (ifDefGlobalAliasableByPtr)
+{
+  cseDef *cdp = item;
+  V_ARG (DECLARATOR_TYPE, decl);
+  memmap *map;
+
+  if (!isOperandGlobal (cdp->sym))
+    return 0;
+  if (decl == GPOINTER)
+    return 1;
+  map = SPEC_OCLS (getSpec (operandType (cdp->sym)));
+  return (map->ptrType == decl);
 }
 
 /*-------------------------------------------------------------------*/
@@ -600,6 +646,48 @@ DEFSETFUNC (ifAnyGetPointer)
 }
 
 /*-----------------------------------------------------------------*/
+/* ifAnyUnrestrictedGetPointer - if get pointer icode              */
+/*-----------------------------------------------------------------*/
+DEFSETFUNC (ifAnyUnrestrictedGetPointer)
+{
+  cseDef *cdp = item;
+  V_ARG (DECLARATOR_TYPE, decl);
+
+  if (cdp->diCode && POINTER_GET (cdp->diCode))
+    {
+      sym_link *ptype;
+      ptype = operandType (IC_LEFT (cdp->diCode));
+      if (!IS_PTR_RESTRICT (ptype))
+        {
+	  if (DCL_TYPE (ptype) == decl || IS_GENPTR (ptype))
+            return 1;
+	}
+    }
+  return 0;
+}
+
+/*-----------------------------------------------------------------*/
+/* ifAnyUnrestrictedSetPointer - if set pointer icode              */
+/*-----------------------------------------------------------------*/
+DEFSETFUNC (ifAnyUnrestrictedSetPointer)
+{
+  cseDef *cdp = item;
+  V_ARG (DECLARATOR_TYPE, decl);
+
+  if (cdp->diCode && POINTER_SET (cdp->diCode))
+    {
+      sym_link *ptype;
+      ptype = operandType (IC_RESULT (cdp->diCode));
+      if (!IS_PTR_RESTRICT (ptype))
+        {
+	  if (DCL_TYPE (ptype) == decl || IS_GENPTR (ptype))
+            return 1;
+	}
+    }
+  return 0;
+}
+
+/*-----------------------------------------------------------------*/
 /* ifOperandsHave - if any of the operand are the same as this     */
 /*-----------------------------------------------------------------*/
 DEFSETFUNC (ifOperandsHave)
@@ -618,6 +706,11 @@ DEFSETFUNC (ifOperandsHave)
   if (IC_RIGHT (cdp->diCode) &&
       IS_SYMOP (IC_RIGHT (cdp->diCode)) &&
       IC_RIGHT (cdp->diCode)->key == op->key)
+    return 1;
+
+  if (POINTER_SET (cdp->diCode) &&
+      IS_SYMOP (IC_RESULT (cdp->diCode)) &&
+      IC_RESULT (cdp->diCode)->key == op->key)
     return 1;
 
   /* or if any of the operands are volatile */
@@ -667,7 +760,7 @@ DEFSETFUNC (ifDefSymIsX)
   V_ARG (operand *, op);
   int match;
 
-  if (op && cdp->sym)
+  if (op && cdp->sym && op->key)
     match = cdp->sym->key == op->key;
   else
     match = (isOperandEqual (cdp->sym, op));
@@ -711,7 +804,7 @@ DEFSETFUNC (ifPointerGet)
   iCode *dic = cdp->diCode;
   operand *left = IC_LEFT (cdp->diCode);
 
-  if (POINTER_GET (dic) && left->key == op->key)
+  if (POINTER_GET (dic) && op->key && left->key == op->key)
     return 1;
 
   return 0;
@@ -725,7 +818,7 @@ DEFSETFUNC (ifPointerSet)
   cseDef *cdp = item;
   V_ARG (operand *, op);
 
-  if (POINTER_SET (cdp->diCode) &&
+  if (POINTER_SET (cdp->diCode) && op->key &&
       IC_RESULT (cdp->diCode)->key == op->key)
     return 1;
 
@@ -823,6 +916,11 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
           IC_RESULT (ic) = operandFromOperand (IC_RESULT (ic));
           IC_RESULT (ic)->isaddr = 0;
           setOperandType (IC_RESULT (ic), operandType (IC_RIGHT (ic)));
+          if (IS_DECL (operandType (IC_RESULT (ic))))
+            {
+              DCL_PTR_VOLATILE (operandType (IC_RESULT (ic))) = 0;
+              DCL_PTR_ADDRSPACE (operandType (IC_RESULT (ic))) = 0;
+            }
           return;
         }
 
@@ -858,7 +956,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       /* if addition then check if one of them is a zero */
       /* if yes turn it into assignment or cast */
       if (IS_OP_LITERAL (IC_LEFT (ic)) &&
-          operandLitValue (IC_LEFT (ic)) == 0.0)
+          isEqualVal (OP_VALUE (IC_LEFT (ic)), 0))
         {
           int typematch;
           typematch = compareType (operandType (IC_RESULT (ic)),
@@ -884,7 +982,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
           return;
         }
       if (IS_OP_LITERAL (IC_RIGHT (ic)) &&
-          operandLitValue (IC_RIGHT (ic)) == 0.0)
+          isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
         {
           int typematch;
           typematch = compareType (operandType (IC_RESULT (ic)),
@@ -928,7 +1026,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       /* is zero then depending on which operand change  */
       /* to assignment or unary minus                    */
       if (IS_OP_LITERAL (IC_RIGHT (ic)) &&
-          operandLitValue (IC_RIGHT (ic)) == 0.0)
+          isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
         {
           /* right size zero change to assignment */
           ic->op = '=';
@@ -939,7 +1037,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
           return;
         }
       if (IS_OP_LITERAL (IC_LEFT (ic)) &&
-          operandLitValue (IC_LEFT (ic)) == 0.0)
+          isEqualVal (OP_VALUE (IC_LEFT (ic)), 0))
         {
           /* left zero turn into an unary minus */
           ic->op = UNARYMINUS;
@@ -955,9 +1053,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
     case '*':
       if (IS_OP_LITERAL (IC_LEFT (ic)))
         {
-          double leftValue = operandLitValue (IC_LEFT (ic));
-
-          if (leftValue == 0.0)
+          if (isEqualVal (OP_VALUE (IC_LEFT (ic)), 0))
             {
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
@@ -965,7 +1061,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
               SET_RESULT_RIGHT (ic);
               return;
             }
-          if (leftValue == 1.0)
+          if (isEqualVal (OP_VALUE (IC_LEFT (ic)), 1))
             {
               /* '*' can have two unsigned chars as operands */
               /* and an unsigned int as result.              */
@@ -986,7 +1082,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
                 }
               return;
             }
-          if (leftValue == -1.0)
+          if (isEqualVal (OP_VALUE (IC_LEFT (ic)), -1))
             {
               /* convert -1 * x to -x */
               ic->op = UNARYMINUS;
@@ -998,9 +1094,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
 
       if (IS_OP_LITERAL (IC_RIGHT (ic)))
         {
-          double rightValue = operandLitValue (IC_RIGHT (ic));
-
-          if (rightValue == 0.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
             {
               ic->op = '=';
               IC_LEFT (ic) = NULL;
@@ -1008,7 +1102,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
               return;
             }
 
-          if (rightValue == 1.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 1))
             {
               /* '*' can have two unsigned chars as operands */
               /* and an unsigned int as result.              */
@@ -1034,7 +1128,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
                 }
               return;
             }
-          if (rightValue == -1.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), -1))
             {
               /* '*' can have two unsigned chars as operands */
               /* and an unsigned int as result.              */
@@ -1075,7 +1169,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
         }
       /* if this is a division then check if left is zero */
       /* then change it to an assignment */
-      if (IS_OP_LITERAL (IC_LEFT (ic)) &&  (operandLitValue (IC_LEFT (ic)) == 0.0))
+      if (IS_OP_LITERAL (IC_LEFT (ic)) && isEqualVal (OP_VALUE (IC_LEFT (ic)), 0))
         {
           ic->op = '=';
           IC_RIGHT (ic) = IC_LEFT (ic);
@@ -1087,8 +1181,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       /* is one then change it to an assignment    */
       if (IS_OP_LITERAL (IC_RIGHT (ic)))
         {
-          double rightValue = operandLitValue (IC_RIGHT (ic));
-          if (rightValue == 1.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 1))
             {
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
@@ -1096,7 +1189,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
               SET_RESULT_RIGHT (ic);
               return;
             }
-          if (rightValue == -1.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), -1))
             {
               /* '/' can have two unsigned chars as operands */
               /* and an unsigned int as result.              */
@@ -1186,7 +1279,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
         {
           ic->op = '=';
           IC_RIGHT (ic) =
-            (operandLitValue (IC_LEFT (ic)) == 0 ?
+            (isEqualVal (OP_VALUE (IC_LEFT (ic)), 0) ?
              operandFromLit (1) : operandFromLit (0));
           IC_LEFT (ic) = NULL;
           SET_ISADDR (IC_RESULT (ic), 0);
@@ -1221,9 +1314,11 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
         }
       if (IS_OP_LITERAL (IC_RIGHT (ic)))
         {
+          unsigned val;
+
           /* if BITWISEAND then check if one of them is a zero */
           /* if yes turn it into 0 assignment */
-          if (operandLitValue (IC_RIGHT (ic)) == 0.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
             {
               if (IS_OP_VOLATILE (IC_LEFT (ic)))
                 {
@@ -1240,24 +1335,24 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
             }
           /* if BITWISEAND then check if one of them is 0xff... */
           /* if yes turn it into assignment */
-          {
-            unsigned val;
-
-            switch (getSize (operandType (IC_RIGHT (ic))))
-              {
-              case 1:
-                val = 0xff;
-                break;
-              case 2:
-                val = 0xffff;
-                break;
-              case 4:
-                val = 0xffffffff;
-                break;
-              default:
-                return;
-              }
-            if (((unsigned) double2ul (operandLitValue (IC_RIGHT (ic))) & val) == val)
+          switch (bitsForType (operandType (IC_RIGHT (ic))))
+            {
+            case 1:
+              val = 0x01;
+              break;
+            case 8:
+              val = 0xff;
+              break;
+            case 16:
+              val = 0xffff;
+              break;
+            case 32:
+              val = 0xffffffff;
+              break;
+            default:
+              return;
+            }
+          if (((unsigned) double2ul (operandLitValue (IC_RIGHT (ic))) & val) == val)
             {
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
@@ -1265,7 +1360,6 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
               SET_RESULT_RIGHT (ic);
               return;
             }
-          }
         }
       break;
     case '|':
@@ -1301,7 +1395,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
 
           /* if BITWISEOR then check if one of them is a zero */
           /* if yes turn it into assignment */
-          if (operandLitValue (IC_RIGHT (ic)) == 0.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
             {
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
@@ -1311,15 +1405,18 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
             }
           /* if BITWISEOR then check if one of them is 0xff... */
           /* if yes turn it into 0xff... assignment */
-          switch (getSize (operandType (IC_RIGHT (ic))))
+          switch (bitsForType (operandType (IC_RIGHT (ic))))
             {
               case 1:
+                val = 0x01;
+                break;
+              case 8:
                 val = 0xff;
                 break;
-              case 2:
+              case 16:
                 val = 0xffff;
                 break;
-              case 4:
+              case 32:
                 val = 0xffffffff;
                 break;
               default:
@@ -1380,10 +1477,32 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       /* if yes turn it into assignment */
       if (IS_OP_LITERAL (IC_RIGHT (ic)))
         {
-          if (operandLitValue (IC_RIGHT (ic)) == 0.0)
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 0))
             {
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
+              IC_LEFT (ic) = NULL;
+              SET_RESULT_RIGHT (ic);
+              return;
+            }
+        }
+      /* if XOR then check if one of them is a zero or one */
+      /* if yes turn it into assignment or invert */
+      if (IS_OP_LITERAL (IC_RIGHT (ic)) &&
+          IS_BOOLEAN (operandType (IC_LEFT (ic))) &&
+          IS_BOOLEAN (operandType (IC_RESULT (ic)))
+         )
+        {
+          if (isEqualVal (OP_VALUE (IC_RIGHT (ic)), 1))
+            {
+              ic->op = '!';
+              IC_RIGHT (ic) = NULL;
+              return;
+            }
+          else
+            {
+              ic->op = '=';
+              IC_RIGHT (ic) = operandFromLit (1);
               IC_LEFT (ic) = NULL;
               SET_RESULT_RIGHT (ic);
               return;
@@ -1575,10 +1694,7 @@ ifxOptimize (iCode * ic, set * cseSet,
       /* too often, if it does happen then the user pays */
       /* the price */
       computeControlFlow (ebbi);
-      if (!options.lessPedantic)
-        {
-          werrorfl (ic->filename, ic->lineno, W_CONTROL_FLOW);
-        }
+      werrorfl (ic->filename, ic->lineno, W_CONTROL_FLOW);
       return;
     }
 
@@ -1589,10 +1705,7 @@ ifxOptimize (iCode * ic, set * cseSet,
   if (elementsInSet (ebb->succList) == 1 &&
       isinSet (ebb->succList, eBBWithEntryLabel (ebbi, label)))
     {
-      if (!options.lessPedantic)
-        {
-          werrorfl (ic->filename, ic->lineno, W_CONTROL_FLOW);
-        }
+      werrorfl (ic->filename, ic->lineno, W_CONTROL_FLOW);
       if (IS_OP_VOLATILE (IC_COND (ic)))
         {
           IC_RIGHT (ic) = IC_COND (ic);
@@ -1984,7 +2097,7 @@ cseBBlock (eBBlock * ebb, int computeOnly, ebbIndex * ebbi)
         }
 
       /* clear the def & use chains for the operands involved */
-      /* in this operation . since it can change due to opts  */
+      /* in this operation since it can change due to opts    */
       unsetDefsAndUses (ic);
 
       if (ic->op == PCALL || ic->op == CALL || ic->op == RECEIVE)
@@ -2226,6 +2339,7 @@ cseBBlock (eBBlock * ebb, int computeOnly, ebbIndex * ebbi)
         {
           algebraicOpts (ic, ebb);
           while (constFold (ic, cseSet));
+          while (boolCast (ic, cseSet));
         }
 
       /* if after all this it becomes an assignment to self
@@ -2329,8 +2443,18 @@ cseBBlock (eBBlock * ebb, int computeOnly, ebbIndex * ebbi)
       if (!(POINTER_SET (ic)) && IS_SYMOP (IC_RESULT (ic)))
         {
           deleteItemIf (&cseSet, ifOperandsHave, IC_RESULT (ic));
+          deleteItemIf (&ptrSetSet, ifOperandsHave, IC_RESULT (ic));
           /* delete any previous definitions */
           ebb->defSet = bitVectCplAnd (ebb->defSet, OP_DEFS (IC_RESULT (ic)));
+
+         /* Until pointer tracking is complete, by conservative and delete all */
+         /* pointer accesses that might alias this symbol. */
+         if (isOperandGlobal (IC_RESULT (ic)))
+           {
+             memmap *map = SPEC_OCLS (getSpec (operandType (IC_RESULT (ic))));
+             deleteItemIf (&cseSet, ifAnyUnrestrictedGetPointer, map->ptrType);
+             deleteItemIf (&ptrSetSet, ifAnyUnrestrictedSetPointer, map->ptrType);
+           }
         }
 
       /* add the left & right to the defUse set */
@@ -2353,6 +2477,8 @@ cseBBlock (eBBlock * ebb, int computeOnly, ebbIndex * ebbi)
       if (POINTER_SET (defic) &&
 		  (IS_SYMOP (IC_RESULT (ic)) || IS_OP_LITERAL (IC_RESULT (ic))))
         {
+          sym_link *ptype = operandType (IC_RESULT (ic));
+
           if (IS_SYMOP (IC_RESULT (ic)))
             {
               OP_USES (IC_RESULT (ic)) =
@@ -2371,6 +2497,20 @@ cseBBlock (eBBlock * ebb, int computeOnly, ebbIndex * ebbi)
           deleteItemIf (&ptrSetSet, ifPointerSet, IC_RESULT (ic));
           /* add to the local pointerset set */
           addSetHead (&ptrSetSet, newCseDef (IC_RESULT (ic), ic));
+
+          /* A write via a non-restrict pointer may modify a global */
+          /* variable used by this function, so delete them */
+          /* and any derived symbols from cseSet. */
+          if (!IS_PTR_RESTRICT (ptype))
+            {
+              deleteItemIf (&cseSet, ifDefGlobalAliasableByPtr);
+              deleteItemIf (&cseSet, ifFromGlobalAliasableByPtr, DCL_TYPE(ptype));
+            }
+
+          /* This could be made more specific for better optimization, but */
+          /* for safety, delete anything this write may have modified. */
+          deleteItemIf (&cseSet, ifFromAddrTaken);
+          deleteItemIf (&cseSet, ifAnyGetPointer);
         }
       else
         {

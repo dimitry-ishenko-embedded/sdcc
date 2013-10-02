@@ -59,8 +59,8 @@ for line in lines:
         invalid += 1;
         print "Invalid instruction: %s" % name
 
-print "%-20.20s" % base,
+print "%-35.35s" % base,
 
 if (invalid > 0):
     print "%d invalid instructions," % invalid,
-print "(f: %.0f, t: %.0f, c: %.0f, b: %.0f, t: %.0f)" % (failures, tests, cases, bytes, ticks)
+print "(f: %2.0f, t: %3.0f, c: %2.0f, b: %6.0f, t: %8.0f)" % (failures, tests, cases, bytes, ticks)

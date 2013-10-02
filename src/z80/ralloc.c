@@ -481,10 +481,13 @@ createStackSpil (symbol * sym)
 
   sloc->isref = 1;              /* to prevent compiler warning */
 
+  wassertl (currFunc, "Local variable used outside of function.");
+
   /* if it is on the stack then update the stack */
   if (IN_STACK (sloc->etype))
     {
-      currFunc->stack += getSize (sloc->type);
+      if (currFunc)
+        currFunc->stack += getSize (sloc->type);
       _G.stackExtend += getSize (sloc->type);
     }
   else
@@ -859,7 +862,7 @@ deassignLRs (iCode *ic, eBBlock *ebp)
           /* if the result of this one needs registers
              and does not have it then assign it right
              away */
-          if (z80_opts.oldralloc && IC_RESULT (ic) &&
+          if (options.oldralloc && IC_RESULT (ic) &&
               !(SKIP_IC2 (ic) || ic->op == JUMPTABLE || ic->op == IFX || ic->op == IPUSH || ic->op == IPOP || ic->op == RETURN) &&
               IS_SYMOP (IC_RESULT (ic)) && (result = OP_SYMBOL (IC_RESULT (ic))) &&    /* has a result */
               result->liveTo > ic->seq &&       /* and will live beyond this */
@@ -961,7 +964,7 @@ positionRegs (symbol * result, symbol * opsym)
   int i, j = 0, shared = 0;
   int change = 0;
 
-  D (D_ALLOC, ("positionRegs: on result %p opsum %p line %u\n", result, opsym, lineno));
+  D (D_ALLOC, ("positionRegs: on result %p opsym %p line %u\n", result, opsym, lineno));
 
   /* if the result has been spilt then cannot share */
   if (opsym->isspilt)
@@ -969,6 +972,7 @@ positionRegs (symbol * result, symbol * opsym)
 again:
   shared = 0;
   /* first make sure that they actually share */
+
   for (i = 0; i < count; i++)
     {
       for (j = 0; j < count; j++)
@@ -1048,8 +1052,8 @@ verifyRegsAssigned (operand * op, iCode * ic)
   if (sym->regs[0])
     return;
 
-  // Don't warn for new allocator , since this is not used by default (until Thoruop is implemented for spillocation compaction).
-  if (z80_opts.oldralloc)
+  // Don't warn for new allocator, since this is not used by default (until Thoruop is implemented for spillocation compaction).
+  if (options.oldralloc)
     werrorfl (ic->filename, ic->lineno, W_LOCAL_NOINIT, sym->prereqv ? sym->prereqv->name : sym->name);
   spillThis (sym);
 }
@@ -1288,6 +1292,16 @@ fillGaps ()
       int i;
       int pdone = 0;
 
+      if (sym->accuse == ACCUSE_SCRATCH)
+        {
+          sym->nRegs = getSize (sym->type);
+          sym->regs[0] = regsZ80 + L_IDX;
+          sym->regs[1] = regsZ80 + H_IDX;
+          sym->accuse = 0;
+          sym->isspilt = FALSE;
+          continue;
+        }
+
       if (!sym->spillA || !sym->clashes || sym->remat)
         continue;
 
@@ -1360,7 +1374,7 @@ fillGaps ()
                 continue;
               if (SKIP_IC (ic))
                 continue;
-              if (!IS_ASSIGN_ICODE (ic))
+              if (IS_ASSIGN_ICODE (ic))
                 continue;
 
               /* if result is assigned to registers */
@@ -1416,7 +1430,7 @@ rUmaskForOp (const operand * op)
   if (sym->isspilt || !sym->nRegs)
     return NULL;
 
-  rumask = newBitVect (_G.nRegs);
+  rumask = newBitVect (_G.nRegs + (IS_GB ? 0 : 2));
 
   for (j = 0; j < sym->nRegs; j++)
     {
@@ -1442,7 +1456,7 @@ z80_rUmaskForOp (const operand * op)
 bitVect *
 regsUsedIniCode (iCode * ic)
 {
-  bitVect *rmask = newBitVect (_G.nRegs);
+  bitVect *rmask = newBitVect (_G.nRegs + (IS_GB ? 0 : 2));
 
   /* do the special cases first */
   if (ic->op == IFX)
@@ -1506,7 +1520,7 @@ createRegMask (eBBlock ** ebbs, int count)
           /* now create the register mask for those
              registers that are in use : this is a
              super set of ic->rUsed */
-          ic->rMask = newBitVect (_G.nRegs + 1);
+          ic->rMask = newBitVect (_G.nRegs + 1 + (IS_GB ? 0 : 2));
 
           /* for all live Ranges alive at this point */
           for (j = 1; j < ic->rlive->size; j++)
@@ -1688,9 +1702,11 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
   D (D_ALLOC, ("packRegsForAssign: running on ic %p\n", ic));
 
   if (!IS_ITEMP (IC_RIGHT (ic)) || OP_SYMBOL (IC_RIGHT (ic))->isind || OP_LIVETO (IC_RIGHT (ic)) > ic->seq)
-    {
-      return 0;
-    }
+    return 0;
+  
+  /* Avoid having multiple named address spaces in one iCode. */
+  if (IS_SYMOP (IC_RESULT (ic)) && SPEC_ADDRSPACE (OP_SYMBOL (IC_RESULT (ic))->etype))
+    return 0;
 
   /* find the definition of iTempNN scanning backwards if we find a
      a use of the true symbol in before we find the definition then
@@ -1751,7 +1767,6 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
               dic = NULL;
               break;
             }
-
         }
     }
 
@@ -2091,7 +2106,6 @@ isBitwiseOptimizable (iCode * ic)
   return FALSE;
 }
 
-// HL handled by new register allocator
 static iCode *
 packRegsForHLUse3 (iCode * lic, operand * op, eBBlock * ebp)
 {
@@ -2099,6 +2113,7 @@ packRegsForHLUse3 (iCode * lic, operand * op, eBBlock * ebp)
   symbol *sym;
   iCode *ic, *dic;
   bool isFirst = TRUE;
+  bool exstk = (currFunc && currFunc->stack > 127);
 
   D (D_PACK_HLUSE3,
      ("Checking HL on %p lic key %u first def %u line %u:\n", OP_SYMBOL (op), lic->key, bitVectFirstBit (OP_DEFS (op)),
@@ -2120,7 +2135,7 @@ packRegsForHLUse3 (iCode * lic, operand * op, eBBlock * ebp)
   if (bitVectnBitsOn (OP_DEFS (op)) > 1)
     return NULL;
 
-  if ((!z80_opts.oldralloc && OPTRALLOC_A) ? getSize (operandType (op)) != 2 : getSize (operandType (op)) > 2)
+  if (!options.oldralloc ? getSize (operandType (op)) != 2 : getSize (operandType (op)) > 2)
     return NULL;
 
   /* And this is the definition */
@@ -2167,7 +2182,7 @@ packRegsForHLUse3 (iCode * lic, operand * op, eBBlock * ebp)
             continue;
         }
 
-      if (IC_RESULT (ic) && IS_SYMOP (IC_RESULT (ic)) && isOperandInDirSpace (IC_RESULT (ic)))
+      if (IC_RESULT (ic) && IS_SYMOP (IC_RESULT (ic)) && (isOperandInDirSpace (IC_RESULT (ic)) || exstk))
         return NULL;
 
       if (IC_LEFT (ic) && IS_SYMOP (IC_LEFT (ic)) && isOperandInDirSpace (IC_LEFT (ic)))
@@ -2207,19 +2222,12 @@ packRegsForHLUse3 (iCode * lic, operand * op, eBBlock * ebp)
           ic->op == UNARYMINUS ||
           ic->op == RETURN ||
           ic->op == RIGHT_OP ||
-          ic->op == '-' ||
+          (ic->op == '-'  && getSize (operandType (IC_RESULT (ic))) == 1) ||
           ic->op == BITWISEAND ||
           ic->op == '|' ||
           ic->op == '>' || ic->op == '<' || ic->op == EQ_OP || (ic->op == '+' && getSize (operandType (IC_RESULT (ic))) == 1))
         /* 16 bit addition uses add hl, rr */
         continue;
-
-      /* Strangely this leads to a code size increase for some functions. */
-      if(!z80_opts.oldralloc)
-        {
-          if (ic->op == '+' && getSize (operandType (IC_RESULT (ic))) == 2 && isOperandEqual (op, IC_RESULT (ic)))
-            continue;
-        }
 
       if (ic->op == '*' && isOperandEqual (op, IC_LEFT (ic)))
         continue;
@@ -2774,14 +2782,14 @@ packRegisters (eBBlock * ebp)
          result of that operation is not on stack then we can leave the
          result of this operation in acc:b combination */
 
-      if ((z80_opts.oldralloc || !OPTRALLOC_HL) && !DISABLE_PACK_HL && IS_ITEMP (IC_RESULT (ic)))
+      if ((options.oldralloc || !OPTRALLOC_HL) && !DISABLE_PACK_HL && IS_ITEMP (IC_RESULT (ic)))
         if (!IS_GB && !IY_RESERVED)
           packRegsForHLUse3 (ic, IC_RESULT (ic), ebp);
 
-      if ((z80_opts.oldralloc || !OPTRALLOC_IY) && !DISABLE_PACK_IY && !IY_RESERVED && IS_ITEMP (IC_RESULT (ic)) && !IS_GB)
+      if ((options.oldralloc || !OPTRALLOC_IY) && !DISABLE_PACK_IY && !IY_RESERVED && IS_ITEMP (IC_RESULT (ic)) && !IS_GB)
         packRegsForIYUse (ic, IC_RESULT (ic), ebp);
 
-      if ((z80_opts.oldralloc || !OPTRALLOC_A) && !DISABLE_PACK_ACC && IS_ITEMP (IC_RESULT (ic)) &&
+      if (options.oldralloc && !DISABLE_PACK_ACC && IS_ITEMP (IC_RESULT (ic)) &&
           getSize (operandType (IC_RESULT (ic))) == 1)
         packRegsForAccUse2 (ic);
     }
@@ -2927,14 +2935,6 @@ serialRegMark (eBBlock ** ebbs, int count)
                   continue;
                 }
 
-              /* Rematerialization should be handled by the new allocator instead, but too inefficient when using an inexact cost function */
-              if (!OPTRALLOC_REMAT && sym->remat)
-                {
-                  D (D_ALLOC, ("serialRegAssign: \"remat spill\"\n"));
-                  spillThis (sym);
-                  continue;
-                }
-
               if (max_alloc_bytes >= sym->nRegs)
                 {
                   sym->for_newralloc = 1;
@@ -2950,7 +2950,7 @@ serialRegMark (eBBlock ** ebbs, int count)
     }
 }
 
-void
+static void
 RegFix (eBBlock ** ebbs, int count)
 {
   int i;
@@ -3147,12 +3147,6 @@ z80_ralloc (ebbIndex * ebbi)
 
   RegFix (ebbs, count);
 
-  /* When --max-allocs-per-node is too low, there can be gaps. */
-  //freeAllRegs ();
-  //fillGaps();
-
-  /* New register allcoator here. */
-
   /* if stack was extended then tell the user */
   if (_G.stackExtend)
     {
@@ -3203,7 +3197,7 @@ void
 z80_assignRegisters (ebbIndex * ebbi)
 {
 #ifdef OLDRALLOC
-  if (z80_opts.oldralloc)
+  if (options.oldralloc)
     z80_oldralloc (ebbi);
   else
 #endif
