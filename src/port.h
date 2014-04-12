@@ -24,6 +24,8 @@
 #define TARGET_ID_R2K      13
 #define TARGET_ID_R3KA     14
 #define TARGET_ID_S08      15
+#define TARGET_ID_STM8     16
+#define TARGET_ID_TLCS90   17
 
 /* Macro to test the target we are compiling for.
    Can only be used after SDCCmain has defined the port
@@ -40,11 +42,13 @@
 #define TARGET_IS_R2K      (port->id == TARGET_ID_R2K)
 #define TARGET_IS_R3KA     (port->id == TARGET_ID_R3KA)
 #define TARGET_IS_GBZ80    (port->id == TARGET_ID_GBZ80)
+#define TARGET_IS_TLCS90   (port->id == TARGET_ID_TLCS90)
 #define TARGET_IS_HC08     (port->id == TARGET_ID_HC08)
 #define TARGET_IS_S08      (port->id == TARGET_ID_S08)
+#define TARGET_IS_STM8     (port->id == TARGET_ID_STM8)
 
 #define TARGET_MCS51_LIKE  (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
-#define TARGET_Z80_LIKE    (TARGET_IS_Z80 || TARGET_IS_Z180 || TARGET_IS_GBZ80 || TARGET_IS_R2K || TARGET_IS_R3KA)
+#define TARGET_Z80_LIKE    (TARGET_IS_Z80 || TARGET_IS_Z180 || TARGET_IS_GBZ80 || TARGET_IS_R2K || TARGET_IS_R3KA || TARGET_IS_TLCS90)
 #define TARGET_IS_RABBIT   (TARGET_IS_R2K || TARGET_IS_R3KA)
 #define TARGET_HC08_LIKE   (TARGET_IS_HC08 || TARGET_IS_S08)
 #define TARGET_PIC_LIKE    (TARGET_IS_PIC14 || TARGET_IS_PIC16)
@@ -218,8 +222,8 @@ typedef struct
     const char *const initializer_name; // A code copy of initialized_name (to be copied for fast initialization).
     struct memmap *default_local_map;   // default location for auto vars
     struct memmap *default_globl_map;   // default location for globl vars
-    int code_ro;                /* code space read-only 1=yes */
-    int maxextalign;                    // maximum extended alignment supported, nonnegative power of 2 (C11 standard, section 6.2.8).
+    int code_ro;                        // code space read-only 1=yes
+    unsigned int maxextalign;           // maximum extended alignment supported, nonnegative power of 2 (C11 standard, section 6.2.8).
   }
   mem;
 
@@ -254,9 +258,9 @@ typedef struct
     /** One more than the smallest
         mul/div operation the processor can do natively
         Eg if the processor has an 8 bit mul, native below is 2 */
-    unsigned muldiv;
+    unsigned int muldiv;
     /** Size of the biggest shift the port can handle. -1 if port can handle shifts of arbitrary size. */
-    unsigned shift;
+    signed int shift;
   }
   support;
 
@@ -315,6 +319,9 @@ typedef struct
   /** Returns the register name of a symbol.
       Used so that 'reg_info' can be an incomplete type. */
   const char *(*getRegName) (const struct reg_info *reg);
+
+  /** Try to keep track of register contents. */
+  bool (*rtrackUpdate)(const char* line);
 
   /* list of keywords that are used by this
      target (used by lexer) */
@@ -415,6 +422,9 @@ extern PORT r3ka_port; /* Rabbit 3000A */
 #if !OPT_DISABLE_GBZ80
 extern PORT gbz80_port;
 #endif
+#if !OPT_DISABLE_TLCS90
+extern PORT tlcs90_port;
+#endif
 #if !OPT_DISABLE_AVR
 extern PORT avr_port;
 #endif
@@ -441,6 +451,9 @@ extern PORT hc08_port;
 #endif
 #if !OPT_DISABLE_S08
 extern PORT s08_port;
+#endif
+#if !OPT_DISABLE_STM8
+extern PORT stm8_port;
 #endif
 
 #endif /* PORT_INCLUDE */

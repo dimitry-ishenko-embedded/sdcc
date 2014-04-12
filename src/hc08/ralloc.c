@@ -38,6 +38,7 @@
 /*-----------------------------------------------------------------*/
 
 extern void genhc08Code (iCode *);
+
 #define D(x)
 
 // Build the old allocator. It can be used by command-line options
@@ -718,6 +719,7 @@ createRegMask (eBBlock ** ebbs, int count)
 
           /* first mark the registers used in this
              instruction */
+          ic->rSurv = newBitVect(port->num_regs);
           ic->rUsed = regsUsedIniCode (ic);
           _G.funcrUsed = bitVectUnion (_G.funcrUsed, ic->rUsed);
 
@@ -751,8 +753,13 @@ createRegMask (eBBlock ** ebbs, int count)
 
               /* for all the registers allocated to it */
               for (k = 0; k < sym->nRegs; k++)
-                if (sym->regs[k])
+                {
+                  if (!sym->regs[k])
+                    continue;
                   ic->rMask = bitVectSetBit (ic->rMask, sym->regs[k]->rIdx);
+                  if (sym->liveTo != ic->key)
+                    ic->rSurv = bitVectSetBit (ic->rSurv, sym->regs[k]->rIdx);
+                }
             }
         }
     }
@@ -2211,9 +2218,9 @@ hc08_oldralloc (ebbIndex * ebbi)
 
   /* liveranges probably changed by register packing
      so we compute them again */
-  recomputeLiveRanges (ebbs, count);
+  recomputeLiveRanges (ebbs, count, FALSE);
 
-  if (options.dump_pack)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_PACK, ebbi);
 
   /* first determine for each live range the number of
@@ -2258,7 +2265,7 @@ hc08_oldralloc (ebbIndex * ebbi)
       redoStackOffsets ();
     }
 
-  if (options.dump_rassgn)
+  if (options.dump_i_code)
     {
       dumpEbbsToFileExt (DUMP_RASSGN, ebbi);
       dumpLiveRanges (DUMP_LRANGE, liveRanges);
@@ -2421,9 +2428,9 @@ hc08_ralloc (ebbIndex * ebbi)
 
   /* liveranges probably changed by register packing
      so we compute them again */
-  recomputeLiveRanges (ebbs, count);
+  recomputeLiveRanges (ebbs, count, FALSE);
 
-  if (options.dump_pack)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_PACK, ebbi);
 
   /* first determine for each live range the number of
@@ -2453,17 +2460,13 @@ hc08_ralloc (ebbIndex * ebbi)
       _G.dataExtend = 0;
     }
 
-  /* after that create the register mask
-     for each of the instruction */
-  createRegMask (ebbs, count);
-
   /* redo that offsets for stacked automatic variables */
   if (currFunc)
     {
       redoStackOffsets ();
     }
 
-  if (options.dump_rassgn)
+  if (options.dump_i_code)
     {
       dumpEbbsToFileExt (DUMP_RASSGN, ebbi);
       dumpLiveRanges (DUMP_LRANGE, liveRanges);

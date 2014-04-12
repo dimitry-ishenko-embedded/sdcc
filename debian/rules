@@ -58,12 +58,17 @@ clean:
 	rm -f support/cpp/configargs.h
 	rm -f ports.all ports.build
 	rm -f confdefs.h
+	rm -rf device/lib/pic1*/.check*
+	rm -f device/lib/pic1*/config.*
+	rm -f device/lib/pic16/stamp-h1
 	find -type f -name '*.o' -exec rm -f {} \;
 	find -type f -name '.stamp' -exec rm -f {} \;
 	find . -name '*.rel' -exec rm -f {} \;
 	find . -name '*.sym' -exec rm -f {} \;
 	find . -name '*.lst' -exec rm -f {} \;
 	find . -name '*.a' -exec rm -f {} \;
+	find . -name '*.cod' -exec rm -f {} \;
+	find . -name '*.hex' -exec rm -f {} \;
 	find . -name config.status -exec rm -f {} \;
 	find . -name Makefile -exec rm -f {} \;
 	rm -f sim/ucsim/cmd.src/cmdpars.hh
@@ -82,6 +87,9 @@ configure-stamp:
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
+		--disable-non-free \
+		--disable-pic14-port \
+		--disable-pic16-port \
 		--prefix=/usr
 	touch $@
 
@@ -123,6 +131,8 @@ install-indep: build
 	# Install examples
 	cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
 	rm -f $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/examples/mcs51/simple*/go*
+	rm -f debian/sdcc-libraries/usr/share/sdcc/lib/src/pic14/GPL
+	rm -f debian/sdcc-libraries/usr/share/sdcc/lib/src/pic14/LGPL
 
 	touch $@
 
@@ -144,7 +154,6 @@ install-arch: build-arch
 	install -o root -g root -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
 	# Remove an unnecessary script 
 	rm -f debian/tmp/usr/share/sdcc/scripts/gen_known_bugs.pl
-
 	dh_install -a --sourcedir=debian/tmp
 
 	touch $@

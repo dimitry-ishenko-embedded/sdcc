@@ -1,0 +1,12 @@
+Fix spelling errors in source code
+--- a/src/stm8/gen.c
++++ b/src/stm8/gen.c
+@@ -1884,7 +1884,7 @@
+     {
+       if (!regalloc_dry_run)
+         {
+-          wassertl (0, "genCopy failed to completly copy operands.");
++          wassertl (0, "genCopy failed to completely copy operands.");
+           fprintf (stderr, "%d bytes left.\n", size);
+           fprintf (stderr, "left type %d source type %d\n", result->type, source->type);
+           for (i = 0; i < n ; i++)

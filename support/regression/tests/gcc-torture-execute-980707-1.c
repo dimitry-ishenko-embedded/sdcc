@@ -15,7 +15,7 @@
 char **
 buildargv (char *input)
 {
-#ifndef __SDCC_mcs51
+#if !defined(__SDCC_mcs51)
   static char *arglist[256];
 #else
   static char *arglist[8];
@@ -43,7 +43,7 @@ void
 testTortureExecute (void)
 {
   char **args;
-#ifndef __SDCC_mcs51
+#if !defined(__SDCC_mcs51)
   char input[256];
 #else
   char input[8];

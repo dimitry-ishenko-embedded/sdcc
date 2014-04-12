@@ -1,3 +1,13 @@
+sdcc (3.4.0+dfsg-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #699842,#746906)
+  * Bump standards version to 3.9.5
+  * Add patch 02_fix_spelling to fix minor spelling error
+  * Add rm GPL and LGPL to prevent double license files
+  * 
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sat, 12 Apr 2014 21:24:12 +0200
+
 sdcc (3.3.0+dfsg-1) unstable; urgency=low
 
   * New upstream release (Closes: #422599, #671631, #724192)

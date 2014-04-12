@@ -311,13 +311,13 @@ relr3(void)
         /*
          * Base values
          */
-        rtbase = adb_2b(0, 0);
-        rtofst = 2;
+        rtbase = adb_xb(0, 0);
+        rtofst = a_bytes;
 
         /*
          * Relocate address
          */
-        pc = adb_2b(a[aindex]->a_addr, 0);
+        pc = adb_xb(a[aindex]->a_addr, 0);
 
         /*
          * Number of 'bytes' per PC address
@@ -821,6 +821,8 @@ relerr3(char *str)
  *
  */
 
+const char errdmp3_null_srcname[] = "<missing>";
+
 VOID
 errdmp3(FILE *fptr, char *str)
 {
@@ -862,7 +864,7 @@ errdmp3(FILE *fptr, char *str)
 "         file              module            area              offset\n");
         fprintf(fptr,
 "  Refby  %-14.14s    %-14.14s    %-14.14s    ",
-                        hp->h_lfile->f_idp,
+                        (hp->h_lfile && hp->h_lfile->f_idp) ? hp->h_lfile->f_idp : errdmp3_null_srcname,
                         &hp->m_id[0],
                         &a[aindex]->a_bap->a_id[0]);
         prntval(fptr, rerr.rtbase);
@@ -880,7 +882,7 @@ errdmp3(FILE *fptr, char *str)
 /*        |                 |                 |                 |           */
         fprintf(fptr,
 "  Defin  %-14.14s    %-14.14s    %-14.14s    ",
-                        raxp->a_bhp->h_lfile->f_idp,
+                        (raxp->a_bhp->h_lfile && raxp->a_bhp->h_lfile->f_idp) ? raxp->a_bhp->h_lfile->f_idp : errdmp3_null_srcname,
                         &raxp->a_bhp->m_id[0],
                         &raxp->a_bap->a_id[0]);
         if (mode & R3_SYM) {

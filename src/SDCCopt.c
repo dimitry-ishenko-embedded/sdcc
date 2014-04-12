@@ -1156,6 +1156,9 @@ isPowerOf2 (unsigned long val)
 static void
 miscOpt (eBBlock ** ebbs, int count)
 {
+/* Borut: disabled optimization of comparision unsigned with 2^n literal
+ * since it is broken; see bug #2165 Broken comparison */
+#if 0
   int i;
 
   /* for all blocks do */
@@ -1239,6 +1242,7 @@ miscOpt (eBBlock ** ebbs, int count)
             } /* switch */
         } /* for */
     } /* for */
+#endif
 }
 
 /*-----------------------------------------------------------------*/
@@ -1248,9 +1252,8 @@ miscOpt (eBBlock ** ebbs, int count)
 /* to enforce the rule.                                            */
 /*-----------------------------------------------------------------*/
 static void
-separateAddressSpaces (eBBlock ** ebbs, int count)
+separateAddressSpaces (eBBlock **ebbs, int count)
 {
-  
   int i;
 
   /* for all blocks do */
@@ -1306,7 +1309,7 @@ separateAddressSpaces (eBBlock ** ebbs, int count)
                 resultaddrspace = getAddrspace (OP_SYMBOL (result)->type);
             }
             
-#if 0            
+#if 0           
           if (leftaddrspace)
             printf("ic %d (dcl? %d) leftaddrspace %s\n", ic->key, (int)(IS_DECL  (OP_SYMBOL (left)->type)), leftaddrspace->name);
           if (rightaddrspace)
@@ -1326,7 +1329,9 @@ separateAddressSpaces (eBBlock ** ebbs, int count)
               leftaddrspace = 0;
               for (iic = ic; iic->prev && iic->prev->op == IPUSH; iic = iic->prev);
             }
-          else if (leftaddrspace && rightaddrspace && leftaddrspace != rightaddrspace)
+          else if (leftaddrspace && rightaddrspace && leftaddrspace != rightaddrspace ||
+            resultaddrspace && rightaddrspace && resultaddrspace != rightaddrspace ||
+            resultaddrspace && leftaddrspace && resultaddrspace != leftaddrspace)
             {
               operand *newop;
               
@@ -2027,18 +2032,69 @@ optimizeCastCast (eBBlock ** ebbs, int count)
     }
 }
 
-/* Fold pointer addition into offset of GET_VALUE_AT_ADDRESS.                  */
-/* The hc08-related ports do a similar thing in hc08/ralloc.c, packPointerOp() */
+/* Fold pointer addition into offset of ADDRESS_OF.                  */
 static void
-offsetFold (eBBlock **ebbs, int count)
+offsetFoldGet (eBBlock **ebbs, int count)
 {
   int i;
   iCode *ic;
   iCode *uic;
 
-  if (!TARGET_IS_Z80 && !TARGET_IS_Z180 && !TARGET_IS_RABBIT)
+  if (!TARGET_Z80_LIKE && !TARGET_IS_STM8)
     return;
+  
+  for (i = 0; i < count; i++)
+    {
+      for (ic = ebbs[i]->sch; ic; ic = ic->next)
+        {
+          if (ic->op == ADDRESS_OF && IC_RESULT (ic) && IS_ITEMP (IC_RESULT (ic)))
+            {
+              /* There must be only one use of the result */
+              if (bitVectnBitsOn (OP_USES (IC_RESULT (ic))) != 1)
+                continue;
 
+              /* This use must be an addition / subtraction */
+              uic = hTabItemWithKey (iCodehTab,
+                        bitVectFirstBit (OP_USES (IC_RESULT (ic))));
+
+              if (uic->op != '+' && uic->op != '-' || !IS_OP_LITERAL (IC_RIGHT (uic)))
+                continue;
+
+              /* Historically ADDRESS_OF didn't have a right operand */
+              wassertl (IC_RIGHT (ic), "ADDRESS_OF without right operand");
+              wassertl (IS_OP_LITERAL (IC_RIGHT (ic)), "ADDRESS_OF with non-literal right operand");
+
+              bitVectUnSetBit (OP_SYMBOL (IC_RESULT (ic))->uses, uic->key);
+
+              if (uic->op == '+')
+                IC_RIGHT (uic) = operandFromLit (operandLitValue (IC_RIGHT (ic)) + operandLitValue (IC_RIGHT (uic)));
+              else
+                IC_RIGHT (uic) = operandFromLit (operandLitValue (IC_RIGHT (ic)) - operandLitValue (IC_RIGHT (uic)));
+              IC_LEFT (uic) = operandFromOperand (IC_LEFT(ic));
+              uic->op = ADDRESS_OF;
+              IC_LEFT (uic)->isaddr = 1;
+
+              ic->op = '=';
+              IC_RIGHT (ic) = IC_RESULT (ic);
+              IC_LEFT (ic) = 0;
+              SET_ISADDR (IC_RESULT (ic), 0);
+            }
+        }
+    }
+}
+
+/* Fold pointer addition into offset of GET_VALUE_AT_ADDRESS.                  */
+/* The hc08-related ports do a similar thing in hc08/ralloc.c, packPointerOp() */
+static void
+offsetFoldUse (eBBlock **ebbs, int count)
+{
+  int i;
+  iCode *ic;
+  iCode *uic;
+
+  if (!TARGET_IS_Z80 && !TARGET_IS_Z180 && !TARGET_IS_RABBIT && !TARGET_IS_STM8)
+    return;
+  
   for (i = 0; i < count; i++)
     {
       for (ic = ebbs[i]->sch; ic; ic = ic->next)
@@ -2052,9 +2108,10 @@ offsetFold (eBBlock **ebbs, int count)
               if (bitVectnBitsOn (OP_USES (IC_RESULT (ic))) != 1)
                 continue;
 
-              /* This use must be a GET_VALUE_AT_DDRESS */
+              /* This use must be a GET_VALUE_AT_ADDRESS */
               uic = hTabItemWithKey (iCodehTab,
                         bitVectFirstBit (OP_USES (IC_RESULT (ic))));
+
               if (!POINTER_GET (uic))
                 continue;
 
@@ -2112,7 +2169,7 @@ eBBlockFromiCode (iCode * ic)
   computeControlFlow (ebbi);
  
   /* dumpraw if asked for */
-  if (options.dump_raw)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_RAW0, ebbi);
 
   /* replace the local variables with their
@@ -2125,7 +2182,7 @@ eBBlockFromiCode (iCode * ic)
   loops = createLoopRegions (ebbi);
 
   /* dumpraw if asked for */
-  if (options.dump_raw)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_RAW1, ebbi);
 
   optimizeCastCast (ebbi->bbOrder, ebbi->count);
@@ -2139,21 +2196,21 @@ eBBlockFromiCode (iCode * ic)
   change = cseAllBlocks (ebbi, FALSE);
 
   /* dumpraw if asked for */
-  if (options.dump_raw)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_CSE, ebbi);
 
   /* compute the data flow */
   computeDataFlow (ebbi);
 
   /* dumpraw if asked for */
-  if (options.dump_raw)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_DFLOW, ebbi);
 
   /* global common subexpression elimination  */
   if (optimize.global_cse)
     {
       change += cseAllBlocks (ebbi, FALSE);
-      if (options.dump_gcse)
+      if (options.dump_i_code)
         dumpEbbsToFileExt (DUMP_GCSE, ebbi);
     }
   else
@@ -2166,12 +2223,12 @@ eBBlockFromiCode (iCode * ic)
   /* kill dead code */
   kchange = killDeadCode (ebbi);
 
-  if (options.dump_kill)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_DEADCODE, ebbi);
 
   /* do loop optimizations */
   change += (lchange = loopOptimizations (loops, ebbi));
-  if (options.dump_loop)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_LOOP, ebbi);
 
   /* recompute the data flow and apply global cse again
@@ -2185,7 +2242,7 @@ eBBlockFromiCode (iCode * ic)
     {
       computeDataFlow (ebbi);
       change += cseAllBlocks (ebbi, FALSE);
-      if (options.dump_loop)
+      if (options.dump_i_code)
         dumpEbbsToFileExt (DUMP_LOOPG, ebbi);
 
       /* if loop optimizations caused a change then do
@@ -2194,23 +2251,45 @@ eBBlockFromiCode (iCode * ic)
          variables created during loop optimizations */
       killDeadCode (ebbi);
 
-      if (options.dump_loop)
+      if (options.dump_i_code)
         dumpEbbsToFileExt (DUMP_LOOPD, ebbi);
     }
 
-  offsetFold (ebbi->bbOrder, ebbi->count);
+  offsetFoldGet (ebbi->bbOrder, ebbi->count);
 
   /* lospre */
+  computeControlFlow (ebbi);
+  loops = createLoopRegions (ebbi);
+  computeDataFlow (ebbi);
+  computeLiveRanges (ebbi->bbOrder, ebbi->count, FALSE);
   adjustIChain (ebbi->bbOrder, ebbi->count);
   ic = iCodeLabelOptimize (iCodeFromeBBlock (ebbi->bbOrder, ebbi->count));
-  if (optimize.lospre && (TARGET_Z80_LIKE || TARGET_HC08_LIKE)) /* Todo: enable for other ports. */
-    lospre (ic, ebbi);
-  /* Break down again and redo some steps to not confuse live range analysis. */
+  if (optimize.lospre && (TARGET_Z80_LIKE || TARGET_HC08_LIKE || TARGET_IS_STM8)) /* Todo: enable for other ports. */
+    {
+      lospre (ic, ebbi);
+      if (options.dump_i_code)
+        dumpEbbsToFileExt (DUMP_LOSPRE, ebbi);
+
+      /* GCSE, lospre and maybe other optimizations sometimes create temporaries that have non-connected live ranges, which is bad. Split them. */
+      ebbi = iCodeBreakDown (ic);
+      computeControlFlow (ebbi);
+      loops = createLoopRegions (ebbi);
+      computeDataFlow (ebbi);
+      recomputeLiveRanges (ebbi->bbOrder, ebbi->count, FALSE);
+      adjustIChain (ebbi->bbOrder, ebbi->count);
+      ic = iCodeLabelOptimize (iCodeFromeBBlock (ebbi->bbOrder, ebbi->count));
+      separateLiveRanges (ic, ebbi);
+    }
+
+  /* Break down again and redo some steps to not confuse live range analysis later. */
   ebbi = iCodeBreakDown (ic);
   computeControlFlow (ebbi);
   loops = createLoopRegions (ebbi);
   computeDataFlow (ebbi);
 
+  killDeadCode (ebbi);
+
+  offsetFoldUse (ebbi->bbOrder, ebbi->count);
   killDeadCode (ebbi);
 
   /* sort it back by block number */
@@ -2225,7 +2304,7 @@ eBBlockFromiCode (iCode * ic)
      (but assume that it can happen in other functions) */
   adjustIChain (ebbi->bbOrder, ebbi->count);
   ic = iCodeLabelOptimize (iCodeFromeBBlock (ebbi->bbOrder, ebbi->count));
-  if (switchAddressSpacesOptimally (ic, ebbi))
+  if (!currFunc || switchAddressSpacesOptimally (ic, ebbi))
     switchAddressSpaces (ic); /* Fallback. Very unlikely to be triggered, unless --max-allocs-per-node is set to very small values or very weird control-flow graphs */
 
   /* Break down again and redo some steps to not confuse live range analysis. */
@@ -2271,9 +2350,9 @@ eBBlockFromiCode (iCode * ic)
   miscOpt (ebbi->bbOrder, ebbi->count);
 
   /* compute the live ranges */
-  computeLiveRanges (ebbi->bbOrder, ebbi->count, TRUE);
+  recomputeLiveRanges (ebbi->bbOrder, ebbi->count, TRUE);
 
-  if (options.dump_range)
+  if (options.dump_i_code)
     dumpEbbsToFileExt (DUMP_RANGE, ebbi);
 
   /* Now that we have the live ranges, discard parameter

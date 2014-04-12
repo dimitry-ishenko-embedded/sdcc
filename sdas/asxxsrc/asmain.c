@@ -260,6 +260,7 @@ search_path_fopen(const char *filename, const char *mode)
  *              VOID    asexit()        asmain.c
  *              VOID    diag()          assubr.c
  *              VOID    err()           assubr.c
+ *              VOID    exprmasks()     asexpr.c
  *              int     fprintf()       c_library
  *              int     int32siz()      asmain.c
  *              VOID    list()          aslist.c
@@ -461,6 +462,7 @@ main(int argc, char *argv[])
         /* end sdas specific */
         if (sflag)
                 tfp = afile(q, "sym", 1);
+        exprmasks(2);
         syminit();
         for (pass=0; pass<3; ++pass) {
                 aserr = 0;
@@ -1672,12 +1674,14 @@ loop:
                                 qerr();
                         c = getmap(d);
                         while (c >= 0) {
-                                if ((n = getmap(d)) >= 0) {
+                                int n2;
+                                if ((n2 = getmap(d)) >= 0) {
                                         outab(c);
                                 } else {
                                         outab(c | 0x80);
                                 }
-                                c = n;
+                                n = n2;
+                                c = n2;
                         }
                         break;
                 default:
@@ -1726,7 +1730,7 @@ loop:
          * which handles all the assembler mnemonics.
          *
          * MACRO Definitions take precedence
-         * over machine specific mmnemonics.
+         * over machine specific mnemonics.
          */
         default:
                 if (np != NULL) {
@@ -2149,7 +2153,7 @@ char *usetxt[] = {
         "  -p   Disable automatic listing pagination",
         "  -u   Disable .list/.nlist processing",
         "  -w   Wide listing format for symbol table",
-        "  -z   Enable case sensitivity for symbols",
+        "  -z   Disable case sensitivity for symbols",
         "  -f   Flag relocatable references by  `   in listing file",
         "  -ff  Flag relocatable references by mode in listing file",
         "  -I   Add the named directory to the include file",

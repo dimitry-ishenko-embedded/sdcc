@@ -18,7 +18,7 @@ void __printf(const char *szFormat, ...);
  #define _STATMEM
 #endif
 
-#if defined(PORT_HOST) || defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r3ka) || defined(__SDCC_gbz80)
+#if defined(PORT_HOST) || defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r3ka) || defined(__SDCC_gbz80) || defined(__SDCC_stm8)
 # define __data
 # define __idata
 # define __pdata
@@ -51,7 +51,7 @@ __code const char *__getSuiteName (void);
 void __runSuite (void);
 
 #define ASSERT(_a)  (++__numTests, (_a) ? (void)0 : __fail ("Assertion failed", #_a, __FILE__, __LINE__))
-#define ASSERT_FAILED(_a)  (++__numTests, (_a) ? 0 : (__fail ("Assertion failed", #_a, __FILE__, __LINE__), 1))
+#define ASSERTFALSE(_a)  ASSERT(!(_a))
 #define FAIL()      FAILM("Failure")
 #define FAILM(_a)   __fail(_a, #_a, __FILE__, __LINE__)
 

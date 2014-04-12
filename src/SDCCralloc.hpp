@@ -189,6 +189,7 @@ struct tree_dec_node
   std::set<unsigned int> bag;
   std::set<var_t> alive;
   assignment_list_t assignments;
+  unsigned weight; // The weight is the number of nodes at which intermediate results need to be remembered. In general, to minimize memory consumption, at join nodes the child with maximum weight should be processed first.
 };
 
 typedef std::multimap<int, var_t> operand_map_t;
@@ -265,7 +266,7 @@ add_operand_to_cfg_node(cfg_node &n, operand *o, std::map<std::pair<int, reg_t>,
 }
 
 // A quick-and-dirty function to get the CFG from sdcc.
-inline iCode *
+static inline iCode *
 create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
 {
   eBBlock **ebbs = ebbi->bbOrder;
@@ -276,7 +277,6 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
   std::map<std::pair<int, reg_t>, var_t> sym_to_index;
 
   start_ic = iCodeLabelOptimize(iCodeFromeBBlock (ebbs, ebbi->count));
-  //start_ic = joinPushes(start_ic);
   {
     int i;
     var_t j;
@@ -304,6 +304,9 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
         extra_ic_generated(ic);
 
         cfg[i].ic = ic;
+
+        if (ic->generated)
+          continue;
 
         for (int j2 = 0; j2 <= operandKey; j2++)
           {
@@ -445,10 +448,9 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
       std::vector<boost::graph_traits<cfg_t>::vertices_size_type> component(num_vertices(cfg2));
       if (boost::connected_components(cfg2, &component[0]) > 1)
         {
-#ifdef DEBUG_RALLOC_DEC
-          std::cerr << "Non-connected liverange found and extended to connected component of the CFG:" << con[i].name << "\n";
-#endif
-          // Non-connected CFGs shouldn't exist either. Another problem with dead code eliminarion.
+          // Non-connected CFGs are created by at least GCSE and lospre. We now have a live-range splitter that fixes them, so this should no longer be necessary, but we leave this code here for now, so in case one gets through, we can still generate correct code.
+          std::cerr << "Warning: Non-connected liverange found and extended to connected component of the CFG:" << con[i].name << ". Please contact sdcc authors with source code to reproduce.\n";
+          
           cfg_sym_t cfg2;
           boost::copy_graph(cfg, cfg2, boost::vertex_copy(forget_properties()).edge_copy(forget_properties()));
           std::vector<boost::graph_traits<cfg_t>::vertices_size_type> component(num_vertices(cfg2));
@@ -460,7 +462,7 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
                 {
                   for (boost::graph_traits<cfg_t>::vertices_size_type k = 0; k < boost::num_vertices(cfg) - 1; k++)
                     {
-                      if(component[j] == component[k])
+                      if (component[j] == component[k])
                         cfg[k].alive.insert(i);
                     }
                 }
@@ -477,7 +479,21 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
         {
           std::set<var_t>::const_iterator v, v_end;
           for (v = cfg[*j].alive.begin(), v_end = cfg[*j].alive.end(); v != v_end; ++v)
-            cfg[i].dying.erase(*v);
+            {
+              const symbol *const vsym = (symbol *)(hTabItemWithKey(liveRanges, con[*v].v));
+
+              const operand *const left = IC_LEFT(cfg[*j].ic);
+              const operand *const right = IC_RIGHT(cfg[*j].ic);
+              const operand *const result = IC_RESULT(cfg[*j].ic);
+
+              if (!POINTER_SET(cfg[*j].ic) && 
+                (!left || !IS_SYMOP(left) || OP_SYMBOL_CONST(left)->key != vsym->key) &&
+                (!right || !IS_SYMOP(right) || OP_SYMBOL_CONST(right)->key != vsym->key) &&
+                result && IS_SYMOP(result) && OP_SYMBOL_CONST(result)->key == vsym->key)
+                continue;
+
+              cfg[i].dying.erase(*v);
+            }
         }
     }
     
@@ -505,8 +521,14 @@ create_cfg(cfg_t &cfg, con_t &con, ebbIndex *ebbi)
           // Here, v is a variable that survives cfg[i].
           // TODO: Check if we can use v, ++v2 instead of cfg[i].alive.begin() to speed things up.
           for (v2 = cfg[i].alive.begin(), v2_end = cfg[i].alive.end(); v2 != v2_end; ++v2)
-            if(*v != *v2)
+            {
+              if(*v == *v2)
+                continue;
+              if (cfg[i].dying.find (*v2) != cfg[i].dying.end())
+                continue;
+
               boost::add_edge(*v, *v2, con);
+            }
           
           next_var:
             ;
@@ -637,7 +659,7 @@ float compability_cost(const assignment& a, const assignment& ac, const I_t &I)
         c += 1000.0f;
         continue;
       }
-        
+#if 0 // This improves the quality of assignments, but it has a big runtime overhead for some cases.
       adjacency_iter_t j, j_end;
       for (boost::tie(j, j_end) = adjacent_vertices(v, I); j != j_end; ++j)
         if(ac.global[v] != -1 && a.global[*j] == ac.global[v])
@@ -645,6 +667,7 @@ float compability_cost(const assignment& a, const assignment& ac, const I_t &I)
           c += 1000.0f;
           break;
         }
+#endif
     }
   
   return(c);
@@ -704,7 +727,10 @@ static void tree_dec_ralloc_leaf(T_t &T, typename boost::graph_traits<T_t>::vert
 #ifdef DEBUG_RALLOC_DEC_ASS
   assignment_list_t::iterator ai;
   for(ai = alist.begin(); ai != alist.end(); ++ai)
-  	print_assignment(*ai);
+    {
+      print_assignment(*ai);
+      std::cout << "\n";
+    }
   assignment best;
   get_best_local_assignment(best, t, T);
   std::cout << "Best: "; print_assignment(best); std::cout << "\n";
@@ -760,8 +786,10 @@ static void tree_dec_ralloc_introduce(T_t &T, typename boost::graph_traits<T_t>:
 
 #ifdef DEBUG_RALLOC_DEC_ASS
   for(ai = alist.begin(); ai != alist.end(); ++ai)
-  	print_assignment(*ai);
-  std::cout << "\n";
+    {
+      print_assignment(*ai);
+      std::cout << "\n";
+    }
 
   assignment best;
   get_best_local_assignment(best, t, T);
@@ -852,8 +880,10 @@ static void tree_dec_ralloc_forget(T_t &T, typename boost::graph_traits<T_t>::ve
 
 #ifdef DEBUG_RALLOC_DEC_ASS
   for(ai = alist.begin(); ai != alist.end(); ++ai)
-  	print_assignment(*ai);
-  std::cout << "\n";
+    {
+      print_assignment(*ai);
+      std::cout << "\n";
+    }
   
   assignment best;
   get_best_local_assignment(best, t, T);
@@ -924,8 +954,10 @@ static void tree_dec_ralloc_join(T_t &T, typename boost::graph_traits<T_t>::vert
 #ifdef DEBUG_RALLOC_DEC_ASS
   std::list<assignment>::iterator ai;
   for(ai = alist1.begin(); ai != alist1.end(); ++ai)
-  	print_assignment(*ai);
-  std::cout << "\n";
+    {
+  	  print_assignment(*ai);
+      std::cout << "\n";
+    }
 #endif
 }
 
@@ -966,13 +998,19 @@ static void tree_dec_ralloc_nodes(T_t &T, typename boost::graph_traits<T_t>::ver
     case 2:
       c0 = *c++;
       c1 = *c;
+
+      if (T[c0].weight < T[c1].weight) // Minimize memory consumption.
+        {
+          /*std::swap (c0, c1)*/ /* Causes code size regressions - don't know why. */
+        }
+
       tree_dec_ralloc_nodes(T, c0, G, I, ac, assignment_optimal);
-      {
-        assignment *ac2 = new assignment;
-        get_best_local_assignment_biased(*ac2, c0, T);
-        tree_dec_ralloc_nodes(T, c1, G, I, *ac2, assignment_optimal);
-        delete ac2;
-      }
+        {
+          assignment *ac2 = new assignment;
+          get_best_local_assignment_biased(*ac2, c0, T);
+          tree_dec_ralloc_nodes(T, c1, G, I, *ac2, assignment_optimal);
+          delete ac2;
+        }
       tree_dec_ralloc_join(T, t, G, I);
       break;
     default:

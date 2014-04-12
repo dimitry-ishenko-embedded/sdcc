@@ -130,8 +130,11 @@ emit_raw (const char *line)
 
   if (*p)
     {
-      genLine.lineElement.isComment = (*p == ';');
-      add_line_node (line);
+      if (!port->rtrackUpdate || !port->rtrackUpdate(line))
+        {
+          genLine.lineElement.isComment = (*p == ';');
+          add_line_node (line);
+        }
     }
 }
 
@@ -188,8 +191,10 @@ emitcode (const char *inst, const char *fmt, ...)
 }
 
 void
-emitLabel (symbol * tlbl)
+emitLabel (symbol *tlbl)
 {
+  if (!tlbl)
+    return;
   emitcode ("", "!tlabeldef", labelKey2num (tlbl->key));
   genLine.lineCurr->isLabel = 1;
 }

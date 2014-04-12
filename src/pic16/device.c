@@ -57,6 +57,7 @@ static PIC16_device default_device = {
     { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
       { 0, 0 }, { 0, 0 }, { 0, 0 } }
   },
+  0,
   NULL
 };
 
@@ -812,6 +813,20 @@ pic16_find_device(const char *name)
                     {
                       d->idInfo.irInfo[val[0]].value = val[1];
                     } // if
+                } // if
+            }
+          else if (0 == strcmp(key, "XINST"))
+            {
+              // XINST %<supported>i
+              res = sscanf(&line[1 + strlen(key)], " %i",
+                           &val[0]);
+              if (res < 1)
+                {
+                  SYNTAX("<supported> (e.g., 1) expected.");
+                }
+              else
+                {
+                  d->xinst = val[0];
                 } // if
             }
           else

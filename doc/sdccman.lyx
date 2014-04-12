@@ -148,17 +148,17 @@ SDCC Compiler User Guide
 \begin_layout Date
 
 \size normal
-SDCC 3.3.0
+SDCC 3.4.0
 \size footnotesize
 
 \begin_inset Newline newline
 \end_inset
 
-$Date:: 2013-05-10 #$ 
+$Date:: 2014-03-22 #$ 
 \begin_inset Newline newline
 \end_inset
 
-$Revision: 8604 $
+$Revision: 8964 $
 \end_layout
 
 \begin_layout Standard
@@ -230,7 +230,7 @@ status collapsed
 \end_inset
 
 , etc.), Dallas DS80C390 variants, Freescale (formerly Motorola) HC08 based
- (hc08, s08) and Zilog Z80 based MCUs (z80, z180, gbz80, Rabbit 2000/3000,
+ (hc08, s08), Zilog Z80 based MCUs (z80, z180, gbz80, Rabbit 2000/3000,
  Rabbit 3000A
 \begin_inset Index idx
 status collapsed
@@ -241,7 +241,17 @@ Z80, Z180, GBZ80, Rabbit 2000/3000, Rabbit 3000A CPU
 
 \end_inset
 
-).
+) and STMicroelectronics STM8 
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+STM8
+\end_layout
+
+\end_inset
+
+.
  It can be retargeted for other microprocessors, support for Microchip PIC
  is under development.
  The entire source code for the compiler is distributed under GPL.
@@ -284,7 +294,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/apps/trac/sdcc/
+http://sdcc.sourceforge.net/wiki/
 \end_layout
 
 \end_inset
@@ -2570,9 +2580,9 @@ http://sdcc.sourceforge.net/
  You can also find links to the user mailing lists that offer help or discuss
  SDCC with other SDCC users.
  Web links to other SDCC related sites can also be found here.
- This document can be found in the DOC directory of the source package as
- a text or HTML file.
- A pdf version of this document is available at 
+ This document can be found in the doc directory of the source package.
+ The latest snapshot build version of this document in pdf format is available
+ at 
 \begin_inset Flex URL
 status collapsed
 
@@ -2587,8 +2597,18 @@ http://sdcc.sourceforge.net/doc/sdccman.pdf
  Some of the other tools (simulator and assembler) included with SDCC contain
  their own documentation and can be found in the source distribution.
  If you want the latest unreleased software, the complete source package
- is available directly from Subversion on https://sdcc.svn.sourceforge.net/svnroot/
-sdcc/trunk/sdcc.
+ is available directly from Subversion on 
+\begin_inset Flex URL
+status collapsed
+
+\begin_layout Plain Layout
+
+http://sourceforge.net/p/sdcc/code/8805/tree/trunk/sdcc/
+\end_layout
+
+\end_inset
+
+.
 \end_layout
 
 \begin_layout Section
@@ -3095,6 +3115,24 @@ status collapsed
 
 \end_inset
 
+-disable-stm8-port Excludes the STM8 port
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
 -disable-pic-port Excludes the PIC14 port
 \end_layout
 
@@ -3186,25 +3224,6 @@ status collapsed
 \end_inset
 
 -disable-packihx Disables building packihx
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--enable-new-pics Enables support for PIC devices that are not supported
- by the current 0.14.2 release of gputils
 \end_layout
 
 \begin_layout Labeling
@@ -7246,7 +7265,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sf.net/project/showfiles.php?group_id=599
+http://sourceforge.net/projects/sdcc/files/
 \end_layout
 
 \end_inset
@@ -7261,7 +7280,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.sf.net/snap.php
+http://sdcc.sourceforge.net/snap.php
 \end_layout
 
 \end_inset
@@ -7746,13 +7765,13 @@ http://www.lyx.org
 \end_inset
 
  as editor is straightforward.
- Prebuilt documentation in html and pdf format is available from 
+ Prebuilt documentation is available from 
 \begin_inset Flex URL
 status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.sf.net/snap.php
+http://sdcc.sourceforge.net/snap.php
 \end_layout
 
 \end_inset
@@ -7807,32 +7826,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.sf.net/doc/sdccman.pdf
-\end_layout
-
-\end_inset
-
-.
-\begin_inset Newline newline
-\end_inset
-
-A html version
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-HTML version of this document
-\end_layout
-
-\end_inset
-
- should be online at 
-\begin_inset Flex URL
-status collapsed
-
-\begin_layout Plain Layout
-
-http://sdcc.sf.net/doc/sdccman.html/index.html
+http://sdcc.sourceforge.net/doc/sdccman.pdf
 \end_layout
 
 \end_inset
@@ -7918,7 +7912,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sf.net/projects/fpgac
+http://sourceforge.net/projects/fpgac/
 \end_layout
 
 \end_inset
@@ -8560,7 +8554,11 @@ sdas6808 - The 6808 assembler.
 \end_layout
 
 \begin_layout Itemize
-sdld -The linker for 8051 type processors.
+sdasstm8 - The STM8 assembler.
+\end_layout
+
+\begin_layout Itemize
+sdld -The linker for 8051 and STM8 type processors.
 \end_layout
 
 \begin_layout Itemize
@@ -8585,6 +8583,10 @@ sz80 - The ucSim Z80 simulator.
 
 \begin_layout Itemize
 shc08 - The ucSim 6808 simulator.
+\end_layout
+
+\begin_layout Itemize
+sstm8 - The ucSim STM8 simulator.
 \end_layout
 
 \begin_layout Itemize
@@ -8765,7 +8767,7 @@ http://shop-pdp.kent.edu/
 \end_layout
 
 \begin_layout Subsection
-s51, sz80, shc08 - The Simulators
+s51, sz80, shc08, sstm8 - The Simulators
 \end_layout
 
 \begin_layout Standard
@@ -8789,12 +8791,22 @@ sz80 (simulator)
 
 \end_inset
 
- and shc08
+ shc08
 \begin_inset Index idx
 status collapsed
 
 \begin_layout Plain Layout
 shc08 (simulator)
+\end_layout
+
+\end_inset
+
+ and sstm8 
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+sstm8 (simulator)
 \end_layout
 
 \end_inset
@@ -8814,7 +8826,7 @@ http://mazsola.iit.uni-miskolc.hu/~drdani/embedded/s51
 
 .
  It currently supports the core mcs51, the Dallas DS80C390, the Phillips
- XA51 family, the Z80 and the 6808.
+ XA51 family, the Z80, 6808 and the STM8.
 \end_layout
 
 \begin_layout Subsection
@@ -8861,7 +8873,7 @@ Using SDCC
 \begin_layout Section
 Standard-Compliance
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 Standard-compliance
@@ -8940,7 +8952,7 @@ ISO/IEC 9899 - Programming languages - C
 \emph default
  should be available at: 
 \begin_inset Flex URL
-status open
+status collapsed
 
 \begin_layout Plain Layout
 
@@ -9481,7 +9493,7 @@ Float classification macros in math.h (C11 requires more than C99).
 \end_layout
 
 \begin_layout Itemize
-Type-generic expressions.
+Type-generic expressions
 \end_layout
 
 \begin_layout Itemize
@@ -9890,18 +9902,17 @@ status collapsed
 \end_layout
 
 \begin_layout Itemize
-sourcefile.
- - (no extension)
+sourcefile.omf
 \begin_inset Index idx
 status collapsed
 
 \begin_layout Plain Layout
-<file> (no extension)
+<file>.omf
 \end_layout
 
 \end_inset
 
- An optional AOMF or AOMF51
+ - An optional AOMF or AOMF51
 \begin_inset Index idx
 status collapsed
 
@@ -10242,7 +10253,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sf.net/projects/srecord
+hhttp://sourceforge.net/projects/srecord/
 \end_layout
 
 \end_inset
@@ -11476,6 +11487,25 @@ gbz80 (GameBoy Z80)
 \labelwidthstring 00.00.0000
 
 \series bold
+-mstm8
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+-mstm8
+\end_layout
+
+\end_inset
+
+
+\series default
+ Generate code for the STMicroelectronics STM8 family of processors.
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+
+\series bold
 -mpic14
 \begin_inset Index idx
 status collapsed
@@ -11587,7 +11617,11 @@ sdcpp (preprocessor)
 \end_layout
 
 \begin_layout Standard
-SDCC uses an adapted version of the GNU Compiler Collection
+SDCC uses 
+\shape italic
+sdcpp
+\shape default
+, an adapted version of the GNU Compiler Collection
 \begin_inset Index idx
 status collapsed
 
@@ -14420,51 +14454,6 @@ status collapsed
 
 \end_inset
 
--fverbose-asm
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--no-gen-comments
-\end_layout
-
-\end_inset
-
-
-\series default
- Include code generator and peep-hole comments in the generated asm files.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
 -no-peep-comments
 \begin_inset Index idx
 status collapsed
@@ -14930,7 +14919,7 @@ Assembler options
 \end_inset
 
 .
- See file sdcc/sdas/doc/asxhtm.html for assembler options.cd
+ See file sdcc/sdas/doc/asmlnk.txt for assembler options.cd
 \end_layout
 
 \begin_layout Labeling
@@ -16726,7 +16715,7 @@ reference "sec:Pragmas"
 \end_inset
 
 .
- File sdcc/sdas/doc/asxhtm.html has more on linker options.
+ File sdcc/sdas/doc/asmlnk.txt has more on linker options.
 \end_layout
 
 \begin_layout Subsection
@@ -17436,7 +17425,7 @@ status collapsed
  returning.
  This option is needed when using the Infineon
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 Infineon
@@ -18298,7 +18287,7 @@ status collapsed
 \series default
 
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 Z80!Options!-
@@ -18363,7 +18352,7 @@ status collapsed
 \series default
 
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 Z80!Options!-
@@ -18542,7 +18531,7 @@ status collapsed
 
 \end_inset
 
--dumpraw
+-dum-ast
 \begin_inset Index idx
 status collapsed
 
@@ -18560,471 +18549,67 @@ status collapsed
 
 \end_inset
 
--dumpraw
+-dump-ast
 \end_layout
 
 \end_inset
 
 
 \series default
- This option will cause the compiler to dump the intermediate code into
- a file of named 
+ This option will cause the compiler to dump the abstract syntax tree to
+ the econsole.
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+
+\series bold
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-dump-i-code
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-dump-i-code
+\end_layout
+
+\end_inset
+
+
+\size large
+ 
+\series default
+\size default
+Will dump iCodes at various stages into files named 
 \emph on
-<source filename>.dumpraw
+<source filename>.dump<stage>
 \emph default
- just after the intermediate code has been generated for a function, i.e.
- before any optimizations are done.
- The basic blocks
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Basic blocks
-\end_layout
-
-\end_inset
-
- at this stage ordered in the depth first number, so they may not be in
- sequence of execution.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpgcse
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpgcse
-\end_layout
-
-\end_inset
-
-
-\series default
- Will create a dump of iCodes, after global subexpression elimination
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Global subexpression elimination
-\end_layout
-
-\end_inset
-
-, into a file named 
-\emph on
-<source filename>.dumpgcse.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpdeadcode
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpdeadcode
-\end_layout
-
-\end_inset
-
-
-\series default
- Will create a dump of iCodes, after deadcode elimination
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Dead-code elimination
-\end_layout
-
-\end_inset
-
-, into a file named 
-\emph on
-<source filename>.dumpdeadcode.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumploop
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumploop
-\end_layout
-
-\end_inset
-
-
-\series default
-\size large
- 
-\size default
-Will create a dump of iCodes, after loop optimizations
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Loop optimization
-\end_layout
-
-\end_inset
-
-, into a file named 
-\emph on
-<source filename>.dumploop.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumprange
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumprange
-\end_layout
-
-\end_inset
-
-
-\series default
-\size large
- 
-\size default
-Will create a dump of iCodes, after live range analysis
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Live range analysis
-\end_layout
-
-\end_inset
-
-, into a file named 
-\emph on
-<source filename>.dumprange.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumlrange
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumlrange
-\end_layout
-
-\end_inset
-
-
-\series default
- Will dump the life ranges
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Live range analysis
-\end_layout
-
-\end_inset
-
- for all symbols.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpregassign
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpregassign
-\end_layout
-
-\end_inset
-
- 
-\series default
-Will create a dump of iCodes, after register assignment
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Register assignment
-\end_layout
-
-\end_inset
-
-, into a file named 
-\emph on
-<source filename>.dumprassgn.
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumplrange
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumplrange
-\end_layout
-
-\end_inset
-
-
-\series default
- Will create a dump of the live ranges of iTemp's
-\end_layout
-
-\begin_layout Labeling
-\labelwidthstring 00.00.0000
-
-\series bold
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpall
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
--
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-
-\backslash
-/
-\end_layout
-
-\end_inset
-
--dumpall
-\end_layout
-
-\end_inset
-
-
-\size large
- 
-\series default
-\size default
-Will cause all the above mentioned dumps to be created.
+.
 \end_layout
 
 \begin_layout Labeling
@@ -19046,7 +18631,7 @@ status collapsed
 
 -dump-graphs
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 -
@@ -19076,6 +18661,51 @@ Will dump internal representations as graphviz .dot files.
  Depending on other options, this can include the control-flow graph at
  lospre, insertion of bank selection instructions or register allcoation
  and the conflict graph and tree-decomposition at register allocation.
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+
+\series bold
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-fverbose-asm
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-no-gen-comments
+\end_layout
+
+\end_inset
+
+
+\series default
+ Include code generator and peep-hole comments in the generated asm files.
 \end_layout
 
 \begin_layout Subsection
@@ -22568,66 +22198,99 @@ SDCC supports named address spaces.
  declare a corresponding named address space:
 \end_layout
 
-\begin_layout Standard
+\begin_layout Verse
 
 \family typewriter
-\begin_inset listings
-inline false
-status collapsed
-
-\begin_layout Plain Layout
-
 void setb0(void); // The function that sets the currently active memory
  bank to b0
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 void setb1(void); // The function that sets the currently active memory
  bank to b1
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 __addressmod setb0 spaceb0; // Declare a named address space called spaceb0
  that uses setb0()
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 __addressmod setb1 spaceb1; // Declare a named address space called spaceb1
  that uses setb1()
-\end_layout
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 spaceb0 int x; // An int in address space spaceb0
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 spaceb1 int *y; // A pointer to an int in address space spaceb1
-\end_layout
-
-\begin_layout Plain Layout
+\begin_inset Newline newline
+\end_inset
 
 spaceb0 int *spaceb1 z; //A pointer in address space sapceb1 that points
  to an int in address space spaceb0
 \end_layout
 
+\begin_layout Standard
+Named address spaces for data in ROM are declared using the const keyword:
+\end_layout
+
+\begin_layout Verse
+
+\family typewriter
+void setb0(void); // The function that sets the currently active memory
+ bank to b0
+\begin_inset Newline newline
 \end_inset
 
+void setb1(void); // The function that sets the currently active memory
+ bank to b1
+\begin_inset Newline newline
+\end_inset
 
+__addressmod setb0 const spaceb0; // Declare a named address space called
+ spaceb0 that uses setb0() and resides in ROM
+\begin_inset Newline newline
+\end_inset
+
+__addressmod setb1 spaceb1; // Declare a named address space called spaceb1
+ that uses setb1() and resides in RAM
+\begin_inset Newline newline
+\end_inset
+
+const spaceb0 int x = 42; // An int in address space spaceb0
+\begin_inset Newline newline
+\end_inset
+
+spaceb1 int *y; // A pointer to an int in address space spaceb1
+\begin_inset Newline newline
+\end_inset
+
+const spaceb0 int *spaceb1 z; //A pointer in address space sapceb1 that
+ points to a constant int in address space spaceb0
 \end_layout
 
 \begin_layout Standard
-SDCC will automatically insert calls to the correspionding function before
+Variables in named address spaces will be placed in areas of the same name
+ (this can be used for the placement of named address spaces in memory by
+ the linker).
+\end_layout
+
+\begin_layout Standard
+SDCC will automatically insert calls to the corresponding function before
  accessing the variable.
  SDCC inserts the minimum possible number calls to the bank selection functions.
+ See Philipp Klaus Krause, 
+\begin_inset Quotes sld
+\end_inset
+
+Optimal Placement of Bank Selection Instructions in Polynomial Time
+\begin_inset Quotes srd
+\end_inset
+
+ for details on how this works.
 \end_layout
 
 \begin_layout Section
@@ -29651,8 +29314,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/device/lib/mcs51/
-crtstart.asm
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/device/lib/mcs51/crtstart.asm
 \end_layout
 
 \end_inset
@@ -32149,7 +31811,7 @@ endasm
 The inline assembler code can contain any valid code understood by the assembler
 , this includes any assembler directives and comment lines.
  The assembler does not like some characters like ':' or ''' in comments.
- You'll find an 100+ pages assembler manual in sdcc/sdas/doc/asxhtm.html
+ You'll find an 100+ pages assembler manual in sdcc/sdas/doc/asmlnk.txt
 \begin_inset Index idx
 status collapsed
 
@@ -32175,8 +31837,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/sdas/doc/asxhtm.ht
-ml
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/sdas/doc/asmlnk.txt
 \end_layout
 
 \end_inset
@@ -37186,7 +36847,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/apps/trac/sdcc/wiki/List%20of%20the%20SDCC%20library
+http://sdcc.sourceforge.net/wiki/index.php/List_of_the_SDCC_library
 \end_layout
 
 \end_inset
@@ -38969,7 +38630,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/mail/?group_id=599
+http://sourceforge.net/p/sdcc/mailman/sdcc-user/
 \end_layout
 
 \end_inset
@@ -39684,8 +39345,8 @@ pragma exclude
 
 \end_inset
 
- none | {acc[,b[,dpl[,dph]]] - The exclude pragma disables the generation
- of pairs of push/pop
+ none | {acc[,b[,dpl[,dph[,bits]]]]} - The exclude pragma disables the generatio
+n of pairs of push/pop
 \begin_inset Index idx
 status collapsed
 
@@ -41919,7 +41580,7 @@ Defines created by the compiler
 
 \begin_layout Standard
 \begin_inset Tabular
-<lyxtabular version="3" rows="16" columns="2">
+<lyxtabular version="3" rows="17" columns="2">
 <features tabularvalignment="middle">
 <column alignment="left" valignment="top" width="3in">
 <column alignment="left" valignment="top" width="3in">
@@ -42850,6 +42511,92 @@ status collapsed
 \begin_inset Text
 
 \begin_layout Plain Layout
+__SDCC_ALL_CALLEE_SAVES
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+SDCC!Defines!SDCC
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+_
+\end_layout
+
+\end_inset
+
+ALL
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+_
+\end_layout
+
+\end_inset
+
+CALLEE
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+_
+\end_layout
+
+\end_inset
+
+SAVES
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+when 
+\emph on
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-all-callee-saves
+\emph default
+ is used
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
 __SDCC_FLOAT_REENT
 \begin_inset Index idx
 status collapsed
@@ -43633,7 +43380,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-https://sourceforge.net/apps/trac/sdcc/wiki/z80%20code%20size
+http://sdcc.sourceforge.net/wiki/index.php/Z80_code_size
 \end_layout
 
 \end_inset
@@ -43664,7 +43411,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-https://sourceforge.net/apps/trac/sdcc/wiki/hc08%20code%20size
+http://sdcc.sourceforge.net/wiki/index.php/Hc08_code_size
 \end_layout
 
 \end_inset
@@ -43776,7 +43523,7 @@ Currently supported devices include:
 
 \begin_layout Standard
 16F: 707, 716, 72, 720, 721, 722, 722a, 723, 723a, 724, 726, 727, 73, 737,
- 74, 747, 76, 767, 77, 777, 785
+ 74, 747, 753, 76, 767, 77, 777, 785
 \end_layout
 
 \begin_layout Standard
@@ -43793,7 +43540,7 @@ Currently supported devices include:
 \end_layout
 
 \begin_layout Standard
-16HV: 610, 616, 785
+16HV: 610, 616, 753, 785
 \end_layout
 
 \begin_layout Standard
@@ -43826,12 +43573,14 @@ Supported devices with enhanced cores:
 
 \begin_layout Standard
 16F: 1454, 1455, 1458, 1459, 1503, 1507, 1508, 1509, 1512, 1513, 1516, 1517,
- 1518, 1519, 1526, 1527, 1782, 1783, 1784, 1786, 1787, 1788, 1789
+ 1518, 1519, 1526, 1527, 1704, 1708, 1782, 1783, 1784, 1786, 1787, 1788,
+ 1789
 \end_layout
 
 \begin_layout Standard
 16LF: 1454, 1455, 1458, 1459, 1503, 1507, 1508, 1509, 1512, 1513, 1516,
- 1517, 1518, 1519, 1526, 1527, 1782, 1783, 1784, 1786, 1787, 1788, 1789
+ 1517, 1518, 1519, 1526, 1527, 1704, 1708, 1782, 1783, 1784, 1786, 1787,
+ 1788, 1789
 \end_layout
 
 \begin_layout Standard
@@ -44015,7 +43764,7 @@ __interrupt
 \emph default
 
 \begin_inset Index idx
-status open
+status collapsed
 
 \begin_layout Plain Layout
 PIC14!interrupt
@@ -44693,6 +44442,24 @@ status collapsed
 
  make non-free device headers and libraries available in the compiler's
  search paths (implicit -I and -L options)
+\end_layout
+
+\begin_layout Description
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-no-extended-instructions forbid use of the extended instruction set (e.g.,
+ ADDFSR)
 \end_layout
 
 \begin_layout Subsection
@@ -47871,25 +47638,13 @@ perl /path/to/sdcc/support/scripts/inc2h-pic16.pl
 \begin_layout Enumerate
 
 \family typewriter
-mv picDEVICE.h /path/to/sdcc/device/include/pic16
+mv picDEVICE.h /path/to/sdcc/device/non-free/include/pic16
 \end_layout
 
 \begin_layout Enumerate
 
 \family typewriter
-mv picDEVICE.c /path/to/sdcc/device/lib/pic16/libdev
-\end_layout
-
-\begin_layout Enumerate
-Add DEVICE to 
-\family typewriter
-/path/to/sdcc/device/lib/pic16/pics.all
-\family default
-
-\begin_inset Newline newline
-\end_inset
-
-Note: No 18f prefix here!
+mv picDEVICE.c /path/to/sdcc/device/non-free/lib/pic16/libdev
 \end_layout
 
 \begin_layout Enumerate
@@ -47915,42 +47670,11 @@ In fact, the
 \family typewriter
 Makefile.am
 \family default
- from steps 
-\begin_inset CommandInset ref
-LatexCommand ref
-reference "enu:pic16-edit-makefile-am"
-
-\end_inset
-
-f using the 
+ using the 
 \family typewriter
 .../libio/mkmk.sh
 \family default
- script; to actually suppress building the I/O library, you must not include
- the 
-\family typewriter
-adc/
-\family default
-, 
-\family typewriter
-i2c/
-\family default
- and 
-\family typewriter
-usart/
-\family default
- sources in the 
-\family typewriter
-Makefile.am
-\family default
- in step 
-\begin_inset CommandInset ref
-LatexCommand ref
-reference "enu:pic16-edit-libio-makefile-am"
-
-\end_inset
-
-.
+ script.
 \end_layout
 
 \end_inset
@@ -48043,92 +47767,9 @@ Copy and modify an existing entry or create a new one and insert it at the
 \end_layout
 
 \begin_layout Enumerate
-\begin_inset CommandInset label
-LatexCommand label
-name "enu:pic16-edit-makefile-am"
-
-\end_inset
-
-Add the device to 
-\family typewriter
-/path/to/sdcc/device/lib/pic16/libdev/Makefile.am
-\family default
-
-\begin_inset Newline newline
-\end_inset
-
-Copy an existing entry and adjust the device name.
-\end_layout
-
-\begin_layout Enumerate
-\begin_inset CommandInset label
-LatexCommand label
-name "enu:pic16-edit-libio-makefile-am"
-
-\end_inset
-
-Add the device to 
-\family typewriter
-/path/to/sdcc/device/lib/pic16/libio/Makefile.am
-\family default
-
-\begin_inset Newline newline
-\end_inset
-
-Copy the record from the 18f2220 and adjust the device name.
-\begin_inset Newline newline
-\end_inset
-
-If the new device does not offer ADC, I
-\begin_inset Formula $^{\text{2}}$
-\end_inset
-
-C, and/or (E)USART functionality as assumed by the library, or if you added
- the new device to 
-\family typewriter
-.../libio/{adc,i2c,usart}.ignore
-\family default
-, remove the lines with references to 
-\family typewriter
-adc/*.c
-\family default
-, 
-\family typewriter
-i2c/*.c
-\family default
-, or 
-\family typewriter
-usart/*.c
-\family default
-, respectively.
-\end_layout
-
-\begin_layout Enumerate
-Update 
-\family typewriter
-libdev/Makefile.in
-\family default
- and 
-\family typewriter
-libio/Makefile.in
-\family default
- using
-\begin_inset Newline newline
-\end_inset
-
 
 \family typewriter
-./bootstrap.sh
-\family default
-
-\begin_inset Newline newline
-\end_inset
-
-in 
-\family typewriter
-/path/to/sdcc/device/lib/pic16
-\family default
-.
+( cd /path/to/sdcc/device/non-free/lib/pic16 && sh update.sh )
 \end_layout
 
 \begin_layout Enumerate
@@ -48139,7 +47780,7 @@ reference "sub:pic16Libraries"
 
 \end_inset
 
-.
+ or just configure and build sdcc again from scratch (recommended).
 \end_layout
 
 \begin_layout Subsection
@@ -51249,7 +50890,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://ec2drv.sf.net/
+http://ec2drv.sourceforge.net/
 \end_layout
 
 \end_inset
@@ -51656,8 +51297,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/doc/figures/ddd_e
-xample.png
+http://sdcc.sourceforge.net/wiki_images/ddd_example.png
 \end_layout
 
 \end_inset
@@ -55122,8 +54762,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/sdcc/trunk/sdcc/device/include/mcs51/compile
-r.h?view=markup
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/device/include/mcs51/compiler.h
 \end_layout
 
 \end_inset
@@ -55136,8 +54775,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/sdcc/trunk/sdcc/device/include/mcs51/cc2510f
-x.h?view=markup
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/device/include/mcs51/cc2510fx.h
 \end_layout
 
 \end_inset
@@ -56543,7 +56181,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/ChangeLog
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/ChangeLog
 \end_layout
 
 \end_inset
@@ -56612,7 +56250,7 @@ Linker documentation
 \begin_inset Text
 
 \begin_layout Plain Layout
-sdcc/sdas/doc/asxhtm.html 
+sdcc/sdas/doc/asmlnk.txt 
 \emph on
 
 \begin_inset space ~
@@ -56642,8 +56280,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/sdas/doc/asxhtm.ht
-ml
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/sdas/doc/asmlnk.txt
 \end_layout
 
 \end_inset
@@ -56678,7 +56315,7 @@ Regression test
 \begin_inset Text
 
 \begin_layout Plain Layout
-sdcc/doc/test_suite_spec.pdf 
+test_suite_spec
 \emph on
 
 \begin_inset space ~
@@ -56708,7 +56345,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.sourceforge.net/doc/test_suite_spec.pdf
+http://sdcc.sourceforge.net/wiki/index.php/Proposed_Test_Suite_Design
 \end_layout
 
 \end_inset
@@ -56763,7 +56400,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/sdcc/trunk/sdcc/doc/
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/doc/
 \end_layout
 
 \end_inset
@@ -56828,7 +56465,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/debugger/README
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/debugger/README
 \end_layout
 
 \end_inset
@@ -56910,8 +56547,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/sim/ucsim/doc/ind
-ex.html
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/sim/ucsim/doc/index.html
 \end_layout
 
 \end_inset
@@ -56976,7 +56612,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewvc/*checkout*/sdcc/trunk/sdcc/src/pic16/NOTES
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/src/pic16/NOTES
 \end_layout
 
 \end_inset
@@ -57052,7 +56688,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.sourceforge.net/doc/cdbfileformat.pdf
+http://sdcc.sourceforge.net/wiki/index.php/CDB_File_Format
 \end_layout
 
 \end_inset
@@ -57164,7 +56800,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.wiki.sourceforge.net/
+http://sdcc.sourceforge.net/wiki/
 \end_layout
 
 \end_inset
@@ -57311,7 +56947,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/forum/forum.php?forum_id=1865
+http://sourceforge.net/p/sdcc/discussion/1865
 \end_layout
 
 \end_inset
@@ -57350,7 +56986,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/forum/forum.php?forum_id=1864
+http://sourceforge.net/p/sdcc/discussion/1864
 \end_layout
 
 \end_inset
@@ -57399,7 +57035,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/tracker/?group_id=599
+http://sourceforge.net/p/sdcc/_list/tickets
 \end_layout
 
 \end_inset
@@ -59310,7 +58946,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/tracker/?group_id=599&atid=100599
+http://sourceforge.net/p/sdcc/bugs/
 \end_layout
 
 \end_inset
@@ -59397,7 +59033,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/tracker/?group_id=599&atid=350599
+http://sourceforge.net/p/sdcc/feature-requests/
 \end_layout
 
 \end_inset
@@ -59438,7 +59074,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/tracker/?group_id=599&atid=300599
+http://sourceforge.net/p/sdcc/patches/
 \end_layout
 
 \end_inset
@@ -59495,7 +59131,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/mail/?group_id=599
+http://sourceforge.net/p/sdcc/mailman/sdcc-user/
 \end_layout
 
 \end_inset
@@ -59517,7 +59153,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/forum/?group_id=599
+http://sourceforge.net/p/sdcc/discussion/
 \end_layout
 
 \end_inset
@@ -59582,7 +59218,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.svn.sourceforge.net/viewcvs.cgi/*checkout*/sdcc/trunk/sdcc/ChangeLog
+http://svn.code.sf.net/p/sdcc/code/trunk/sdcc/ChangeLog
 \end_layout
 
 \end_inset
@@ -59637,49 +59273,12 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/svn/?group_id=599
+http://sourceforge.net/p/sdcc/code/8805/tree/
 \end_layout
 
 \end_inset
 
  (by number or by date).
- An on-line source code browser and detailled instructions are also available
- there.
- SDCC versions starting from 1999 up to now are available (currently the
- versions prior to the conversion from cvs
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-cvs|see
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-{
-\end_layout
-
-\end_inset
-
-Subversion
-\begin_inset ERT
-status collapsed
-
-\begin_layout Plain Layout
-
-}
-\end_layout
-
-\end_inset
-
-
-\end_layout
-
-\end_inset
-
- to Subversion (April 2006) are either by accessible by Subversion or by
- cvs).
 \end_layout
 
 \begin_layout Section
@@ -59756,7 +59355,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.wiki.sourceforge.net/
+http://sdcc.sourceforge.net/wiki/
 \end_layout
 
 \end_inset
@@ -59825,35 +59424,6 @@ http://sdcc.sourceforge.net/snap.php
 \end_inset
 
 ).
-\end_layout
-
-\begin_layout Standard
-There is a separate document 
-\shape italic
-test_suite.pdf 
-\begin_inset Index idx
-status collapsed
-
-\begin_layout Plain Layout
-Test suite
-\end_layout
-
-\end_inset
-
-
-\shape default
- 
-\begin_inset Flex URL
-status collapsed
-
-\begin_layout Plain Layout
-
-http://sdcc.sourceforge.net/doc/test_suite_spec.pdf
-\end_layout
-
-\end_inset
-
- about the regression test suite.
 \end_layout
 
 \begin_layout Standard
@@ -60063,7 +59633,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sf.net/projects/fpgac
+http://sourceforge.net/projects/fpgac/
 \end_layout
 
 \end_inset
@@ -60080,7 +59650,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://www.sf.net
+http://sourceforge.net/
 \end_layout
 
 \end_inset
@@ -60119,7 +59689,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sourceforge.net/tracker/?group_id=599&atid=350599
+http://sourceforge.net/p/sdcc/feature-requests/
 \end_layout
 
 \end_inset
@@ -67619,7 +67189,7 @@ Register-Allocation
 sdcc currently has two register allocators.
  One of them is optimal when optimizing for code size.
  This register allocator is used by default on the hc08, s08, z80, z180,
- r2k, r3ka and gbz80 ports.
+ r2k, r3ka, gbz80 and stm8 ports.
  Even though is runs in polynomial time, it can be quite slow; therefore
  the --max-allos-per-node command line option can be used for a trade-off
  between compilation speed and quality of the genrated result: Lower values
@@ -68659,7 +68229,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sdcc.wiki.sourceforge.net/SDCC+internals+and+porting
+http://sdcc.sourceforge.net/wiki/index.php/SDCC_internals_and_porting
 \end_layout
 
 \end_inset
@@ -68670,7 +68240,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://sf.net/mailarchive/message.php?msg_id=13954144
+http://sourceforge.net/mailarchive/message.php?msg_id=13954144
 \end_layout
 
 \end_inset
@@ -68765,8 +68335,8 @@ Annotated syntax tree
  while there may be a xdata storage class for 8051 there is no such storage
  class for z80.
  SDCC allows MCU specific storage class extensions, i.e.
- xdata will be treated as a storage class specifier when parsing 8051 C
- code but will be treated as a C identifier when parsing z80 code.
+ __xdata will be treated as a storage class specifier when parsing 8051
+ C code but will be treated as a C identifier when parsing z80 code.
 \end_layout
 
 \begin_layout Paragraph*
@@ -72919,7 +72489,7 @@ status collapsed
 
 \begin_layout Plain Layout
 
-http://www.sf.net
+http://sourceforge.net/
 \end_layout
 
 \end_inset
@@ -72946,7 +72516,7 @@ Also thanks to all SDCC Distributed Compile Farm members for donating CPU
 \end_layout
 
 \begin_layout Standard
-This document was initially written by Sandeep Dutta and updated bu SDCC
+This document was initially written by Sandeep Dutta and updated by SDCC
  developers.
 \end_layout
 

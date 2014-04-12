@@ -105,7 +105,6 @@ template <class I_t>
 void thorup_E(std::multimap<unsigned int, unsigned int> &M, const I_t &I)
 {
   typedef typename boost::graph_traits<I_t>::adjacency_iterator adjacency_iter_t;
-  typedef typename boost::graph_traits<I_t>::vertex_iterator vertex_iter_t;
   typedef typename boost::property_map<I_t, boost::vertex_index_t>::type index_map;
   index_map index = boost::get(boost::vertex_index, I);
 
@@ -404,9 +403,12 @@ void nicify_diffs_more(T_t &T, typename boost::graph_traits<T_t>::vertex_descrip
           typename boost::graph_traits<T_t>::vertex_descriptor d = boost::add_vertex(T);
           T[d].bag = T[t].bag;
           T[d].bag.erase(T[d].bag.begin());
+          T[d].weight = 0;
           boost::add_edge(t, d, T);
           nicify_diffs_more(T, t);
         }
+      else
+        T[t].weight = 0;
       return;
     case 1:
       break;
@@ -415,6 +417,7 @@ void nicify_diffs_more(T_t &T, typename boost::graph_traits<T_t>::vertex_descrip
       c1 = *c;
       nicify_diffs_more(T, c0);
       nicify_diffs_more(T, c1);
+      T[t].weight = std::min(T[c0].weight, T[c1].weight) + 1;
       return;
     default:
       std::cerr << "nicify_diffs_more error.\n";
@@ -430,6 +433,7 @@ void nicify_diffs_more(T_t &T, typename boost::graph_traits<T_t>::vertex_descrip
   if (t_size <= c0_size + 1 && t_size + 1 >= c0_size)
     {
       nicify_diffs_more(T, c0);
+      T[t].weight = T[c0].weight;
       return;
     }
 

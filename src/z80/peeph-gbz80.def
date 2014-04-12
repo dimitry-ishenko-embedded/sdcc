@@ -22,7 +22,7 @@
 // Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 replace restart {
-	ld	%1,%1
+	ld	%1, %1
 } by {
 	; peephole 1 removed redundant load.
 } if notVolatile(%1)
@@ -194,16 +194,6 @@ replace restart {
 	and	a,%1
 	ld	%2,%4
 } if notVolatile(%2), notSame(%1 %2)
-
-replace restart {
-	ld	%1,a
-	ld	a,%2
-	or	a,%1
-} by {
-	ld	%1,a
-	or	a,%2
-	; peephole 17 removed load by reordering or arguments.
-} if notVolatile(%1)
 
 replace restart {
 	ld	%1,a
@@ -1084,26 +1074,26 @@ replace restart {
 } by {
 	ret
 	; peephole 151 replaced jump by return.
-} if labelIsReturnOnly(), labelRefCountChange(%5 -1)
+} if labelIsReturnOnly(%5), labelRefCountChange(%5 -1)
 
 replace restart {
 	jp	%1,%5
 } by {
 	ret	%1
 	; peephole 152 replaced jump by return.
-} if labelIsReturnOnly(), labelRefCountChange(%5 -1)
+} if labelIsReturnOnly(%5), labelRefCountChange(%5 -1)
 
 replace {
 	jp	%5
 } by {
 	jr	%5
 	; peephole 153 changed absolute to relative unconditional jump.
-} if labelInRange()
+} if labelInRange(%5)
 
 replace {
 	jp	%1,%5
 } by {
 	jr	%1,%5
 	; peephole 154 changed absolute to relative conditional jump.
-} if labelInRange()
+} if labelInRange(%5)
 
