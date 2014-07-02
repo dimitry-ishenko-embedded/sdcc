@@ -1,10 +1,11 @@
 #!/usr/bin/make -f
 
 export DH_VERBOSE=1
-export DEB_BUILD_HARDENING=1
 
-DPKG_EXPORT_BUILDFLAGS = 1
-include /usr/share/dpkg/buildflags.mk
+export CPPFLAGS=$(shell dpkg-buildflags --get CPPFLAGS)
+export CFLAGS=$(shell dpkg-buildflags --get CFLAGS)
+export CXXFLAGS=$(shell dpkg-buildflags --get CXXFLAGS)
+export LDFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
 
 # These are used for cross-compiling and for saving the configure script
 # from having to guess our platform (since we know it already)
@@ -84,13 +85,15 @@ configure-stamp:
 	mkdir -p $(CURDIR)/build
 	cp /usr/share/misc/config.sub sim/ucsim/config.sub
 	cp /usr/share/misc/config.guess sim/ucsim/config.guess
+	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
 		--build=$(DEB_BUILD_GNU_TYPE) \
 		--disable-non-free \
 		--disable-pic14-port \
 		--disable-pic16-port \
-		--prefix=/usr
+		--prefix=/usr \
+
 	touch $@
 
 build: build-arch build-indep
@@ -142,6 +145,12 @@ install-arch: build-arch
 	dh_installdirs 
 	dh_prep
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdld6808
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdld6808
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldz80
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldz80
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldgb
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldgb
 
 	# Remove empty dirs:
 	find $(CURDIR)/debian/tmp -type d -empty -delete

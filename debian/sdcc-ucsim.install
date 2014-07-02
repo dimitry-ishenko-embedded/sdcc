@@ -1,7 +1,10 @@
 usr/bin/s51
+usr/bin/sdar
 usr/bin/savr
 usr/bin/shc08
 usr/bin/sdcdb
+usr/bin/sst7
+usr/bin/sstm8
 usr/bin/sz80
 usr/bin/*.el usr/share/emacs/site-lisp/sdcc-ucsim/
 usr/share/doc/ucsim/*.html usr/share/doc/sdcc-ucsim/

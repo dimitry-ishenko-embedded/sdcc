@@ -1,3 +1,14 @@
+sdcc (3.4.0+dfsg-2) unstable; urgency=medium
+
+  * Add patch 03_fix_compilation (Closes: #752972, #752071)
+  * Update hardening
+  * Replace sdld6808, sdldz80 and sdldgb by a symbolic link to sdld.
+    It was the same file eariler 
+  * Added a few missing binaries to package
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Wed, 02 Jul 2014 22:41:35 +0000
+
+
 sdcc (3.4.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release (Closes: #699842,#746906)
