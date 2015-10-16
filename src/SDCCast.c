@@ -27,6 +27,7 @@
 #include "common.h"
 #include "dbuf_string.h"
 #include "SDCCbtree.h"
+#include "SDCCset.h"
 
 int currLineno = 0;
 set *astList = NULL;
@@ -66,7 +67,7 @@ static struct
 int noLineno = 0;
 int noAlloc = 0;
 symbol *currFunc = NULL;
-static ast *createIval (ast *, sym_link *, initList *, ast *, ast *);
+static ast *createIval (ast *, sym_link *, initList *, ast *, ast *, int);
 static ast *createIvalCharPtr (ast *, sym_link *, ast *, ast *);
 static ast *optimizeCompare (ast *);
 ast *optimizeRRCRLC (ast *);
@@ -224,10 +225,22 @@ copyAstValues (ast * dest, ast * src)
 ast *
 copyAst (ast * src)
 {
-  ast *dest;
+  ast *dest = NULL;
+  static long level = -1;
+  static set *pset;
 
   if (!src)
     return NULL;
+
+  if (++level == 0)
+    if ((pset = newSet ()) == NULL)
+      goto exit_1;
+
+  /* check if it is a infinate recursive call */
+  if (isinSet (pset, src))
+    goto exit_1;
+  else
+    addSet (&pset, src);
 
   dest = Safe_alloc (sizeof (ast));
 
@@ -265,7 +278,14 @@ copyAst (ast * src)
   dest->falseLabel = copySymbol (src->falseLabel);
   dest->left = copyAst (src->left);
   dest->right = copyAst (src->right);
+
 exit:
+  if (pset != NULL && isinSet (pset, src))
+    deleteSetItem (&pset, src);
+exit_1:
+  if (level-- == 0)
+    if (pset != NULL)
+      deleteSet (&pset);
   return dest;
 }
 
@@ -1080,6 +1100,8 @@ findStructField (symbol *fields, symbol *target)
   return NULL; /* not found */
 }
 
+static int aggregateIsAutoVar = 0;
+
 /*-----------------------------------------------------------------*/
 /* createIvalStruct - generates initial value for structures       */
 /*-----------------------------------------------------------------*/
@@ -1088,7 +1110,7 @@ createIvalStruct (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
 {
   ast *rast = NULL;
   ast *lAst;
-  symbol *sflds;
+  symbol *sflds, *old_sflds, *ps;
   initList *iloop;
   sym_link *etype = getSpec (type);
 
@@ -1106,6 +1128,7 @@ createIvalStruct (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
       if (sflds && IS_BITFIELD (sflds->type) && SPEC_BUNNAMED (sflds->etype))
         continue;
 
+      old_sflds = sflds;
       /* designated initializer? */
       if (iloop && iloop->designation)
         {
@@ -1139,11 +1162,20 @@ createIvalStruct (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
       if (!iloop && (!AST_SYMBOL (rootValue)->islocal || SPEC_STAT (etype)))
         break;
 
+      if (aggregateIsAutoVar)
+        for (ps = old_sflds; ps != sflds && ps != NULL; ps = ps->next)
+          {
+            ps->implicit = 1;
+            lAst = newNode (PTR_OP, newNode ('&', sym, NULL), newAst_VALUE (symbolVal (ps)));
+            lAst = decorateType (resolveSymbols (lAst), RESULT_TYPE_NONE);
+            rast = decorateType (resolveSymbols (createIval (lAst, ps->type, NULL, rast, rootValue, 1)), RESULT_TYPE_NONE);          
+          }
+
       /* initialize this field */
       sflds->implicit = 1;
       lAst = newNode (PTR_OP, newNode ('&', sym, NULL), newAst_VALUE (symbolVal (sflds)));
       lAst = decorateType (resolveSymbols (lAst), RESULT_TYPE_NONE);
-      rast = decorateType (resolveSymbols (createIval (lAst, sflds->type, iloop, rast, rootValue)), RESULT_TYPE_NONE);
+      rast = decorateType (resolveSymbols (createIval (lAst, sflds->type, iloop, rast, rootValue, 1)), RESULT_TYPE_NONE);
       iloop = iloop ? iloop->next : NULL;
     }
 
@@ -1174,13 +1206,21 @@ createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
   /* take care of the special   case  */
   /* array of characters can be init  */
   /* by a string                      */
+  /* char *p = "abc";                 */
   if (IS_CHAR (type->next) &&
       ilist && ilist->type == INIT_NODE)
     if ((rast = createIvalCharPtr (sym,
                                    type,
                                    decorateType (resolveSymbols (list2expr (ilist)), RESULT_TYPE_NONE),
                                    rootValue)))
-
+      return decorateType (resolveSymbols (rast), RESULT_TYPE_NONE);
+  /* char *p = {"abc"}; */
+  if (IS_CHAR (type->next) &&
+      ilist && ilist->type == INIT_DEEP && ilist->init.deep && ilist->init.deep->type == INIT_NODE)
+    if ((rast = createIvalCharPtr (sym,
+                                   type,
+                                   decorateType (resolveSymbols (list2expr (ilist->init.deep)), RESULT_TYPE_NONE),
+                                   rootValue)))
       return decorateType (resolveSymbols (rast), RESULT_TYPE_NONE);
 
   /* not the special case */
@@ -1222,8 +1262,7 @@ createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
       for (;;)
         {
           ast *aSym;
-
-          if (!iloop && ((lcnt && size >= lcnt) || !DCL_ELEM (type) || !AST_SYMBOL (rootValue)->islocal || SPEC_STAT (etype)))
+          if (!iloop && ((lcnt && size >= lcnt) || !DCL_ELEM (type) || !AST_SYMBOL (rootValue)->islocal))
             {
               break;
             }
@@ -1260,7 +1299,7 @@ createIvalArray (ast * sym, sym_link * type, initList * ilist, ast * rootValue)
 
           aSym = newNode ('[', sym, newAst_VALUE (valueFromLit ((float) (idx))));
           aSym = decorateType (resolveSymbols (aSym), RESULT_TYPE_NONE);
-          rast = createIval (aSym, type->next, iloop, rast, rootValue);
+          rast = createIval (aSym, type->next, iloop, rast, rootValue, 0);
           idx++;
           iloop = (iloop ? iloop->next : NULL);
         }
@@ -1351,6 +1390,16 @@ createIvalCharPtr (ast * sym, sym_link * type, ast * iexpr, ast * rootVal)
                                             newAst_VALUE (valueFromLit ((float) i))), newAst_VALUE (valueFromLit (*s++))));
         }
 
+      /* assign zero to others */
+      for (i = size; i < symsize; i++)
+        {
+          rast = newNode (NULLOP,
+                          rast,
+                          newNode ('=',
+                                   newNode ('[', sym,
+                                            newAst_VALUE (valueFromLit ((float) i))), newAst_VALUE (valueFromLit (0))));
+        }
+
       // now WE don't need iexpr's symbol anymore
       freeStringSymbol (AST_SYMBOL (iexpr));
 
@@ -1400,11 +1449,11 @@ createIvalPtr (ast * sym, sym_link * type, initList * ilist, ast * rootVal)
 /* createIval - generates code for initial value                   */
 /*-----------------------------------------------------------------*/
 static ast *
-createIval (ast * sym, sym_link * type, initList * ilist, ast * wid, ast * rootValue)
+createIval (ast * sym, sym_link * type, initList * ilist, ast * wid, ast * rootValue, int omitStatic)
 {
   ast *rast = NULL;
 
-  if (!ilist && (!AST_SYMBOL (rootValue)->islocal || SPEC_STAT (getSpec (type))))
+  if (!ilist && (!AST_SYMBOL (rootValue)->islocal || (omitStatic && SPEC_STAT (getSpec (type)))))
     return NULL;
 
   /* if structure then    */
@@ -1436,7 +1485,7 @@ ast *
 initAggregates (symbol * sym, initList * ival, ast * wid)
 {
   ast *newAst = newAst_VALUE (symbolVal (sym));
-  return createIval (newAst, sym->type, ival, wid, newAst);
+  return createIval (newAst, sym->type, ival, wid, newAst, 1);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1526,7 +1575,9 @@ gatherAutoInit (symbol * autoChain)
 
           if (IS_AGGREGATE (sym->type))
             {
+              aggregateIsAutoVar = 1;
               work = initAggregates (sym, sym->ival, NULL);
+              aggregateIsAutoVar = 0;
             }
           else
             {
@@ -1789,7 +1840,7 @@ constExprValue (ast * cexpr, int check)
       /* if we are casting a literal value then */
       if (IS_CAST_OP (cexpr) && IS_LITERAL (cexpr->right->ftype))
         {
-          return valCastLiteral (cexpr->ftype, floatFromVal (cexpr->right->opval.val));
+          return valCastLiteral (cexpr->ftype, floatFromVal (cexpr->right->opval.val), ullFromVal (cexpr->right->opval.val));
         }
 
       if (IS_AST_VALUE (cexpr))
@@ -2592,6 +2643,7 @@ addCast (ast * tree, RESULT_TYPE resultType, bool promote)
       newLink = newCharLink ();
       break;
     case RESULT_TYPE_INT:
+    case RESULT_TYPE_GPTR:
 #if 0
       if (getSize (tree->etype) > INTSIZE)
         {
@@ -2696,7 +2748,7 @@ getLeftResultType (ast * tree, RESULT_TYPE resultType)
     case '[':
       if (!IS_ARRAY (LTYPE (tree)))
         return resultType;
-      if (DCL_ELEM (LTYPE (tree)) > 0 && DCL_ELEM (LTYPE (tree)) <= 255)
+      if (DCL_ELEM (LTYPE (tree)) > 0 && getSize (tree->left->ftype) < 256)
         return RESULT_TYPE_CHAR;
       return resultType;
     default:
@@ -4215,8 +4267,8 @@ decorateType (ast * tree, RESULT_TYPE resultType)
           if (tree->opval.op == LEFT_OP || (tree->opval.op == RIGHT_OP && SPEC_USIGN (LETYPE (tree))))
             {
               werrorfl (tree->filename, tree->lineno, W_SHIFT_CHANGED, (tree->opval.op == LEFT_OP ? "left" : "right"));
-	      /* Change shift op to comma op and replace the right operand with 0. */
-	      /* This preserves the left operand in case there were side-effects. */
+              /* Change shift op to comma op and replace the right operand with 0. */
+              /* This preserves the left operand in case there were side-effects. */
               tree->opval.op = ',';
               tree->right->opval.val = constCharVal (0);
               TETYPE (tree) = TTYPE (tree) = tree->right->opval.val->type;
@@ -4395,7 +4447,7 @@ decorateType (ast * tree, RESULT_TYPE resultType)
           if (!IS_PTR (LTYPE (tree)))
             {
               tree->type = EX_VALUE;
-              tree->opval.val = valCastLiteral (LTYPE (tree), floatFromVal (valFromType (RTYPE (tree))));
+              tree->opval.val = valCastLiteral (LTYPE (tree), floatFromVal (valFromType (RTYPE (tree))), ullFromVal (valFromType (RTYPE (tree))));
               TTYPE (tree) = tree->opval.val->type;
               tree->left = NULL;
               tree->right = NULL;
@@ -4427,7 +4479,7 @@ decorateType (ast * tree, RESULT_TYPE resultType)
               checkPtrCast (LTYPE (tree), RTYPE (tree), tree->values.cast.implicitCast);
               LRVAL (tree) = 1;
               tree->type = EX_VALUE;
-              tree->opval.val = valCastLiteral (LTYPE (tree), gpVal | pVal);
+              tree->opval.val = valCastLiteral (LTYPE (tree), gpVal | pVal, gpVal | pVal);
               TTYPE (tree) = tree->opval.val->type;
               tree->left = NULL;
               tree->right = NULL;
@@ -6969,6 +7021,9 @@ createFunction (symbol * name, ast * body)
   if (IFFUNC_ISREENT (name->type))
     reentrant++;
 
+  if (FUNC_ISINLINE (name->type) && FUNC_ISNAKED (name->type))
+    werrorfl (name->fileDef, name->lineDef, W_INLINE_NAKED, name->name);
+
   inlineState.count = 0;
   expandInlineFuncs (body, NULL);
 
@@ -7186,11 +7241,25 @@ ast_print (ast * tree, FILE * outfile, int indent)
       if (IS_LITERAL (tree->opval.val->etype))
         {
           fprintf (outfile, "CONSTANT (%p) value = ", tree);
-          if (SPEC_USIGN (tree->opval.val->etype))
-            fprintf (outfile, "%u", (TYPE_TARGET_ULONG) ulFromVal (tree->opval.val));
+          if (SPEC_LONGLONG (tree->opval.val->etype))
+            {
+              unsigned long long ull = ullFromVal (tree->opval.val);
+
+              if (SPEC_USIGN (tree->opval.val->etype))
+                fprintf (outfile, "%llu, 0x%llx", ull, ull);
+              else
+                fprintf (outfile, "%lld, 0x%llx", (signed long long) ull, ull);
+            }
           else
-            fprintf (outfile, "%d", (TYPE_TARGET_LONG) ulFromVal (tree->opval.val));
-          fprintf (outfile, ", 0x%x, %f", (TYPE_TARGET_ULONG) ulFromVal (tree->opval.val), floatFromVal (tree->opval.val));
+            {
+              unsigned long ul = ulFromVal (tree->opval.val);
+
+              if (SPEC_USIGN (tree->opval.val->etype))
+                fprintf (outfile, "%lu", ul);
+              else
+                fprintf (outfile, "%ld", (signed long) ul);
+              fprintf (outfile, ", 0x%lx, %f", ul, floatFromVal (tree->opval.val));
+            }
         }
       else if (tree->opval.val->sym)
         {

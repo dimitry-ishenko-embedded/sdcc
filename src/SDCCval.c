@@ -263,7 +263,7 @@ list2int (initList * val)
 /* list2val - converts the first element of the list to value       */
 /*------------------------------------------------------------------*/
 value *
-list2val (initList * val)
+list2val (initList * val, int check)
 {
   if (!val)
     return NULL;
@@ -272,9 +272,12 @@ list2val (initList * val)
     return NULL;
 
   if (val->type == INIT_DEEP)
-    return list2val (val->init.deep);
+    return list2val (val->init.deep, check);
 
-  return constExprValue (val->init.node, TRUE);
+  if (val->type == INIT_NODE && val->init.node->opval.op == CAST)
+    return constExprValue (val->init.node->right, check);
+
+  return constExprValue (val->init.node, check);
 }
 
 /*------------------------------------------------------------------*/
@@ -749,7 +752,8 @@ checkConstantRange (sym_link * var, sym_link * lit, int op, bool exchangeLeftRig
       if (IS_BOOLEAN (var))
         return CCR_OK;
 
-      if (getenv ("SDCC_VERY_PEDANTIC"))
+      if (1) // Though the else branch is dead, I still would like to keep it.
+      //if (getenv ("SDCC_VERY_PEDANTIC"))
         {
           if (SPEC_USIGN (var))
             {
@@ -1170,7 +1174,6 @@ constVal (const char *s)
     {
       SPEC_NOUN (val->type) = V_INT;
       SPEC_LONGLONG (val->type) = 1;
-      werror (W_LONGLONG_LITERAL, p);
       p2 += 2;
       if (strchr (p2, 'l') || strchr (p2, 'L'))
         werror (E_INTEGERSUFFIX, p); 
@@ -1279,6 +1282,8 @@ constVal (const char *s)
 
   if (SPEC_LONGLONG (val->type))
     {
+      if (dval > 2147483648.0 || dval < -2147483648.0)
+        werror (W_LONGLONG_LITERAL, p);
       if (SPEC_USIGN (val->type))
         {
           SPEC_CVAL (val->type).v_ulonglong = (TYPE_TARGET_ULONGLONG) llval;
@@ -1778,7 +1783,7 @@ byteOfVal (value * val, int offset)
 }
 
 /*------------------------------------------------------------------*/
-/* ullFromLit - literal to unsigned long conversion                 */
+/* ullFromLit - literal to unsigned long long conversion            */
 /*------------------------------------------------------------------*/
 TYPE_TARGET_ULONGLONG
 ullFromLit (sym_link * lit)
@@ -1852,7 +1857,7 @@ ullFromLit (sym_link * lit)
 }
 
 /*------------------------------------------------------------------*/
-/* ullFromVal - value to unsigned long conversion                   */
+/* ullFromVal - value to unsigned long long conversion              */
 /*------------------------------------------------------------------*/
 TYPE_TARGET_ULONGLONG
 ullFromVal (value * val)
@@ -2584,7 +2589,7 @@ valLogicAndOr (value * lval, value * rval, int op)
 /* valCastLiteral - casts a literal value to another type           */
 /*------------------------------------------------------------------*/
 value *
-valCastLiteral (sym_link * dtype, double fval)
+valCastLiteral (sym_link * dtype, double fval, TYPE_TARGET_ULONGLONG llval)
 {
   value *val;
   unsigned long l = double2ul (fval);
@@ -2645,9 +2650,9 @@ valCastLiteral (sym_link * dtype, double fval)
       if (SPEC_LONGLONG (val->etype))
         {
           if (SPEC_USIGN (val->etype))
-            SPEC_CVAL (val->etype).v_ulonglong = (TYPE_TARGET_ULONGLONG) l;
+            SPEC_CVAL (val->etype).v_ulonglong = (TYPE_TARGET_ULONGLONG) llval;
           else
-            SPEC_CVAL (val->etype).v_longlong = (TYPE_TARGET_LONGLONG) l;
+            SPEC_CVAL (val->etype).v_longlong = (TYPE_TARGET_LONGLONG) llval;
         }
       else if (SPEC_LONG (val->etype))
         {
@@ -2895,12 +2900,39 @@ valForStructElem (ast * structT, ast * elemT)
 {
   value *val, *lval = NULL;
   symbol *sym;
+  int idxoff = 0;
+  ast *sast = NULL;
 
   /* left could be further derefed */
   if (IS_AST_OP (structT))
     {
       if (structT->opval.op == '[')
         lval = valForArray (structT);
+      else if (structT->opval.op == '+')
+        {
+          if (IS_AST_LIT_VALUE (structT->right) && !IS_AST_OP (structT->left))
+            {
+              idxoff = (int) (AST_ULONG_VALUE (structT->right) * getSize (structT->left->ftype->next));
+              sast = structT->left;
+            }
+          else if (IS_AST_LIT_VALUE (structT->left) && !IS_AST_OP (structT->right))
+            {
+              idxoff = (int) (AST_ULONG_VALUE (structT->left) * getSize (structT->right->ftype->next));
+              sast = structT->right;
+            }
+          else
+            return NULL;
+        }
+      else if (structT->opval.op == '-')
+        {
+          if (IS_AST_LIT_VALUE (structT->right) && !IS_AST_OP (structT->left))
+            {
+              idxoff = 0 - (int) (AST_ULONG_VALUE (structT->right) * getSize (structT->left->ftype->next));
+              sast = structT->left;
+            }
+          else
+            return NULL;
+        }
       else if (structT->opval.op == '.')
         lval = valForStructElem (structT->left, structT->right);
       else if (structT->opval.op == PTR_OP)
@@ -2939,7 +2971,11 @@ valForStructElem (ast * structT, ast * elemT)
     }
   else
     {
-      SNPRINTF (val->name, sizeof (val->name), "(%s + %d)", AST_SYMBOL (structT)->rname, (int) sym->offset);
+      if (sast)
+        SNPRINTF (val->name, sizeof (val->name), "(%s + (%d))", AST_SYMBOL (sast)->rname, ((int) sym->offset) + idxoff);
+      else
+        SNPRINTF (val->name, sizeof (val->name), "(%s + %d)", AST_SYMBOL (structT)->rname, (int) sym->offset);
+
       if (SPEC_SCLS (structT->etype) == S_CODE)
         DCL_TYPE (val->type) = CPOINTER;
       else if (SPEC_SCLS (structT->etype) == S_XDATA)

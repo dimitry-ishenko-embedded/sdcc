@@ -51,9 +51,11 @@ static void add_operand_conflicts_in_node(const cfg_node &n, I_t &I)
 	
   if(!result || !IS_SYMOP(result))
     return;
-    
-  // Todo: Identify more operations that code generation can always handle and exclude them (as done for the z80-like ports).
-  if (ic->op == '=')
+
+  // Todo: More fine-grained control for these.
+  if (!(ic->op == '+' || ic->op == '-' || ic->op == UNARYMINUS && !IS_FLOAT (operandType (left)) || ic->op == '~' ||
+    ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND ||
+    ic->op == GET_VALUE_AT_ADDRESS))
     return;
 
   operand_map_t::const_iterator oir, oir_end, oirs; 
@@ -177,13 +179,20 @@ static void set_surviving_regs(const assignment &a, unsigned short int i, const 
 {
   iCode *ic = G[i].ic;
   
+  ic->rMask = newBitVect(port->num_regs);
   ic->rSurv = newBitVect(port->num_regs);
   
   std::set<var_t>::const_iterator v, v_end;
   for (v = G[i].alive.begin(), v_end = G[i].alive.end(); v != v_end; ++v)
-    if(a.global[*v] >= 0 && G[i].dying.find(*v) == G[i].dying.end())
-      if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
-        ic->rSurv = bitVectSetBit(ic->rSurv, a.global[*v]);
+    {
+      if(a.global[*v] < 0)
+        continue;
+      ic->rMask = bitVectSetBit(ic->rMask, a.global[*v]);
+
+      if(G[i].dying.find(*v) == G[i].dying.end())
+        if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
+          ic->rSurv = bitVectSetBit(ic->rSurv, a.global[*v]);
+    }
 }
 
 template<class G_t>
@@ -192,6 +201,7 @@ static void unset_surviving_regs(unsigned short int i, const G_t &G)
   iCode *ic = G[i].ic;
   
   freeBitVect(ic->rSurv);
+  freeBitVect(ic->rMask);
 }
 
 template <class G_t, class I_t>
@@ -449,10 +459,27 @@ static float rough_cost_estimate(const assignment &a, unsigned short int i, cons
 // Code for another ic is generated when generating this one. Mark the other as generated.
 static void extra_ic_generated(iCode *ic)
 {
+  int i;
+
   if(ic->op == '>' || ic->op == '<' || ic->op == LE_OP || ic->op == GE_OP || ic->op == EQ_OP || ic->op == NE_OP ||
-    ic->op == BITWISEAND && (IS_OP_LITERAL (IC_LEFT (ic)) || IS_OP_LITERAL (IC_RIGHT (ic)) && getSize(operandType(IC_RESULT(ic))) == 1))
+    ic->op == BITWISEAND && (IS_OP_LITERAL (IC_LEFT (ic)) || IS_OP_LITERAL (IC_RIGHT (ic))))
     {
       iCode *ifx;
+
+      // Bitwise and code generation can only do the jump if one operand is a literal with at most one nonzero byte.
+      if (ic->op == BITWISEAND && getSize(operandType(IC_RESULT(ic))) > 1)
+        {
+          int nonzero = 0;
+          operand *const litop = IS_OP_LITERAL (IC_LEFT (ic)) ? IC_LEFT (ic) : IC_RIGHT (ic);
+
+          for(int i = 0; i < getSize(operandType(IC_LEFT (ic))) && i < getSize(operandType(IC_RIGHT (ic))) && i < getSize(operandType(IC_RESULT(ic))); i++)
+            if(byteOfVal (OP_VALUE (litop), i))
+              nonzero++;
+
+          if(nonzero > 1)
+            return;
+        }
+
       if (ifx = ifxForOp (IC_RESULT (ic), ic))
         {
           OP_SYMBOL (IC_RESULT (ic))->for_newralloc = false;

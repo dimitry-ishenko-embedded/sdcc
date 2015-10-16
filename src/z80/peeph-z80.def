@@ -1596,7 +1596,7 @@ replace restart {
 	pop	ix
 	jp	%1
 	; peephole115 replaced call at end of function by jump moving call beyond pop ix (tail call optimization).
-}
+} if symmParmStack(%1)
 
 replace restart {
 	ld	%1,#%2
@@ -1914,6 +1914,15 @@ replace restart {
 	jp	M,%2
 	; peephole 141 used sign flag instead of testing bit 7.
 }
+
+replace restart {
+	dec %1
+	ld	a, %1
+	or	a, a
+} by {
+	dec %1
+	; peephole 141a removed redundant transfer and flag setting in a
+} if notUsed('a')
 
 replace restart {
 	ld	%1,a
@@ -2244,6 +2253,9 @@ replace restart {
 	; peephole 152 replaced jump by return.
 } if labelIsReturnOnly(%5), labelRefCountChange(%5 -1)
 
+// Replace jp by ret before replacing jp by jr outside of jump tables, since using ret can reduce the number of references to jump labels.
+barrier
+
 replace {
 	jp	%5
 } by {
@@ -2278,4 +2290,12 @@ replace {
 	jr	NC,%5
 	; peephole 157 changed absolute to relative conditional jump.
 } if labelInRange(%5)
+
+replace {
+	dec b
+	jr	NZ,	%5	
+} by {
+	djnz	%5
+	; peephole 156 used djnz
+}
 

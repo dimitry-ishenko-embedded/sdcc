@@ -29,7 +29,9 @@
 #include "dbuf.h"
 
 #define INTNO_MAX 255           /* maximum allowed interrupt number */
+#define INTNO_TRAP INTNO_MAX
 #define INTNO_UNSPEC (INTNO_MAX+1)      /* interrupt number unspecified */
+
 
 #define BITVAR_PAD -1
 
@@ -267,6 +269,8 @@ typedef struct sym_link
     unsigned inlinereq:1;           /* inlining requested                   */
     unsigned noreturn:1;            /* promised not to return               */
     unsigned smallc:1;              /* Parameters on stack are passed in reverse order */
+    unsigned z88dk_fastcall:1;      /* For the z80-related ports: Function has a single paramter of at most 32 bits that is passed in dehl */
+    unsigned z88dk_callee:1;        /* Stack pointer adjustment for parameters passed on the stack is done by the callee */
     unsigned intno;                 /* 1=Interrupt service routine          */
     short regbank;                  /* register bank 2b used                */
     unsigned builtin;               /* is a builtin function                */
@@ -442,6 +446,10 @@ extern sym_link *validateLink (sym_link * l,
 #define IFFUNC_ISOVERLAY(x) (IS_FUNC(x) && FUNC_ISOVERLAY(x))
 #define FUNC_ISSMALLC(x) (x->funcAttrs.smallc)
 #define IFFUNC_ISSMALLC(x) (IS_FUNC(x) && FUNC_ISSMALLC(x))
+#define FUNC_ISZ88DK_FASTCALL(x) (x->funcAttrs.z88dk_fastcall)
+#define IFFUNC_ISZ88DK_FASTCALL(x) (IS_FUNC(x) && FUNC_ISZ88DK_FASTCALL(x))
+#define FUNC_ISZ88DK_CALLEE(x) (x->funcAttrs.z88dk_callee)
+#define IFFUNC_ISZ88DK_CALLEE(x) (IS_FUNC(x) && FUNC_ISZ88DK_CALLEE(x))
 
 #define BANKED_FUNCTIONS        ( options.model == MODEL_HUGE || \
                                   ( (options.model == MODEL_LARGE || options.model == MODEL_MEDIUM) && \
@@ -454,6 +462,7 @@ extern sym_link *validateLink (sym_link * l,
 #define SPEC_LONGLONG(x) validateLink(x, "SPEC_LONGLONG", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_longlong
 #define SPEC_SHORT(x) validateLink(x, "SPEC_LONG", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_short
 #define SPEC_USIGN(x) validateLink(x, "SPEC_USIGN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_unsigned
+#define SPEC_SIGN(x) validateLink(x, "SPEC_USIGN", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_signed
 #define SPEC_SCLS(x) validateLink(x, "SPEC_SCLS", #x, SPECIFIER, __FILE__, __LINE__)->select.s.sclass
 #define SPEC_ENUM(x) validateLink(x, "SPEC_ENUM", #x, SPECIFIER, __FILE__, __LINE__)->select.s.b_isenum
 #define SPEC_OCLS(x) validateLink(x, "SPEC_OCLS", #x, SPECIFIER, __FILE__, __LINE__)->select.s.oclass

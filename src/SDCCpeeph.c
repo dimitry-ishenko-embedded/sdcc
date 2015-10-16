@@ -203,6 +203,7 @@ FBYNAME (labelInRange)
          -127 to + 127 bytes, for Z80 -126 to +129 bytes.*/
       dist = (pcDistance (currPl, lbl, TRUE) +
               pcDistance (currPl, lbl, FALSE));
+
       /* Use 125 for now. Could be made more exact using port and
          exact jump location instead of currPl. */
       if (!dist || dist > 127)
@@ -1108,6 +1109,53 @@ FBYNAME (operandsNotRelated)
 }
 
 /*-----------------------------------------------------------------*/
+/* notSimilar - Check, if one is another's substring               */
+/*-----------------------------------------------------------------*/
+FBYNAME (notSimilar)
+{
+  set *operands;
+  const char *op1, *op2;
+
+  operands = setFromConditionArgs (cmdLine, vars);
+
+  if (!operands)
+    {
+      fprintf (stderr,
+               "*** internal error: notSame peephole restriction"
+               " malformed: %s\n", cmdLine);
+      return FALSE;
+    }
+
+  while ((op1 = setFirstItem (operands)))
+    {
+      deleteSetItem (&operands, (void*)op1);
+
+      for (op2 = setFirstItem (operands); op2; op2 = setNextItem (operands))
+        {
+          if ((strstr (op1, op2) || strstr (op2, op1)) && strcmp (op1, op2) == 0)
+            {
+              deleteSet (&operands);
+              return FALSE;
+            }
+        }
+    }
+
+  deleteSet (&operands);
+  return TRUE;
+}
+
+/*-----------------------------------------------------------------*/
+/* symmParmStack - Caller readjusts stack by the number of bytes
+   that were pushed in all calls to this function                  */
+/*-----------------------------------------------------------------*/
+FBYNAME (symmParmStack)
+{
+  if (port->peep.symmParmStack)
+    return port->peep.symmParmStack();
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
 /* notSame - Check, that arguments are pairwise not the same       */
 /*-----------------------------------------------------------------*/
 FBYNAME (notSame)
@@ -1173,6 +1221,161 @@ FBYNAME (operandsLiteral)
 
   deleteSet (&operands);
   return TRUE;
+}
+
+static long *
+immdGet (const char *pc, long *pl)
+{
+  long s = 1;
+
+  if (!pc || !pl)
+    return NULL;
+
+  // omit space
+  for (; ISCHARSPACE (*pc); pc++);
+  // parse sign
+  for (; !ISCHARDIGIT (*pc); pc++)
+    if (*pc == '-')
+      s *= -1;
+  else if (*pc == '+')
+      s *= +1;
+  else
+    return NULL;
+
+  if (pc[0] == '0' && (pc[1] == 'x' || pc[1] == 'X'))
+    {
+      if (sscanf (pc + 2, "%lx", pl) != 1)
+        return NULL;
+    }
+  else
+    {
+      if (sscanf (pc, "%ld", pl) != 1)
+        return NULL;
+    }
+
+  *pl *= s;
+  return pl;
+}
+
+static bool
+immdError (const char *info, const char *param, const char *cmd)
+{
+  fprintf (stderr, "*** internal error: immdInRange gets "
+           "%s: \"%s\" in \"%s\"\n", info, param, cmd);
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
+/* immdInRange - returns true if the sum or difference of two      */
+/* immediates is in a give range.                                  */
+/*-----------------------------------------------------------------*/
+FBYNAME (immdInRange)
+{
+  char r[64], operator[8];
+  const char *op;
+  long i, j, k, h, low, high, left_l, right_l, order;
+  const char *padd[] = {"+", "'+'", "\"+\"", "add", "'add'", "\"add\""};
+  const char *psub[] = {"-", "'-'", "\"-\"", "sub", "'sub'", "\"sub\""};
+
+  for (i = order = 0; order < 6;)
+    {
+      // pick up one parameter in the temp buffer r[64]
+      for (; ISCHARSPACE (cmdLine[i]) && cmdLine[i]; i++);
+      for (j = i; !ISCHARSPACE (cmdLine[j]) && cmdLine[j]; j++);
+      if (!cmdLine[i]) // unexpected end
+        return immdError ("no enough input", "", cmdLine);
+      else
+        {
+          for (k = i; k < j; k++)
+            r[k - i] = cmdLine[k];
+          r[j - i] = 0;
+        }
+      // parse the string by order
+      switch (order)
+        {
+          case 0: // lower bound
+            if (!immdGet (r, &low))
+              return immdError ("bad lower bound", r, cmdLine);
+            break;
+          case 1: // upper bound
+            if (!immdGet (r, &high))
+              return immdError ("bad upper bound", r, cmdLine);
+            break;
+          case 2: // operator
+            if (sscanf (r, "%s", operator) != 1)
+              return immdError ("bad operator", r, cmdLine);
+            break;
+          case 3: // left operand
+            if (immdGet (r, &left_l)) // the left operand is given directly
+              {
+              }
+            else if (r[0] == '%') // the left operand is passed via pattern match
+              {
+                if (!immdGet (r + 1, &k) || !(op = hTabItemWithKey (vars, (int) k)))
+                  return immdError ("bad left operand", r, cmdLine);
+                else if (!immdGet (op, &left_l))
+                  return immdError ("bad left operand", op, r);
+              }
+            else
+              return immdError ("bad left operand", r, cmdLine);
+            break;
+          case 4: // right operand
+            if (immdGet (r, &right_l)) // the right operand is given directly
+              {
+              }
+            else if (r[0] == '%') // the right operand is passed via pattern match
+              {
+                if (!immdGet (r + 1, &k) || !(op = hTabItemWithKey (vars, (int) k)))
+                  return immdError ("bad right operand", r, cmdLine);
+                else if (!immdGet (op, &right_l))
+                  return immdError ("bad right operand", op, r);
+              }
+            else
+              return immdError ("bad right operand", r, cmdLine);
+            break;
+          case 5: // result
+            if (r[0] != '%' || !immdGet (r + 1, &h))
+              return immdError ("bad result container", r, cmdLine);
+            break;
+          default: // should not reach
+            return immdError ("unexpected input", "", cmdLine);
+            break;
+        }
+      order++;
+      i = j;
+    }
+
+  // calculate
+  for (j = k = 0; k < sizeof (padd) / sizeof (padd[0]); k++) // add
+    if (strcmp (operator, padd[k]) == 0)
+      {
+        i = left_l + right_l;
+        j = 1;
+        break;
+      }
+  if (!j)
+    for (k = 0; k < sizeof (psub) / sizeof (psub[0]); k++) // sub
+      if (strcmp (operator, psub[k]) == 0)
+        {
+          i = left_l - right_l;
+          j = 1;
+          break;
+        }
+  if (!j)
+    return immdError ("bad operator", operator, cmdLine);
+
+  // bind the result
+  if ((low <= i && i <= high) || (high <= i && i <= low))
+    {
+      char *p[] = {r, NULL};
+      sprintf (r, "%ld", i);
+      bindVar ((int) h, p, &vars);
+      return TRUE;
+    }
+  else
+    {
+      return FALSE;
+    }
 }
 
 static const struct ftab
@@ -1241,7 +1444,16 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "okToRemoveSLOC", okToRemoveSLOC                // 0
-  }
+  },
+  {
+    "immdInRange", immdInRange
+  },
+  {
+    "notSimilar", notSimilar
+  },
+  {
+    "symmParmStack", symmParmStack
+  },
 };
 
 /*-----------------------------------------------------------------*/

@@ -557,7 +557,7 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
       operand *const litop = IS_OP_LITERAL(left) ? IC_LEFT(ic) : IC_RIGHT(ic);
       for(unsigned int i = 0; i < getSize(operandType(result)); i++)
         {
-          unsigned char byte = (ulFromVal (OP_VALUE (litop)) >> (i * 8) & 0xff);
+          unsigned char byte = byteOfVal (OP_VALUE (litop), i);
           if (byte != 0x00 && byte != 0x01 && byte != 0x02 && byte != 0x04 && byte != 0x08 && byte != 0x10 && byte != 0x20 && byte != 0x40 && byte != 0x80)
             goto nobit;
         }
@@ -730,7 +730,7 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     }
 #endif
 
-  if(ic->op == RETURN || ic->op == SEND)
+  if(ic->op == RETURN || ic->op == SEND || ic->op == RECEIVE)
     return(true);
 
   if((IS_GB || IY_RESERVED) && (IS_TRUE_SYMOP(left) || IS_TRUE_SYMOP(right)))
@@ -745,6 +745,10 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   if(exstk && (operand_on_stack(result, a, i, G) + operand_on_stack(left, a, i, G) + operand_on_stack(right, a, i, G) >= 2) && (result && IS_SYMOP(result) && getSize(operandType(result)) >= 2 || !result_only_HL))	// Todo: Make this more accurate to get better code when using --fomit-frame-pointer
     return(false);
   if(exstk && (operand_on_stack(left, a, i, G) || operand_on_stack(right, a, i, G)) && (ic->op == '>' || ic->op == '<'))
+    return(false);
+  if(ic->op == '+' && getSize(operandType(result)) >= 2 && input_in_HL &&
+    ((exstk ? operand_on_stack(left, a, i, G) : IS_TRUE_SYMOP (left)) && (ia.registers[REG_L][1] > 0 || ia.registers[REG_H][1] > 0) ||
+    (exstk ? operand_on_stack(right, a, i, G) : IS_TRUE_SYMOP (right)) && (ia.registers[REG_L][1] > 0 || ia.registers[REG_H][1] > 0)))
     return(false);
 
   if(ic->op == '+' && getSize(operandType(result)) == 2 && (IS_OP_LITERAL (right) && ulFromVal (OP_VALUE (IC_RIGHT(ic))) <= 3 || IS_OP_LITERAL (left) && ulFromVal (OP_VALUE (IC_LEFT(ic))) <= 3) && 
@@ -1231,7 +1235,7 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
     case ADDRESS_OF:
     case JUMPTABLE:
     case CAST:
-    //case RECEIVE:
+    case RECEIVE:
     case SEND:
     case DUMMY_READ_VOLATILE:
     case CRITICAL:

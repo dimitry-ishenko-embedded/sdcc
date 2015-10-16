@@ -523,7 +523,7 @@ spillThis (symbol * sym)
   /* if this is rematerializable or has a spillLocation
      we are okay, else we need to create a spillLocation
      for it */
-  if (!(sym->remat || sym->usl.spillLoc))
+  if (!(sym->remat || sym->usl.spillLoc) || (sym->usl.spillLoc && !sym->usl.spillLoc->onStack)) // z80 port currently only supports on-stack spill locations in code generation.
     {
       createStackSpil (sym);
     }
@@ -1621,7 +1621,7 @@ regTypeNum (void)
   for (sym = hTabFirstItem (liveRanges, &k); sym; sym = hTabNextItem (liveRanges, &k))
     {
       /* if used zero times then no registers needed */
-      if ((sym->liveTo - sym->liveFrom) == 0)
+      if ((sym->liveTo - sym->liveFrom) == 0 && getSize (sym->type) <= 4)
         continue;
 
       D (D_ALLOC, ("regTypeNum: loop on sym %p\n", sym));
@@ -1720,7 +1720,7 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
   for (dic = ic->prev; dic; dic = dic->prev)
     {
       /* PENDING: Don't pack across function calls. */
-      if (dic->op == CALL || dic->op == PCALL)
+      if (dic->op == CALL || dic->op == PCALL || dic->op == INLINEASM)
         {
           dic = NULL;
           break;
@@ -1807,7 +1807,13 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
              IC_RESULT (ic)->key == IC_LEFT (dic)->key) || (IC_RIGHT (dic) && IC_RESULT (ic)->key == IC_RIGHT (dic)->key)))
         return 0;
     }
+
 pack:
+  /* Keep assignment if it is an sfr write  - not all of code generation can deal with result in sfr */
+  if (IC_RESULT (ic) && IS_TRUE_SYMOP (IC_RESULT (ic)) && SPEC_OCLS (OP_SYMBOL (IC_RESULT (ic))->etype) && IN_REGSP (SPEC_OCLS (OP_SYMBOL (IC_RESULT (ic))->etype)) &&
+    (dic->op == LEFT_OP || dic->op == RIGHT_OP))
+    return 0;
+
   /* found the definition */
   /* replace the result with the result of */
   /* this assignment and remove this assignment */
@@ -2925,7 +2931,7 @@ serialRegMark (eBBlock ** ebbs, int count)
                  or is already assigned to registers (or marked for the new allocator)
                  or will not live beyond this instructions */
               if (!sym->nRegs ||
-                  sym->isspilt || bitVectBitValue (_G.regAssigned, sym->key) || sym->for_newralloc || sym->liveTo <= ic->seq)
+                  sym->isspilt || bitVectBitValue (_G.regAssigned, sym->key) || sym->for_newralloc || (sym->liveTo <= ic->seq && (sym->nRegs <= 4 || ic->op != CALL)))
                 {
                   D (D_ALLOC, ("serialRegAssign: won't live long enough.\n"));
                   continue;
@@ -2941,7 +2947,11 @@ serialRegMark (eBBlock ** ebbs, int count)
                   continue;
                 }
 
-              if (max_alloc_bytes >= sym->nRegs)
+              if (sym->nRegs > 4) /* TODO. Change this once we can allocate bigger variables (but still spill when its a big return value). */
+                {
+                  spillThis (sym);
+                }
+              else if (max_alloc_bytes >= sym->nRegs)
                 {
                   sym->for_newralloc = 1;
                   max_alloc_bytes -= sym->nRegs;

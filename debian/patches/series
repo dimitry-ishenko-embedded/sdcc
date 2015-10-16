@@ -1,2 +1,2 @@
-02_fix_spelling
-03_fix_compilation
+01_enable_huge_model.patch
+02_enable_ppc64.patch

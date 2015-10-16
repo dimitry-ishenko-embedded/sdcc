@@ -25,7 +25,9 @@ Z80_LONG = $(COMMON_LONG) \
 Z80_LONGLONG = $(COMMON_LONGLONG) \
   _mullonglong.c \
   _divslonglong.c \
-  _divulonglong.c
+  _divulonglong.c \
+  _modslonglong.c \
+  _modulonglong.c
 
 Z80_SDCC = $(COMMON_SDCC) \
   _itoa.c \
@@ -38,7 +40,7 @@ Z80SOURCES = $(addprefix ../,$(Z80_FLOAT) $(Z80_INT) $(Z80_LONG) $(Z80_LONGLONG)
 Z8OBJECTS = $(patsubst %.c,%.rel,$(Z80_FLOAT) $(Z80_INT) $(Z80_LONG) $(Z80_LONGLONG) $(Z80_SDCC))
 
 OBJ = divunsigned.rel divsigned.rel divmixed.rel modunsigned.rel modsigned.rel modmixed.rel mul.rel mulchar.rel \
-      putchar.rel stubs.rel heap.rel fstubs.rel memmove.rel strcpy.rel strlen.rel abs.rel crtcall.rel \
+      putchar.rel heap.rel memmove.rel strcpy.rel strlen.rel abs.rel __sdcc_call_hl.rel __sdcc_call_iy.rel crtenter.rel \
       setjmp.rel
 
 LIB = z180.lib

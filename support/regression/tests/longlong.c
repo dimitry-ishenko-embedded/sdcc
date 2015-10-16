@@ -8,7 +8,7 @@
 #pragma disable_warning 85
 #endif
 
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16)
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_ds400) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16)
 long long x;
 unsigned long long y;
 int i;
@@ -41,9 +41,8 @@ void
 testLongLong (void)
 {
   volatile unsigned long tmp;
-// Test fils on 32-bit systems.
-//#if !defined(__SDCC_mcs51) && !defined(__SDCC_hc08) && !defined(__SDCC_ds390) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16)
-#if 0
+
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_ds400) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16) && !defined(__SDCC_hc08) && !defined(__SDCC_s08)
   i = 42;
   ASSERT (g() == 43);
   i = 23;
@@ -55,14 +54,14 @@ testLongLong (void)
   ASSERT ((x >> 1) == 21);
   ASSERT ((x << 1) == 84);
   ASSERT (!(x >> 17));
-//  ASSERT ((x << 17) == (42l << 17)); sdcc has broken long long constants!
+  ASSERT ((x << 17) == (42l << 17));
   y = x;
   ASSERT (y == 42ull);
   ASSERT ((y >> 1) == 21);
   ASSERT ((y << 1) == 84);
   ASSERT ((y >> 17) == 0);
-//  ASSERT ((y << 17) == (42ul << 17));
-//  ASSERT ((y << 16) == (42ul << 16));
+  ASSERT ((y << 17) == (42ul << 17));
+  ASSERT ((y << 16) == (42ul << 16));
 
   tmp = 0xaaffaafful;
   y = tmp;
@@ -88,6 +87,47 @@ testLongLong (void)
   ASSERT (c() == 12);
   y >>= 31;
   ASSERT (y == 3);
+
+  tmp = 23;
+  y = 42;
+  ASSERT (y + tmp == 42 + 23);
+  ASSERT (y - tmp == 42 - 23);
+#ifndef __SDCC_gbz80 // long long multiplication broken on gbz80, bug #2329
+  ASSERT (y * tmp == 42 * 23);
+#endif
+#if 0 // Fails on 32-bit hosts.
+  ASSERT (y / tmp == 42 / 23);
+#endif
+  ASSERT (y % tmp == 42 % 23);
+
+  tmp = 42;
+  x = 42ll << 23;
+  ASSERT (x + y == (42ll << 23) + 42);
+#ifndef __SDCC_gbz80 // Breaks due to bug in hl handling in gbz80 port
+  ASSERT (x - y == (42ll << 23) - 42);
+#endif
+#ifndef __SDCC_gbz80 // long long multiplication broken on gbz80, bug #2329
+  ASSERT (x * y == (42ll << 23) * 42);
+#endif
+#if 0 // Fails on 32-bit hosts.
+  ASSERT (x / tmp == (42ll << 23) / 42);
+#endif
+  ASSERT (x % tmp == (42ll << 23) % 42);
+
+  x = 0x1122334455667788ll;
+  y = 0x9988776655443322ull;
+  ASSERT (y + x == 0x9988776655443322ull + 0x1122334455667788ll);
+  ASSERT (y - x == 0x9988776655443322ull - 0x1122334455667788ll);
+
+#if 0 // why fail? need investigation.
+  y = 0x55667788ull;
+  ASSERT (y * y == 0x55667788ull * 0x55667788ull);
+  y = 0x55667788ull;
+  x = 0x55667788ll;
+  ASSERT (y * x == 0x55667788ull * 0x55667788ll);
+#endif
+
+  c(); // Unused long long return value require special handling in register allocation.
 #endif
 }
 

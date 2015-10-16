@@ -214,7 +214,7 @@ Var SDCC.PathToRemove
 !define MUI_ICON ".\sdcc.ico"
 
 ; Welcome page
-!define MUI_WELCOMEPAGE_TEXT "$(^NameDA) release is dedicated to the memory of Borut Ražem. He was a highly active developer, release manager and administrator of the SDCC project. We will miss him dearly.$\r$\n$\r$\nThis wizard will guide you through the installation of $(^NameDA).$\r$\n$\r$\nIt is recommended that you close all other applications before starting Setup. This will make it possible to update relevant system files without having to reboot your computer.$\r$\n$\r$\n$_CLICK"
+!define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of $(^NameDA).$\r$\n$\r$\nIt is recommended that you close all other applications before starting Setup. This will make it possible to update relevant system files without having to reboot your computer.$\r$\n$\r$\n$_CLICK"
 !insertmacro MUI_PAGE_WELCOME
 
 ; License page
@@ -386,6 +386,7 @@ ${Section} "SDCC application files" SEC01
   File "${SDCC_ROOT}\bin\sdldgb.exe"
   File "${SDCC_ROOT}\bin\sdld6808.exe"
   File "${SDCC_ROOT}\bin\sdldz80.exe"
+  File "${SDCC_ROOT}\bin\sdldstm8.exe"
   File "${SDCC_ROOT}\bin\sdar.exe"
   File "${SDCC_ROOT}\bin\sdranlib.exe"
   File "${SDCC_ROOT}\bin\sdnm.exe"
@@ -407,7 +408,6 @@ ${Section} "ucSim application files" SEC02
   SectionIn 1 2 3
   SetOutPath "$INSTDIR\bin"
   File "${SDCC_ROOT}\bin\s51.exe"
-  File "${SDCC_ROOT}\bin\savr.exe"
   File "${SDCC_ROOT}\bin\shc08.exe"
   File "${SDCC_ROOT}\bin\sz80.exe"
   File "${SDCC_ROOT}\bin\sstm8.exe"
@@ -1056,6 +1056,7 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\bin\sdldgb.exe"
   Delete "$INSTDIR\bin\sdld6808.exe"
   Delete "$INSTDIR\bin\sdldz80.exe"
+  Delete "$INSTDIR\bin\sdldstm8.exe"
   Delete "$INSTDIR\bin\sdar.exe"
   Delete "$INSTDIR\bin\sdranlib.exe"
   Delete "$INSTDIR\bin\sdnm.exe"
@@ -1074,7 +1075,6 @@ ${Section} Uninstall SECUNINSTALL
 
 
   Delete "$INSTDIR\bin\s51.exe"
-  Delete "$INSTDIR\bin\savr.exe"
   Delete "$INSTDIR\bin\shc08.exe"
   Delete "$INSTDIR\bin\sz80.exe"
   Delete "$INSTDIR\bin\sstm8.exe"

@@ -1,3 +1,25 @@
+sdcc (3.5.0+dfsg-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #789831)
+  * Improve manpages asxxxx and sdcc
+  * Add manpages sdar, sdas390, sdasrab, sdasstm8, sdastlcs90,
+    sdldstm8, sdnm, sdobjcopy, sstm8
+  * Remove manpage savr
+  * Remove patches, 02_fix_spelling and 03_fix_compilation. Fixed
+    in upstream.
+  * Bump standards version to 3.9.6
+  * Remove unneeded lines from clean target in rules file
+  * Update description i control file (Closes: #766325)
+  * Move sdar from sdcc-ucsim to sdcc
+  * Add binary file sdldstm8 to sdcc
+  * Add huge memory model libraries (Closes: #768307)
+  * Add dependency on graphicsmagick-imagemagick-compat
+  * Exclude example code from compression
+  * Add patch 02_enable_ppc64.patch (Closes: #766478)
+  * Use autotools-dev to support new arches
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Fri, 16 Oct 2015 21:52:11 +0200
+
 sdcc (3.4.0+dfsg-2) unstable; urgency=medium
 
   * Add patch 03_fix_compilation (Closes: #752972, #752071)

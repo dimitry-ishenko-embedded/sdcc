@@ -37,11 +37,12 @@
     Warning! This program is not able to find all variable. Especially them not, whose
     can be found in the indirect or external RAM.
 
-  $Id: mcs51-disasm.pl 8508 2013-04-14 18:38:56Z molnarkaroly $
+  $Id: mcs51-disasm.pl 9068 2014-09-04 12:57:30Z molnarkaroly $
 =cut
 
 use strict;
 use warnings;
+no if $] >= 5.018, warnings => "experimental::smartmatch";        # perl 5.16
 use 5.12.0;                     # when (regex)
 
 use constant FALSE	=> 0;
@@ -394,7 +395,7 @@ sub _defined($)
 
 sub define($)
   {
-  my ($Name) = ($_[0] =~ /^(\S+)/o);
+  my ($Name) = ($_[0] =~ /^(\S+)/op);
   my $Body = ${^POSTMATCH};
 
   $Body =~ s/^\s+//o;
@@ -5667,7 +5668,7 @@ sub print_label($)
 
   if ($type == BL_TYPE_SUB)
     {
-    print "\n;$border0\n" 
+    print "\n;$border0\n";
     }
   elsif ($type == BL_TYPE_JLABEL)
     {

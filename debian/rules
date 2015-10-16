@@ -29,62 +29,24 @@ endif
 clean:
 	dh_testdir
 	dh_testroot
-	# Clean up files that Makefile should have cleaned
 	[ ! -f Makefile ] || $(MAKE) distclean
-	rm -f device/lib/pic14/config.h
-	rm -f device/lib/pic14/config.log
-	rm -f device/lib/pic14/stamp-h1
-	rm -f device/lib/r2k/*.asm
-	rm -f device/lib/z180/*.asm
-	rm -f sim/ucsim/cmd.src/cmdlex.cc
-	rm -f sim/ucsim/cmd.src/cmdpars.cc
-	rm -f src/pic14/Makefile.dep
-	rm -f src/pic14/peeph.rul
 	rm -rf $(CURDIR)/build
-	rm -f custom.h
-	rm -f sim/ucsim/custom.h
-	rm -f support/regression/ports/host/spec.mk
-	rm -f support/cpp/configargs.h,.log
-	rm -f support/cpp/config.log
-	rm -f support/cpp/config.status
 	rm -f support/sdbinutils/binutils/arlex.c
 	rm -f support/sdbinutils/binutils/arparse.c
 	rm -f support/sdbinutils/binutils/arparse.h
-	rm -f sim/ucsim/config.guess
-	rm -f sim/ucsim/config.sub
-	rm -f sim/ucsim/config.log
-	rm -f config.log
-	rm -f device/lib/small-stack-auto/Makefile
-	rm -f as/link/asxxxx_config.h
-	rm -f support/cpp/configargs.h
-	rm -f ports.all ports.build
+	rm -f sim/ucsim/config.sub sim/ucsim/config.guess
+	rm -f config.log sim/ucsim/config.log
 	rm -f confdefs.h
-	rm -rf device/lib/pic1*/.check*
-	rm -f device/lib/pic1*/config.*
-	rm -f device/lib/pic16/stamp-h1
-	find -type f -name '*.o' -exec rm -f {} \;
-	find -type f -name '.stamp' -exec rm -f {} \;
-	find . -name '*.rel' -exec rm -f {} \;
-	find . -name '*.sym' -exec rm -f {} \;
-	find . -name '*.lst' -exec rm -f {} \;
-	find . -name '*.a' -exec rm -f {} \;
-	find . -name '*.cod' -exec rm -f {} \;
-	find . -name '*.hex' -exec rm -f {} \;
-	find . -name config.status -exec rm -f {} \;
-	find . -name Makefile -exec rm -f {} \;
-	rm -f sim/ucsim/cmd.src/cmdpars.hh
-	# Clean up the Debian specific files
-	rm -f config.status doc/sdccman.ps
-	rm -f *-stamp
-	rm -f install-indep install-arch
+	rm -f install-arch install-indep
+	dh_autotools-dev_restoreconfig
 	dh_clean
 
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	mkdir -p $(CURDIR)/build
-	cp /usr/share/misc/config.sub sim/ucsim/config.sub
-	cp /usr/share/misc/config.guess sim/ucsim/config.guess
+	touch sim/ucsim/config.guess sim/ucsim/config.sub
+	dh_autotools-dev_updateconfig
 	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \
@@ -92,8 +54,7 @@ configure-stamp:
 		--disable-non-free \
 		--disable-pic14-port \
 		--disable-pic16-port \
-		--prefix=/usr \
-
+		--prefix=/usr
 	touch $@
 
 build: build-arch build-indep
@@ -129,7 +90,7 @@ install-indep: build
 	#Clean up unnecessary directories
 	rm -rf `find $(CURDIR)/debian/tmp -type d -name .deps`
 
-	dh_install -i --sourcedir=debian/tmp
+	dh_install -i --sourcedir=debian/tmp --list-missing
 
 	# Install examples
 	cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
@@ -163,7 +124,7 @@ install-arch: build-arch
 	install -o root -g root -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
 	# Remove an unnecessary script 
 	rm -f debian/tmp/usr/share/sdcc/scripts/gen_known_bugs.pl
-	dh_install -a --sourcedir=debian/tmp
+	dh_install -a --sourcedir=debian/tmp --list-missing
 
 	touch $@
 
@@ -180,7 +141,7 @@ binary-common:
 	dh_link
 	dh_lintian
 	dh_strip -Xusr/share/sdcc/lib/
-	dh_compress 
+	dh_compress --exclude=.c --exclude=.h --exclude=.cpp
 	dh_fixperms
 	dh_installdeb
 	dh_shlibdeps

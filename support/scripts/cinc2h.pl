@@ -2,7 +2,7 @@
 
 =back
 
-  Copyright (C) 2012, Molnar Karoly <molnarkaroly@users.sf.net>
+  Copyright (C) 2012-2014, Molnar Karoly <molnarkaroly@users.sf.net>
 
     This file is part of SDCC. 
 
@@ -92,11 +92,12 @@
    cases you can copy and paste another device's records and adjust
    them to the newly added device.
 
-  $Id: cinc2h.pl 8697 2013-05-30 19:25:40Z tecodev $
+  $Id: cinc2h.pl 9083 2014-10-03 17:40:19Z molnarkaroly $
 =cut
 
 use strict;
 use warnings;
+no if $] >= 5.018, warnings => "experimental::smartmatch";        # perl 5.16
 use 5.12.0;                     # when (regex)
 use File::Path 'make_path';
 use feature 'switch';           # Starting from 5.10.1.
@@ -405,7 +406,7 @@ sub correct_name($)
 
         # Adds to the list the $Name register.
 
-sub add_register($$)
+sub new_register($$)
   {
   my ($Name, $Address) = @_;
 
@@ -544,7 +545,7 @@ sub add_reg_bits($$)
     if (! defined($reg))
       {
       Log("The $name register is not directly be reached or does not exist. ($mcu)", 2);
-      $reg = add_register($name, -1);
+      $reg = new_register($name, -1);
       }
 
     bit_filtration($name, $Bits);
@@ -694,7 +695,7 @@ sub read_content_from_header($)
         # PORTC     EQU  H'0007'
         #
 
-          add_register($1, str2int($2));
+          new_register($1, str2int($2));
           }
         } # when (ST_REG_ADDR)
 
@@ -894,8 +895,8 @@ sub extract_config_area($$)
   open(LIB, '<', $gpproc_path) || die "extract_config_area(): Can not open. -> \"$gpproc_path\"\n";
 
         # static struct px pics[] = {
-        #   { PROC_CLASS_PIC12E   , "__12F529T39A"  , { "pic12f529t39a"  , "p12f529t39a"    , "12f529t39a"      }, 0xE529,  3,    8, 0x0005FF, 0x000600, {       -1,       -1 }, { 0x000FFF, 0x000FFF }, "12f529t39a_g.lkr"  , 0 },
-        #   { PROC_CLASS_PIC14E   , "__16LF1517"    , { "pic16lf1517"    , "p16lf1517"      , "16lf1517"        }, 0xA517,  4,   32, 0x001FFF, 0x002000, {       -1,       -1 }, { 0x008007, 0x008008 }, "16lf1517_g.lkr"    , 0 },
+        #   { PROC_CLASS_PIC12E   , "__12F529T39A"  , { "pic12f529t39a"  , "p12f529t39a"    , "12f529t39a"      }, 0xE529,  3,    8, 0x00E0, { 0x07, 0x0F }, 0x06F, {     -1,     -1 }, 0x00FF, 0x0005FF, 0x000600, {       -1,       -1 }, { 0x000640, 0x000643 }, { 0x000FFF, 0x000FFF }, { 0x000600, 0x00063F }, "p12f529t39a.inc"  , "12f529t39a_g.lkr"  , 0 },
+        #   { PROC_CLASS_PIC14E   , "__16LF1517"    , { "pic16lf1517"    , "p16lf1517"      , "16lf1517"        }, 0xA517,  4,   32, 0x0F80, { 0x70, 0x7F },    -1, { 0x2000, 0x21EF }, 0x0FFF, 0x001FFF, 0x002000, {       -1,       -1 }, { 0x008000, 0x008003 }, { 0x008007, 0x008008 }, {       -1,       -1 }, "p16lf1517.inc"    , "16lf1517_g.lkr"    , 0 },
 
   my $in_table = FALSE;
 
@@ -905,9 +906,9 @@ sub extract_config_area($$)
 
     if (! $in_table)
       {
-      $in_table = TRUE if ($_ =~ /^\s*static\s+struct\s+px\s+pics\[\s*\]\s*=\s*\{\s*$/io);
+      $in_table = TRUE if (/^\s*static\s+struct\s+px\s+pics\[\s*\]\s*=\s*\{\s*$/io);
       }
-    elsif ($_ =~ /\{\s*PROC_CLASS_\w+\s*,\s*"\w+"\s*,\s*\{\s*"\w+"\s*,\s*"\w+"\s*,\s*"(\S+)"\s*}\s*,\s*[\w-]+\s*,\s*[\w-]+\s*,\s*[\w-]+\s*,\s*\S+\s*,\s*\S+\s*,\s*\{\s*\S+\s*,\s*\S+\s*\}\s*,\s*{\s*(\S+)\s*,\s*(\S+)\s*\}\s*,\s*\"?[\.\w]+\"?\s*,\s*\d+\s*\}/io)
+    elsif (/\{\s*PROC_CLASS_\w+\s*,\s*"\w+"\s*,\s*\{\s*"\w+"\s*,\s*"\w+"\s*,\s*"(\w+)"\s*}\s*,\s*[\w-]+\s*,\s*[\w-]+\s*,\s*[\w-]+\s*,\s*[\w-]+\s*,\s*\{\s*\S+\s*,\s*\S+\s*\}\s*,\s*\S+\s*,\s*\{\s*\S+\s*,\s*\S+\s*\}\s*,\s*\S+\s*,\s*\S+\s*,\s*\S+\s*,\s*\{\s*\S+\s*,\s*\S+\s*\}\s*,\s*{\s*\S+\s*,\s*\S+\s*\}\s*,\s*{\s*(\S+)\s*,\s*(\S+)\s*\}\s*,\s*{\s*\S+\s*,\s*\S+\s*\}\s*,\s*\"?[\.\w]+\"?\s*,\s*\"?[\.\w]+\"?\s*,\s*\d+\s*\}/io)
       {
       my ($name, $c_start, $c_end) = ($1, $2, $3);
 
@@ -1403,7 +1404,7 @@ sub make_pic14_dependent_defs()
 
 sub print_to_header_file()
   {
-  my $text;
+  my ($text, $name, $address, $str);
 
   print_license('declarations');
   Outl("#ifndef __${mcu}_H__\n#define __${mcu}_H__\n\n$section");
@@ -1416,9 +1417,10 @@ sub print_to_header_file()
 
     foreach (sort { $a->{ADDRESS} <=> $b->{ADDRESS} } @registers)
       {
-      my ($name, $address) = ($_->{NAME}, $_->{ADDRESS});
-      my $str = sprintf('0x%04X', $address);
+      ($name, $address) = ($_->{NAME}, $_->{ADDRESS});
+      next if ($address < 0);
 
+      $str = sprintf('0x%04X', $address);
       Outl(align("#define ${name}_ADDR", DIST_ADDRSIZE), $str);
       }
 
