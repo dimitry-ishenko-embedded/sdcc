@@ -18,11 +18,12 @@ Build-Depends-Indep: ghostscript,
                      lyx,
                      texlive-fonts-recommended,
                      texlive-generic-recommended,
-                     texlive-latex-recommended
-Standards-Version: 3.9.6
+                     texlive-latex-recommended,
+                     gsfonts
+Standards-Version: 3.9.7
 Homepage: http://sdcc.sourceforge.net
-Vcs-Git: git://anonscm.debian.org/collab-maint/sdcc.git
-Vcs-Browser: http://anonscm.debian.org/git/collab-maint/sdcc.git
+Vcs-Git: https://anonscm.debian.org/collab-maint/sdcc.git
+Vcs-Browser: https://anonscm.debian.org/git/collab-maint/sdcc.git
 
 Package: sdcc
 Architecture: any
@@ -31,7 +32,8 @@ Depends: sdcc-libraries (= ${source:Version}),
          ${shlibs:Depends}
 Recommends: sdcc-doc
 Suggests: python, sdcc-ucsim
-Breaks: sdcc-libraries (<< 2.9.0)
+Breaks: sdcc-ucsim (<< 3.5.0)
+Replaces: sdcc-ucsim (<< 3.5.0)
 Description: Small Device C Compiler
  SDCC is a C compiler for the Intel MCS51 family, HC08, PIC,
  GameBoy Z80, DS80S390, Z80, Z180 and STM8 microcontrollers.

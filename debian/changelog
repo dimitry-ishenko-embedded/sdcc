@@ -1,3 +1,16 @@
+sdcc (3.5.0+dfsg-2) unstable; urgency=medium
+
+  * Add dependency on gsfonts (Closes: #818447)
+  * Bump standards version to 3.9.7, no changes needed
+  * Remove breaks version 2.9.0
+  * Add breaks version 3.4.0, sdar was moved from
+    sdcc-ucsim to sdcc. (Closes: #803660)
+  * Add patch 03_spelling to fix spelling error
+  * Change vcs browser from http to https
+  * Add hardening += all to build options
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sat, 19 Mar 2016 19:31:13 +0100
+
 sdcc (3.5.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release (Closes: #789831)
