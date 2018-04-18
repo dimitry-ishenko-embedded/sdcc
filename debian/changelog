@@ -1,3 +1,11 @@
+sdcc (3.5.0+dfsg-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Add patch from Dr. Tobias Quathamer to fix FTBFS with lyx 2.3.
+    (Closes: #894619)
+
+ -- Adrian Bunk <bunk@debian.org>  Wed, 18 Apr 2018 19:34:21 +0300
+
 sdcc (3.5.0+dfsg-2) unstable; urgency=medium
 
   * Add dependency on gsfonts (Closes: #818447)
