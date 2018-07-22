@@ -38,12 +38,14 @@ init:
 	jp	_exit
 
 	;; Ordering of segments for the linker.
+	.area	_HOME
 	.area	_CODE
         .area   _GSINIT
         .area   _GSFINAL
         
 	.area	_DATA
         .area   _BSS
+        .area   _HEAP
 
         .area   _CODE
 __clock::

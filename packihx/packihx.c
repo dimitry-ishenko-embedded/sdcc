@@ -14,7 +14,7 @@
 #include <ctype.h>
 #include <assert.h>
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__BORLANDC__)
 
 typedef unsigned char Uint8 ;
 typedef unsigned Uint16 ;
@@ -223,7 +223,7 @@ int validateChecksum(Line *line)
     if (checksum != line->checksum)
     {
         fprintf(stderr, "packihx: invalid checksum %X (want %X) @ line %d\n", 
-        	(unsigned)checksum, (unsigned)(line->checksum),
+        	(unsigned)(line->checksum), (unsigned)checksum, 
         	lineno);
         return -1;	
     }

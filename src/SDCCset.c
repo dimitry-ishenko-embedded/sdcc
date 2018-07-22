@@ -23,36 +23,27 @@
 -------------------------------------------------------------------------*/
 
 #include <stdio.h>
-#if defined(__APPLE__) && defined(__MACH__)
-#include <sys/malloc.h>
-#else
-#include <malloc.h>
-#endif
-#include "newalloc.h"
 #include <assert.h>
+#include "newalloc.h"
 #include "SDCCset.h"
 
 /*-----------------------------------------------------------------*/
-/* newSet - will allocate & return a new set entry             */
+/* newSet - will allocate & return a new set entry                 */
 /*-----------------------------------------------------------------*/
 set *
-newSet ()
+newSet (void)
 {
   set *lp;
 
-  lp = Safe_calloc (1, sizeof (set));
-//  if (lp == 0) {
-  //  fprintf(stderr, "out of virtual memory: %s\n", __FILE__);
-  //  exit(1);
-  //  }
-
+  lp = Safe_alloc (sizeof (set));
   lp->item = lp->curr = lp->next = NULL;
   return lp;
 }
 
 
 /*-----------------------------------------------------------------*/
-/* setFromSet - creates a list from another list                */
+/* setFromSet - creates a list from another list; the order of     */
+/*              elements in new list is reverted                   */
 /*-----------------------------------------------------------------*/
 set *
 setFromSet (set * lp)
@@ -70,10 +61,29 @@ setFromSet (set * lp)
 }
 
 /*-----------------------------------------------------------------*/
+/* setFromSet - creates a list from another list; the order of     */
+/*              elements in retained                               */
+/*-----------------------------------------------------------------*/
+set *
+setFromSetNonRev (set * lp)
+{
+  set *lfl = NULL;
+
+  while (lp)
+    {
+      addSet (&lfl, lp->item);
+      lp = lp->next;
+    }
+
+  return lfl;
+
+}
+
+/*-----------------------------------------------------------------*/
 /* isSetsEqual - are the lists equal, they are equal if they have  */
 /*               the same objects & the same number of objects     */
 /*-----------------------------------------------------------------*/
-int 
+int
 isSetsEqual (set * dest, set * src)
 {
   set *src1 = src;
@@ -89,10 +99,11 @@ isSetsEqual (set * dest, set * src)
 }
 
 /*-----------------------------------------------------------------*/
-/* isSetsEqualWith - are the lists equal, they are equal if they have  */
-/* the same objects & the same number of objects , compare function    */
+/* isSetsEqualWith - are the lists equal, they are equal if they   */
+/*                   have  the same objects & the same number of   */
+/*                   objects , compare function                    */
 /*-----------------------------------------------------------------*/
-int 
+int
 isSetsEqualWith (set * dest, set * src, int (*cFunc) (void *, void *))
 {
   set *src1 = src;
@@ -108,7 +119,7 @@ isSetsEqualWith (set * dest, set * src, int (*cFunc) (void *, void *))
 }
 
 /*-----------------------------------------------------------------*/
-/* addSetIfnotP - adds to a linked list if not already present   */
+/* addSetIfnotP - adds to a linked list if not already present     */
 /*-----------------------------------------------------------------*/
 void *
 addSetIfnotP (set ** list, void *item)
@@ -123,7 +134,7 @@ addSetIfnotP (set ** list, void *item)
 }
 
 /*-----------------------------------------------------------------*/
-/* addSetHead - add item to head of linked list                  */
+/* addSetHead - add item to head of linked list                    */
 /*-----------------------------------------------------------------*/
 void *
 addSetHead (set ** list, void *item)
@@ -140,7 +151,7 @@ addSetHead (set ** list, void *item)
 }
 
 /*-----------------------------------------------------------------*/
-/* addSet - add an item to a linear linked list                  */
+/* addSet - add an item to a linear linked list                    */
 /*-----------------------------------------------------------------*/
 void *
 addSet (set ** list, void *item)
@@ -170,7 +181,7 @@ addSet (set ** list, void *item)
 /*-----------------------------------------------------------------*/
 /* deleteItemIf - will delete from set if cond function returns 1  */
 /*-----------------------------------------------------------------*/
-void 
+void
 deleteItemIf (set ** sset, int (*cond) (void *, va_list),...)
 {
   set *sp = *sset;
@@ -178,9 +189,11 @@ deleteItemIf (set ** sset, int (*cond) (void *, va_list),...)
 
   while (sp)
     {
-      // On the x86 va_list is just a pointer, so due to pass by value
-      // ap is not mofified by the called function.  On the PPC va_list
-      // is a pointer to a structure, so ap is modified.  Re-init each time.
+      /*
+       * On the x86 va_list is just a pointer, so due to pass by value
+       * ap is not mofified by the called function.  On the PPC va_list
+       * is a pointer to a structure, so ap is modified.  Re-init each time.
+       */
       va_start (ap, cond);
 
       if ((*cond) (sp->item, ap))
@@ -198,7 +211,7 @@ deleteItemIf (set ** sset, int (*cond) (void *, va_list),...)
 /*-----------------------------------------------------------------*/
 /* deleteSetItem - will delete a given item from the list          */
 /*-----------------------------------------------------------------*/
-void 
+void
 deleteSetItem (set ** list, void *item)
 {
   set *lp, *lp1;
@@ -208,32 +221,30 @@ deleteSetItem (set ** list, void *item)
     return;
 
   /* if this item is at the head of the list */
-  if ((*list)->item == item)
-    {
-      lp = *list;
-      *list = (*list)->next;
-      return;
-    }
+  if ((*list)->item == item) {
+    lp = *list;
+    *list = (*list)->next;
+    Safe_free (lp);
+    return;
+  }
 
   /* find the item in the list */
-  for (lp = *list; lp->next; lp = lp->next)
-    {
-      if (lp->next->item == item)	/* the next one is it */
-	{
-	  lp1 = lp->next;	/* this one will need to be freed */
-	  lp->next = lp->next->next;	/* take out of list */
-	  return;
-	}
+  for (lp = *list; lp->next; lp = lp->next) {
+    if (lp->next->item == item) { /* the next one is it */
+      lp1 = lp->next;             /* this one will need to be freed */
+      lp->next = lp->next->next;  /* take out of list */
+      Safe_free (lp1);
+      return;
     }
+  }
 
   /* could not find it */
-  return;
 }
 
 /*-----------------------------------------------------------------*/
-/* isinSet - the item is present in the linked list              */
+/* isinSet - the item is present in the linked list                */
 /*-----------------------------------------------------------------*/
-int 
+int
 isinSet (set * list, void *item)
 {
   set *lp;
@@ -248,7 +259,7 @@ isinSet (set * list, void *item)
 /*-----------------------------------------------------------------*/
 /* isinSetWith - the item is present in the linked list            */
 /*-----------------------------------------------------------------*/
-int 
+int
 isinSetWith (set * list, void *item, int (*cFunc) (void *, void *))
 {
   set *lp;
@@ -261,7 +272,25 @@ isinSetWith (set * list, void *item, int (*cFunc) (void *, void *))
 }
 
 /*-----------------------------------------------------------------*/
-/* unionSets - will return the union of the two lists             */
+/* mergeSets - append list to sset                                 */
+/*-----------------------------------------------------------------*/
+void
+mergeSets (set **sset, set *list)
+{
+  if (*sset == NULL) {
+    *sset = list;
+  }
+  else {
+    set *lp;
+
+    for (lp = *sset; lp->next; lp = lp->next)
+      ;
+    lp->next = list;
+  }
+}
+
+/*-----------------------------------------------------------------*/
+/* unionSets - will return the union of the two lists              */
 /*-----------------------------------------------------------------*/
 set *
 unionSets (set * list1, set * list2, int throw)
@@ -282,14 +311,14 @@ unionSets (set * list1, set * list2, int throw)
   switch (throw)
     {
     case THROW_SRC:
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list2);
       break;
     case THROW_DEST:
-      setToNull ((void **) &list1);
+      setToNull ((void *) &list1);
       break;
     case THROW_BOTH:
-      setToNull ((void **) &list1);
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list1);
+      setToNull ((void *) &list2);
     }
 
   return un;
@@ -317,14 +346,14 @@ unionSetsWith (set * list1, set * list2, int (*cFunc) (), int throw)
   switch (throw)
     {
     case THROW_SRC:
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list2);
       break;
     case THROW_DEST:
-      setToNull ((void **) &list1);
+      setToNull ((void *) &list1);
       break;
     case THROW_BOTH:
-      setToNull ((void **) &list1);
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list1);
+      setToNull ((void *) &list2);
     }
 
   return un;
@@ -347,21 +376,22 @@ intersectSets (set * list1, set * list2, int throw)
   switch (throw)
     {
     case THROW_SRC:
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list2);
       break;
     case THROW_DEST:
-      setToNull ((void **) &list1);
+      setToNull ((void *) &list1);
       break;
     case THROW_BOTH:
-      setToNull ((void **) &list1);
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list1);
+      setToNull ((void *) &list2);
     }
 
   return in;
 }
 
 /*-----------------------------------------------------------------*/
-/* intersectSetsWith - returns list of items in common to two lists */
+/* intersectSetsWith - returns list of items in common to two      */
+/*                     lists                                       */
 /*-----------------------------------------------------------------*/
 set *
 intersectSetsWith (set * list1, set * list2,
@@ -378,14 +408,14 @@ intersectSetsWith (set * list1, set * list2,
   switch (throw)
     {
     case THROW_SRC:
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list2);
       break;
     case THROW_DEST:
-      setToNull ((void **) &list1);
+      setToNull ((void *) &list1);
       break;
     case THROW_BOTH:
-      setToNull ((void **) &list1);
-      setToNull ((void **) &list2);
+      setToNull ((void *) &list1);
+      setToNull ((void *) &list2);
     }
 
   return in;
@@ -394,7 +424,7 @@ intersectSetsWith (set * list1, set * list2,
 /*-----------------------------------------------------------------*/
 /* elementsInSet - elements count of a set                         */
 /*-----------------------------------------------------------------*/
-int 
+int
 elementsInSet (set * s)
 {
   set *loop = s;
@@ -407,6 +437,43 @@ elementsInSet (set * s)
     }
 
   return count;
+}
+
+/*-----------------------------------------------------------------*/
+/* indexSet - returns the i'th item in set                         */
+/*-----------------------------------------------------------------*/
+void *
+indexSet (set * s, int index)
+{
+  set *loop=s;
+  
+  while(loop && index) {
+  	index--;
+  	loop = loop->next;
+  }
+
+  return (loop->item);
+}
+
+
+/*-----------------------------------------------------------------*/
+/* reverseSet - reverse the order of the items of a set            */
+/*-----------------------------------------------------------------*/
+
+set *
+reverseSet (set * s)
+{
+  set *t = NULL;
+  set *u = NULL;
+
+  while(s->next) {
+    t = s->next;
+    s->next = u;
+    u = s;
+    s = t;
+  }
+  s->next = u;
+  return s;
 }
 
 /*-----------------------------------------------------------------*/
@@ -428,14 +495,14 @@ subtractFromSet (set * left, set * right, int throw)
   switch (throw)
     {
     case THROW_SRC:
-      setToNull ((void **) &right);
+      setToNull ((void *) &right);
       break;
     case THROW_DEST:
-      setToNull ((void **) &left);
+      setToNull ((void *) &left);
       break;
     case THROW_BOTH:
-      setToNull ((void **) &left);
-      setToNull ((void **) &right);
+      setToNull ((void *) &left);
+      setToNull ((void *) &right);
       break;
     }
 
@@ -445,7 +512,7 @@ subtractFromSet (set * left, set * right, int throw)
 /*-----------------------------------------------------------------*/
 /* applyToSet - will call the supplied function with each item     */
 /*-----------------------------------------------------------------*/
-int 
+int
 applyToSet (set * list, int (*somefunc) (void *, va_list),...)
 {
   set *lp;
@@ -462,10 +529,11 @@ applyToSet (set * list, int (*somefunc) (void *, va_list),...)
 }
 
 /*-----------------------------------------------------------------*/
-/* applyToSetFTrue - will call the supplied function with each item */
-/*                   until list is exhausted or a true is returned */
+/* applyToSetFTrue - will call the supplied function with each     */
+/*                   item until list is exhausted or a true is     */
+/*                   returned                                      */
 /*-----------------------------------------------------------------*/
-int 
+int
 applyToSetFTrue (set * list, int (*somefunc) (void *, va_list),...)
 {
   set *lp;
@@ -547,9 +615,9 @@ getSet (set ** list)
 }
 
 /*-----------------------------------------------------------------*/
-/* setToNull - will throw away the entire list                   */
+/* setToNull - will throw away the entire list                     */
 /*-----------------------------------------------------------------*/
-void 
+void
 setToNull (void **item)
 {
 
@@ -558,6 +626,33 @@ setToNull (void **item)
 
   if (!*item)
     return;
-  free (*item);
+  Safe_free (*item);
   *item = NULL;
+}
+
+/*-----------------------------------------------------------------*/
+/* deleteSet - will throw away the entire list                     */
+/*  note - setToNull doesn't actually throw away the whole list.   */
+/*         Instead it only throws away the first item.             */
+/*-----------------------------------------------------------------*/
+void
+deleteSet (set **s)
+{
+  set *curr;
+  set *next;
+
+  if(!s || !*s)
+    return;
+
+  curr = *s;
+  next = curr->next;
+  while (next) {
+    Safe_free (curr);
+    curr = next;
+    next = next->next;
+  }
+
+  Safe_free (curr);
+
+  *s = NULL;
 }

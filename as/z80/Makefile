@@ -14,15 +14,15 @@ SRC	= asdata.c asexpr.c aslex.c aslist.c asmain.c asout.c \
 OBJS	= $(SRC:%.c=$(OBJDIR)/%.o)
 SLIBOBJS	= $(SLIBSRC:%.c=$(OBJDIR)/%.o) 
 
-BINS	= $(BUILDDIR)as$(EXT)
+BINS	= $(BUILDDIR)/as$(EXT)$(EXEEXT)
 
-CFLAGS	+= $(OPTS) -I. -DINDEXLIB -DMLH_MAP -DUNIX -DSDK
+CFLAGS	+= $(CPPFLAGS) $(OPTS) -I. -DINDEXLIB -DMLH_MAP -DUNIX -DSDK
 CFLAGS	+= -funsigned-char
 CFLAGS	+= -I$(SLIB) 
 
-LDFLAGS += -lm
+LDFLAGS += -lm $(EXTRALIBS)
 
-all:	$(OBJDIR) dep $(BINS)
+all:	dep $(BINS)
 
 dep: Makefile.dep
 
@@ -31,17 +31,24 @@ Makefile.dep: $(SRC) *.h
 
 include Makefile.dep
 
-$(OBJDIR):
+# We need a '.stamp'-file in $(OBJDIR), because the time stamp
+# of $(OBJDIR) itself is always updated, when a file in $(OBJDIR)
+# is updated. A rule like
+#	$(OBJDIR)/anyfile: $(OBJDIR)
+# will always force a remake (at least on Linux ext2).
+
+$(OBJDIR)/.stamp:
 	mkdir -p $(OBJDIR)
+	touch $(OBJDIR)/.stamp
 
 $(BINS): $(OBJS) $(SLIBOBJS)
 	$(CC) -o $(BINS) $(OBJS) $(SLIBOBJS) $(LDFLAGS)
 
 
-$(OBJDIR)/%.o:	%.c
+$(OBJDIR)/%.o:	%.c $(OBJDIR)/.stamp
 	$(CC) -c $(CFLAGS) -o $@ $<
 
-$(OBJDIR)/%.o:	$(SLIB)/%.c
+$(OBJDIR)/%.o:	$(SLIB)/%.c $(OBJDIR)/.stamp
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 _as-z80:

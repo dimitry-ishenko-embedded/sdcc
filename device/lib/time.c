@@ -25,8 +25,6 @@
 #include <stdio.h>
 #include <time.h>
 
-#define FIXDS390BUG (long)
-
 // please note that the tm structure has the years since 1900,
 // but time returns the seconds since 1970
 
@@ -71,18 +69,21 @@ static char ascTimeBuffer[32];
 static void CheckTime(struct tm *timeptr) {
     // we could do some normalization here, e.g.
     // change 40 october to 9 november
+    #if !__TIME_UNSIGNED
     if (timeptr->tm_sec<0) timeptr->tm_sec=0;
-    else if (timeptr->tm_sec>59) timeptr->tm_sec=59;
     if (timeptr->tm_min<0) timeptr->tm_min=0;
-    else if (timeptr->tm_min>59) timeptr->tm_min=59;
     if (timeptr->tm_hour<0) timeptr->tm_hour=0;
-    else if (timeptr->tm_hour>23) timeptr->tm_hour=23;
     if (timeptr->tm_wday<0) timeptr->tm_wday=0;
-    else if (timeptr->tm_wday>6) timeptr->tm_wday=6;
+    if (timeptr->tm_mon<0) timeptr->tm_mon=0;
+    #endif
+    
+    if (timeptr->tm_sec>59) timeptr->tm_sec=59;
+    if (timeptr->tm_min>59) timeptr->tm_min=59;
+    if (timeptr->tm_hour>23) timeptr->tm_hour=23;
+    if (timeptr->tm_wday>6) timeptr->tm_wday=6;
     if (timeptr->tm_mday<1) timeptr->tm_mday=1;
     else if (timeptr->tm_mday>31) timeptr->tm_mday=31;
-    if (timeptr->tm_mon<0) timeptr->tm_mon=0;
-    else if (timeptr->tm_mon>11) timeptr->tm_mon=11;
+    if (timeptr->tm_mon>11) timeptr->tm_mon=11;
     if (timeptr->tm_year<0) timeptr->tm_year=0;
 }
 
@@ -178,28 +179,28 @@ time_t mktime(struct tm *timeptr) {
     CheckTime(timeptr);
 
     // seconds from 1970 till 1 jan 00:00:00 this year
-    seconds= FIXDS390BUG (year-1970)*60*60*24*365;
+    seconds= (year-1970)*(60*60*24L*365);
 
     // add extra days for leap years
     for (i=1970; i<year; i++) {
 	if (LEAP_YEAR(i)) {
-	    seconds+= FIXDS390BUG 60*60*24;
+	    seconds+= 60*60*24L;
 	}
     }
 
     // add days for this year
     for (i=0; i<month; i++) {
       if (i==1 && LEAP_YEAR(year)) { 
-	seconds+= FIXDS390BUG 60*60*24*29;
+	seconds+= 60*60*24L*29;
       } else {
-	seconds+= FIXDS390BUG 60*60*24*monthDays[i];
+	seconds+= 60*60*24L*monthDays[i];
       }
     }
 
-    seconds+= FIXDS390BUG (timeptr->tm_mday-1)*60*60*24;
-    seconds+= FIXDS390BUG timeptr->tm_hour*60*60;
-    seconds+= FIXDS390BUG timeptr->tm_min*60;
-    seconds+= FIXDS390BUG timeptr->tm_sec;
+    seconds+= timeptr->tm_mday-1*60*60*24L;
+    seconds+= timeptr->tm_hour*60*60;
+    seconds+= timeptr->tm_min*60;
+    seconds+= timeptr->tm_sec;
     return seconds;
 }
 

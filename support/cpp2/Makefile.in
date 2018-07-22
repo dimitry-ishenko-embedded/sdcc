@@ -22,8 +22,9 @@
 #the Free Software Foundation, 59 Temple Place - Suite 330,
 #Boston MA 02111-1307, USA.
 
+EXEEXT = @EXEEXT@
 PRJDIR = ../..
-TARGET = $(PRJDIR)/bin/sdcpp
+TARGET = $(PRJDIR)/bin/sdcpp$(EXEEXT)
 
 # This is the default target.
 all: $(TARGET)
@@ -34,9 +35,11 @@ srcdir = @srcdir@
 
 
 LIBS = @LIBS@
+CFLAGS = @CFLAGS@
 ALL_CFLAGS = $(INTERNAL_CFLAGS) $(X_CFLAGS) $(T_CFLAGS) \
   $(CFLAGS) $(WARN_CFLAGS) $(XCFLAGS) @DEFS@
 ALL_CPPFLAGS = $(CPPFLAGS) $(X_CPPFLAGS) $(T_CPPFLAGS)
+LDFLAGS = @LDFLAGS@
 
 CC = @CC@
 AR = ar
@@ -105,9 +108,12 @@ OBSTACK=obstack.o
 # End of variables for you to override.
 
 install: all
-	$(INSTALL) $(TARGET) `echo $(bindir)/sdcpp|sed '$(transform)'`
-	$(STRIP) -s `echo $(bindir)/sdcpp|sed '$(transform)'`
+	mkdir -p $(bindir)
+	$(INSTALL) $(TARGET) `echo $(bindir)/sdcpp$(EXEEXT)|sed '$(transform)'`
+	$(STRIP) `echo $(bindir)/sdcpp$(EXEEXT)|sed '$(transform)'`
 
+uninstall:
+	rm -f $(bindir)/sdcpp$(EXEEXT)
 clean:
 	-rm -f $(TARGET) *.o core libcpp.a
 
@@ -126,17 +132,17 @@ SYSTEM_H = system.h hwint.h
 
 # sed inserts variable overrides after the following line.
 ####target overrides
-@target_overrides@
+#@target_overrides@
 
 ####host overrides
-@host_overrides@
+#@host_overrides@
 
 ####cross overrides
-@cross_defines@
-@cross_overrides@
+#@cross_defines@
+#@cross_overrides@
 
 ####build overrides
-@build_overrides@
+#@build_overrides@
 #
 
 INCLUDES = -I$(srcdir) -I$(LIBIBERTY_DIR)

@@ -3,10 +3,20 @@
 #include <testfwk.h>
 #include <stdarg.h>
 
+#ifdef __ds390
+#include <tinibios.h> /* main() must see the ISR declarations */
+#endif
+
+#if defined(PORT_HOST) || defined(SDCC_z80) || defined(SDCC_gbz80)
+#define _REENTRANT
+#else
+#define _REENTRANT reentrant
+#endif
+
 /** Define this if the port's div or mod functions are broken.
     A slow loop based method will be substituded.
 */
-#define BROKEN_DIV_MOD		1
+//#define BROKEN_DIV_MOD		1
 
 void _putchar(char c);
 void _exitEmu(void);
@@ -41,7 +51,7 @@ int __mod(int num, int denom)
 }
 #endif
 
-static void _printn(int n) 
+static void _printn(int n) _REENTRANT
 {
     int rem;
 
@@ -66,7 +76,7 @@ void __printf(const char *szFormat, ...) REENTRANT
         if (*szFormat == '%') {
             switch (*++szFormat) {
             case 's': {
-                char GENERIC *sz = va_arg(ap, char GENERIC *);
+                char *sz = va_arg(ap, char *);
                 while (*sz) {
                     _putchar(*sz++);
                 }
@@ -105,12 +115,12 @@ __fail(const char *szMsg, const char *szCond, const char *szFile, int line)
 int 
 main(void)
 {
-    TESTFUN **cases;
+    TESTFUNP *cases;
     int numCases = 0;
 
     __printf("--- Running: %s\n", getSuiteName());
 
-    cases = (TESTFUN **)suite();
+    cases = suite();
 
     while (*cases) {
         __printf("Running %u\n", numCases);

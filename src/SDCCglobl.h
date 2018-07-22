@@ -1,63 +1,56 @@
 /* SDCCglobl.h - global macros etc required by all files */
+
 #ifndef SDCCGLOBL_H
 #define SDCCGLOBL_H
+
 #include <memory.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <setjmp.h>
 #include <stdio.h>
 
+#include "SDCCset.h"
+
+
 /*
  * Define host port dependant constants etc.
  */
 
-#define DOS_DIR_SEPARATOR_CHAR	    '\\'
-#define DOS_DIR_SEPARATOR_STRING   "\\"
 #define UNIX_DIR_SEPARATOR_CHAR    '/'
-#define UNIX_DIR_SEPARATOR_STRING  "/"
 
-#if defined(__BORLANDC__)	/* Borland Turbo C/Win32 Host */
+#ifdef _WIN32       /* WIN32 native */
 
-#define NATIVE_WIN32 		1
-#define DIR_SEPARATOR_CHAR	    DOS_DIR_SEPARATOR_CHAR
-#define DIR_SEPARATOR_STRING	    DOS_DIR_SEPARATOR_STRING
+#  define NATIVE_WIN32 		1
+#  ifdef __MINGW32__  /* GCC MINGW32 depends on configure */
+#    include "sdccconf.h"
+#  else
+#    include "sdcc_vc.h"
+#    define PATH_MAX  _MAX_PATH
+#  endif
 
-#elif defined(_MSC_VER)		/* Miscosoft VC6/Win32 Host */
-
-#define NATIVE_WIN32 		1
-#include "sdcc_vc.h"
-#define DIR_SEPARATOR_CHAR	    DOS_DIR_SEPARATOR_CHAR
-#define DIR_SEPARATOR_STRING	    DOS_DIR_SEPARATOR_STRING
-
-#elif defined(__MINGW32__)	/* MINGW32 DOS Host */
-
-#define NATIVE_WIN32		1
-#define DIR_SEPARATOR_CHAR	    DOS_DIR_SEPARATOR_CHAR
-#define DIR_SEPARATOR_STRING	    DOS_DIR_SEPARATOR_STRING
-
-#else /* Assume Un*x style system */
-
-#include "sdccconf.h"
-#define DIR_SEPARATOR_CHAR	    UNIX_DIR_SEPARATOR_CHAR
-#define DIR_SEPARATOR_STRING	    UNIX_DIR_SEPARATOR_STRING
-
-#endif // _MSC_VER
+#else               /* Assume Un*x style system */
+#  include "sdccconf.h"
+#endif
 
 #include "SDCCerr.h"
 
 #define SPACE ' '
 #define ZERO  0
 
-#define  MAX_FNAME_LEN  128
+#include <limits.h>		/* PATH_MAX		     */
+#ifndef PATH_MAX		/* POSIX, but not required   */
+#  define PATH_MAX 255		/* define a reasonable value */
+#endif
+
 #define  MAX_REG_PARMS  1
 typedef int bool;
 
 #ifndef max
-#define max(a,b) (a > b ? a : b)
+#  define max(a,b) (a > b ? a : b)
 #endif
 
 #ifndef min
-#define min(a,b) (a < b ? a : b)
+#  define min(a,b) (a < b ? a : b)
 #endif
 
 #ifndef THROWS
@@ -80,19 +73,6 @@ typedef int bool;
 #define FLOATSIZE   port->s.float_size
 #define MAXBASESIZE port->s.max_base_size
 
-
-#define PRAGMA_SAVE        "SAVE"
-#define PRAGMA_RESTORE     "RESTORE"
-#define PRAGMA_NOINDUCTION "NOINDUCTION"
-#define PRAGMA_NOINVARIANT "NOINVARIANT"
-#define PRAGMA_NOLOOPREV   "NOLOOPREVERSE"
-#define PRAGMA_INDUCTION   "INDUCTION"
-#define PRAGMA_STACKAUTO   "STACKAUTO"
-#define PRAGMA_NOJTBOUND   "NOJTBOUND"
-#define PRAGMA_NOGCSE      "NOGCSE"
-#define PRAGMA_NOOVERLAY   "NOOVERLAY"
-#define PRAGMA_CALLEESAVES "CALLEE-SAVES"
-#define PRAGMA_EXCLUDE     "EXCLUDE"
 #define  SMALL_MODEL 0
 #define  LARGE_MODEL 1
 #define  TRUE 1
@@ -120,42 +100,49 @@ typedef int bool;
 #define COPYTYPE(start,end,from) (end = getSpec (start = from))
 
 
-/* generalpurpose stack related macros */
-#define  STACK_DCL(stack,type,size)                   \
-         typedef  type  t_##stack   ;                 \
-         t_##stack   stack[size]    ;                 \
-         t_##stack   (*p_##stack) = stack + (size);   \
+/* general purpose stack related macros */
+#define  STACK_DCL(stack,type,size)                                   \
+         typedef  type  t_##stack   ;                                 \
+         t_##stack   stack[size]    ;                                 \
+         t_##stack   (*p_##stack) = stack;
 
 /* define extern stack */
-#define EXTERN_STACK_DCL(stack,type,size)             \
-        typedef type t_##stack     ;                  \
-        extern t_##stack stack[size] ;                \
+#define EXTERN_STACK_DCL(stack,type,size)                             \
+        typedef type t_##stack     ;                                  \
+        extern t_##stack stack[size] ;                                \
         extern t_##stack *p_##stack;
 
-#define  STACK_FULL(stack)    ((p_##stack) <= stack )
-#define  STACK_EMPTY(stack)   ((p_##stack) >= (stack +      \
-                              sizeof(stack)/sizeof(*stack)) )
+#define  STACK_EMPTY(stack)     ((p_##stack) <= stack )
+#define  STACK_FULL(stack)      ((p_##stack) >= (stack +              \
+                                sizeof(stack)/sizeof(*stack))         )
 
-#define  STACK_PUSH_(stack,x) (*--p_##stack = (x))
-#define  STACK_POP_(stack)    (*p_##stack++)
+#define  STACK_PUSH_(stack, x)  (*++p_##stack = (x))
+#define  STACK_POP_(stack)      (*p_##stack--)
 
-#define  STACK_PUSH(stack,x)  (STACK_FULL(stack)                  \
-                              ?((t_##stack)(long)(STACK_ERR(1)))  \
-                              : STACK_PUSH_(stack,x)              )
+#define  STACK_PUSH(stack, x)   (STACK_FULL(stack)                    \
+                                ? (STACK_ERR(1, stack), *p_##stack)   \
+                                : STACK_PUSH_(stack,x)                )
 
-#define  STACK_POP(stack)     (STACK_EMPTY(stack)                 \
-                              ?((t_##stack)(long)(STACK_ERR(0)))  \
-                              : STACK_POP_(stack)                 )
+#define  STACK_POP(stack)       (STACK_EMPTY(stack)                   \
+                                ? (STACK_ERR(-1, stack), *p_##stack)  \
+                                : STACK_POP_(stack)                   )
 
-#define  STACK_PEEK(stack)    (STACK_EMPTY(stack)                 \
-                              ?((t_##stack) NULL)                 \
-                              : *p_##stack                        )
+#define  STACK_PEEK(stack)      (STACK_EMPTY(stack)                   \
+                                ? (STACK_ERR(0, stack), *p_##stack)   \
+                                : *p_##stack                          )
 
-#define  STACK_ERR(o)         ( o                                 \
-                              ? fprintf(stderr,"stack Overflow\n")\
-                              : fprintf(stderr,"stack underflow\n"))
+#define  STACK_ERR(o, stack)    (fatal(1, E_STACK_VIOLATION, #stack,  \
+                                        (o < 0)                       \
+                                        ? "underflow"                 \
+                                        : (o > 0)                     \
+                                          ? "overflow"                \
+                                          : "empty"))
 
 /* optimization options */
+/*
+ * cloneOptimize function in SDCC.lex should be updated every time
+ * a new set is added to the optimize structure!
+ */
 struct optimize
   {
     unsigned global_cse;
@@ -180,17 +167,29 @@ enum
     MODEL_COMPACT = 2,
     MODEL_MEDIUM = 4,
     MODEL_LARGE = 8,
-    MODEL_FLAT24 = 16
+    MODEL_FLAT24 = 16,
+    MODEL_PAGE0 = 32 /* for the xa51 port */
   };
 
+/* overlay segment name and the functions
+   that belong to it. used by pragma overlay */
+typedef struct {
+    char *osname;	/* overlay segment name */
+    int  nfuncs;        /* number of functions in this overlay */
+    char *funcs[128];   /* function name that belong to this */
+} olay;
+
 /* other command line options */
+/*
+ * cloneOptions function in SDCC.lex should be updated every time
+ * a new set is added to the options structure!
+ */
 struct options
   {
     int model;			/* see MODEL_* defines above */
     int stackAuto;		/* Stack Automatic  */
     int useXstack;		/* use Xternal Stack */
     int stack10bit;		/* use 10 bit stack (flat24 model only) */
-    int genericPtr;		/* use generic pointers */
     int dump_raw;		/* dump after intermediate code generation */
     int dump_gcse;		/* dump after gcse */
     int dump_loop;		/* dump after loop optimizations */
@@ -198,6 +197,7 @@ struct options
     int dump_range;		/* dump after live range analysis */
     int dump_pack;		/* dump after register packing */
     int dump_rassgn;		/* dump after register assignment */
+    int dump_tree;              /* dump front-end tree before lowering to iCode */
     int cc_only;		/* compile only flag              */
     int intlong_rent;		/* integer & long support routines reentrant */
     int float_rent;		/* floating point routines are reentrant */
@@ -205,22 +205,29 @@ struct options
     int cyclomatic;		/* print cyclomatic information */
     int noOverlay;		/* don't overlay local variables & parameters */
     int mainreturn;		/* issue a return after main */
+    int xram_movc;              /* use movc instead of movx to read xram (mcs51) */
     int nopeep;			/* no peep hole optimization */
     int asmpeep;		/* pass inline assembler thru peep hole */
     int debug;			/* generate extra debug info */
-    int stackOnData;		/* stack after data segment  */
     int c1mode;			/* Act like c1 - no pre-proc, asm or link */
     char *peep_file;		/* additional rules for peep hole */
-    char *out_name;		/* Asm output name for c1 mode */
     int nostdlib;		/* Don't use standard lib files */
     int nostdinc;		/* Don't use standard include files */
     int noRegParams;            /* Disable passing some parameters in registers */
     int verbose;		/* Show what the compiler is doing */
     int shortis8bits;           /* treat short like int or char */
+    int lessPedantic;           /* disable some warnings */
     int profile;                /* Turn on extra profiling information */
-    char *calleeSaves[128];	/* list of functions using callee save */
-    char *excludeRegs[32];	/* registers excluded from saving */
-
+    int ommitFramePtr;		/* Turn off the frame pointer. */
+    int useAccelerator;		/* use ds390 Arithmetic Accelerator */
+    int noiv;			/* do not generate irq vector table entries */
+    int all_callee_saves; 	/* callee saves for all functions */
+    int stack_probe;            /* insert call to function __stack_probe */
+    int tini_libid;		/* library ID for TINI */
+    int protect_sp_update;	/* DS390 - will disable interrupts during ESP:SP updates */
+    int parms_in_bank1;       	/* DS390 - use reg bank1 to pass parameters */
+    int stack_size;       	/* MCS51/DS390 - Tells the linker to allocate this space for stack */
+    int pack_iram;       	/* MCS51/DS390 - Tells the linker to pack variables in internal ram */
     /* starting address of the segments */
     int xstack_loc;		/* initial location of external stack */
     int stack_loc;		/* initial value of internal stack pointer */
@@ -228,17 +235,40 @@ struct options
     int data_loc;		/* interram start location       */
     int idata_loc;		/* indirect address space        */
     int code_loc;		/* code location start           */
-    int iram_size;		/* internal ram size (used only for error checking) */
+    int iram_size;		/* internal ram size (used only for error checking) */   
+    int xram_size;		/* external ram size (used only for error checking) */
+    bool xram_size_set;         /* since xram_size=0 is a possibility */
+    int code_size;		/* code size (used only for error checking) */    
+    int verboseExec;            /* show what we are doing */
+    int noXinitOpt;             /* don't optimize initialized xdata */
+    int noCcodeInAsm;           /* hide c-code from asm */
+    int iCodeInAsm;             /* show i-code in asm */
+    int printSearchDirs;        /* display the directories in the compiler's search path */
+    int vc_err_style;           /* errors and warnings are compatible with Micro$oft visual studio */
+    int use_stdout;             /* send errors to stdout instead of stderr */
+    int no_std_crt0;            /*For the z80/gbz80 do not link default crt0.o*/
+    /* sets */
+    set *calleeSavesSet;        /* list of functions using callee save */
+    set *excludeRegsSet;        /* registers excluded from saving */
+/*  set *olaysSet;               * not implemented yet: overlay segments used in #pragma OVERLAY */
   };
 
 /* forward definition for variables accessed globally */
 extern int noAssemble;         /* no assembly, stop after code generation */
 extern char *yytext;
 extern char *currFname;
-extern char *srcFileName;	/* source file name without the extenstion */
-extern char *moduleName;	/* source file name without path & extension */
+extern char *fullSrcFileName;	/* full name for the source file; */
+				/* can be NULL while linking without compiling */
+extern char *fullDstFileName;	/* full name for the output file; */
+				/* only given by -o, otherwise NULL */
+extern char *dstFileName;	/* destination file name without extension */
+extern char *dstPath;		/* path for the output files; */
+				/* "" is equivalent with cwd */
+extern char *moduleName;	/* module name is source file without path and extension */
+				/* can be NULL while linking without compiling */
+extern int seqPointNo;		/* current sequence point */
 extern int currLineno;		/* current line number    */
-extern int yylineno;		/* line number of the current file SDCC.lex */
+extern int mylineno;		/* line number of the current file SDCC.lex */
 extern FILE *yyin;		/* */
 extern FILE *asmFile;		/* assembly output file */
 extern FILE *cdbFile;		/* debugger symbol file */
@@ -246,26 +276,25 @@ extern int NestLevel;		/* NestLevel                 SDCC.y   */
 extern int stackPtr;		/* stack pointer             SDCC.y   */
 extern int xstackPtr;		/* external stack pointer    SDCC.y   */
 extern int reentrant;		/* /X flag has been sent     SDCC.y */
-extern char buffer[];		/* general buffer      SDCCgen.c   */
-extern int currRegBank;		/* register bank being used   SDCCgens.c   */
+extern char buffer[PATH_MAX * 2];/* general buffer           SDCCmain.c   */
+extern int currRegBank;		/* register bank being used  SDCCgens.c   */
+extern int RegBankUsed[4];	/* JCF: register banks used  SDCCmain.c   */
 extern struct symbol *currFunc;	/* current function    SDCCgens.c */
 extern int cNestLevel;		/* block nest level  SDCCval.c      */
 extern int currBlockno;		/* sequentail block number */
 extern struct optimize optimize;
 extern struct options options;
 extern unsigned maxInterrupts;
+extern int ignoreTypedefType;
 
 /* Visible from SDCCmain.c */
-extern int nrelFiles;
-extern char *relFiles[128];
-extern char *libFiles[128];
-extern int nlibFiles;
-extern char *libPaths[128];
-extern int nlibPaths;
+extern set *preArgvSet;
+extern set *relFilesSet;
+extern set *libFilesSet;
+extern set *libPathsSet;
+extern set *libDirsSet;         /* list of lib search directories */
 
-extern bool verboseExec ;
-
-void parseWithComma (char **, char *);
+void setParseWithComma (set **, char *);
 
 /** Creates a temporary file a'la tmpfile which avoids the bugs
     in cygwin wrt c:\tmp.
@@ -273,10 +302,11 @@ void parseWithComma (char **, char *);
 */
 FILE *tempfile (void);
 
-/** Creates a duplicate of the string 'sz' a'la strdup but using
-    libgc.
+/** Creates a temporary file name a'la tmpnam which avoids the bugs
+    in cygwin wrt c:\tmp.
+    Scans, in order: TMP, TEMP, TMPDIR, else uses tmpfile().
 */
-char *gc_strdup (const char *sz);
+char *tempfilename (void);
 
 /** An assert() macro that will go out through sdcc's error
     system.
@@ -311,6 +341,17 @@ extern struct _dumpFiles dumpFiles[];
 /* Buffer which can be used to hold a file name; assume it will
  * be trashed by any function call within SDCC.
  */
-extern char scratchFileName[FILENAME_MAX];
+extern char scratchFileName[PATH_MAX];
+
+/* Define well known filenos if the system does not define them.  */
+#ifndef STDIN_FILENO
+# define STDIN_FILENO   0
+#endif
+#ifndef STDOUT_FILENO
+# define STDOUT_FILENO  1
+#endif
+#ifndef STDERR_FILENO
+# define STDERR_FILENO  2
+#endif
 
 #endif

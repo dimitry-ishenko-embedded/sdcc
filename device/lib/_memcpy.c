@@ -26,24 +26,21 @@
 
 #if !_SDCC_PORT_PROVIDES_MEMCPY
 
-#define NULL (void *)0
-
 void * memcpy (
 	void * dst,
 	void * src,
-	int acount
+	size_t acount
 	) 
 {
 #if _SDCC_Z80_STYLE_LIB_OPT
 
-#pragma NOINDUCTION
+#pragma noinduction
 
 	char * d = dst;
 	char * s = src;
-	int count = -acount;
+	/* PENDING: Divide first to get around sign problems */
+	int count = -(acount >> 2);
 
-        count /= 4;
-        
         while (count) {
 		*d++ = *s++;
 		*d++ = *s++;

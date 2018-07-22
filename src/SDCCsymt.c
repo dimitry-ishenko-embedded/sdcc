@@ -24,6 +24,17 @@
 #include "common.h"
 #include "newalloc.h"
 
+value *aggregateToPointer (value *val);
+void printTypeChainRaw (sym_link * start, FILE * of);
+
+void printFromToType(sym_link *from, sym_link *to) {
+  fprintf (stderr, "from type '");
+  printTypeChain (from, stderr);
+  fprintf (stderr, "'\nto type '");
+  printTypeChain (to, stderr);
+  fprintf (stderr, "'\n");
+}
+
 /* noun strings */
 char *nounName(sym_link *sl) {
   switch (SPEC_NOUN(sl)) 
@@ -38,6 +49,7 @@ char *nounName(sym_link *sl) {
     case V_VOID: return "void";
     case V_STRUCT: return "struct";
     case V_LABEL: return "label";
+    case V_BITFIELD: return "bitfield";
     case V_BIT: return "bit";
     case V_SBIT: return "sbit";
     case V_DOUBLE: return "double";
@@ -72,7 +84,7 @@ newBucket ()
 {
   bucket *bp;
 
-  bp = Safe_calloc (1, sizeof (bucket));
+  bp = Safe_alloc ( sizeof (bucket));
 
   return bp;
 }
@@ -105,22 +117,30 @@ addSym (bucket ** stab,
   bucket *bp;			/* temp bucket    *         */
 
   if (checkType) {
+    symbol *csym = (symbol *)sym;
+
     if (getenv("DEBUG_SANITY")) {
       fprintf (stderr, "addSym: %s ", sname);
     }
     /* make sure the type is complete and sane */
-    checkTypeSanity(((symbol *)sym)->etype, ((symbol *)sym)->name);
+    checkTypeSanity(csym->etype, csym->name);
+  }
+
+  /* prevent overflow of the (r)name buffers */
+  if (strlen(sname)>SDCC_SYMNAME_MAX) {
+    werror (W_SYMBOL_NAME_TOO_LONG, SDCC_SYMNAME_MAX);
+    sname[SDCC_SYMNAME_MAX]='\0';
   }
 
   /* the symbols are always added at the head of the list  */
   i = hashKey (sname);
   /* get a free entry */
-  bp = Safe_calloc (1, sizeof (bucket));
+  bp = Safe_alloc ( sizeof (bucket));
 
   bp->sym = sym;		/* update the symbol pointer  */
   bp->level = level;		/* update the nest level      */
   bp->block = block;
-  strcpy (bp->name, sname);	/* copy the name into place */
+  strncpyz (bp->name, sname, sizeof(bp->name));	/* copy the name into place */
 
   /* if this is the first entry */
   if (stab[i] == NULL)
@@ -217,13 +237,12 @@ findSymWithLevel (bucket ** stab, symbol * sym)
    **/
   while (bp)
     {
-
       if (strcmp (bp->name, sym->name) == 0 && bp->level <= sym->level)
 	{
 	  /* if this is parameter then nothing else need to be checked */
 	  if (((symbol *) (bp->sym))->_isparm)
 	    return (bp->sym);
-	  /* if levels match then block numbers hsould also match */
+	  /* if levels match then block numbers should also match */
 	  if (bp->level && bp->level == sym->level && bp->block == sym->block)
 	    return (bp->sym);
 	  /* if levels don't match then we are okay */
@@ -268,12 +287,13 @@ newSymbol (char *name, int scope)
 {
   symbol *sym;
 
-  sym = Safe_calloc (1, sizeof (symbol));
+  sym = Safe_alloc ( sizeof (symbol));
 
-  strcpy (sym->name, name);	/* copy the name    */
+  strncpyz (sym->name, name, sizeof(sym->name));	/* copy the name */
   sym->level = scope;		/* set the level    */
   sym->block = currBlockno;
-  sym->lineDef = yylineno;	/* set the line number */
+  sym->lineDef = mylineno;	/* set the line number */
+  sym->fileDef = currFname;
   return sym;
 }
 
@@ -281,11 +301,12 @@ newSymbol (char *name, int scope)
 /* newLink - creates a new link (declarator,specifier)              */
 /*------------------------------------------------------------------*/
 sym_link *
-newLink ()
+newLink (SYM_LINK_CLASS select)
 {
   sym_link *p;
 
-  p = Safe_calloc (1, sizeof (sym_link));
+  p = Safe_alloc ( sizeof (sym_link));
+  p->class=select;
 
   return p;
 }
@@ -298,10 +319,41 @@ newStruct (char *tag)
 {
   structdef *s;
 
-  s = Safe_calloc (1, sizeof (structdef));
+  s = Safe_alloc ( sizeof (structdef));
 
-  strcpy (s->tag, tag);		/* copy the tag            */
+  strncpyz (s->tag, tag, sizeof(s->tag));		/* copy the tag */
   return s;
+}
+  
+/*------------------------------------------------------------------*/
+/* sclsFromPtr - Return the storage class a pointer points into.    */
+/*               S_FIXED is returned for generic pointers or other  */
+/*               unexpected cases                                   */
+/*------------------------------------------------------------------*/
+STORAGE_CLASS
+sclsFromPtr(sym_link *ptr)
+{
+  switch (DCL_TYPE (ptr))
+    {
+    case POINTER:
+      return S_DATA;
+    case GPOINTER:
+      return S_FIXED;
+    case FPOINTER:
+      return S_XDATA;
+    case CPOINTER:
+      return S_CODE;
+    case IPOINTER:
+      return S_IDATA;
+    case PPOINTER:
+      return S_PDATA;
+    case EEPPOINTER:
+      return S_EEPROM;
+    case FUNCTION:
+      return S_CODE;
+    default:
+      return S_FIXED;
+    }
 }
 
 /*------------------------------------------------------------------*/
@@ -330,8 +382,6 @@ pointerTypes (sym_link * ptr, sym_link * type)
      storage class of the type */
   if (IS_SPEC (type))
     {
-      DCL_PTR_CONST (ptr) = SPEC_CONST (type);
-      DCL_PTR_VOLATILE (ptr) = SPEC_VOLATILE (type);
       switch (SPEC_SCLS (type))
 	{
 	case S_XDATA:
@@ -347,20 +397,17 @@ pointerTypes (sym_link * ptr, sym_link * type)
 	  DCL_TYPE (ptr) = POINTER;
 	  break;
 	case S_CODE:
-	  DCL_PTR_CONST (ptr) = port->mem.code_ro;
 	  DCL_TYPE (ptr) = CPOINTER;
 	  break;
 	case S_EEPROM:
 	  DCL_TYPE (ptr) = EEPPOINTER;
 	  break;
 	default:
-	  DCL_TYPE (ptr) = GPOINTER;
+	  DCL_TYPE (ptr) = port->unqualified_pointer;
 	  break;
 	}
       /* the storage class of type ends here */
-      SPEC_SCLS (type) =
-	SPEC_CONST (type) =
-	SPEC_VOLATILE (type) = 0;
+      SPEC_SCLS (type) = 0;
     }
 
   /* now change all the remaining unknown pointers
@@ -368,7 +415,7 @@ pointerTypes (sym_link * ptr, sym_link * type)
   while (ptr)
     {
       if (!IS_SPEC (ptr) && DCL_TYPE (ptr) == UPOINTER)
-	DCL_TYPE (ptr) = GPOINTER;
+	DCL_TYPE (ptr) = port->unqualified_pointer;
       ptr = ptr->next;
     }
 
@@ -377,10 +424,9 @@ pointerTypes (sym_link * ptr, sym_link * type)
   while (type)
     {
       if (!IS_SPEC (type) && DCL_TYPE (type) == UPOINTER)
-	DCL_TYPE (type) = GPOINTER;
+	DCL_TYPE (type) = port->unqualified_pointer;
       type = type->next;
     }
-
 }
 
 /*------------------------------------------------------------------*/
@@ -393,6 +439,9 @@ addDecl (symbol * sym, int type, sym_link * p)
   sym_link *tail;
   sym_link *t;
 
+  if (getenv("SDCC_DEBUG_FUNCTION_POINTERS"))
+    fprintf (stderr, "SDCCsymt.c:addDecl(%s,%d,%p)\n", sym->name, type, p);
+
   /* if we are passed a link then set head & tail */
   if (p)
     {
@@ -402,7 +451,7 @@ addDecl (symbol * sym, int type, sym_link * p)
     }
   else
     {
-      head = tail = newLink ();
+      head = tail = newLink (DECLARATOR);
       DCL_TYPE (head) = type;
     }
 
@@ -447,14 +496,17 @@ addDecl (symbol * sym, int type, sym_link * p)
     {
       if (!IS_SPEC (sym->etype))
 	{
-	  sym->etype = sym->etype->next = newLink ();
-	  sym->etype->class = SPECIFIER;
+	  sym->etype = sym->etype->next = newLink (SPECIFIER);
 	}
       SPEC_SCLS (sym->etype) = SPEC_SCLS (DCL_TSPEC (p));
-      SPEC_CONST (sym->etype) = SPEC_CONST (DCL_TSPEC (p));
-      SPEC_VOLATILE (sym->etype) = SPEC_VOLATILE (DCL_TSPEC (p));
       DCL_TSPEC (p) = NULL;
     }
+
+  // if there is a function in this type chain
+  if (p && funcInChain(sym->type)) {
+    processFuncArgs (sym);
+  }
+
   return;
 }
 
@@ -482,7 +534,7 @@ void checkTypeSanity(sym_link *etype, char *name) {
   noun=nounName(etype);
 
   if (getenv("DEBUG_SANITY")) {
-    fprintf (stderr, "checking sanity for %s %x\n", name, (int)etype);
+    fprintf (stderr, "checking sanity for %s %p\n", name, etype);
   }
 
   if ((SPEC_NOUN(etype)==V_CHAR || 
@@ -531,34 +583,15 @@ void checkTypeSanity(sym_link *etype, char *name) {
 sym_link *
 mergeSpec (sym_link * dest, sym_link * src, char *name)
 {
-
-  sym_link *symlink;
-
-  if (!IS_SPEC(dest)) {
-    // This can happen for pointers, find the end type
-    while (dest && !IS_SPEC(dest))
-      dest=dest->next;
-  }
-  if (!IS_SPEC(src)) {
-    // here we have a declarator as source, reverse them
-    symlink=src;
-    src=dest;
-    dest=symlink;
-    while (dest && !IS_SPEC(dest)) {
-      // and find the specifier
-      dest=dest->next;
-    }
-  } else {
-    symlink=dest;
-  }
-
   if (!IS_SPEC(dest) || !IS_SPEC(src)) {
+#if 0
     werror (E_INTERNAL_ERROR, __FILE__, __LINE__, "cannot merge declarator");
     exit (1);
-  }
-
-  if (getenv("DEBUG_mergeSpec")) {
-    fprintf (stderr, "mergeSpec: \"%s\"\n", name);
+#else
+    werror (E_SYNTAX_ERROR, yytext);
+    // the show must go on
+    return newIntLink();
+#endif
   }
 
   if (SPEC_NOUN(src)) {
@@ -604,41 +637,36 @@ mergeSpec (sym_link * dest, sym_link * src, char *name)
   dest->select.s._signed|=src->select.s._signed;
   SPEC_STAT (dest) |= SPEC_STAT (src);
   SPEC_EXTR (dest) |= SPEC_EXTR (src);
+  SPEC_CONST(dest) |= SPEC_CONST (src);
   SPEC_ABSA (dest) |= SPEC_ABSA (src);
-  SPEC_RENT (dest) |= SPEC_RENT (src);
-  SPEC_INTN (dest) |= SPEC_INTN (src);
-  SPEC_BANK (dest) |= SPEC_BANK (src);
   SPEC_VOLATILE (dest) |= SPEC_VOLATILE (src);
-  SPEC_CRTCL (dest) |= SPEC_CRTCL (src);
   SPEC_ADDR (dest) |= SPEC_ADDR (src);
   SPEC_OCLS (dest) = SPEC_OCLS (src);
   SPEC_BLEN (dest) |= SPEC_BLEN (src);
   SPEC_BSTR (dest) |= SPEC_BSTR (src);
   SPEC_TYPEDEF (dest) |= SPEC_TYPEDEF (src);
-  SPEC_NONBANKED (dest) |= SPEC_NONBANKED (src);
-  SPEC_NAKED (dest) |= SPEC_NAKED (src);
-
+  SPEC_ENUM (dest) |= SPEC_ENUM (src);
+  if (SPEC_ARGREG(src) && !SPEC_ARGREG(dest))
+      SPEC_ARGREG(dest) = SPEC_ARGREG(src);
+  
   if (IS_STRUCT (dest) && SPEC_STRUCT (dest) == NULL)
     SPEC_STRUCT (dest) = SPEC_STRUCT (src);
 
-  return symlink;
-}
+  /* these are the only function attributes that will be set 
+     in a specifier while parsing */
+  FUNC_NONBANKED(dest) |= FUNC_NONBANKED(src);
+  FUNC_BANKED(dest) |= FUNC_BANKED(src);
+  FUNC_ISCRITICAL(dest) |= FUNC_ISCRITICAL(src);
+  FUNC_ISREENT(dest) |= FUNC_ISREENT(src);
+  FUNC_ISNAKED(dest) |= FUNC_ISNAKED(src);
+  FUNC_ISISR(dest) |= FUNC_ISISR(src);
+  FUNC_ISJAVANATIVE(dest) |= FUNC_ISJAVANATIVE(src);
+  FUNC_ISBUILTIN(dest) |= FUNC_ISBUILTIN(src);
+  FUNC_ISOVERLAY(dest) |= FUNC_ISOVERLAY(src);
+  FUNC_INTNO(dest) |= FUNC_INTNO(src);
+  FUNC_REGBANK(dest) |= FUNC_REGBANK(src);
 
-/*------------------------------------------------------------------*/
-/* cloneSpec - copies the entire spec and returns a new spec        */
-/*------------------------------------------------------------------*/
-sym_link *
-cloneSpec (sym_link * src)
-{
-  sym_link *spec;
-
-  /* go thru chain till we find the specifier */
-  while (src && src->class != SPECIFIER)
-    src = src->next;
-
-  spec = newLink ();
-  memcpy (spec, src, sizeof (sym_link));
-  return spec;
+  return dest;
 }
 
 /*------------------------------------------------------------------*/
@@ -650,7 +678,7 @@ genSymName (int level)
   static int gCount = 0;
   static char gname[SDCC_NAME_MAX + 1];
 
-  sprintf (gname, "__%04d%04d", level, gCount++);
+  SNPRINTF (gname, sizeof(gname), "__%04d%04d", level, gCount++);
   return gname;
 }
 
@@ -677,8 +705,7 @@ newCharLink ()
 {
   sym_link *p;
 
-  p = newLink ();
-  p->class = SPECIFIER;
+  p = newLink (SPECIFIER);
   SPEC_NOUN (p) = V_CHAR;
 
   return p;
@@ -692,8 +719,7 @@ newFloatLink ()
 {
   sym_link *p;
 
-  p = newLink ();
-  p->class = SPECIFIER;
+  p = newLink (SPECIFIER);
   SPEC_NOUN (p) = V_FLOAT;
 
   return p;
@@ -707,8 +733,7 @@ newLongLink ()
 {
   sym_link *p;
 
-  p = newLink ();
-  p->class = SPECIFIER;
+  p = newLink (SPECIFIER);
   SPEC_NOUN (p) = V_INT;
   SPEC_LONG (p) = 1;
 
@@ -723,8 +748,7 @@ newIntLink ()
 {
   sym_link *p;
 
-  p = newLink ();
-  p->class = SPECIFIER;
+  p = newLink (SPECIFIER);
   SPEC_NOUN (p) = V_INT;
 
   return p;
@@ -756,8 +780,9 @@ getSize (sym_link * p)
 	case V_LABEL:
 	  return 0;
 	case V_SBIT:
-	  return BITSIZE;
 	case V_BIT:
+	  return BITSIZE;
+	case V_BITFIELD:
 	  return ((SPEC_BLEN (p) / 8) + (SPEC_BLEN (p) % 8 ? 1 : 0));
 	default:
 	  return 0;
@@ -767,10 +792,14 @@ getSize (sym_link * p)
   /* this is a specifier  */
   switch (DCL_TYPE (p))
     {
-    case FUNCTION:
-      return 2;
     case ARRAY:
-      return DCL_ELEM (p) * getSize (p->next);
+      if (DCL_ELEM(p)) {
+	return DCL_ELEM (p) * getSize (p->next);
+      } else {
+	  //	werror (E_INTERNAL_ERROR, __FILE__, __LINE__, 
+	  //	"can not tell the size of an array[]");
+	return 0;
+      }
     case IPOINTER:
     case PPOINTER:
     case POINTER:
@@ -778,6 +807,7 @@ getSize (sym_link * p)
     case EEPPOINTER:
     case FPOINTER:
     case CPOINTER:
+    case FUNCTION:
       return (FPTRSIZE);
     case GPOINTER:
       return (GPTRSIZE);
@@ -815,8 +845,9 @@ bitsForType (sym_link * p)
 	case V_LABEL:
 	  return 0;
 	case V_SBIT:
-	  return 1;
 	case V_BIT:
+	  return 1;
+	case V_BITFIELD:
 	  return SPEC_BLEN (p);
 	default:
 	  return 0;
@@ -826,8 +857,6 @@ bitsForType (sym_link * p)
   /* this is a specifier  */
   switch (DCL_TYPE (p))
     {
-    case FUNCTION:
-      return 2;
     case ARRAY:
       return DCL_ELEM (p) * getSize (p->next) * 8;
     case IPOINTER:
@@ -837,6 +866,7 @@ bitsForType (sym_link * p)
     case EEPPOINTER:
     case FPOINTER:
     case CPOINTER:
+    case FUNCTION:
       return (FPTRSIZE * 8);
     case GPOINTER:
       return (GPTRSIZE * 8);
@@ -881,9 +911,7 @@ copySymbol (symbol * src)
   dest->type = copyLinkChain (src->type);
   dest->etype = getSpec (dest->type);
   dest->next = NULL;
-  dest->args = copyValueChain (src->args);
   dest->key = src->key;
-  dest->calleeSave = src->calleeSave;
   dest->allocreq = src->allocreq;
   return dest;
 }
@@ -946,36 +974,82 @@ addSymChain (symbol * symHead)
 {
   symbol *sym = symHead;
   symbol *csym = NULL;
+  int error = 0;
 
   for (; sym != NULL; sym = sym->next)
     {
       changePointer(sym);
       checkTypeSanity(sym->etype, sym->name);
 
+      if (!sym->level && !(IS_SPEC(sym->etype) && IS_TYPEDEF(sym->etype)))
+        checkDecl (sym, 0);
+      
       /* if already exists in the symbol table then check if
          one of them is an extern definition if yes then
          then check if the type match, if the types match then
          delete the current entry and add the new entry      */
       if ((csym = findSymWithLevel (SymbolTab, sym)) &&
 	  csym->level == sym->level) {
-	
-	/* one definition extern ? */
-	if (IS_EXTERN (csym->etype) || IS_EXTERN (sym->etype)) {
-	  /* do types match ? */
-	  if (compareType (csym->type, sym->type) != 1) {
-	    /* no then error */
-	    werror (E_EXTERN_MISMATCH, csym->name);
-	    continue;
+
+	/* If the previous definition was for an array with incomplete */
+	/* type, and the new definition has completed the type, update */
+	/* the original type to match */
+	if (IS_DECL(csym->type) && DCL_TYPE(csym->type)==ARRAY
+	    && IS_DECL(sym->type) && DCL_TYPE(sym->type)==ARRAY)
+	  {
+	    if (!DCL_ELEM(csym->type) && DCL_ELEM(sym->type))
+	      DCL_ELEM(csym->type) = DCL_ELEM(sym->type);
 	  }
-	  /* delete current entry */
-	  deleteSym (SymbolTab, csym, csym->name);
-	} else {
-	  /* not extern */
-	  werror (E_DUPLICATE, sym->name);
+
+	#if 0
+	/* If only one of the definitions used the "at" keyword, copy */
+	/* the address to the other. */
+	if (IS_SPEC(csym->etype) && SPEC_ABSA(csym->etype)
+	    && IS_SPEC(sym->etype) && !SPEC_ABSA(sym->etype))
+	  {
+	    SPEC_ABSA (sym->etype) = 1;
+	    SPEC_ADDR (sym->etype) = SPEC_ADDR (csym->etype);
+	  }
+	if (IS_SPEC(csym->etype) && !SPEC_ABSA(csym->etype)
+	    && IS_SPEC(sym->etype) && SPEC_ABSA(sym->etype))
+	  {
+	    SPEC_ABSA (csym->etype) = 1;
+	    SPEC_ADDR (csym->etype) = SPEC_ADDR (sym->etype);
+	  }
+	#endif
+  
+        error = 0;        
+        if (csym->ival && sym->ival)
+          error = 1;
+	if (compareTypeExact (csym->type, sym->type, sym->level) != 1)
+          error = 1;
+        
+        if (error) {
+          /* one definition extern ? */
+	  if (IS_EXTERN (csym->etype) || IS_EXTERN (sym->etype))
+	    werror (E_EXTERN_MISMATCH, sym->name);
+          else
+	    werror (E_DUPLICATE, sym->name);
+	  fprintf (stderr, "from type '");
+	  printTypeChain (csym->type, stderr);
+	  if (IS_SPEC (csym->etype) && SPEC_ABSA (csym->etype))
+	    fprintf(stderr, " at 0x%x", SPEC_ADDR (csym->etype));
+	  fprintf (stderr, "'\nto type '");
+	  printTypeChain (sym->type, stderr);
+	  if (IS_SPEC (sym->etype) && SPEC_ABSA (sym->etype))
+	    fprintf(stderr, " at 0x%x", SPEC_ADDR (sym->etype));
+	  fprintf (stderr, "'\n");
 	  continue;
 	}
-      }
 
+	if (csym->ival && !sym->ival)
+	  sym->ival = csym->ival;
+
+	/* delete current entry */
+	deleteSym (SymbolTab, csym, csym->name);
+	deleteFromSeg(csym);
+      }
+      
       /* add new entry */
       addSym (SymbolTab, sym, sym->name, sym->level, sym->block, 1);
     }
@@ -998,38 +1072,40 @@ funcInChain (sym_link * lnk)
 }
 
 /*------------------------------------------------------------------*/
-/* structElemType - returns the type info of a sturct member        */
+/* structElemType - returns the type info of a struct member        */
 /*------------------------------------------------------------------*/
 sym_link *
-structElemType (sym_link * stype, value * id, value ** argsp)
+structElemType (sym_link * stype, value * id)
 {
   symbol *fields = (SPEC_STRUCT (stype) ? SPEC_STRUCT (stype)->fields : NULL);
   sym_link *type, *etype;
   sym_link *petype = getSpec (stype);
 
-  if (!fields || !id)
-    return NULL;
+  if (fields && id) {
+    
+    /* look for the id */
+    while (fields)
+      {
+	if (strcmp (fields->rname, id->name) == 0)
+	  {
+	    type = copyLinkChain (fields->type);
+	    etype = getSpec (type);
+	    SPEC_SCLS (etype) = (SPEC_SCLS (petype) == S_REGISTER ?
+				 SPEC_SCLS (etype) : SPEC_SCLS (petype));
+            if (IS_SPEC (type))
+              SPEC_CONST (type) |= SPEC_CONST (stype);
+            else
+              DCL_PTR_CONST (type) |= SPEC_CONST (stype);
+	    return type;
+	  }
+	fields = fields->next;
+      }
+  }
 
-  /* look for the id */
-  while (fields)
-    {
-      if (strcmp (fields->rname, id->name) == 0)
-	{
-	  if (argsp)
-	    {
-	      *argsp = fields->args;
-	    }
-	  type = copyLinkChain (fields->type);
-	  etype = getSpec (type);
-	  SPEC_SCLS (etype) = (SPEC_SCLS (petype) == S_REGISTER ?
-			       SPEC_SCLS (etype) : SPEC_SCLS (petype));
-	  return type;
-	}
-      fields = fields->next;
-    }
   werror (E_NOT_MEMBER, id->name);
-
-  return NULL;
+    
+  // the show must go on
+  return newIntLink();
 }
 
 /*------------------------------------------------------------------*/
@@ -1064,61 +1140,89 @@ compStructSize (int su, structdef * sdef)
     while (loop) {
 
 	/* create the internal name for this variable */
-	sprintf (loop->rname, "_%s", loop->name);
-	loop->offset = (su == UNION ? sum = 0 : sum);
+	SNPRINTF (loop->rname, sizeof(loop->rname), "_%s", loop->name);
+	if (su == UNION) {
+	    sum = 0;
+	    bitOffset = 0;
+	}
 	SPEC_VOLATILE (loop->etype) |= (su == UNION ? 1 : 0);
 
 	/* if this is a bit field  */
 	if (loop->bitVar) {
 
 	    /* change it to a unsigned bit */
-	    SPEC_NOUN (loop->etype) = V_BIT;
+	    SPEC_NOUN (loop->etype) = V_BITFIELD;
 	    SPEC_USIGN (loop->etype) = 1;
-	    /* check if this fit into the remaining   */
-	    /* bits of this byte else align it to the */
-	    /* next byte boundary                     */
-	    if ((SPEC_BLEN (loop->etype) = loop->bitVar) <= (8 - bitOffset)) {
-		SPEC_BSTR (loop->etype) = bitOffset;
-		if ((bitOffset += (loop->bitVar % 8)) == 8)
+	    SPEC_BLEN (loop->etype) = loop->bitVar;
+
+	    if (loop->bitVar == BITVAR_PAD) {
+	        /* A zero length bitfield forces padding */
+	        SPEC_BSTR (loop->etype) = bitOffset;
+		SPEC_BLEN (loop->etype) = 0;
+	        bitOffset = 8;
+	        loop->offset = sum;
+	    }
+	    else {
+	        if (bitOffset == 8) {
+	            bitOffset = 0;
+	            sum++;
+	        }
+		/* check if this fit into the remaining   */
+		/* bits of this byte else align it to the */
+		/* next byte boundary                     */
+		if (loop->bitVar <= (8 - bitOffset)) {
+		    /* fits into current byte */
+		    loop->offset = sum;
+		    SPEC_BSTR (loop->etype) = bitOffset;
+		    bitOffset += loop->bitVar;
+		}
+		else if (!bitOffset) {
+		    /* does not fit, but is already byte aligned */
+		    loop->offset = sum;
+		    SPEC_BSTR (loop->etype) = bitOffset;
+		    bitOffset += loop->bitVar;
+		} 
+		else {
+		    /* does not fit; need to realign first */
 		    sum++;
-	    }
-	    else /* does not fit */ {
-		bitOffset = 0;
-		SPEC_BSTR (loop->etype) = bitOffset;
-		sum += (loop->bitVar / 8);
-		bitOffset += (loop->bitVar % 8);
-	    }
-	    /* if this is the last field then pad */
-	    if (!loop->next && bitOffset && bitOffset != 8) {
-		bitOffset = 0;
-		sum++;
+		    loop->offset = (su == UNION ? sum = 0 : sum);
+		    bitOffset = 0;
+		    SPEC_BSTR (loop->etype) = bitOffset;
+		    bitOffset += loop->bitVar;
+	        }
+	        while (bitOffset>8) {
+	            bitOffset -= 8;
+	            sum++;
+	        } 
 	    }
 	}
 	else {
+	    /* This is a non-bit field. Make sure we are */
+	    /* byte aligned first */
+	    if (bitOffset) {
+		sum++;
+		loop->offset = (su == UNION ? sum = 0 : sum);
+		bitOffset = 0;
+	    }
+	    loop->offset = sum;
 	    checkDecl (loop, 1);
 	    sum += getSize (loop->type);
 	}
 
-	/* if function then do the arguments for it */
-	if (funcInChain (loop->type)) {
-	    processFuncArgs (loop, 1);
-	}
-
 	loop = loop->next;
 
-	/* if this is not a bitfield but the */
-	/* previous one was and did not take */
-	/* the whole byte then pad the rest  */
-	if ((loop && !loop->bitVar) && bitOffset) {
-	    bitOffset = 0;
-	    sum++;
+	/* if union then size = sizeof larget field */
+	if (su == UNION) {
+	    /* For UNION, round up after each field */
+	    sum += ((bitOffset+7)/8);
+	    usum = max (usum, sum);
 	}
 
-	/* if union then size = sizeof larget field */
-	if (su == UNION)
-	    usum = max (usum, sum);
-
     }
+    
+    /* For STRUCT, round up after all fields processed */
+    if (su != UNION)
+	sum += ((bitOffset+7)/8);
 
     return (su == UNION ? usum : sum);
 }
@@ -1129,52 +1233,77 @@ compStructSize (int su, structdef * sdef)
 static void 
 checkSClass (symbol * sym, int isProto)
 {
+  sym_link *t;
+  
   if (getenv("DEBUG_SANITY")) {
     fprintf (stderr, "checkSClass: %s \n", sym->name);
   }
-  if (strcmp(sym->name, "_testsGlobal")==0) {
-    printf ("oach\n");
-  }
   
-  /* type is literal can happen foe enums change
+  /* type is literal can happen for enums change
      to auto */
   if (SPEC_SCLS (sym->etype) == S_LITERAL && !SPEC_ENUM (sym->etype))
     SPEC_SCLS (sym->etype) = S_AUTO;
   
-  /* if sfr or sbit then must also be */
-  /* volatile the initial value will be xlated */
-  /* to an absolute address */
+  /* if sfr or sbit then must also be volatile */
   if (SPEC_SCLS (sym->etype) == S_SBIT ||
       SPEC_SCLS (sym->etype) == S_SFR)
     {
       SPEC_VOLATILE (sym->etype) = 1;
-      /* if initial value given */
-      if (sym->ival)
-	{
-	  SPEC_ABSA (sym->etype) = 1;
-	  SPEC_ADDR (sym->etype) =
-	    (int) list2int (sym->ival);
-	  sym->ival = NULL;
-	}
     }
   
   /* if absolute address given then it mark it as
-     volatile */
-  if (IS_ABSOLUTE (sym->etype))
-    SPEC_VOLATILE (sym->etype) = 1;
+     volatile -- except in the PIC port */
+
+#if !OPT_DISABLE_PIC || !OPT_DISABLE_PIC16
+  /* The PIC port uses a different peep hole optimizer based on "pCode" */
+  if (!TARGET_IS_PIC && !TARGET_IS_PIC16)
+#endif
+
+    if (IS_ABSOLUTE (sym->etype))
+      SPEC_VOLATILE (sym->etype) = 1;
   
-  /* global variables declared const put into code */
-  if (sym->level == 0 &&
-      SPEC_CONST (sym->etype)) {
-    SPEC_SCLS (sym->etype) = S_CODE;
+  /* If code memory is read only, then pointers to code memory */
+  /* implicitly point to constants -- make this explicit       */
+  t = sym->type;
+  while (t && t->next) {
+    if (IS_CODEPTR(t) && port->mem.code_ro) {
+      if (IS_SPEC(t->next)) {
+        SPEC_CONST (t->next) = 1;
+      } else {
+        DCL_PTR_CONST (t->next) = 1;
+      }
+    }
+    t = t->next;
   }
-  
+
+  /* global variables declared const put into code */
+  /* if no other storage class specified */
+  if (sym->level == 0 &&
+      SPEC_SCLS(sym->etype) == S_FIXED &&
+      !IS_FUNC(sym->type)) {
+    /* find the first non-array link */
+    t = sym->type;
+    while (IS_ARRAY(t))
+      t = t->next;
+    if (IS_CONSTANT (t)) {
+      SPEC_SCLS (sym->etype) = S_CODE;
+    }
+  }
+
   /* global variable in code space is a constant */
   if (sym->level == 0 &&
       SPEC_SCLS (sym->etype) == S_CODE &&
-      port->mem.code_ro)
-    SPEC_CONST (sym->etype) = 1;
-  
+      port->mem.code_ro) {
+    /* find the first non-array link */
+    t = sym->type;
+    while (IS_ARRAY(t))
+      t = t->next;
+    if (IS_SPEC(t)) {
+      SPEC_CONST (t) = 1;
+    } else {
+      DCL_PTR_CONST (t) = 1;
+    }
+  }
 
   /* if bit variable then no storage class can be */
   /* specified since bit is already a storage */
@@ -1195,7 +1324,7 @@ checkSClass (symbol * sym, int isProto)
       sym->ival = NULL;
     }
 
-  /* if this is an atomatic symbol */
+  /* if this is an automatic symbol */
   if (sym->level && (options.stackAuto || reentrant)) {
     if ((SPEC_SCLS (sym->etype) == S_AUTO ||
 	 SPEC_SCLS (sym->etype) == S_FIXED ||
@@ -1210,7 +1339,7 @@ checkSClass (symbol * sym, int isProto)
       }
     }
   }
-  
+
   /* automatic symbols cannot be given   */
   /* an absolute address ignore it      */
   if (sym->level &&
@@ -1226,6 +1355,7 @@ checkSClass (symbol * sym, int isProto)
   if ((IS_ARRAY (sym->type) || IS_PTR (sym->type)) &&
       (SPEC_NOUN (sym->etype) == V_BIT ||
        SPEC_NOUN (sym->etype) == V_SBIT ||
+       SPEC_NOUN (sym->etype) == V_BITFIELD ||
        SPEC_SCLS (sym->etype) == S_SFR))
     werror (E_BIT_ARRAY, sym->name);
 
@@ -1254,7 +1384,7 @@ checkSClass (symbol * sym, int isProto)
   if (sym->level && SPEC_SCLS (sym->etype) == S_FIXED &&
       !IS_STATIC(sym->etype))
     {
-      if (options.stackAuto || (currFunc && IS_RENT (currFunc->etype)))
+      if (options.stackAuto || (currFunc && IFFUNC_ISREENT (currFunc->type)))
 	{
 	  SPEC_SCLS (sym->etype) = (options.useXstack ?
 				    S_XSTACK : S_STACK);
@@ -1265,7 +1395,8 @@ checkSClass (symbol * sym, int isProto)
 	   * control this allcoation, but the code was originally that way, and
 	   * changing it for non-390 ports breaks the compiler badly.
 	   */
-	  bool useXdata = TARGET_IS_DS390 ? 1 : options.useXstack;
+	  bool useXdata = (TARGET_IS_DS390 || TARGET_IS_DS400) ? 
+		1 : options.useXstack;
 	  SPEC_SCLS (sym->etype) = (useXdata ?
 				    S_XDATA : S_FIXED);
 	}
@@ -1287,7 +1418,7 @@ changePointer (symbol * sym)
   for (p = sym->type; p; p = p->next)
     {
       if (!IS_SPEC (p) && DCL_TYPE (p) == UPOINTER)
-	DCL_TYPE (p) = GPOINTER;
+	DCL_TYPE (p) = port->unqualified_pointer;
       if (IS_PTR (p) && IS_FUNC (p->next))
 	DCL_TYPE (p) = CPOINTER;
     }
@@ -1320,11 +1451,11 @@ copyLinkChain (sym_link * p)
   sym_link *head, *curr, *loop;
 
   curr = p;
-  head = loop = (curr ? newLink () : (void *) NULL);
+  head = loop = (curr ? newLink (p->class) : (void *) NULL);
   while (curr)
     {
       memcpy (loop, curr, sizeof (sym_link));	/* copy it */
-      loop->next = (curr->next ? newLink () : (void *) NULL);
+      loop->next = (curr->next ? newLink (curr->next->class) : (void *) NULL);
       loop = loop->next;
       curr = curr->next;
     }
@@ -1383,12 +1514,14 @@ cleanUpLevel (bucket ** table, int level)
 /* computeType - computes the resultant type from two types         */
 /*------------------------------------------------------------------*/
 sym_link *
-computeType (sym_link * type1, sym_link * type2)
+computeType (sym_link * type1, sym_link * type2, bool promoteCharToInt)
 {
   sym_link *rType;
   sym_link *reType;
   sym_link *etype1 = getSpec (type1);
-  sym_link *etype2 = getSpec (type2);
+  sym_link *etype2;
+   
+  etype2 = type2 ? getSpec (type2) : type1;
 
   /* if one of them is a float then result is a float */
   /* here we assume that the types passed are okay */
@@ -1404,11 +1537,11 @@ computeType (sym_link * type1, sym_link * type2)
   else if (IS_BITVAR (etype2) && !IS_BITVAR (etype1))
     rType = copyLinkChain (type1);
   else
-    /* if one of them is a pointer then that
+    /* if one of them is a pointer or array then that
        prevails */
-  if (IS_PTR (type1))
+  if (IS_PTR (type1) || IS_ARRAY (type1))
     rType = copyLinkChain (type1);
-  else if (IS_PTR (type2))
+  else if (IS_PTR (type2) || IS_ARRAY (type2))
     rType = copyLinkChain (type2);
   else if (getSize (type1) > getSize (type2))
     rType = copyLinkChain (type1);
@@ -1417,9 +1550,34 @@ computeType (sym_link * type1, sym_link * type2)
 
   reType = getSpec (rType);
 
-  /* if either of them unsigned then make this unsigned */
-  if ((SPEC_USIGN (etype1) || SPEC_USIGN (etype2)) && !IS_FLOAT (reType))
+  /* avoid conflicting types */
+  reType->select.s._signed = 0;
+
+  if (IS_CHAR (reType) && promoteCharToInt)
+    SPEC_NOUN (reType) = V_INT;
+
+  if (!IS_FLOAT (reType)
+      && (   (   SPEC_USIGN (etype1)
+              /* if this operand is promoted to a larger
+		 type don't check it's signedness */
+	      && (getSize (etype1) >= getSize (reType))
+	      /* char has to handled as it would have
+		 been promoted to int */
+	      && !IS_CHAR (etype1))
+	      /* same for 2nd operand */  
+	  || (   SPEC_USIGN (etype2)
+	      && (getSize (etype2) >= getSize (reType))
+	      && !IS_CHAR (etype2))
+	  /* if both are unsigned char and not promoted
+	     let the result be unsigned too */
+	  || (   SPEC_USIGN (etype1)
+	      && SPEC_USIGN (etype2)
+	      && IS_CHAR (etype1)
+	      && IS_CHAR (etype2)
+	      && !promoteCharToInt)))
     SPEC_USIGN (reType) = 1;
+  else
+    SPEC_USIGN (reType) = 0;
 
   /* if result is a literal then make not so */
   if (IS_LITERAL (reType))
@@ -1431,7 +1589,7 @@ computeType (sym_link * type1, sym_link * type2)
 /*--------------------------------------------------------------------*/
 /* compareType - will do type check return 1 if match, -1 if castable */
 /*--------------------------------------------------------------------*/
-int 
+int
 compareType (sym_link * dest, sym_link * src)
 {
   if (!dest && !src)
@@ -1448,14 +1606,26 @@ compareType (sym_link * dest, sym_link * src)
     {
       if (IS_DECL (src))
 	{
-	  if (DCL_TYPE (src) == DCL_TYPE (dest))
+	  if (DCL_TYPE (src) == DCL_TYPE (dest)) {
+	    if (IS_FUNC(src)) {
+	      //checkFunction(src,dest);
+	    }
 	    return compareType (dest->next, src->next);
-	  if (IS_PTR (src) && IS_PTR (dest))
+	  }
+	  if (IS_PTR (dest) && IS_GENPTR (src) && IS_VOID(src->next)) {
+	    return 1;
+	  }
+	  if (IS_PTR (src) && IS_GENPTR (dest))
 	    return -1;
-	  if (IS_PTR (dest) && IS_ARRAY (src))
-	    return -1;
+	  if (IS_PTR (dest) && IS_ARRAY (src)) {
+	    value *val=aggregateToPointer (valFromType(src));
+	    int res=compareType (dest, val->type);
+	    Safe_free(val->type);
+	    Safe_free(val);
+	    return res;
+	  }
 	  if (IS_PTR (dest) && IS_FUNC (dest->next) && IS_FUNC (src))
-	    return -1 * compareType (dest->next, src);
+	    return compareType (dest->next, src);
 	  return 0;
 	}
       else if (IS_PTR (dest) && IS_INTEGRAL (src))
@@ -1513,27 +1683,208 @@ compareType (sym_link * dest, sym_link * src)
   return 1;
 }
 
+/*--------------------------------------------------------------------*/
+/* compareTypeExact - will do type check return 1 if match exactly    */
+/*--------------------------------------------------------------------*/
+int
+compareTypeExact (sym_link * dest, sym_link * src, int level)
+{
+  STORAGE_CLASS srcScls, destScls;
+  
+  if (!dest && !src)
+    return 1;
+
+  if (dest && !src)
+    return 0;
+
+  if (src && !dest)
+    return 0;
+
+  /* if dest is a declarator then */
+  if (IS_DECL (dest))
+    {
+      if (IS_DECL (src))
+	{
+	  if (DCL_TYPE (src) == DCL_TYPE (dest)) {
+	    if ((DCL_TYPE (src) == ARRAY) && (DCL_ELEM (src) != DCL_ELEM (dest)))
+	      return 0;
+	    if (DCL_PTR_CONST (src) != DCL_PTR_CONST (dest))
+	      return 0;
+	    if (DCL_PTR_VOLATILE (src) != DCL_PTR_VOLATILE (dest))
+	      return 0;
+	    if (IS_FUNC(src))
+              {
+		value *exargs, *acargs, *checkValue;
+
+                /* verify function return type */
+	        if (!compareTypeExact (dest->next, src->next, -1))
+		  return 0;
+  		if (FUNC_ISISR (dest) != FUNC_ISISR (src))
+		  return 0;
+		if (FUNC_REGBANK (dest) != FUNC_REGBANK (src))
+		  return 0;
+		if (IFFUNC_ISNAKED (dest) != IFFUNC_ISNAKED (src))
+		  return 0;
+		#if 0
+                if (IFFUNC_ISREENT (dest) != IFFUNC_ISREENT (src) && argCnt>1)
+		  return 0;
+                #endif
+
+		/* compare expected args with actual args */
+		exargs = FUNC_ARGS(dest);
+		acargs = FUNC_ARGS(src);
+
+		/* for all the expected args do */
+		for (; exargs && acargs; exargs = exargs->next, acargs = acargs->next)
+		  {
+		    //checkTypeSanity(acargs->etype, acargs->name);
+
+		    if (IS_AGGREGATE (acargs->type))
+		      {
+			checkValue = copyValue (acargs);
+			aggregateToPointer (checkValue);
+		      }
+		    else
+		      checkValue = acargs;
+
+                    #if 0
+		    if (!compareTypeExact (exargs->type, checkValue->type, -1))
+                      return 0;
+                    #endif
+		  }
+
+		  /* if one them ended we have a problem */
+		  if ((exargs && !acargs && !IS_VOID (exargs->type)) ||
+		      (!exargs && acargs && !IS_VOID (acargs->type)))
+		    return 0;                  
+                  return 1;
+              }
+	    return compareTypeExact (dest->next, src->next, level);
+	  }
+          return 0;
+	}
+      return 0;
+    }
+
+  /* if one is a specifier and the other is not */
+  if ((IS_SPEC (src) && !IS_SPEC (dest)) ||
+      (IS_SPEC (dest) && !IS_SPEC (src)))
+    return 0;
+
+  /* if one of them is a void then ok */
+  if (SPEC_NOUN (dest) != SPEC_NOUN (src))
+    return 0;
+
+  /* if they are both bitfields then if the lengths
+     and starts don't match */
+  if (IS_BITFIELD (dest) && IS_BITFIELD (src) &&
+      (SPEC_BLEN (dest) != SPEC_BLEN (src) ||
+       SPEC_BSTR (dest) != SPEC_BSTR (src)))
+    return 0;
+
+  if (IS_INTEGRAL (dest))
+    {
+      /* signedness must match */
+      if (SPEC_USIGN (dest) != SPEC_USIGN (src))
+	return 0;
+      /* size must match */
+      if (SPEC_LONG (dest) != SPEC_LONG (src))
+	return 0;
+      if (SPEC_SHORT (dest) != SPEC_SHORT (src))
+	return 0;
+    }
+  
+  if (IS_STRUCT (dest))
+    {
+      if (SPEC_STRUCT (dest) != SPEC_STRUCT (src))
+	return 0;
+    }
+
+  if (SPEC_CONST (dest) != SPEC_CONST (src))
+    return 0;
+  if (SPEC_VOLATILE (dest) != SPEC_VOLATILE (src))
+    return 0;
+  if (SPEC_STAT (dest) != SPEC_STAT (src))
+    return 0;
+  if (SPEC_ABSA (dest) != SPEC_ABSA (src))
+    return 0;
+  if (SPEC_ABSA (dest) && SPEC_ADDR (dest) != SPEC_ADDR (src))
+    return 0;
+      
+  destScls = SPEC_SCLS (dest);
+  srcScls = SPEC_SCLS (src);
+  
+  /* Compensate for const to const code change in checkSClass() */
+  if (!level & port->mem.code_ro && SPEC_CONST (dest))
+    {
+      if (srcScls == S_CODE && destScls == S_FIXED)
+	destScls = S_CODE;
+      if (destScls == S_CODE && srcScls == S_FIXED)
+	srcScls = S_CODE;
+    }
+
+  /* compensate for allocGlobal() */  
+  if ((srcScls == S_FIXED || srcScls == S_AUTO)
+      && port->mem.default_globl_map == xdata
+      && !level)
+    srcScls = S_XDATA;
+  
+  if (level>0 && !SPEC_STAT (dest))
+    {
+      /* Compensate for hack-o-matic in checkSClass() */
+      if (options.stackAuto || (currFunc && IFFUNC_ISREENT (currFunc->type)))
+	{
+	  if (destScls == S_FIXED)
+	    destScls = (options.useXstack ? S_XSTACK : S_STACK);
+	  if (srcScls == S_FIXED)
+	    srcScls = (options.useXstack ? S_XSTACK : S_STACK);
+	}
+      else if (TARGET_IS_DS390 || TARGET_IS_DS400 || options.useXstack)
+	{
+	  if (destScls == S_FIXED)
+	    destScls = S_XDATA;
+	  if (srcScls == S_FIXED)
+	    srcScls = S_XDATA;
+	}
+    }
+
+  if (srcScls != destScls)
+    {
+      #if 0
+      printf ("level = %d\n", level);
+      printf ("SPEC_SCLS (src) = %d, SPEC_SCLS (dest) = %d\n",
+		SPEC_SCLS (src), SPEC_SCLS (dest));
+      printf ("srcScls = %d, destScls = %d\n",srcScls, destScls);
+      #endif
+      return 0;
+    }
+  
+  return 1;
+}
+
 /*------------------------------------------------------------------*/
 /* inCalleeSaveList - return 1 if found in callee save list          */
 /*------------------------------------------------------------------*/
-bool 
-inCalleeSaveList (char *s)
+static int
+calleeCmp(void *p1, void *p2)
 {
-  int i;
+  return (strcmp((char *)p1, (char *)(p2)) == 0);
+}
 
-  for (i = 0; options.calleeSaves[i]; i++)
-    if (strcmp (options.calleeSaves[i], s) == 0)
-      return 1;
-
-  return 0;
+bool
+inCalleeSaveList(char *s)
+{
+  if (options.all_callee_saves)
+    return 1;
+  return isinSetWith(options.calleeSavesSet, s, calleeCmp);
 }
 
 /*-----------------------------------------------------------------*/
-/* aggregateArgToPointer:  change an agggregate type function      */
+/* aggregateToPointer:  change an agggregate type function      */
 /*         argument to a pointer to that type.     */
 /*-----------------------------------------------------------------*/
-void 
-aggregateArgToPointer (value * val)
+value *
+aggregateToPointer (value * val)
 {
   if (IS_AGGREGATE (val->type))
     {
@@ -1545,7 +1896,7 @@ aggregateArgToPointer (value * val)
 	  sym_link *p = val->type;
 
 	  werror (W_STRUCT_AS_ARG, val->name);
-	  val->type = newLink ();
+	  val->type = newLink (DECLARATOR);
 	  val->type->next = p;
 	}
 
@@ -1560,16 +1911,13 @@ aggregateArgToPointer (value * val)
 	  DCL_TYPE (val->type) = PPOINTER;
 	  break;
 	case S_FIXED:
-	  if (TARGET_IS_DS390)
-	    {
-	      /* The AUTO and REGISTER classes should probably
-	       * also become generic pointers, but I haven't yet
-	       * devised a test case for that.
-	       */
-	      DCL_TYPE (val->type) = GPOINTER;
-	      break;
-	    }
-	  /* fall through! */
+	  if (SPEC_OCLS(val->etype)) {
+	    DCL_TYPE(val->type)=PTR_TYPE(SPEC_OCLS(val->etype));
+	  } else {
+	    // this happens for (external) function parameters
+	    DCL_TYPE (val->type) = port->unqualified_pointer;
+	  }
+	  break;
 	case S_AUTO:
 	case S_DATA:
 	case S_REGISTER:
@@ -1585,9 +1933,9 @@ aggregateArgToPointer (value * val)
 	  DCL_TYPE (val->type) = EEPPOINTER;
 	  break;
 	default:
-	  DCL_TYPE (val->type) = GPOINTER;
+	  DCL_TYPE (val->type) = port->unqualified_pointer;
 	}
-
+      
       /* is there is a symbol associated then */
       /* change the type of the symbol as well */
       if (val->sym)
@@ -1596,14 +1944,14 @@ aggregateArgToPointer (value * val)
 	  val->sym->etype = getSpec (val->sym->type);
 	}
     }
+  return val;
 }
 /*------------------------------------------------------------------*/
 /* checkFunction - does all kinds of check on a function            */
 /*------------------------------------------------------------------*/
 int 
-checkFunction (symbol * sym)
+checkFunction (symbol * sym, symbol *csym)
 {
-  symbol *csym;
   value *exargs, *acargs;
   value *checkValue;
   int argCnt = 0;
@@ -1612,6 +1960,12 @@ checkFunction (symbol * sym)
     fprintf (stderr, "checkFunction: %s ", sym->name);
   }
 
+  if (!IS_DECL(sym->type) || DCL_TYPE(sym->type)!=FUNCTION)
+    {
+      werror(E_SYNTAX_ERROR, sym->name);
+      return 0;
+    }
+    
   /* make sure the type is complete and sane */
   checkTypeSanity(((symbol *)sym)->etype, ((symbol *)sym)->name);
 
@@ -1639,21 +1993,44 @@ checkFunction (symbol * sym)
 
   /* check if this function is defined as calleeSaves
      then mark it as such */
-  sym->calleeSave = inCalleeSaveList (sym->name);
+  FUNC_CALLEESAVES(sym->type) = inCalleeSaveList (sym->name);
 
   /* if interrupt service routine  */
   /* then it cannot have arguments */
-  if (sym->args && IS_ISR (sym->etype) && !IS_VOID (sym->args->type))
+  if (IFFUNC_ARGS(sym->type) && FUNC_ISISR (sym->type))
     {
-      werror (E_INT_ARGS, sym->name);
-      sym->args = NULL;
+      if (!IS_VOID(FUNC_ARGS(sym->type)->type)) {
+	werror (E_INT_ARGS, sym->name);
+	FUNC_ARGS(sym->type)=NULL;
+      }
     }
 
-  if (!(csym = findSym (SymbolTab, sym, sym->name)))
+  for (argCnt=1, acargs = FUNC_ARGS(sym->type); 
+       acargs; 
+       acargs=acargs->next, argCnt++) {
+    if (!acargs->sym) { 
+      // this can happen for reentrant functions
+      werror(E_PARAM_NAME_OMITTED, sym->name, argCnt);
+      // the show must go on: synthesize a name and symbol
+      SNPRINTF (acargs->name, sizeof(acargs->name), "_%s_PARM_%d", sym->name, argCnt);
+      acargs->sym = newSymbol (acargs->name, 1);
+      SPEC_OCLS (acargs->etype) = istack;
+      acargs->sym->type = copyLinkChain (acargs->type);
+      acargs->sym->etype = getSpec (acargs->sym->type);
+      acargs->sym->_isparm = 1;
+      strncpyz (acargs->sym->rname, acargs->name, sizeof(acargs->sym->rname));
+    } else if (strcmp(acargs->sym->name, acargs->sym->rname)==0) { 
+      // synthesized name
+      werror(E_PARAM_NAME_OMITTED, sym->name, argCnt);
+    }
+  }
+  argCnt--;
+
+  if (!csym && !(csym = findSym (SymbolTab, sym, sym->name)))
     return 1;			/* not defined nothing more to check  */
 
   /* check if body already present */
-  if (csym && csym->fbody)
+  if (csym && IFFUNC_HASBODY(csym->type))
     {
       werror (E_FUNC_BODY, sym->name);
       return 0;
@@ -1663,33 +2040,39 @@ checkFunction (symbol * sym)
   if (compareType (csym->type, sym->type) <= 0)
     {
       werror (E_PREV_DEF_CONFLICT, csym->name, "type");
-      werror (W_CONTINUE, "previous definition type ");
-      printTypeChain (csym->type, stderr);
-      fprintf (stderr, "\n");
-      werror (W_CONTINUE, "current definition type ");
-      printTypeChain (sym->type, stderr);
-      fprintf (stderr, "\n");
+      printFromToType(csym->type, sym->type);
       return 0;
     }
 
-  if (SPEC_INTRTN (csym->etype) != SPEC_INTRTN (sym->etype))
+  if (FUNC_ISISR (csym->type) != FUNC_ISISR (sym->type))
     {
       werror (E_PREV_DEF_CONFLICT, csym->name, "interrupt");
     }
 
-  if (SPEC_BANK (csym->etype) != SPEC_BANK (sym->etype))
+  if (FUNC_REGBANK (csym->type) != FUNC_REGBANK (sym->type))
     {
       werror (E_PREV_DEF_CONFLICT, csym->name, "using");
     }
 
-  if (SPEC_NAKED (csym->etype) != SPEC_NAKED (sym->etype))
+  if (IFFUNC_ISNAKED (csym->type) != IFFUNC_ISNAKED (sym->type))
     {
       werror (E_PREV_DEF_CONFLICT, csym->name, "_naked");
     }
+  
+  /* Really, reentrant should match regardless of argCnt, but     */
+  /* this breaks some existing code (the fp lib functions). If    */
+  /* the first argument is always passed the same way, this       */
+  /* lax checking is ok (but may not be true for in future ports) */
+  if (IFFUNC_ISREENT (csym->type) != IFFUNC_ISREENT (sym->type)
+      && argCnt>1)
+    {
+      //printf("argCnt = %d\n",argCnt);
+      werror (E_PREV_DEF_CONFLICT, csym->name, "reentrant");
+    }
 
-  /* compare expected agrs with actual args */
-  exargs = csym->args;
-  acargs = sym->args;
+  /* compare expected args with actual args */
+  exargs = FUNC_ARGS(csym->type);
+  acargs = FUNC_ARGS(sym->type);
 
   /* for all the expected args do */
   for (argCnt = 1;
@@ -1709,7 +2092,7 @@ checkFunction (symbol * sym)
       if (IS_AGGREGATE (acargs->type))
 	{
 	  checkValue = copyValue (acargs);
-	  aggregateArgToPointer (checkValue);
+	  aggregateToPointer (checkValue);
 	}
       else
 	{
@@ -1719,6 +2102,7 @@ checkFunction (symbol * sym)
       if (compareType (exargs->type, checkValue->type) <= 0)
 	{
 	  werror (E_ARG_TYPE, argCnt);
+	  printFromToType(exargs->type, checkValue->type);
 	  return 0;
 	}
     }
@@ -1731,6 +2115,7 @@ checkFunction (symbol * sym)
   /* replace with this defition */
   sym->cdef = csym->cdef;
   deleteSym (SymbolTab, csym, csym->name);
+  deleteFromSeg(csym);
   addSym (SymbolTab, sym, sym->name, sym->level, sym->block, 1);
   if (IS_EXTERN (csym->etype) && !
       IS_EXTERN (sym->etype))
@@ -1740,30 +2125,62 @@ checkFunction (symbol * sym)
   return 1;
 }
 
+/*------------------------------------------------------------------*/
+/* cdbStructBlock - calls struct printing for a blcks               */
+/*------------------------------------------------------------------*/
+void cdbStructBlock (int block)
+{
+  int i;
+  bucket **table = StructTab;
+  bucket *chain;
+
+  /* go thru the entire  table  */
+  for (i = 0; i < 256; i++)
+    {
+      for (chain = table[i]; chain; chain = chain->next)
+	{
+	  if (chain->block >= block)
+	    {
+	      if(debugFile)
+		debugFile->writeType((structdef *)chain->sym, chain->block, 0, NULL);
+	    }
+	}
+    }
+}
+
 /*-----------------------------------------------------------------*/
 /* processFuncArgs - does some processing with function args       */
 /*-----------------------------------------------------------------*/
 void 
-processFuncArgs (symbol * func, int ignoreName)
+processFuncArgs (symbol * func)
 {
   value *val;
   int pNum = 1;
+  sym_link *funcType=func->type;
+
+  if (getenv("SDCC_DEBUG_FUNCTION_POINTERS"))
+    fprintf (stderr, "SDCCsymt.c:processFuncArgs(%s)\n", func->name);
+
+  /* find the function declaration within the type */
+  while (funcType && !IS_FUNC(funcType))
+    funcType=funcType->next;
 
   /* if this function has variable argument list */
   /* then make the function a reentrant one    */
-  if (func->hasVargs)
-    SPEC_RENT (func->etype) = 1;
+  if (IFFUNC_HASVARARGS(funcType) || (options.stackAuto && !func->cdef))
+    FUNC_ISREENT(funcType)=1;
 
   /* check if this function is defined as calleeSaves
      then mark it as such */
-  func->calleeSave = inCalleeSaveList (func->name);
+  FUNC_CALLEESAVES(funcType) = inCalleeSaveList (func->name);
 
-  val = func->args;		/* loop thru all the arguments   */
+  /* loop thru all the arguments   */
+  val = FUNC_ARGS(funcType);
 
   /* if it is void then remove parameters */
   if (val && IS_VOID (val->type))
     {
-      func->args = NULL;
+      FUNC_ARGS(funcType) = NULL;
       return;
     }
 
@@ -1773,19 +2190,24 @@ processFuncArgs (symbol * func, int ignoreName)
   /* change it to pointer to the same type */
   while (val)
     {
+	int argreg = 0;
       /* mark it as a register parameter if
          the function does not have VA_ARG
          and as port dictates */
-      if (!func->hasVargs &&
-	  (*port->reg_parm) (val->type))
+      if (!IFFUNC_HASVARARGS(funcType) &&
+	  (argreg = (*port->reg_parm) (val->type)))
 	{
 	  SPEC_REGPARM (val->etype) = 1;
+	  SPEC_ARGREG(val->etype) = argreg;
+	} else if (IFFUNC_ISREENT(funcType)) {
+	    FUNC_HASSTACKPARM(funcType) = 1;
 	}
 
       if (IS_AGGREGATE (val->type))
 	{
-	  aggregateArgToPointer (val);
+	  aggregateToPointer (val);
 	}
+
       val = val->next;
       pNum++;
     }
@@ -1794,17 +2216,17 @@ processFuncArgs (symbol * func, int ignoreName)
   if (func->cdef) {
     /* ignore --stack-auto for this one, we don't know how it is compiled */
     /* simply trust on --int-long-reent or --float-reent */
-    if (IS_RENT(func->etype)) {
+    if (IFFUNC_ISREENT(funcType)) {
       return;
     }
   } else {
     /* if this function is reentrant or */
     /* automatics r 2b stacked then nothing */
-    if (IS_RENT (func->etype) || options.stackAuto)
+    if (IFFUNC_ISREENT (funcType) || options.stackAuto)
       return;
   }
 
-  val = func->args;
+  val = FUNC_ARGS(funcType);
   pNum = 1;
   while (val)
     {
@@ -1813,30 +2235,45 @@ processFuncArgs (symbol * func, int ignoreName)
       /* synthesize a variable name */
       if (!val->sym)
 	{
-
-	  sprintf (val->name, "_%s_PARM_%d", func->name, pNum++);
+	  SNPRINTF (val->name, sizeof(val->name), 
+		    "_%s_PARM_%d", func->name, pNum++);
 	  val->sym = newSymbol (val->name, 1);
 	  SPEC_OCLS (val->etype) = port->mem.default_local_map;
 	  val->sym->type = copyLinkChain (val->type);
 	  val->sym->etype = getSpec (val->sym->type);
 	  val->sym->_isparm = 1;
-	  strcpy (val->sym->rname, val->name);
-	  SPEC_STAT (val->etype) = SPEC_STAT (val->sym->etype) =
-	    SPEC_STAT (func->etype);
+	  strncpyz (val->sym->rname, val->name, sizeof(val->sym->rname));
+	  #if 0
+	  /* ?? static functions shouldn't imply static parameters - EEP */
+	  if (IS_SPEC(func->etype)) {
+	    SPEC_STAT (val->etype) = SPEC_STAT (val->sym->etype) =
+	      SPEC_STAT (func->etype);
+	  }
+	  #endif
 	  addSymChain (val->sym);
 
 	}
       else			/* symbol name given create synth name */
 	{
 
-	  sprintf (val->name, "_%s_PARM_%d", func->name, pNum++);
-	  strcpy (val->sym->rname, val->name);
+	  SNPRINTF (val->name, sizeof(val->name), "_%s_PARM_%d", func->name, pNum++);
+	  strncpyz (val->sym->rname, val->name, sizeof(val->sym->rname));
 	  val->sym->_isparm = 1;
 	  SPEC_OCLS (val->etype) = SPEC_OCLS (val->sym->etype) =
 	    (options.model != MODEL_SMALL ? xdata : data);
-	  SPEC_STAT (val->etype) = SPEC_STAT (val->sym->etype) =
-	    SPEC_STAT (func->etype);
+	  
+	  #if 0
+	  /* ?? static functions shouldn't imply static parameters - EEP */
+	  if (IS_SPEC(func->etype)) {
+	    SPEC_STAT (val->etype) = SPEC_STAT (val->sym->etype) =
+	      SPEC_STAT (func->etype);
+	  }
+	  #endif
 	}
+      if (!isinSet(operKeyReset, val->sym)) {
+	addSet (&operKeyReset, val->sym);
+	applyToSet (operKeyReset, resetParmKey);
+      }
       val = val->next;
     }
 }
@@ -1870,10 +2307,13 @@ void PT(sym_link *type)
 /*-----------------------------------------------------------------*/
 /* printTypeChain - prints the type chain in human readable form   */
 /*-----------------------------------------------------------------*/
-void 
-printTypeChain (sym_link * type, FILE * of)
+void
+printTypeChain (sym_link * start, FILE * of)
 {
   int nlr = 0;
+  value *args;
+  sym_link * type, * search;
+  STORAGE_CLASS scls;
 
   if (!of)
     {
@@ -1881,91 +2321,128 @@ printTypeChain (sym_link * type, FILE * of)
       nlr = 1;
     }
 
+  if (start==NULL) {
+    fprintf (of, "void");
+    return;
+  }
+
+  /* Print the chain as it is written in the source: */
+  /* start with the last entry.                      */
+  /* However, the storage class at the end of the    */
+  /* chain reall applies to the first in the chain!  */
+
+  for (type = start; type && type->next; type = type->next)
+    ;
+  if (IS_SPEC (type))
+    scls=SPEC_SCLS(type);
+  else
+    scls=0;
   while (type)
     {
+      if (type==start) {
+	switch (scls) 
+	  {
+	  case S_DATA: fprintf (of, "data-"); break;
+	  case S_XDATA: fprintf (of, "xdata-"); break;
+	  case S_SFR: fprintf (of, "sfr-"); break;
+	  case S_SBIT: fprintf (of, "sbit-"); break;
+	  case S_CODE: fprintf (of, "code-"); break;
+	  case S_IDATA: fprintf (of, "idata-"); break;
+	  case S_PDATA: fprintf (of, "pdata-"); break;
+	  case S_LITERAL: fprintf (of, "literal-"); break;
+	  case S_STACK: fprintf (of, "stack-"); break;
+	  case S_XSTACK: fprintf (of, "xstack-"); break;
+	  case S_BIT: fprintf (of, "bit-"); break;
+	  case S_EEPROM: fprintf (of, "eeprom-"); break;
+	  default: break;
+	  }
+      }
+
       if (IS_DECL (type))
 	{
-	  if (DCL_PTR_VOLATILE(type)) {
-	    fprintf (of, "volatile ");
+	  if (!IS_FUNC(type)) {
+	    if (DCL_PTR_VOLATILE (type)) {
+	      fprintf (of, "volatile-");
+	    }
+	    if (DCL_PTR_CONST (type)) {
+	      fprintf (of, "const-");
+	    }
 	  }
 	  switch (DCL_TYPE (type))
 	    {
 	    case FUNCTION:
-	      fprintf (of, "function ");
+	      fprintf (of, "function %s %s", 
+		       (IFFUNC_ISBUILTIN(type) ? "__builtin__" : " "),
+		       (IFFUNC_ISJAVANATIVE(type) ? "_JavaNative" : " "));
+	      fprintf (of, "( ");
+	      for (args = FUNC_ARGS(type); 
+	           args; 
+		   args=args->next) {
+		printTypeChain(args->type, of);
+		if (args->next)
+		  fprintf(of, ", ");
+	      }
+	      fprintf (of, ") ");
 	      break;
 	    case GPOINTER:
-	      fprintf (of, "_generic * ");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "generic* ");
 	      break;
 	    case CPOINTER:
-	      fprintf (of, "_code * ");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "code* ");
 	      break;
 	    case FPOINTER:
-	      fprintf (of, "_far * ");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "xdata* ");
 	      break;
 	    case EEPPOINTER:
-	      fprintf (of, "_eeprom * ");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "eeprom* ");
 	      break;
-
 	    case POINTER:
-	      fprintf (of, "_near * ");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "near* ");
 	      break;
 	    case IPOINTER:
-	      fprintf (of, "_idata *");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "idata* ");
 	      break;
 	    case PPOINTER:
-	      fprintf (of, "_pdata *");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "pdata* ");
 	      break;
 	    case UPOINTER:
-	      fprintf (of, " _unkown *");
-	      if (DCL_PTR_CONST (type))
-		fprintf (of, "const ");
+	      fprintf (of, "unknown* ");
 	      break;
 	    case ARRAY:
-	      fprintf (of, "array of ");
+	      if (DCL_ELEM(type)) {
+		fprintf (of, "[%d] ", DCL_ELEM(type));
+	      } else {
+		fprintf (of, "[] ");
+	      }
 	      break;
 	    }
 	}
       else
 	{
 	  if (SPEC_VOLATILE (type))
-	    fprintf (of, "volatile ");
-	  if (SPEC_USIGN (type))
-	    fprintf (of, "unsigned ");
+	    fprintf (of, "volatile-");
 	  if (SPEC_CONST (type))
-	    fprintf (of, "const ");
-
+	    fprintf (of, "const-");
+	  if (SPEC_USIGN (type))
+	    fprintf (of, "unsigned-");
 	  switch (SPEC_NOUN (type))
 	    {
 	    case V_INT:
 	      if (IS_LONG (type))
-		fprintf (of, "long ");
-	      fprintf (of, "int ");
+		fprintf (of, "long-");
+	      fprintf (of, "int");
 	      break;
 
 	    case V_CHAR:
-	      fprintf (of, "char ");
+	      fprintf (of, "char");
 	      break;
 
 	    case V_VOID:
-	      fprintf (of, "void ");
+	      fprintf (of, "void");
 	      break;
 
 	    case V_FLOAT:
-	      fprintf (of, "float ");
+	      fprintf (of, "float");
 	      break;
 
 	    case V_STRUCT:
@@ -1973,234 +2450,213 @@ printTypeChain (sym_link * type, FILE * of)
 	      break;
 
 	    case V_SBIT:
-	      fprintf (of, "sbit ");
+	      fprintf (of, "sbit");
 	      break;
 
 	    case V_BIT:
-	      fprintf (of, "bit {%d,%d}", SPEC_BSTR (type), SPEC_BLEN (type));
+	      fprintf (of, "bit");
+	      break;
+
+	    case V_BITFIELD:
+	      fprintf (of, "bitfield {%d,%d}", SPEC_BSTR (type), SPEC_BLEN (type));
 	      break;
 
 	    case V_DOUBLE:
-	      fprintf (of, "double ");
+	      fprintf (of, "double");
 	      break;
 
 	    default:
-	      fprintf (of, "unknown type ");
+	      fprintf (of, "unknown type");
 	      break;
 	    }
 	}
-      type = type->next;
+      /* search entry in list before "type" */
+      for (search = start; search && search->next != type;)
+	search = search->next;
+      type = search;
+      if (type)
+	fputc (' ', of);
     }
   if (nlr)
     fprintf (of, "\n");
 }
 
-/*-----------------------------------------------------------------*/
-/* cdbTypeInfo - print the type information for debugger           */
-/*-----------------------------------------------------------------*/
-void 
-cdbTypeInfo (sym_link * type, FILE * of)
+/*--------------------------------------------------------------------*/
+/* printTypeChainRaw - prints the type chain in human readable form   */
+/*                     in the raw data structure ordering             */
+/*--------------------------------------------------------------------*/
+void
+printTypeChainRaw (sym_link * start, FILE * of)
 {
-  fprintf (of, "{%d}", getSize (type));
+  int nlr = 0;
+  value *args;
+  sym_link * type;
+
+  if (!of)
+    {
+      of = stdout;
+      nlr = 1;
+    }
+
+  if (start==NULL) {
+    fprintf (of, "void");
+    return;
+  }
+
+  type = start;
+  
   while (type)
     {
       if (IS_DECL (type))
 	{
+	  if (!IS_FUNC(type)) {
+	    if (DCL_PTR_VOLATILE (type)) {
+	      fprintf (of, "volatile-");
+	    }
+	    if (DCL_PTR_CONST (type)) {
+	      fprintf (of, "const-");
+	    }
+	  }
 	  switch (DCL_TYPE (type))
 	    {
 	    case FUNCTION:
-	      fprintf (of, "DF,");
+	      fprintf (of, "function %s %s", 
+		       (IFFUNC_ISBUILTIN(type) ? "__builtin__" : " "),
+		       (IFFUNC_ISJAVANATIVE(type) ? "_JavaNative" : " "));
+	      fprintf (of, "( ");
+	      for (args = FUNC_ARGS(type); 
+	           args; 
+		   args=args->next) {
+		printTypeChain(args->type, of);
+		if (args->next)
+		  fprintf(of, ", ");
+	      }
+	      fprintf (of, ") ");
 	      break;
 	    case GPOINTER:
-	      fprintf (of, "DG,");
+	      fprintf (of, "generic* ");
 	      break;
 	    case CPOINTER:
-	      fprintf (of, "DC,");
+	      fprintf (of, "code* ");
 	      break;
 	    case FPOINTER:
-	      fprintf (of, "DX,");
-	      break;
-	    case POINTER:
-	      fprintf (of, "DD,");
-	      break;
-	    case IPOINTER:
-	      fprintf (of, "DI,");
-	      break;
-	    case PPOINTER:
-	      fprintf (of, "DP,");
+	      fprintf (of, "xdata* ");
 	      break;
 	    case EEPPOINTER:
-	      fprintf (of, "DA,");
+	      fprintf (of, "eeprom* ");
+	      break;
+	    case POINTER:
+	      fprintf (of, "near* ");
+	      break;
+	    case IPOINTER:
+	      fprintf (of, "idata* ");
+	      break;
+	    case PPOINTER:
+	      fprintf (of, "pdata* ");
+	      break;
+	    case UPOINTER:
+	      fprintf (of, "unknown* ");
 	      break;
 	    case ARRAY:
-	      fprintf (of, "DA%d,", DCL_ELEM (type));
-	      break;
-	    default:
+	      if (DCL_ELEM(type)) {
+		fprintf (of, "[%d] ", DCL_ELEM(type));
+	      } else {
+		fprintf (of, "[] ");
+	      }
 	      break;
 	    }
+          if (DCL_TSPEC(type))
+            {
+              fprintf (of, "{");
+              printTypeChainRaw(DCL_TSPEC(type), of);
+              fprintf (of, "}");
+            }
 	}
-      else
+      else if (IS_SPEC (type))
 	{
+	switch (SPEC_SCLS (type)) 
+	  {
+	  case S_DATA: fprintf (of, "data-"); break;
+	  case S_XDATA: fprintf (of, "xdata-"); break;
+	  case S_SFR: fprintf (of, "sfr-"); break;
+	  case S_SBIT: fprintf (of, "sbit-"); break;
+	  case S_CODE: fprintf (of, "code-"); break;
+	  case S_IDATA: fprintf (of, "idata-"); break;
+	  case S_PDATA: fprintf (of, "pdata-"); break;
+	  case S_LITERAL: fprintf (of, "literal-"); break;
+	  case S_STACK: fprintf (of, "stack-"); break;
+	  case S_XSTACK: fprintf (of, "xstack-"); break;
+	  case S_BIT: fprintf (of, "bit-"); break;
+	  case S_EEPROM: fprintf (of, "eeprom-"); break;
+	  default: break;
+	  }
+	  if (SPEC_VOLATILE (type))
+	    fprintf (of, "volatile-");
+	  if (SPEC_CONST (type))
+	    fprintf (of, "const-");
+	  if (SPEC_USIGN (type))
+	    fprintf (of, "unsigned-");
 	  switch (SPEC_NOUN (type))
 	    {
 	    case V_INT:
 	      if (IS_LONG (type))
-		fprintf (of, "SL");
-	      else
-		fprintf (of, "SI");
+		fprintf (of, "long-");
+	      fprintf (of, "int");
 	      break;
 
 	    case V_CHAR:
-	      fprintf (of, "SC");
+	      fprintf (of, "char");
 	      break;
 
 	    case V_VOID:
-	      fprintf (of, "SV");
+	      fprintf (of, "void");
 	      break;
 
 	    case V_FLOAT:
-	      fprintf (of, "SF");
+	      fprintf (of, "float");
 	      break;
 
 	    case V_STRUCT:
-	      fprintf (of, "ST%s", SPEC_STRUCT (type)->tag);
+	      fprintf (of, "struct %s", SPEC_STRUCT (type)->tag);
 	      break;
 
 	    case V_SBIT:
-	      fprintf (of, "SX");
+	      fprintf (of, "sbit");
 	      break;
 
 	    case V_BIT:
-	      fprintf (of, "SB%d$%d", SPEC_BSTR (type), SPEC_BLEN (type));
+	      fprintf (of, "bit");
+	      break;
+
+	    case V_BITFIELD:
+	      fprintf (of, "bitfield {%d,%d}", SPEC_BSTR (type), SPEC_BLEN (type));
+	      break;
+
+	    case V_DOUBLE:
+	      fprintf (of, "double");
 	      break;
 
 	    default:
+	      fprintf (of, "unknown type");
 	      break;
 	    }
-	  fputs (":", of);
-	  if (SPEC_USIGN (type))
-	    fputs ("U", of);
-	  else
-	    fputs ("S", of);
-	}
-      type = type->next;
-    }
-}
-/*-----------------------------------------------------------------*/
-/* cdbSymbol - prints a symbol & its type information for debugger */
-/*-----------------------------------------------------------------*/
-void 
-cdbSymbol (symbol * sym, FILE * of, int isStructSym, int isFunc)
-{
-  memmap *map;
-
-  if (!sym)
-    return;
-  if (!of)
-    of = stdout;
-
-  if (isFunc)
-    fprintf (of, "F:");
-  else
-    fprintf (of, "S:");		/* symbol record */
-  /* if this is not a structure symbol then
-     we need to figure out the scope information */
-  if (!isStructSym)
-    {
-      if (!sym->level)
-	{
-	  /* global */
-	  if (IS_STATIC (sym->etype))
-	    fprintf (of, "F%s$", moduleName);	/* scope is file */
-	  else
-	    fprintf (of, "G$");	/* scope is global */
 	}
       else
-	/* symbol is local */
-	fprintf (of, "L%s$", (sym->localof ? sym->localof->name : "-null-"));
+        fprintf (of, "NOT_SPEC_OR_DECL");
+      type = type->next;
+      if (type)
+	fputc (' ', of);
     }
-  else
-    fprintf (of, "S$");		/* scope is structure */
-
-  /* print the name, & mangled name */
-  fprintf (of, "%s$%d$%d(", sym->name,
-	   sym->level, sym->block);
-
-  cdbTypeInfo (sym->type, of);
-  fprintf (of, "),");
-
-  /* print the address space */
-  map = SPEC_OCLS (sym->etype);
-  fprintf (of, "%c,%d,%d",
-	   (map ? map->dbName : 'Z'), sym->onStack, SPEC_STAK (sym->etype));
-
-  /* if assigned to registers then output register names */
-  /* if this is a function then print
-     if is it an interrupt routine & interrupt number
-     and the register bank it is using */
-  if (isFunc)
-    fprintf (of, ",%d,%d,%d", SPEC_INTRTN (sym->etype),
-	     SPEC_INTN (sym->etype), SPEC_BANK (sym->etype));
-  /* alternate location to find this symbol @ : eg registers
-     or spillication */
-
-  if (!isStructSym)
+  if (nlr)
     fprintf (of, "\n");
 }
 
-/*-----------------------------------------------------------------*/
-/* cdbStruct - print a structure for debugger                      */
-/*-----------------------------------------------------------------*/
-void 
-cdbStruct (structdef * sdef, int block, FILE * of,
-	   int inStruct, char *tag)
-{
-  symbol *sym;
-
-  fprintf (of, "T:");
-  /* if block # then must have function scope */
-  fprintf (of, "F%s$", moduleName);
-  fprintf (of, "%s[", (tag ? tag : sdef->tag));
-  for (sym = sdef->fields; sym; sym = sym->next)
-    {
-      fprintf (of, "({%d}", sym->offset);
-      cdbSymbol (sym, of, TRUE, FALSE);
-      fprintf (of, ")");
-    }
-  fprintf (of, "]");
-  if (!inStruct)
-    fprintf (of, "\n");
-}
-
-/*------------------------------------------------------------------*/
-/* cdbStructBlock - calls struct printing for a blcks               */
-/*------------------------------------------------------------------*/
-void 
-cdbStructBlock (int block, FILE * of)
-{
-  int i;
-  bucket **table = StructTab;
-  bucket *chain;
-  wassert (of);
-
-  /* go thru the entire  table  */
-  for (i = 0; i < 256; i++)
-    {
-      for (chain = table[i]; chain; chain = chain->next)
-	{
-	  if (chain->block >= block)
-	    {
-	      cdbStruct ((structdef *) chain->sym, chain->block, of, 0, NULL);
-	    }
-	}
-    }
-}
 
 /*-----------------------------------------------------------------*/
 /* powof2 - returns power of two for the number if number is pow 2 */
 /*-----------------------------------------------------------------*/
-int 
-powof2 (unsigned long num)
+int
+powof2 (TYPE_UDWORD num)
 {
   int nshifts = 0;
   int n1s = 0;
@@ -2243,7 +2699,7 @@ sym_link *floatType;
 static char *
 _mangleFunctionName(char *in)
 {
-  if (port->getMangledFunctionName) 
+  if (port->getMangledFunctionName)
     {
       return port->getMangledFunctionName(in);
     }
@@ -2251,6 +2707,109 @@ _mangleFunctionName(char *in)
     {
       return in;
     }
+}
+
+/*-----------------------------------------------------------------*/
+/* typeFromStr - create a typechain from an encoded string         */
+/* basic types - 	'c' - char            			   */
+/*   			's' - short				   */
+/* 			'i' - int                                  */
+/* 			'l' - long                                 */
+/*                      'f' - float				   */
+/*                      'v' - void				   */
+/*                      '*' - pointer - default (GPOINTER)	   */
+/* modifiers -          'u' - unsigned                             */
+/* pointer modifiers -  'g' - generic                              */
+/*                      'x' - xdata                                */
+/*                      'p' - code                                 */
+/*                      'd' - data                                 */                     
+/*                      'F' - function                             */                     
+/* examples : "ig*" - generic int *				   */
+/*            "cx*" - char xdata *                                 */
+/*            "ui" -  unsigned int                                 */
+/*-----------------------------------------------------------------*/
+sym_link *typeFromStr (char *s)
+{
+    sym_link *r = newLink(DECLARATOR);
+    int usign = 0;
+
+    do {
+	sym_link *nr;
+	switch (*s) {
+	case 'u' : 
+	    usign = 1;
+	    s++;
+	    continue ;
+	    break ;
+	case 'c':
+	    r->class = SPECIFIER;
+	    SPEC_NOUN(r) = V_CHAR;
+	    break;
+	case 's':
+	case 'i':
+	    r->class = SPECIFIER;
+	    SPEC_NOUN(r) = V_INT;
+	    break;
+	case 'l':
+	    r->class = SPECIFIER;
+	    SPEC_NOUN(r) = V_INT;
+	    SPEC_LONG(r) = 1;
+	    break;
+	case 'f':
+	    r->class = SPECIFIER;
+	    SPEC_NOUN(r) = V_FLOAT;
+	    break;
+	case 'v':
+	    r->class = SPECIFIER;
+	    SPEC_NOUN(r) = V_VOID;
+	    break;
+	case '*':
+	    DCL_TYPE(r) = port->unqualified_pointer;
+	    break;
+	case 'g':
+	case 'x':
+	case 'p':
+	case 'd':
+	case 'F':
+	    assert(*(s+1)=='*');
+	    nr = newLink(DECLARATOR);
+	    nr->next = r;
+	    r = nr;
+	    switch (*s) {
+	    case 'g':
+		DCL_TYPE(r) = GPOINTER;
+		break;
+	    case 'x':
+		DCL_TYPE(r) = FPOINTER;
+		break;
+	    case 'p':
+		DCL_TYPE(r) = CPOINTER;
+		break;
+	    case 'd':
+		DCL_TYPE(r) = POINTER;
+		break;
+	    case 'F':
+		DCL_TYPE(r) = FUNCTION;
+		nr = newLink(DECLARATOR);
+		nr->next = r;
+		r = nr;
+		DCL_TYPE(r) = CPOINTER;
+		break;
+	    }
+	    s++;
+	    break;
+	default:
+	    werror(E_INTERNAL_ERROR, __FILE__, __LINE__, 
+		   "typeFromStr: unknown type");
+	    break;
+	}
+	if (IS_SPEC(r) && usign) {
+	    SPEC_USIGN(r) = 1;
+	    usign = 0;
+	}
+	s++;
+    } while (*s);
+    return r;
 }
 
 /*-----------------------------------------------------------------*/
@@ -2278,11 +2837,16 @@ initCSupport ()
 
   int bwd, su, muldivmod, tofrom, rlrr;
 
+  if (getenv("SDCC_NO_C_SUPPORT")) {
+    /* for debugging only */
+    return;
+  }
+
   floatType = newFloatLink ();
 
   for (bwd = 0; bwd < 3; bwd++)
     {
-      sym_link *l;
+      sym_link *l = NULL;
       switch (bwd)
 	{
 	case 0:
@@ -2321,32 +2885,87 @@ initCSupport ()
 	    {
 	      if (tofrom)
 		{
-		  sprintf (buffer, "__fs2%s%s", ssu[su], sbwd[bwd]);
-		  __conv[tofrom][bwd][su] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], floatType, 1, options.float_rent);
+		  SNPRINTF (buffer, sizeof(buffer), "__fs2%s%s", ssu[su], sbwd[bwd]);
+		  __conv[tofrom][bwd][su] = funcOfType (buffer, __multypes[bwd][su], floatType, 1, options.float_rent);
 		}
 	      else
 		{
-		  sprintf (buffer, "__%s%s2fs", ssu[su], sbwd[bwd]);
-		  __conv[tofrom][bwd][su] = funcOfType (_mangleFunctionName(buffer), floatType, __multypes[bwd][su], 1, options.float_rent);
+		  SNPRINTF (buffer, sizeof(buffer), "__%s%s2fs", ssu[su], sbwd[bwd]);
+		  __conv[tofrom][bwd][su] = funcOfType (buffer, floatType, __multypes[bwd][su], 1, options.float_rent);
 		}
 	    }
 	}
     }
 
+/*
   for (muldivmod = 0; muldivmod < 3; muldivmod++)
     {
       for (bwd = 0; bwd < 3; bwd++)
 	{
 	  for (su = 0; su < 2; su++)
 	    {
-	      sprintf (buffer, "_%s%s%s",
+	      SNPRINTF (buffer, sizeof(buffer),
+			"_%s%s%s",
 		       smuldivmod[muldivmod],
 		       ssu[su],
 		       sbwd[bwd]);
               __muldiv[muldivmod][bwd][su] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], __multypes[bwd][su], 2, options.intlong_rent);
-	      SPEC_NONBANKED (__muldiv[muldivmod][bwd][su]->etype) = 1;
+	      FUNC_NONBANKED (__muldiv[muldivmod][bwd][su]->type) = 1;
 	    }
 	}
+    }
+
+  muluint() and mulsint() resp. mululong() and mulslong() return the same result.
+  Therefore they've been merged into mulint() and mullong().
+*/
+
+  for (bwd = 0; bwd < 3; bwd++)
+    {
+      for (su = 0; su < 2; su++)
+	{
+	  for (muldivmod = 1; muldivmod < 3; muldivmod++)
+	    {
+	      /* div and mod */
+	      SNPRINTF (buffer, sizeof(buffer),
+			"_%s%s%s",
+		       smuldivmod[muldivmod],
+		       ssu[su],
+		       sbwd[bwd]);
+	      __muldiv[muldivmod][bwd][su] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], __multypes[bwd][su], 2, options.intlong_rent);
+	      FUNC_NONBANKED (__muldiv[muldivmod][bwd][su]->type) = 1;
+	    }
+	}
+    }
+  /* mul only */
+  muldivmod = 0;
+  /* byte */
+  bwd = 0;
+  for (su = 0; su < 2; su++)
+    {
+      /* muluchar and mulschar are still separate functions, because e.g. the z80
+         port is sign/zero-extending to int before calling mulint() */
+      SNPRINTF (buffer, sizeof(buffer),
+		"_%s%s%s",
+		smuldivmod[muldivmod],
+		ssu[su],
+		sbwd[bwd]);
+      __muldiv[muldivmod][bwd][su] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], __multypes[bwd][su], 2, options.intlong_rent);
+      FUNC_NONBANKED (__muldiv[muldivmod][bwd][su]->type) = 1;
+    }
+  /* signed only */
+  su = 0;
+  /* word and doubleword */
+  for (bwd = 1; bwd < 3; bwd++)
+    {
+      /* mul, int/long */
+      SNPRINTF (buffer, sizeof(buffer),
+		"_%s%s",
+		smuldivmod[muldivmod],
+		sbwd[bwd]);
+      __muldiv[muldivmod][bwd][0] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], __multypes[bwd][su], 2, options.intlong_rent);
+      FUNC_NONBANKED (__muldiv[muldivmod][bwd][0]->type) = 1;
+      /* signed = unsigned */
+      __muldiv[muldivmod][bwd][1] = __muldiv[muldivmod][bwd][0];
     }
 
   for (rlrr = 0; rlrr < 2; rlrr++)
@@ -2355,13 +2974,112 @@ initCSupport ()
 	{
 	  for (su = 0; su < 2; su++)
 	    {
-	      sprintf (buffer, "_%s%s%s",
+	      SNPRINTF (buffer, sizeof(buffer),
+			"_%s%s%s",
 		       srlrr[rlrr],
 		       ssu[su],
 		       sbwd[bwd]);
               __rlrr[rlrr][bwd][su] = funcOfType (_mangleFunctionName(buffer), __multypes[bwd][su], __multypes[0][0], 2, options.intlong_rent);
-	      SPEC_NONBANKED (__rlrr[rlrr][bwd][su]->etype) = 1;
+	      FUNC_NONBANKED (__rlrr[rlrr][bwd][su]->type) = 1;
 	    }
 	}
     }
+}
+
+/*-----------------------------------------------------------------*/
+/* initBuiltIns - create prototypes for builtin functions          */
+/*-----------------------------------------------------------------*/
+void initBuiltIns()
+{
+    int i;
+    symbol *sym;
+
+    if (!port->builtintable) return ;
+
+    for (i = 0 ; port->builtintable[i].name ; i++) {
+	sym = funcOfTypeVarg(port->builtintable[i].name,port->builtintable[i].rtype,
+			     port->builtintable[i].nParms,port->builtintable[i].parm_types);
+	FUNC_ISBUILTIN(sym->type) = 1;
+	FUNC_ISREENT(sym->type) = 0;	/* can never be reentrant */
+    }
+}
+
+sym_link *validateLink(sym_link 	*l, 
+			const char 	*macro,
+			const char 	*args,
+			const char 	select,
+			const char 	*file, 
+			unsigned 	line)
+{    
+  if (l && l->class==select)
+    {
+	return l;
+    }
+    fprintf(stderr, 
+	    "Internal error: validateLink failed in %s(%s) @ %s:%u:"
+	    " expected %s, got %s\n",
+	    macro, args, file, line, 
+	    DECLSPEC2TXT(select), l ? DECLSPEC2TXT(l->class) : "null-link");
+    exit(-1);
+    return l; // never reached, makes compiler happy.
+}
+
+/*--------------------------------------------------------------------*/
+/* newEnumType - create an integer type compatible with enumerations  */
+/*--------------------------------------------------------------------*/
+sym_link *
+newEnumType (symbol *enumlist)
+{
+  int min, max, v;
+  symbol *sym;
+  sym_link *type;
+
+  if (!enumlist)
+    {
+      type = newLink (SPECIFIER);
+      SPEC_NOUN (type) = V_INT;
+      return type;
+    }
+      
+  /* Determine the range of the enumerated values */
+  sym = enumlist;
+  min = max = (int) floatFromVal (valFromType (sym->type));
+  for (sym = sym->next; sym; sym = sym->next)
+    {
+      v = (int) floatFromVal (valFromType (sym->type));
+      if (v<min)
+        min = v;
+      if (v>max)
+        max = v;
+    }
+
+  /* Determine the smallest integer type that is compatible with this range */
+  type = newLink (SPECIFIER);
+  if (min>=0 && max<=255)
+    {
+      SPEC_NOUN (type) = V_CHAR;
+      SPEC_USIGN (type) = 1;
+    }
+  else if (min>=-128 && max<=127)
+    {
+      SPEC_NOUN (type) = V_CHAR;
+    }
+  else if (min>=0 && max<=65535)
+    {
+      SPEC_NOUN (type) = V_INT;
+      SPEC_USIGN (type) = 1;
+    }
+  else if (min>=-32768 && max<=32767)
+    {
+      SPEC_NOUN (type) = V_INT;
+    }
+  else
+    {
+      SPEC_NOUN (type) = V_INT;
+      SPEC_LONG (type) = 1;
+      if (min>=0)
+        SPEC_USIGN (type) = 1;
+    }
+  
+  return type;    
 }

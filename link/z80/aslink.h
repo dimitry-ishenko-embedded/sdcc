@@ -14,6 +14,15 @@
  */
 #include <limits.h>
 
+#ifndef PATH_MAX
+ #if defined(__BORLANDC__) || defined(_MSC_VER)
+  #include <stdlib.h>
+  #define PATH_MAX	_MAX_PATH
+ #else
+  #define PATH_MAX	255	/* define a reasonable value */
+ #endif
+#endif
+
 #define	VERSION	"V01.75"
 
 /*
@@ -79,7 +88,7 @@
  */
 
 #ifdef SDK
-#define	NCPS	32		/* characters per symbol */
+#define	NCPS	80		/* characters per symbol.  Used to be 32... */
 #else /* SDK */
 #define	NCPS	8		/* characters per symbol */
 #endif /* SDK */
@@ -417,6 +426,7 @@ struct lbfile {
 	char		*libspc;
 	char		*relfil;
 	char		*filspc;
+    long		offset; /*>=0 if rel file is embedded in a lib file at this offset*/
 };
 
 /*
@@ -438,9 +448,13 @@ extern	char	*rp;		/*	pointer into the LST file
 extern	char	rb[NINPUT];	/*	LST file text line being
 				 *	address relocated
 				 */
-extern	char	ctype[];	/*	array of character types, one per
+extern	unsigned char	ctype[];	/*	array of character types, one per
 				 *	ASCII character
 				 */
+
+extern char sdccopt[NINPUT];
+extern char sdccopt_module[NINPUT];
+extern char curr_module[NINPUT];
 
 /*
  *	Character Type Definitions
@@ -641,6 +655,7 @@ extern	char		getnb();
 extern	int		more();
 extern	VOID		skip();
 extern	VOID		unget();
+extern	VOID		chop_crlf();
 
 /* lkarea.c */
 extern	VOID		lkparea();
@@ -700,7 +715,7 @@ extern	VOID		erpdmp();
 extern	VOID		prntval();
 
 /* lklibr.c */
-extern	VOID		addfile();
+extern	int		addfile();
 extern	VOID		addlib();
 extern	VOID		addpath();
 extern	int		fndsym();

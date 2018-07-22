@@ -54,6 +54,10 @@
 #define CLOCKS_PER_SEC 1000
 #define memcpy(d,s,l) memcpyx(d,s,l)
 
+# if defined(SDCC_ds400)
+# include <ds400rom.h>
+# endif
+
 #elif defined(__z80) || defined(__gbz80)
 unsigned int _clock(void);
 
@@ -107,7 +111,7 @@ Boolean Func_3 (Enumeration Enum_Par_Val);
 
 unsigned getsp(void);
 
-int main(void)
+void main(void)
 {
     One_Fifty       Int_1_Loc;
     REG   One_Fifty       Int_2_Loc;
@@ -120,6 +124,15 @@ int main(void)
     REG   int             Number_Of_Runs;
     unsigned  long runTime;
 
+#if defined(SDCC_ds400)
+    // Intialize the ROM.
+    if (romInit(1, SPEED_2X))
+    {
+        // We're hosed. romInit will have printed an error, nothing more to do.
+        return;
+    }
+#endif    
+    
     printf("[dhry]\n");
 
     Next_Ptr_Glob = &_r[0];
@@ -143,9 +156,13 @@ int main(void)
 
     /* 32766 is the highest value for a 16 bitter */
 #if DEBUG
-    Number_Of_Runs = 3000;
+    Number_Of_Runs = 1;
 #else
+#if defined(SDCC_ds400)    
+    Number_Of_Runs = 10240;
+#else    
     Number_Of_Runs = 32766;
+#endif    
 #endif    
 
     runTime = clock();
@@ -207,9 +224,9 @@ int main(void)
 	DPRINTF(("Int_1_Loc %d == 3, Int_2_Loc %d == 3, Int_3_Loc %d == 7\n",
 	       Int_1_Loc, Int_2_Loc, Int_3_Loc));
 
-	Int_2_Loc = Int_2_Loc * Int_1_Loc;
-	Int_1_Loc = Int_2_Loc / Int_3_Loc;
-	Int_2_Loc = 7 * (Int_2_Loc - Int_3_Loc) - Int_1_Loc;
+	Int_2_Loc = Int_2_Loc * Int_1_Loc; /* i2 = 3 * 3 = 9 */
+	Int_1_Loc = Int_2_Loc / Int_3_Loc; /* i1 = 9 / 7 = 1 */
+	Int_2_Loc = 7 * (Int_2_Loc - Int_3_Loc) - Int_1_Loc; /* i2 = 7 * (9 - 7) - 1 */
 	/* Int_1_Loc == 1, Int_2_Loc == 13, Int_3_Loc == 7 */
 	DPRINTF(("Int_1_Loc %d == 1, Int_2_Loc %d == 13, Int_3_Loc %d == 7\n",
 	       Int_1_Loc, Int_2_Loc, Int_3_Loc));
@@ -274,9 +291,9 @@ int main(void)
     printf ("        should be:   %d\n", (int)7);
     printf ("Enum_Loc:            %d\n", Enum_Loc);
     printf ("        should be:   %d\n", (int)1);
-    printf ("Str_1_Loc:           %s\n", (char _generic *)Str_1_Loc);
+    printf ("Str_1_Loc:           %s\n", (char *)Str_1_Loc);
     printf ("        should be:   DHRYSTONE PROGRAM, 1'ST STRING\n");
-    printf ("Str_2_Loc:           %s\n", (char _generic *)Str_2_Loc);
+    printf ("Str_2_Loc:           %s\n", (char *)Str_2_Loc);
     printf ("        should be:   DHRYSTONE PROGRAM, 2'ND STRING\n");
     printf ("\n");
 #endif
@@ -302,7 +319,13 @@ void Proc_1 (REG Rec_Pointer Ptr_Val_Par)
     /* Local variable, initialized with Ptr_Val_Par->Ptr_Comp,    */
     /* corresponds to "rename" in Ada, "with" in Pascal           */
   
-    structassign (*Ptr_Val_Par->Ptr_Comp, *Ptr_Glob); 
+#if !defined(SDCC_ds390)    
+    structassign (*Ptr_Val_Par->Ptr_Comp, *Ptr_Glob);
+#else
+    /* I have no idea why this is necessary... */
+    memcpyx((void xdata *)*Ptr_Val_Par->Ptr_Comp, (void xdata *)*Ptr_Glob, 
+	   sizeof(Rec_Type));
+#endif
     Ptr_Val_Par->variant.var_1.Int_Comp = 5;
     Next_Record->variant.var_1.Int_Comp 
         = Ptr_Val_Par->variant.var_1.Int_Comp;

@@ -89,7 +89,7 @@ cl_avr::ldi_Rd_K(t_mem code)
 
   d= (code&0xf0)>>4;
   K= ((code&0xf00)>>4)|(code&0xf);
-  ram->write(d+16, &K);
+  ram->write(d+16, K);
   return(resGO);
 }
 
@@ -118,7 +118,7 @@ cl_avr::ldd_Rd_Z_q(t_mem code)
   q= ((code&0x2000)>>8)|((code&0xc00)>>7)|(code&0x7);
   z= ram->get(ZH)*256 + ram->get(ZL);
   t_mem data= ram->read(z+q);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -141,7 +141,7 @@ cl_avr::ldd_Rd_Y_q(t_mem code)
   q= ((code&0x2000)>>8)|((code&0xc00)>>7)|(code&0x7);
   y= ram->get(YH)*256 + ram->get(YL);
   t_mem data= ram->read(y+q);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -164,7 +164,7 @@ cl_avr::std_Z_q_Rr(t_mem code)
   q= ((code&0x2000)>>8)|((code&0xc00)>>7)|(code&0x7);
   z= ram->get(ZH)*256 + ram->get(ZL);
   t_mem data= ram->read(r);
-  ram->write(z+q, &data);
+  ram->write(z+q, data);
   tick(1);
   return(resGO);
 }
@@ -187,7 +187,7 @@ cl_avr::std_Y_q_Rr(t_mem code)
   q= ((code&0x2000)>>8)|((code&0xc00)>>7)|(code&0x7);
   y= ram->get(YH)*256 + ram->get(YL);
   t_mem data= ram->read(r);
-  ram->write(y+q, &data);
+  ram->write(y+q, data);
   tick(1);
   return(resGO);
 }
@@ -209,7 +209,7 @@ cl_avr::lds_Rd_k(t_mem code)
   d= (code&0x1f0)>>4;
   k= fetch();
   t_mem data= ram->read(k);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(2);
   return(resGO);
 }
@@ -223,14 +223,14 @@ cl_avr::lds_Rd_k(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_Z$(t_mem code)
+cl_avr::ld_Rd_ZS(t_mem code)
 {
   t_addr z, d;
 
   d= (code&0x1f0)>>4;
   z= ram->get(ZH)*256 + ram->get(ZL);
   t_mem data= ram->read(z);
-  ram->write(d, &data);
+  ram->write(d, data);
   ram->set(ZL, data= (ram->get(ZL)+1)&0xff);
   if (!data)
     ram->set(ZH, (ram->get(ZH)+1)&0xff);
@@ -247,7 +247,7 @@ cl_avr::ld_Rd_Z$(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_$Z(t_mem code)
+cl_avr::ld_Rd_SZ(t_mem code)
 {
   t_addr z, d;
   t_mem data;
@@ -258,7 +258,7 @@ cl_avr::ld_Rd_$Z(t_mem code)
     ram->set(ZH, (ram->get(ZH)-1)&0xff);
   z= ram->get(ZH)*256 + z;
   data= ram->read(z);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -272,7 +272,7 @@ cl_avr::lpm_Rd_Z(t_mem code)
 
 
 int
-cl_avr::lpm_Rd_Z$(t_mem code)
+cl_avr::lpm_Rd_ZS(t_mem code)
 {
   return(resGO);
 }
@@ -286,7 +286,7 @@ cl_avr::elpm_Rd_Z(t_mem code)
 
 
 int
-cl_avr::elpm_Rd_Z$(t_mem code)
+cl_avr::elpm_Rd_ZS(t_mem code)
 {
   return(resGO);
 }
@@ -300,14 +300,14 @@ cl_avr::elpm_Rd_Z$(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_Y$(t_mem code)
+cl_avr::ld_Rd_YS(t_mem code)
 {
   t_addr y, d;
 
   d= (code&0x1f0)>>4;
   y= ram->get(YH)*256 + ram->get(YL);
   t_mem data= ram->read(y);
-  ram->write(d, &data);
+  ram->write(d, data);
   ram->set(YL, data= (ram->get(YL)+1)&0xff);
   if (!data)
     ram->set(YH, (ram->get(YH)+1)&0xff);
@@ -324,7 +324,7 @@ cl_avr::ld_Rd_Y$(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_$Y(t_mem code)
+cl_avr::ld_Rd_SY(t_mem code)
 {
   t_addr y, d;
   t_mem data;
@@ -335,7 +335,7 @@ cl_avr::ld_Rd_$Y(t_mem code)
     ram->set(YH, (ram->get(YH)-1)&0xff);
   y= ram->get(YH)*256 + y;
   data= ram->read(y);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -356,7 +356,7 @@ cl_avr::ld_Rd_X(t_mem code)
   d= (code&0x1f0)>>4;
   x= ram->get(XH)*256 + ram->get(XL);
   t_mem data= ram->read(x);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -370,14 +370,14 @@ cl_avr::ld_Rd_X(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_X$(t_mem code)
+cl_avr::ld_Rd_XS(t_mem code)
 {
   t_addr x, d;
 
   d= (code&0x1f0)>>4;
   x= ram->get(XH)*256 + ram->get(XL);
   t_mem data= ram->read(x);
-  ram->write(d, &data);
+  ram->write(d, data);
   ram->set(XL, data= (ram->get(XL)+1)&0xff);
   if (!data)
     ram->set(XH, (ram->get(XH)+1)&0xff);
@@ -394,7 +394,7 @@ cl_avr::ld_Rd_X$(t_mem code)
  */
 
 int
-cl_avr::ld_Rd_$X(t_mem code)
+cl_avr::ld_Rd_SX(t_mem code)
 {
   t_addr x, d;
   t_mem data;
@@ -405,7 +405,7 @@ cl_avr::ld_Rd_$X(t_mem code)
     ram->set(XH, (ram->get(XH)-1)&0xff);
   x= ram->get(XH)*256 + x;
   data= ram->read(x);
-  ram->write(d, &data);
+  ram->write(d, data);
   tick(1);
   return(resGO);
 }
@@ -426,7 +426,7 @@ cl_avr::pop_Rd(t_mem code)
 
   d= (code&0x1f0)>>4;
   pop_data(&D);
-  ram->write(d, &D);
+  ram->write(d, D);
   tick(1);
   
   return(resGO);
@@ -449,7 +449,7 @@ cl_avr::sts_k_Rr(t_mem code)
   r= (code&0x1f0)>>4;
   k= fetch();
   t_mem data= ram->read(r);
-  ram->write(k, &data);
+  ram->write(k, data);
   tick(2);
   return(resGO);
 }
@@ -463,14 +463,14 @@ cl_avr::sts_k_Rr(t_mem code)
  */
 
 int
-cl_avr::st_Z$_Rr(t_mem code)
+cl_avr::st_ZS_Rr(t_mem code)
 { 
   t_addr z, r;
 
   r= (code&0x1f0)>>4;
   z= ram->get(ZH)*256 + ram->get(ZL);
   t_mem data= ram->read(r);
-  ram->write(z, &data);
+  ram->write(z, data);
   ram->set(ZL, data= (ram->get(ZL)+1)&0xff);
   if (!data)
     ram->set(ZH, (ram->get(ZH)+1)&0xff);
@@ -487,7 +487,7 @@ cl_avr::st_Z$_Rr(t_mem code)
  */
 
 int
-cl_avr::st_$Z_Rr(t_mem code)
+cl_avr::st_SZ_Rr(t_mem code)
 {
   t_addr z, r;
   t_mem data;
@@ -498,7 +498,7 @@ cl_avr::st_$Z_Rr(t_mem code)
     ram->set(ZH, (ram->get(ZH)-1)&0xff);
   z= ram->get(ZH)*256 + z;
   data= ram->read(r);
-  ram->write(z, &data);
+  ram->write(z, data);
   tick(1);
   return(resGO);
 }
@@ -512,14 +512,14 @@ cl_avr::st_$Z_Rr(t_mem code)
  */
 
 int
-cl_avr::st_Y$_Rr(t_mem code)
+cl_avr::st_YS_Rr(t_mem code)
 {
   t_addr y, r;
 
   r= (code&0x1f0)>>4;
   y= ram->get(YH)*256 + ram->get(YL);
   t_mem data= ram->read(r);
-  ram->write(y, &data);
+  ram->write(y, data);
   ram->set(YL, data= (ram->get(YL)+1)&0xff);
   if (!data)
     ram->set(YH, (ram->get(YH)+1)&0xff);
@@ -536,7 +536,7 @@ cl_avr::st_Y$_Rr(t_mem code)
  */
 
 int
-cl_avr::st_$Y_Rr(t_mem code)
+cl_avr::st_SY_Rr(t_mem code)
 {
   t_addr y, r;
   t_mem data;
@@ -547,7 +547,7 @@ cl_avr::st_$Y_Rr(t_mem code)
     ram->set(YH, (ram->get(YH)-1)&0xff);
   y= ram->get(YH)*256 + y;
   data= ram->read(r);
-  ram->write(y, &data);
+  ram->write(y, data);
   tick(1);
   return(resGO);
 }
@@ -569,7 +569,7 @@ cl_avr::st_X_Rr(t_mem code)
   r= (code&0x1f0)>>4;
   x= ram->get(XH)*256 + ram->get(XL);
   t_mem data= ram->read(r);
-  ram->write(x, &data);
+  ram->write(x, data);
   tick(1);
   return(resGO);
 }
@@ -583,14 +583,14 @@ cl_avr::st_X_Rr(t_mem code)
  */
 
 int
-cl_avr::st_X$_Rr(t_mem code)
+cl_avr::st_XS_Rr(t_mem code)
 {
   t_addr x, r;
 
   r= (code&0x1f0)>>4;
   x= ram->get(XH)*256 + ram->get(XL);
   t_mem data= ram->read(r);
-  ram->write(x, &data);
+  ram->write(x, data);
   ram->set(XL, data= (ram->get(XL)+1)&0xff);
   if (!data)
     ram->set(XH, (ram->get(XH)+1)&0xff);
@@ -607,7 +607,7 @@ cl_avr::st_X$_Rr(t_mem code)
  */
 
 int
-cl_avr::st_$X_Rr(t_mem code)
+cl_avr::st_SX_Rr(t_mem code)
 {
   t_addr x, r;
   t_mem data;
@@ -618,7 +618,7 @@ cl_avr::st_$X_Rr(t_mem code)
     ram->set(XH, (ram->get(XH)-1)&0xff);
   x= ram->get(XH)*256 + x;
   data= ram->read(r);
-  ram->write(x, &data);
+  ram->write(x, data);
   tick(1);
   return(resGO);
 }
@@ -663,7 +663,7 @@ cl_avr::swap_Rd(t_mem code)
   data= ram->read(d);
   temp= (data>>4)&0xf;
   data= (data<<4)|temp;
-  ram->write(d, &data);
+  ram->write(d, data);
   return(resGO);
 }
 
@@ -684,7 +684,7 @@ cl_avr::in_Rd_A(t_mem code)
   P= ((code&0x600)>>5)|(code&0xf);
   d= (code&0x1f0)>>4;
   data= ram->read(P+0x20);
-  ram->write(d, &data);
+  ram->write(d, data);
   return(resGO);
 }
 
@@ -705,7 +705,7 @@ cl_avr::out_A_Rr(t_mem code)
   P= ((code&0x600)>>5)|(code&0xf);
   r= (code&0x1f0)>>4;
   data= ram->read(r);
-  ram->write(P+0x20, &data);
+  ram->write(P+0x20, data);
   return(resGO);
 }
 
@@ -725,7 +725,7 @@ cl_avr::mov_Rd_Rr(t_mem code)
   d= (code&0x1f0)>>4;
   r= ((code&0x200)>>5)|(code&0xf);
   t_mem data= ram->read(r);
-  ram->write(d, &data);
+  ram->write(d, data);
   return(resGO);
 }
 

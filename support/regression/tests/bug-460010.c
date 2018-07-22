@@ -2,6 +2,12 @@
  */
 #include <testfwk.h>
 
+#if defined __mcs51 || defined __ds390 || defined __xa51
+#define XDATA xdata
+#else
+#define XDATA
+#endif
+
 void 
 func( unsigned char a )
 {
@@ -11,7 +17,13 @@ func( unsigned char a )
 void
 testBadPromotion(void)
 {
-  unsigned char c=*((unsigned char*)(0xa000));
+
+#ifdef SDCC
+  unsigned char c=*((unsigned XDATA char*)(0xa000));
+#else
+  unsigned char loc_c;
+  unsigned char c=*(unsigned char*)&loc_c;
+#endif 
   
   func(c); 
   

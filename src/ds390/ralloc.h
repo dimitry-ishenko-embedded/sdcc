@@ -31,9 +31,10 @@ enum
   {
     R2_IDX = 0, R3_IDX, R4_IDX,
     R5_IDX, R6_IDX, R7_IDX,
-    R0_IDX, R1_IDX, X8_IDX,
+    R0_IDX, R1_IDX, DPL_IDX, 
+    DPH_IDX, DPX_IDX, B_IDX, X8_IDX,
     X9_IDX, X10_IDX, X11_IDX,
-    X12_IDX, CND_IDX
+    X12_IDX, CND_IDX 
   };
 
 
@@ -52,11 +53,14 @@ typedef struct regs
     char *base;			/* base address */
     short offset;		/* offset from the base */
     unsigned isFree:1;		/* is currently unassigned  */
+    int  print;                 /* needs to be printed*/
   }
 regs;
 extern regs regs390[];
 
 regs *ds390_regWithIdx (int);
+
+bitVect *ds390_rUmaskForOp (operand * op);
 
 extern int ds390_ptrRegReq;
 extern int ds390_nRegs;

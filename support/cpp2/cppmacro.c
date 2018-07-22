@@ -1184,8 +1184,10 @@ warn_of_redefinition (pfile, node, macro2)
   if (node->flags & NODE_WARN)
     return 1;
 
+#if 0
   if (! CPP_PEDANTIC (pfile))
     return 0;
+#endif
 
   /* Redefinition of a macro is allowed if and only if the old and new
      definitions are the same.  (6.10.3 paragraph 2). */
@@ -1418,7 +1420,8 @@ _cpp_create_definition (pfile, node)
 	      macro->count--;
 	    }
 	  /* Let assembler get away with murder.  */
-	  else if (CPP_OPTION (pfile, lang) != CLK_ASM)
+	  else if ((CPP_OPTION (pfile, lang) != CLK_ASM)
+		&& (!CPP_OPTION(pfile, allow_naked_hash)))
 	    {
 	      ok = 0;
 	      cpp_error (pfile, "'#' is not followed by a macro parameter");

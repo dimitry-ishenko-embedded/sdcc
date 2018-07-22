@@ -22,8 +22,8 @@
    what you give them.   Help stamp out software-hoarding!  
 -------------------------------------------------------------------------*/
 
-#ifndef SDCCGEN51_H
-#define SDCCGEN51_H
+#ifndef Z80GEN_H
+#define Z80GEN_H
 
 typedef enum
   {
@@ -53,7 +53,13 @@ typedef enum
     /* Is in H and L */
     AOP_HLREG,
     /* Simple literal. */
-    AOP_SIMPLELIT
+    AOP_SIMPLELIT,
+    /* Is in the extended stack pointer (IY on the Z80) */
+    AOP_EXSTK,
+    /* Is referenced by a pointer in a register pair. */
+    AOP_PAIRPTR,
+    /* Read as 0, discard writes */
+    AOP_DUMMY
   }
 AOP_TYPE;
 
@@ -65,9 +71,11 @@ typedef struct asmop
     AOP_TYPE type;
     short coff;                 /* current offset */
     short size;                 /* total size */
-    unsigned code:1;            /* is in Code space */
-    unsigned paged:1;           /* in paged memory  */
-    unsigned freed:1;           /* already freed    */
+    unsigned  code:1;               /* is in Code space */
+    unsigned  paged:1;              /* in paged memory  */
+    unsigned  freed:1;              /* already freed    */
+    unsigned  bcInUse:1;
+    unsigned  deInUse:1;
     union
       {
         value *aop_lit;         /* if literal */
@@ -77,6 +85,7 @@ typedef struct asmop
         int aop_stk;            /* stack offset when AOP_STK */
         const char *aop_str[4]; /* just a string array containing the location */
         unsigned long aop_simplelit; /* Just the value. */
+        int aop_pairId;		/* The pair ID */
       }
     aopu;
   }

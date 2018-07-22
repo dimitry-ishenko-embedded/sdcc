@@ -39,12 +39,13 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 class cl_it_src: public cl_base
 {
 public:
+  int poll_priority;
   uchar ie_mask;  // Mask in IE register
   uchar src_reg;  // Register in SFR of source
   uchar src_mask; // Mask of source bit in src_reg
   uint  addr;     // Address of service routine
   bool  clr_bit;  // Request bit must be cleared when IT accepted
-  char  *name;	  // For debug
+  //char  *name;	  // For debug
   bool  active;   // Acceptance can be disabled
 
   cl_it_src(uchar Iie_mask,
@@ -52,13 +53,23 @@ public:
 	    uchar Isrc_mask,
 	    uint  Iaddr,
 	    bool  Iclr_bit,
-	    char  *Iname);
-  ~cl_it_src(void);
+	    char  *Iname,
+	    int   apoll_priority);
+  virtual ~cl_it_src(void);
 
           bool is_active(void);
   virtual void set_active_status(bool Aactive);
   virtual void activate(void);
   virtual void deactivate(void);
+};
+
+
+class cl_irqs: public cl_sorted_list
+{
+public:
+  cl_irqs(t_index alimit, t_index adelta);
+  virtual void *key_of(void *item); 
+  virtual int compare(void *key1, void *key2);
 };
 
 

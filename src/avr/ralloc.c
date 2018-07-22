@@ -549,31 +549,6 @@ nfreeRegsType (int type)
 	return nFreeRegs (type);
 }
 
-
-/*-----------------------------------------------------------------*/
-/* allDefsOutOfRange - all definitions are out of a range          */
-/*-----------------------------------------------------------------*/
-static bool
-allDefsOutOfRange (bitVect * defs, int fseq, int toseq)
-{
-	int i;
-
-	if (!defs)
-		return TRUE;
-
-	for (i = 0; i < defs->size; i++) {
-		iCode *ic;
-
-		if (bitVectBitValue (defs, i) &&
-		    (ic = hTabItemWithKey (iCodehTab, i)) &&
-		    (ic->seq >= fseq && ic->seq <= toseq))
-
-			return FALSE;
-	}
-
-	return TRUE;
-}
-
 /*-----------------------------------------------------------------*/
 /* computeSpillable - given a point find the spillable live ranges */
 /*-----------------------------------------------------------------*/
@@ -633,16 +608,6 @@ static int
 rematable (symbol * sym, eBBlock * ebp, iCode * ic)
 {
 	return sym->remat;
-}
-
-/*-----------------------------------------------------------------*/
-/* notUsedInBlock - not used in this block                         */
-/*-----------------------------------------------------------------*/
-static int
-notUsedInBlock (symbol * sym, eBBlock * ebp, iCode * ic)
-{
-	return (!bitVectBitsInCommon (sym->defs, ebp->usesDefs) &&
-		allDefsOutOfRange (sym->defs, ebp->fSeq, ebp->lSeq));
 }
 
 /*-----------------------------------------------------------------*/
@@ -727,7 +692,7 @@ leastUsedLR (set * sset)
 
 	}
 
-	setToNull ((void **) &sset);
+	setToNull ((void *) &sset);
 	sym->blockSpil = 0;
 	return sym;
 }
@@ -1617,11 +1582,12 @@ createRegMask (eBBlock ** ebbs, int count)
 				/* for all the registers allocated to it */
 				for (k = 0; k < sym->nRegs; k++) {
 					if (sym->regs[k]) {
-						ic->rMask = bitVectSetBit (ic-> rMask, sym->regs[k]->rIdx);
+						int rIdx = sym->regs[k]->rIdx;
+						ic->rMask = bitVectSetBit (ic-> rMask,rIdx);
 						/* special case for X & Z registers */
-						if (k == R26_IDX || k == R27_IDX) 
+						if (rIdx == R26_IDX || rIdx == R27_IDX) 
 							ic->rMask = bitVectSetBit (ic->rMask, X_IDX);
-						if (k == R30_IDX || k == R31_IDX) 
+						if (rIdx == R30_IDX || rIdx == R31_IDX) 
 							ic->rMask = bitVectSetBit (ic->rMask, Z_IDX);
 					}
 				}
@@ -1891,7 +1857,8 @@ packRegsForOneuse (iCode * ic, operand * op, eBBlock * ebp)
 	/* now check if it is the return from
 	   a function call */
 	if (dic->op == CALL || dic->op == PCALL) {
-		if (ic->op != SEND && ic->op != RETURN) {
+		if (ic->op != SEND && ic->op != RETURN &&
+		    !POINTER_SET(ic) && !POINTER_GET(ic)) {
 			OP_SYMBOL (op)->ruonly = 1;
 			return dic;
 		}
@@ -2239,7 +2206,7 @@ setDefaultRegs (eBBlock ** ebbs, int count)
 		regsAVR[i].type = (regsAVR[i].type & ~REG_MASK) | REG_SCR;
 		regsAVR[i].isFree = 1;
 	}
-	if (!currFunc->hasFcall) {
+	if (!IFFUNC_HASFCALL(currFunc->type)) {
 		preAssignParms (ebbs[0]->sch);
 	}
 	/* Y - is not allocated (it is the stack frame) */
@@ -2262,6 +2229,10 @@ avr_assignRegisters (eBBlock ** ebbs, int count)
 	   live ranges reducing some register pressure */
 	for (i = 0; i < count; i++)
 		packRegisters (ebbs[i]);
+
+	/* liveranges probably changed by register packing
+	   so we compute them again */
+	recomputeLiveRanges (ebbs, count);
 
 	if (options.dump_pack)
 		dumpEbbsToFileExt (DUMP_PACK, ebbs, count);
@@ -2309,8 +2280,8 @@ avr_assignRegisters (eBBlock ** ebbs, int count)
 	/* free up any _G.stackSpil locations allocated */
 	applyToSet (_G.stackSpil, deallocStackSpil);
 	_G.slocNum = 0;
-	setToNull ((void **) &_G.stackSpil);
-	setToNull ((void **) &_G.spiltSet);
+	setToNull ((void *) &_G.stackSpil);
+	setToNull ((void *) &_G.spiltSet);
 	/* mark all registers as free */
 
 	return;

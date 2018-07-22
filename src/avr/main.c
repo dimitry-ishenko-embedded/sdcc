@@ -131,6 +131,29 @@ _avr_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 	return TRUE;
 }
 
+/* Indicate which extended bit operations this port supports */
+static bool
+hasExtBitOp (int op, int size)
+{
+  if (op == RRC
+      || op == RLC
+      || op == GETHBIT
+     )
+    return TRUE;
+  else
+    return FALSE;
+}
+
+/* Indicate the expense of an access to an output storage class */
+static int
+oclsExpense (struct memmap *oclass)
+{
+  if (IN_FARSPACE(oclass))
+    return 1;
+    
+  return 0;
+}
+
 /** $1 is always the basename.
     $2 is always the output file.
     $3 varies
@@ -138,11 +161,12 @@ _avr_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
     MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] = {
-	"linkavr", "", "$1", NULL
+	"linkavr", "", "\"$1\"", NULL
 };
 
+/* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
 static const char *_asmCmd[] = {
-	"asavr", "$l" , "-plosgff", "$1.s", NULL
+	"asavr", "$l" , "$3", "\"$1.s\"", NULL
 };
 
 /* Globals */
@@ -150,20 +174,28 @@ PORT avr_port = {
         TARGET_ID_AVR,
 	"avr",
 	"ATMEL AVR",		/* Target name */
+	NULL,			/* processor */
 	{
+         glue,
 	 TRUE,			/* Emit glue around main */
 	 MODEL_LARGE | MODEL_SMALL,
-	 MODEL_SMALL},
+	 MODEL_SMALL
+	},
 	{
 	 _asmCmd,
+         NULL,
 	 "-plosgff",		/* Options with debug */
 	 "-plosgff",		/* Options without debug */
 	 0,
-	".s"},
+	".s",
+	 NULL,			/* no do_assemble */
+	},
 	{
 	 _linkCmd,
+         NULL,
 	 NULL,
-	 ".rel"},
+	 ".rel",
+	 1},
 	{
 	 _defaultRules},
 	{
@@ -182,10 +214,13 @@ PORT avr_port = {
 	 "OSEG",
 	 "GSFINAL",
 	 "HOME",
+	 NULL, // initialized xdata
+	 NULL, // a code copy of xiseg
 	 NULL,
 	 NULL,
 	 0,
 	 },
+        { NULL, NULL },
 	{
 	 -1, 1, 4, 1, 1, 0},
 	/* avr has an 8 bit mul */
@@ -195,24 +230,36 @@ PORT avr_port = {
 	"_",
 	_avr_init,
 	_avr_parseOptions,
+	NULL,
 	_avr_finaliseOptions,
 	_avr_setDefaultOptions,
 	avr_assignRegisters,
 	_avr_getRegName,
 	_avr_keywords,
 	_avr_genAssemblerPreamble,
+	NULL,				/* no genAssemblerEnd */
 	_avr_genIVT,
+	NULL, // _avr_genXINIT
 	_avr_reset_regparm,
 	_avr_regparm,
         NULL,
 	NULL,
+        NULL,
+	hasExtBitOp,		/* hasExtBitOp */
+	oclsExpense,		/* oclsExpense */
 	FALSE,
+	TRUE,			/* little endian */
 	0,			/* leave lt */
 	1,			/* transform gt ==> not le */
 	0,			/* leave le */
 	0,			/* leave ge */
 	0,			/* leave !=  */
 	0,			/* leave == */
-	FALSE,                        /* No array initializer support. */
+	FALSE,                  /* No array initializer support. */
+	0,                      /* no CSE cost estimation yet */
+	NULL, 			/* no builtin functions */
+	GPOINTER,		/* treat unqualified pointers as "generic" pointers */
+	1,			/* reset labelKey to 1 */
+	1,			/* globals & local static allowed */
 	PORT_MAGIC
 };

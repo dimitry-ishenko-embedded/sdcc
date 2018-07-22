@@ -9,14 +9,15 @@ PRJDIR		= .
 include $(PRJDIR)/Makefile.common
 
 SDCC_MISC	= debugger/mcs51 sim/ucsim
-SDCC_LIBS	= support/cpp support/cpp2
+SDCC_LIBS	= support/cpp2 support/makebin
 SDCC_DOC        = doc
 
 # Parts that are not normally compiled but need to be cleaned
-SDCC_EXTRA      = support/regression support/makebin
+SDCC_EXTRA      = support/regression
 
-SDCC_ASLINK	= as/mcs51 as link
+SDCC_ASLINK	= as/mcs51 as link as/hc08
 SDCC_PACKIHX	= packihx
+SDCC_LIBRARIAN	= support/librarian
 
 TARGETS         = sdcc-libs sdcc-cc sdcc-aslink sdcc-doc
 
@@ -37,8 +38,11 @@ TARGETS         += sdcc-packihx
 PKGS            += $(SDCC_PACKIHX)
 endif
 
+TARGETS         += sdcc-librarian
+PKGS            += $(SDCC_LIBRARIAN)
+
 PKGS_TINI	= $(SDCC_LIBS) $(SDCC_ASLINK) \
-		  src device/include $(SDCC_PACKIHX)
+		  src device/include $(SDCC_PACKIHX) $(SDCC_LIBRARIAN)
 PORTS		= $(shell cat ports.build)
 ALLPORTS	= $(shell cat ports.all)
 
@@ -63,7 +67,10 @@ sdcc-misc:
 sdcc-packihx:
 	$(MAKE) -C $(SDCC_PACKIHX)
 
-sdcc-device:
+sdcc-librarian:
+	$(MAKE) -C $(SDCC_LIBRARIAN)
+
+sdcc-device: sdcc-cc sdcc-aslink
 	$(MAKE) -C device/include
 	$(MAKE) -C device/lib
 
@@ -76,7 +83,7 @@ sdcc-doc:
 
 sdcc: $(TARGETS)
 
-sdcc-tini: sdcc-cc sdcc-aslink sdcc-device-tini sdcc-packihx
+sdcc-tini: sdcc-cc sdcc-aslink sdcc-device-tini sdcc-packihx sdcc-librarian
 	$(MAKE) -f main.mk all
 
 # Some interesting sub rules
@@ -117,7 +124,7 @@ clean:
 	$(MAKE) -f clean.mk clean
 	@echo "+ Cleaning packages in their directories..."
 	for pkg in $(PKGS); do\
-	  $(MAKE) PORTS="$(PORTS)" -C $$pkg -f clean.mk clean ;\
+	  $(MAKE) PORTS="$(PORTS)" EXEEXT=$(EXEEXT) -C $$pkg -f clean.mk clean ;\
 	done
 
 # Deleting all files created by configuring or building the program
@@ -127,7 +134,7 @@ distclean:
 	$(MAKE) -f clean.mk distclean
 	@echo "+ DistCleaning packages using clean.mk..."
 	for pkg in $(PKGS); do\
-	  $(MAKE) -C $$pkg PORTS="$(PORTS)" -f clean.mk distclean ;\
+	  $(MAKE) -C $$pkg PORTS="$(PORTS)" EXEEXT=$(EXEEXT) -f clean.mk distclean ;\
 	done
 	for pkg in $(SDCC_EXTRA); do \
 	  $(MAKE) -C $$pkg clean; \
@@ -138,7 +145,7 @@ distclean:
 mostlyclean: clean
 	$(MAKE) -f clean.mk mostlyclean
 	for pkg in $(PKGS); do\
-	  $(MAKE) -C $$pkg -f clean.mk PORTS="$(PORTS)" mostlyclean ;\
+	  $(MAKE) -C $$pkg -f clean.mk PORTS="$(PORTS)" EXEEXT=$(EXEEXT) mostlyclean ;\
 	done
 
 
@@ -148,7 +155,7 @@ mostlyclean: clean
 realclean: distclean
 	$(MAKE) -f clean.mk realclean
 	for pkg in $(PKGS); do\
-	  $(MAKE) -C $$pkg -f clean.mk PORTS="$(PORTS)" realclean ;\
+	  $(MAKE) -C $$pkg -f clean.mk PORTS="$(PORTS)" EXEEXT=$(EXEEXT) realclean ;\
 	done
 
 

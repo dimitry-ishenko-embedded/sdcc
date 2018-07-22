@@ -1,4 +1,4 @@
-CLEANALLPORTS = avr ds390 izt mcs51 pic z80
+CLEANALLPORTS = avr ds390 izt mcs51 pic pic16 z80 xa51
 PRJDIR = ..
 
 # Deleting all files created by building the program
@@ -6,7 +6,7 @@ PRJDIR = ..
 clean:
 	rm -f *core *[%~] *.[oa] *.output
 	rm -f .[a-z]*~ \#*
-	rm -f $(PRJDIR)/bin/sdcc sdcc
+	rm -f $(PRJDIR)/bin/sdcc$(EXEEXT) sdcc$(EXEEXT)
 	for port in $(CLEANALLPORTS) ; do\
 	  $(MAKE) -C $$port -f ../port-clean.mk clean ;\
 	done

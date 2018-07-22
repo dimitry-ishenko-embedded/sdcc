@@ -4,6 +4,16 @@
 #include <string.h>
 #include <assert.h>
 
+
+#ifndef COMMON_H
+#define COMMON_H
+
+#if defined(__APPLE__) && (__MACH__)
+#ifdef _G
+#undef _G
+#endif
+#endif
+
 #include "SDCCglobl.h"
 #include "SDCCmem.h"
 #include "SDCCast.h"
@@ -23,6 +33,12 @@
 #include "SDCCopt.h"
 #include "SDCCglue.h"
 #include "SDCCpeeph.h"
+#include "SDCCdebug.h"
+#include "SDCCutil.h"
 
 #include "asm.h"
 #include "port.h"
+
+#include "newalloc.h"
+
+#endif

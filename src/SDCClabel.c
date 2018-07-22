@@ -28,15 +28,15 @@ hTab *labelRef = NULL;
 hTab *labelDef = NULL;
 
 /*-----------------------------------------------------------------*/
-/* buildLabelRefTable - creates an hashTable of label referneces   */
+/* buildLabelRefTable - creates an hashTable of label references   */
 /*-----------------------------------------------------------------*/
 void 
 buildLabelRefTable (iCode * ic)
 {
   iCode *lic;
 
-  setToNull ((void **) &labelRef);
-  setToNull ((void **) &labelDef);
+  setToNull ((void *) &labelRef);
+  setToNull ((void *) &labelDef);
   labelRef = newHashTable (labelKey + 1);
   labelDef = newHashTable (labelKey + 1);
 
@@ -83,7 +83,7 @@ labelGotoNext (iCode * ic)
       if (loop->op == GOTO &&	/* if this is a goto */
 	  loop->next &&		/* and we have a next one */
 	  loop->next->op == LABEL &&	/* next one is a label */
-	  loop->next->argLabel.label->key == loop->argLabel.label->key)		/* same label */
+	  loop->next->label->key == loop->label->key)	/* same label */
 	{
 	  loop->prev->next = loop->next;	/* get this out of the chain */
 	  loop->next->prev = loop->prev;
@@ -94,6 +94,36 @@ labelGotoNext (iCode * ic)
 
   return change;
 }
+
+/*-------------------------------------------------------------------*/
+/* deleteIfx - delete an IFX iCode or convert to DUMMY_READ_VOLATILE */
+/*-------------------------------------------------------------------*/
+static void
+deleteIfx (iCode * loop, int key)
+{
+  if (!options.lessPedantic)
+    {
+      werrorfl (loop->filename, loop->lineno, W_CONTROL_FLOW);
+    }
+  hTabDeleteItem (&labelRef, key, loop, DELETE_ITEM, NULL);
+	      
+  /* If the condition was volatile, convert IFX to */
+  /* DUMMY_READ_VOLATILE. Otherwise just delete the */
+  /* IFX iCode */
+  if (IS_OP_VOLATILE (IC_COND (loop)))
+    {
+      IC_RIGHT (loop) = IC_COND (loop);
+      IC_LEFT (loop) = NULL;
+      IC_RESULT (loop) = NULL;
+      loop->op = DUMMY_READ_VOLATILE;
+    }
+  else
+    {
+      loop->prev->next = loop->next;
+      loop->next->prev = loop->prev;
+    }
+}
+
 
 /*-----------------------------------------------------------------*/
 /* labelIfx - special case Ifx elimination                         */
@@ -119,29 +149,16 @@ labelIfx (iCode * ic)
 	  if (IC_TRUE (loop) &&
 	      IC_TRUE (loop)->key == IC_LABEL (loop->next)->key)
 	    {
-
-	      /* get rid of this if */
-	      werror (W_CONTROL_FLOW, loop->filename, loop->lineno);
-	      loop->prev->next = loop->next;
-	      loop->next->prev = loop->prev;
-	      hTabDeleteItem (&labelRef,
-			      (IC_TRUE (loop))->key,
-			      loop, DELETE_ITEM, NULL);
+	      deleteIfx (loop, IC_TRUE (loop)->key);
 	      change++;
-	      continue;
+              continue;
 	    }
 	  else
 	    {
 	      if (IC_FALSE (loop) &&
 		  IC_FALSE (loop)->key == IC_LABEL (loop->next)->key)
 		{
-		  /* get rid of this if */
-		  werror (W_CONTROL_FLOW, loop->filename, loop->lineno);
-		  loop->prev->next = loop->next;
-		  loop->next->prev = loop->prev;
-		  hTabDeleteItem (&labelRef,
-				  (IC_FALSE (loop))->key,
-				  loop, DELETE_ITEM, NULL);
+		  deleteIfx (loop, IC_FALSE (loop)->key);
 		  change++;
 		  continue;
 		}
@@ -156,13 +173,7 @@ labelIfx (iCode * ic)
 	  ((IC_TRUE (loop) && IC_TRUE (loop)->key == IC_LABEL (loop->next)->key) ||
 	   (IC_FALSE (loop) && IC_FALSE (loop)->key == IC_LABEL (loop->next)->key)))
 	{
-
-	  werror (W_CONTROL_FLOW, loop->filename, loop->lineno);
-	  loop->prev->next = loop->next;
-	  loop->next->prev = loop->prev;
-	  hTabDeleteItem (&labelRef,
-			  IC_LABEL (loop->next)->key,
-			  loop, DELETE_ITEM, NULL);
+	  deleteIfx (loop, IC_LABEL (loop->next)->key);
 	  change++;
 	  continue;
 	}
@@ -281,7 +292,7 @@ labelGotoGoto (iCode * ic)
 	  stat->next != loop)
 	{
 
-	  symbol *repLabel = stat->next->argLabel.label;	/* replace with label */
+	  symbol *repLabel = stat->next->label;	/* replace with label */
 
 	  /* if they are the same then continue */
 	  if (repLabel->key == sLabel->key)
@@ -294,7 +305,7 @@ labelGotoGoto (iCode * ic)
 	    case GOTO:		/* for a goto statement */
 
 	      hTabDeleteItem (&labelRef, (IC_LABEL (loop))->key, loop, DELETE_ITEM, NULL);
-	      loop->argLabel.label = repLabel;
+	      loop->label = repLabel;
 	      hTabAddItem (&labelRef, repLabel->key, loop);
 	      break;
 
@@ -322,7 +333,7 @@ labelGotoGoto (iCode * ic)
 }
 
 /*-----------------------------------------------------------------*/
-/* labelUnrefLabel - remove unreferneced labels                    */
+/* labelUnrefLabel - remove unreferenced labels                    */
 /*-----------------------------------------------------------------*/
 int 
 labelUnrefLabel (iCode * ic)
@@ -336,9 +347,6 @@ labelUnrefLabel (iCode * ic)
       /* if this is a label */
       if (loop->op == LABEL)
 	{
-	  set *refs;
-
-	  refs = NULL;
 	  if (((IC_LABEL (loop))->key == returnLabel->key) ||
 	      ((IC_LABEL (loop))->key == entryLabel->key))
 	    continue;
@@ -376,6 +384,7 @@ labelUnreach (iCode * ic)
       /* statement is not a label           */
       if (loop->op == GOTO || loop->op == RETURN)
 	{
+	  int warn = 0;
 
 	  if (loop->next &&
 	      (loop->next->op == LABEL ||
@@ -397,14 +406,21 @@ labelUnreach (iCode * ic)
 		  hTabDeleteItem (&labelRef, IC_LABEL (tic)->key, tic, DELETE_ITEM, NULL);
 		  break;
 		case IFX:
+		  warn = 1;
 		  if (IC_TRUE (tic))
 		    hTabDeleteItem (&labelRef, IC_TRUE (tic)->key, tic, DELETE_ITEM, NULL);
 		  else
 		    hTabDeleteItem (&labelRef, IC_FALSE (tic)->key, tic, DELETE_ITEM, NULL);
 		  break;
+		default:
+		  warn = 1;
 
 		}
 	    }
+
+	  if (warn)
+	    werrorfl (loop->next->filename, loop->next->lineno,
+	              W_CODE_UNREACH);
 
 	  /* now set up the pointers */
 	  loop->next = loop2;

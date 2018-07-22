@@ -2,9 +2,9 @@
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
 # ** DO NOT EDIT **
 
-# TARGTYPE "Win32 (x86) Static Library" 0x0104
+# TARGTYPE "Win32 (x86) Generic Project" 0x010a
 
-CFG=pica - Win32 Debug
+CFG=pica - Win32 Release
 !MESSAGE This is not a valid makefile. To build this project using NMAKE,
 !MESSAGE use the Export Makefile command and run
 !MESSAGE 
@@ -13,19 +13,22 @@ CFG=pica - Win32 Debug
 !MESSAGE You can specify a configuration when running NMAKE
 !MESSAGE by defining the macro CFG on the command line. For example:
 !MESSAGE 
-!MESSAGE NMAKE /f "pica.mak" CFG="pica - Win32 Debug"
+!MESSAGE NMAKE /f "pica.mak" CFG="pica - Win32 Release"
 !MESSAGE 
 !MESSAGE Possible choices for configuration are:
 !MESSAGE 
-!MESSAGE "pica - Win32 Debug" (based on "Win32 (x86) Static Library")
+!MESSAGE "pica - Win32 Debug" (based on "Win32 (x86) Generic Project")
+!MESSAGE "pica - Win32 Release" (based on "Win32 (x86) Generic Project")
 !MESSAGE 
 
 # Begin Project
 # PROP AllowPerConfigDependencies 0
 # PROP Scc_ProjName ""
 # PROP Scc_LocalPath ""
-CPP=cl.exe
-RSC=rc.exe
+MTL=midl.exe
+
+!IF  "$(CFG)" == "pica - Win32 Debug"
+
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
 # PROP BASE Output_Dir "Debug"
@@ -36,38 +39,52 @@ RSC=rc.exe
 # PROP Output_Dir ""
 # PROP Intermediate_Dir ""
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
-# ADD CPP /nologo /G3 /ML /W3 /WX /Gm /GX /ZI /Od /I ".." /I "." /I "..\.." /I "..\..\support\util" /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /FR /J /FD /Zm500 /GZ /c
-# ADD BASE RSC /l 0x409 /d "_DEBUG"
-# ADD RSC /l 0x409 /d "_DEBUG"
-BSC32=bscmake.exe
-# ADD BASE BSC32 /nologo
-# ADD BSC32 /nologo
-LIB32=link.exe -lib
-# ADD BASE LIB32 /nologo
-# ADD LIB32 /nologo /out:"port.lib"
+
+!ELSEIF  "$(CFG)" == "pica - Win32 Release"
+
+# PROP BASE Use_MFC 0
+# PROP BASE Use_Debug_Libraries 1
+# PROP BASE Output_Dir "Release"
+# PROP BASE Intermediate_Dir "Release"
+# PROP BASE Target_Dir ""
+# PROP Use_MFC 0
+# PROP Use_Debug_Libraries 1
+# PROP Output_Dir ""
+# PROP Intermediate_Dir ""
+# PROP Target_Dir ""
+
+!ENDIF 
+
 # Begin Target
 
 # Name "pica - Win32 Debug"
-# Begin Group "Source Files"
-
-# PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Name "pica - Win32 Release"
 # Begin Source File
 
 SOURCE=.\peeph.def
+
+!IF  "$(CFG)" == "pica - Win32 Debug"
+
 # Begin Custom Build
 InputPath=.\peeph.def
 
 "peeph.rul" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
-	echo on 
-	gawk -f ../SDCCpeeph.awk $(InputPath) >peeph.rul 
-	
-# End Custom Build
-# End Source File
-# End Group
-# Begin Group "Header Files"
+	gawk -f ../SDCCpeeph.awk $(InputPath) >peeph.rul
 
-# PROP Default_Filter "h;hpp;hxx;hm;inl"
-# End Group
+# End Custom Build
+
+!ELSEIF  "$(CFG)" == "pica - Win32 Release"
+
+# Begin Custom Build
+InputPath=.\peeph.def
+
+"peeph.rul" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
+	gawk -f ../SDCCpeeph.awk $(InputPath) >peeph.rul
+
+# End Custom Build
+
+!ENDIF 
+
+# End Source File
 # End Target
 # End Project

@@ -2,16 +2,16 @@
 
 EMU = $(SDCC_EXTRA_DIR)/emu/rrgb/rrgb
 
-SDCCFLAGS += --lesspedantic -DREENTRANT= -DGENERIC=
+SDCCFLAGS +=-mgbz80 --less-pedantic -DREENTRANT=
 
 EXEEXT = .gb
 
 # Needs parts of gbdk-lib, namely the internal mul/div/mod functions.
-EXTRAS = fwk/lib/testfwk$(OBJEXT) ports/$(PORT)/support$(OBJEXT)
+EXTRAS = ports/$(PORT)/testfwk$(OBJEXT) ports/$(PORT)/support$(OBJEXT)
 
 # Rule to link into .ihx
 %.gb: %.c $(EXTRAS)
-	$(SDCC) $(SDCCFLAGS) $< $(EXTRAS)
+	$(SDCC) $(SDCCFLAGS) $< $(EXTRAS) -o $@
 
 %$(OBJEXT): %.asm
 	../../bin/as-gbz80 -plosgff $@ $<
@@ -20,11 +20,18 @@ EXTRAS = fwk/lib/testfwk$(OBJEXT) ports/$(PORT)/support$(OBJEXT)
 	../../bin/as-gbz80 -plosgff $@ $<
 
 %$(OBJEXT): %.c
-	$(SDCC) $(SDCCFLAGS) -c $<
+	echo $(OBJEXT)
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
+
+ports/$(PORT)/%$(OBJEXT): fwk/lib/%.c
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
 
 # PENDING: Path to sdcc-extra
 %.out: %$(EXEEXT)
 	mkdir -p `dirname $@`
-	$(EMU) -m $< > $@
+	$(EMU) -k -m $< > $@
 	-grep -n FAIL $@ /dev/null || true
+
+_clean:
+	rm -f ports/$(PORT)/testfwk.asm ports/$(PORT)/*.lst ports/$(PORT)/*.o ports/$(PORT)/*.sym
 

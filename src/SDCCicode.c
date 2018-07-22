@@ -24,6 +24,7 @@
 
 #include "common.h"
 #include "newalloc.h"
+#include "math.h"
 
 /*-----------------------------------------------------------------*/
 /* global variables       */
@@ -37,18 +38,22 @@ char *filename;
 int lineno;
 int block;
 int scopeLevel;
+int seqPoint;
 
 symbol *returnLabel;		/* function return label */
 symbol *entryLabel;		/* function entry  label */
+
 /*-----------------------------------------------------------------*/
 /* forward definition of some functions */
-operand *geniCodeDivision (operand *, operand *);
+operand *geniCodeDivision (operand *, operand *, bool);
 operand *geniCodeAssign (operand *, operand *, int);
-operand *geniCodeArray (operand *, operand *,int);
-operand *geniCodeArray2Ptr (operand *);
+static operand *geniCodeArray (operand *, operand *,int);
+static operand *geniCodeArray2Ptr (operand *);
 operand *geniCodeRValue (operand *, bool);
 operand *geniCodeDerefPtr (operand *,int);
 int isLvaluereq(int lvl);
+void  setOClass (sym_link * ptr, sym_link * spec);
+static operand *geniCodeCast (sym_link *, operand *, bool);
 
 #define PRINTFUNC(x) void x (FILE *of, iCode *ic, char *s)
 /* forward definition of ic print functions */
@@ -65,6 +70,9 @@ PRINTFUNC (picIfx);
 PRINTFUNC (picJumpTable);
 PRINTFUNC (picInline);
 PRINTFUNC (picReceive);
+PRINTFUNC (picDummyRead);
+PRINTFUNC (picCritical);
+PRINTFUNC (picEndCritical);
 
 iCodeTable codeTable[] =
 {
@@ -111,8 +119,87 @@ iCodeTable codeTable[] =
   {RECEIVE, "recv", picReceive, NULL},
   {SEND, "send", picGenericOne, NULL},
   {ARRAYINIT, "arrayInit", picGenericOne, NULL},
+  {DUMMY_READ_VOLATILE, "dummy = (volatile)", picDummyRead, NULL},
+  {CRITICAL, "critical_start", picCritical, NULL},
+  {ENDCRITICAL, "critical_end", picEndCritical, NULL}
 };
 
+/*-----------------------------------------------------------------*/
+/* checkConstantRange: check a constant against the type           */
+/*-----------------------------------------------------------------*/
+
+
+/*   pedantic=0: allmost anything is allowed as long as the absolute
+       value is within the bit range of the type, and -1 is treated as
+       0xf..f for unsigned types (e.g. in assign)
+     pedantic=1: -1==-1, not allowed for unsigned types (e.g. in compare)
+     pedantic>1: "char c=200" is not allowed (evaluates to -56)
+*/
+
+void checkConstantRange(sym_link *ltype, value *val, char *msg,
+			int pedantic) {
+  double max;
+  int warnings=0;
+  int negative=0;
+  long v;
+
+  max = pow ((double)2.0, (double)bitsForType(ltype));
+
+  if (IS_LONG(val->type)) {
+    if (IS_UNSIGNED(val->type)) {
+      v=SPEC_CVAL(val->type).v_ulong;
+    } else {
+      v=SPEC_CVAL(val->type).v_long;
+    }
+  } else {
+    if (IS_UNSIGNED(val->type)) {
+      v=SPEC_CVAL(val->type).v_uint;
+    } else {
+      v=SPEC_CVAL(val->type).v_int;
+    }
+  }
+
+
+#if 0
+  // this could be a good idea
+  if (options.pedantic)
+    pedantic=2;
+#endif
+
+  if (IS_FLOAT(ltype)) {
+    // anything will do
+    return;
+  }
+
+  if (!IS_UNSIGNED(val->type) && v<0) {
+    negative=1;
+    if (IS_UNSIGNED(ltype) && (pedantic>1)) {
+      warnings++;
+    }
+    v=-v;
+  }
+
+  // if very pedantic: "char c=200" is not allowed
+  if (pedantic>1 && !IS_UNSIGNED(ltype)) {
+    max = max/2 + negative;
+  }
+
+  if (v >= max) {
+    warnings++;
+  }
+
+#if 0 // temporary disabled, leaving the warning as a reminder
+  if (warnings) {
+    SNPRINTF (message, sizeof(message), "for %s %s in %s", 
+	     IS_UNSIGNED(ltype) ? "unsigned" : "signed",
+	     nounName(ltype), msg);
+    werror (W_CONST_RANGE, message);
+
+    if (pedantic>1)
+      fatalError++;
+  }
+#endif
+}
 
 /*-----------------------------------------------------------------*/
 /* operandName - returns the name of the operand                   */
@@ -136,10 +223,10 @@ printOperand (operand * op, FILE * file)
 
     case VALUE:
       opetype = getSpec (operandType (op));
-      if (SPEC_NOUN (opetype) == V_FLOAT)
+      if (IS_FLOAT (opetype))
 	fprintf (file, "%g {", SPEC_CVAL (opetype).v_float);
       else
-	fprintf (file, "0x%x {", (int) floatFromVal (op->operand.valOperand));
+	fprintf (file, "0x%x {", (unsigned) floatFromVal (op->operand.valOperand));
       printTypeChain (operandType (op), file);
       fprintf (file, "}");
       break;
@@ -147,12 +234,14 @@ printOperand (operand * op, FILE * file)
     case SYMBOL:
 #define REGA 1
 #ifdef REGA
-      fprintf (file, "%s [k%d lr%d:%d so:%d]{ ia%d re%d rm%d nos%d}",		/*{ar%d rm%d ru%d p%d a%d u%d i%d au%d k%d ks%d}"  , */
+      fprintf (file, "%s [k%d lr%d:%d so:%d]{ ia%d re%d rm%d nos%d ru%d dp%d}",		/*{ar%d rm%d ru%d p%d a%d u%d i%d au%d k%d ks%d}"  , */
 	       (OP_SYMBOL (op)->rname[0] ? OP_SYMBOL (op)->rname : OP_SYMBOL (op)->name),
 	       op->key,
 	       OP_LIVEFROM (op), OP_LIVETO (op),
 	       OP_SYMBOL (op)->stack,
-	       op->isaddr, OP_SYMBOL (op)->isreqv, OP_SYMBOL (op)->remat,OP_SYMBOL(op)->noSpilLoc
+	       op->isaddr, OP_SYMBOL (op)->isreqv, 
+	       OP_SYMBOL (op)->remat,OP_SYMBOL(op)->noSpilLoc,
+	       OP_SYMBOL(op)->ruonly,OP_SYMBOL(op)->dptr
 	);
       {
 	fprintf (file, "{");
@@ -307,6 +396,9 @@ PRINTFUNC (picGenericOne)
   if (!IC_RESULT (ic) && !IC_LEFT (ic))
     fprintf (of, s);
 
+  if (ic->op == SEND || ic->op == RECEIVE) {
+      fprintf(of,"{argreg = %d}",ic->argreg);
+  }
   fprintf (of, "\n");
 }
 
@@ -379,10 +471,40 @@ PRINTFUNC (picReceive)
   fprintf (of, "\n");
 }
 
+PRINTFUNC (picDummyRead)
+{
+  fprintf (of, "\t");
+  fprintf (of, "%s ", s);
+  printOperand (IC_RIGHT (ic), of);
+  fprintf (of, "\n");
+}
+
+PRINTFUNC (picCritical)
+{
+  fprintf (of, "\t");
+  if (IC_RESULT (ic))
+    printOperand (IC_RESULT (ic), of);
+  else
+    fprintf (of, "(stack)");
+  fprintf (of, " = %s ", s);
+  fprintf (of, "\n");
+}
+
+PRINTFUNC (picEndCritical)
+{
+  fprintf (of, "\t");
+  fprintf (of, "%s = ", s);
+  if (IC_RIGHT (ic))
+    printOperand (IC_RIGHT (ic), of);
+  else
+    fprintf (of, "(stack)");
+  fprintf (of, "\n");
+}
+
 /*-----------------------------------------------------------------*/
 /* piCode - prints one iCode                                       */
 /*-----------------------------------------------------------------*/
-int 
+int
 piCode (void *item, FILE * of)
 {
   iCode *ic = item;
@@ -406,7 +528,7 @@ void PICC(iCode *ic)
 /*-----------------------------------------------------------------*/
 /* printiCChain - prints intermediate code for humans              */
 /*-----------------------------------------------------------------*/
-void 
+void
 printiCChain (iCode * icChain, FILE * of)
 {
   iCode *loop;
@@ -418,7 +540,7 @@ printiCChain (iCode * icChain, FILE * of)
     {
       if ((icTab = getTableEntry (loop->op)))
 	{
-	  fprintf (of, "%s(%d:%d:%d:%d:%d)\t",
+	  fprintf (of, "%s(l%d:s%d:k%d:d%d:s%d)\t",
 		   loop->filename, loop->lineno,
 		   loop->seq, loop->key, loop->depth, loop->supportRtn);
 
@@ -436,7 +558,7 @@ newOperand ()
 {
   operand *op;
 
-  op = Safe_calloc (1, sizeof (operand));
+  op = Safe_alloc ( sizeof (operand));
 
   op->key = 0;
   return op;
@@ -450,8 +572,9 @@ newiCode (int op, operand * left, operand * right)
 {
   iCode *ic;
 
-  ic = Safe_calloc (1, sizeof (iCode));
+  ic = Safe_alloc ( sizeof (iCode));
 
+  ic->seqPoint = seqPoint;
   ic->lineno = lineno;
   ic->filename = filename;
   ic->block = block;
@@ -474,7 +597,7 @@ newiCodeCondition (operand * condition,
 {
   iCode *ic;
 
-  if (IS_VOID(OP_SYMBOL(condition)->type)) {
+  if (IS_VOID(operandType(condition))) {
     werror(E_VOID_VALUE_USED);
   }
 
@@ -495,7 +618,7 @@ newiCodeLabelGoto (int op, symbol * label)
 
   ic = newiCode (op, NULL, NULL);
   ic->op = op;
-  ic->argLabel.label = label;
+  ic->label = label;
   IC_LEFT (ic) = NULL;
   IC_RIGHT (ic) = NULL;
   IC_RESULT (ic) = NULL;
@@ -511,11 +634,16 @@ newiTemp (char *s)
   symbol *itmp;
 
   if (s)
-    sprintf (buffer, "%s", s);
+  {
+      SNPRINTF (buffer, sizeof(buffer), "%s", s);
+  }
   else
-    sprintf (buffer, "iTemp%d", iTempNum++);
+  {
+      SNPRINTF (buffer, sizeof(buffer), "iTemp%d", iTempNum++);
+  }
+    
   itmp = newSymbol (buffer, 1);
-  strcpy (itmp->rname, itmp->name);
+  strncpyz (itmp->rname, itmp->name, SDCC_NAME_MAX);
   itmp->isitmp = 1;
 
   return itmp;
@@ -534,10 +662,12 @@ newiTempLabel (char *s)
     return itmplbl;
 
   if (s)
-    itmplbl = newSymbol (s, 1);
+    {
+	itmplbl = newSymbol (s, 1);
+    }
   else
     {
-      sprintf (buffer, "iTempLbl%d", iTempLblNum++);
+      SNPRINTF (buffer, sizeof(buffer), "iTempLbl%d", iTempLblNum++);
       itmplbl = newSymbol (buffer, 1);
     }
 
@@ -556,7 +686,7 @@ newiTempPreheaderLabel ()
 {
   symbol *itmplbl;
 
-  sprintf (buffer, "preHeaderLbl%d", iTempLblNum++);
+  SNPRINTF (buffer, sizeof(buffer), "preHeaderLbl%d", iTempLblNum++);
   itmplbl = newSymbol (buffer, 1);
 
   itmplbl->isitmp = 1;
@@ -608,7 +738,6 @@ copyiCode (iCode * ic)
     case PCALL:
       IC_RESULT (nic) = operandFromOperand (IC_RESULT (ic));
       IC_LEFT (nic) = operandFromOperand (IC_LEFT (ic));
-      IC_ARGS (nic) = IC_ARGS (ic);
       break;
 
     case INLINEASM:
@@ -634,7 +763,7 @@ copyiCode (iCode * ic)
 iCodeTable *
 getTableEntry (int oper)
 {
-  int i;
+  unsigned i;
 
   for (i = 0; i < (sizeof (codeTable) / sizeof (iCodeTable)); i++)
     if (oper == codeTable[i].icode)
@@ -711,6 +840,8 @@ isParameterToCall (value * args, operand * op)
 {
   value *tval = args;
 
+  wassert (IS_SYMOP(op));
+    
   while (tval)
     {
       if (tval->sym &&
@@ -733,7 +864,7 @@ isOperandGlobal (operand * op)
   if (IS_ITEMP (op))
     return 0;
 
-  if (op->type == SYMBOL &&
+  if (IS_SYMOP(op) &&
       (op->operand.symOperand->level == 0 ||
        IS_STATIC (op->operand.symOperand->etype) ||
        IS_EXTERN (op->operand.symOperand->etype))
@@ -756,13 +887,13 @@ isOperandVolatile (operand * op, bool chkTemp)
     return 0;
 
   opetype = getSpec (optype = operandType (op));
-
-  if (IS_PTR (optype) && DCL_PTR_VOLATILE (optype))
-    return 1;
-
-  if (IS_VOLATILE (opetype))
-    return 1;
-  return 0;
+    
+  if (IS_PTR (optype) && DCL_PTR_VOLATILE (optype))   
+    return 1;   
+    
+  if (IS_VOLATILE (opetype))   
+    return 1;   
+  return 0; 
 }
 
 /*-----------------------------------------------------------------*/
@@ -783,6 +914,7 @@ isOperandLiteral (operand * op)
 
   return 0;
 }
+
 /*-----------------------------------------------------------------*/
 /* isOperandInFarSpace - will return true if operand is in farSpace */
 /*-----------------------------------------------------------------*/
@@ -811,6 +943,64 @@ isOperandInFarSpace (operand * op)
   return (IN_FARSPACE (SPEC_OCLS (etype)) ? TRUE : FALSE);
 }
 
+/*------------------------------------------------------------------*/
+/* isOperandInDirSpace - will return true if operand is in dirSpace */
+/*------------------------------------------------------------------*/
+bool 
+isOperandInDirSpace (operand * op)
+{
+  sym_link *etype;
+
+  if (!op)
+    return FALSE;
+
+  if (!IS_SYMOP (op))
+    return FALSE;
+
+  if (!IS_TRUE_SYMOP (op))
+    {
+      if (SPIL_LOC (op))
+	etype = SPIL_LOC (op)->etype;
+      else
+	return FALSE;
+    }
+  else
+    {
+      etype = getSpec (operandType (op));
+    }
+  return (IN_DIRSPACE (SPEC_OCLS (etype)) ? TRUE : FALSE);
+}
+
+/*--------------------------------------------------------------------*/
+/* isOperandInCodeSpace - will return true if operand is in codeSpace */
+/*--------------------------------------------------------------------*/
+bool 
+isOperandInCodeSpace (operand * op)
+{
+  sym_link *etype;
+
+  if (!op)
+    return FALSE;
+
+  if (!IS_SYMOP (op))
+    return FALSE;
+
+  etype = getSpec (operandType (op));
+
+  if (!IS_TRUE_SYMOP (op))
+    {
+      if (SPIL_LOC (op))
+	etype = SPIL_LOC (op)->etype;
+      else
+	return FALSE;
+    }
+  else
+    {
+      etype = getSpec (operandType (op));
+    }
+  return (IN_CODESPACE (SPEC_OCLS (etype)) ? TRUE : FALSE);
+}
+
 /*-----------------------------------------------------------------*/
 /* isOperandOnStack - will return true if operand is on stack      */
 /*-----------------------------------------------------------------*/
@@ -826,14 +1016,33 @@ isOperandOnStack (operand * op)
     return FALSE;
 
   etype = getSpec (operandType (op));
+  if (IN_STACK (etype) ||
+      OP_SYMBOL(op)->onStack ||
+      (SPIL_LOC(op) && SPIL_LOC(op)->onStack))
+    return TRUE;
 
-  return ((IN_STACK (etype)) ? TRUE : FALSE);
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
+/* isOclsExpensive - will return true if accesses to an output     */
+/*                   storage class are expensive                   */
+/*-----------------------------------------------------------------*/
+bool 
+isOclsExpensive (struct memmap *oclass)
+{
+  if (port->oclsExpense)
+    return port->oclsExpense (oclass) > 0;
+
+  /* In the absence of port specific guidance, assume only */
+  /* farspace is expensive. */
+  return IN_FARSPACE (oclass);
 }
 
 /*-----------------------------------------------------------------*/
 /* operandLitValue - literal value of an operand                   */
 /*-----------------------------------------------------------------*/
-double 
+double
 operandLitValue (operand * op)
 {
   assert (isOperandLiteral (op));
@@ -842,7 +1051,32 @@ operandLitValue (operand * op)
 }
 
 /*-----------------------------------------------------------------*/
-/* operandOperation - perforoms operations on operands             */
+/* getBuiltInParms - returns parameters to a builtin functions     */
+/*-----------------------------------------------------------------*/
+iCode *getBuiltinParms (iCode *ic, int *pcount, operand **parms)
+{
+    sym_link *ftype;
+
+    *pcount = 0;
+    /* builtin functions uses only SEND for parameters */
+    while (ic->op != CALL) {
+	assert(ic->op == SEND && ic->builtinSEND);
+	ic->generated = 1;    /* mark the icode as generated */
+	parms[*pcount] = IC_LEFT(ic);
+	ic = ic->next;
+	(*pcount)++;
+    }
+
+    ic->generated = 1;
+    /* make sure this is a builtin function call */
+    assert(IS_SYMOP(IC_LEFT(ic)));
+    ftype = operandType(IC_LEFT(ic));
+    assert(IFFUNC_ISBUILTIN(ftype));
+    return ic;
+}
+
+/*-----------------------------------------------------------------*/
+/* operandOperation - performs operations on operands             */
 /*-----------------------------------------------------------------*/
 operand *
 operandOperation (operand * left, operand * right,
@@ -850,12 +1084,12 @@ operandOperation (operand * left, operand * right,
 {
   sym_link *let , *ret=NULL;
   operand *retval = (operand *) 0;
-  
+
   assert (isOperandLiteral (left));
   let = getSpec(operandType(left));
   if (right) {
     assert (isOperandLiteral (right));
-    ret = getSpec(operandType(left));
+    ret = getSpec(operandType(right));
   }
 
   switch (op)
@@ -871,55 +1105,136 @@ operandOperation (operand * left, operand * right,
 						 operandLitValue (right)));
       break;
     case '*':
+      /*
       retval = operandFromValue (valCastLiteral (type,
 						 operandLitValue (left) *
 						 operandLitValue (right)));
+      This could be all we've to do, but with gcc we've to take care about
+      overflows. Two examples:
+      ULONG_MAX * ULONG_MAX doesn't fit into a double, some of the least
+      significant bits are lost (52 in fraction, 63 bits would be
+      necessary to keep full precision).
+      If the resulting double value is greater than ULONG_MAX (resp.
+      USHRT_MAX, ...), then 0 will be assigned to v_ulong (resp. u_uint, ...)!
+      */
+
+      /* if it is not a specifier then we can assume that */
+      /* it will be an unsigned long                      */
+      if (IS_INT (type) ||
+          !IS_SPEC (type))
+        {
+	  /* long is handled here, because it can overflow with double */
+	  if (IS_LONG (type) ||
+	      !IS_SPEC (type))
+	  /* signed and unsigned mul are the same, as long as the precision
+	     of the result isn't bigger than the precision of the operands. */
+	    retval = operandFromValue (valCastLiteral (type,
+		     (TYPE_UDWORD) operandLitValue (left) *
+		     (TYPE_UDWORD) operandLitValue (right)));
+	  else if (IS_UNSIGNED (type)) /* unsigned int */
+	    {
+	      /* unsigned int is handled here in order to detect overflow */
+	      TYPE_UDWORD ul = (TYPE_UWORD) operandLitValue (left) *
+			       (TYPE_UWORD) operandLitValue (right);
+
+	      retval = operandFromValue (valCastLiteral (type, (TYPE_UWORD) ul));
+	      if (ul != (TYPE_UWORD) ul)
+		werror (W_INT_OVL);
+	    }
+	  else /* signed int */
+	    {
+	      /* signed int is handled here in order to detect overflow */
+	      TYPE_DWORD l = (TYPE_WORD) operandLitValue (left) *
+			     (TYPE_WORD) operandLitValue (right);
+
+	      retval = operandFromValue (valCastLiteral (type, (TYPE_WORD) l));
+	      if (l != (TYPE_WORD) l)
+		werror (W_INT_OVL);
+	    }
+	}
+      else
+	/* all others go here: */
+	retval = operandFromValue (valCastLiteral (type,
+						   operandLitValue (left) *
+						   operandLitValue (right)));
       break;
     case '/':
-      if ((unsigned long) operandLitValue (right) == 0)
+      if ((TYPE_UDWORD) operandLitValue (right) == 0)
 	{
 	  werror (E_DIVIDE_BY_ZERO);
 	  retval = right;
 
 	}
       else
-	retval = operandFromValue (valCastLiteral (type,
-						   operandLitValue (left) /
-						   operandLitValue (right)));
+        {
+	  if (IS_UNSIGNED (type))
+	    {
+	      SPEC_USIGN (let) = 1;
+	      SPEC_USIGN (ret) = 1;
+	      retval = operandFromValue (valCastLiteral (type,
+					(TYPE_UDWORD) operandLitValue (left) /
+					(TYPE_UDWORD) operandLitValue (right)));
+	    }
+	  else
+	    {
+              retval = operandFromValue (valCastLiteral (type,
+						     operandLitValue (left) /
+						     operandLitValue (right)));
+	    }
+	}
       break;
     case '%':
-      if ((unsigned long) operandLitValue (right) == 0) {
+      if ((TYPE_UDWORD) operandLitValue (right) == 0)
+        {
 	  werror (E_DIVIDE_BY_ZERO);
 	  retval = right;
-      }
-      else 
-	retval = operandFromLit ((SPEC_USIGN(let) ? 
-				  (unsigned long) operandLitValue (left) :
-				  (long) operandLitValue (left)) %
-				 (SPEC_USIGN(ret) ? 
-				  (unsigned long) operandLitValue (right) :
-				  (long) operandLitValue (right)));
-
+        }
+      else
+        {
+          if (IS_UNSIGNED (type))
+	    retval = operandFromLit ((TYPE_UDWORD) operandLitValue (left) %
+				     (TYPE_UDWORD) operandLitValue (right));
+	  else
+	    retval = operandFromLit ((TYPE_DWORD) operandLitValue (left) %
+				     (TYPE_DWORD) operandLitValue (right));
+        }
       break;
     case LEFT_OP:
-      retval = operandFromLit (((SPEC_USIGN(let) ? 
-				  (unsigned long) operandLitValue (left) :
-				  (long) operandLitValue (left)) <<
-				 (SPEC_USIGN(ret) ? 
-				  (unsigned long) operandLitValue (right) :
-				  (long) operandLitValue (right))));
+      /* The number of left shifts is always unsigned. Signed doesn't make
+	 sense here. Shifting by a negative number is impossible. */
+      retval = operandFromValue (valCastLiteral (type,
+				 ((TYPE_UDWORD) operandLitValue (left) <<
+				  (TYPE_UDWORD) operandLitValue (right))));
       break;
     case RIGHT_OP:
-      retval = operandFromLit (((SPEC_USIGN(let) ? 
-				  (unsigned long) operandLitValue (left) :
-				  (long) operandLitValue (left)) >>
-				 (SPEC_USIGN(ret) ? 
-				  (unsigned long) operandLitValue (right) :
-				  (long) operandLitValue (right))));
+      /* The number of right shifts is always unsigned. Signed doesn't make
+	 sense here. Shifting by a negative number is impossible. */
+      if (IS_UNSIGNED(let))
+        /* unsigned: logic shift right */
+        retval = operandFromLit ((TYPE_UDWORD) operandLitValue (left) >>
+				 (TYPE_UDWORD) operandLitValue (right));
+      else
+        /* signed: arithmetic shift right */
+        retval = operandFromLit ((TYPE_DWORD ) operandLitValue (left) >>
+				 (TYPE_UDWORD) operandLitValue (right));
       break;
     case EQ_OP:
-      retval = operandFromLit (operandLitValue (left) ==
-			       operandLitValue (right));
+      /* this op doesn't care about signedness */
+      {
+	TYPE_UDWORD l, r;
+
+	l = (TYPE_UDWORD) operandLitValue (left);
+	if (IS_CHAR(OP_VALUE(left)->type))
+	  l &= 0xff;
+	else if (!IS_LONG (OP_VALUE(left)->type))
+	  l &= 0xffff;
+	r = (TYPE_UDWORD) operandLitValue (right);
+	if (IS_CHAR(OP_VALUE(right)->type))
+	  r &= 0xff;
+	else if (!IS_LONG (OP_VALUE(right)->type))
+	  r &= 0xffff;
+	retval = operandFromLit (l == r);
+      }
       break;
     case '<':
       retval = operandFromLit (operandLitValue (left) <
@@ -942,16 +1257,19 @@ operandOperation (operand * left, operand * right,
 			       operandLitValue (right));
       break;
     case BITWISEAND:
-      retval = operandFromLit ((unsigned long) operandLitValue (left) &
-			       (unsigned long) operandLitValue (right));
+      retval = operandFromValue (valCastLiteral (type,
+                                                 (TYPE_UDWORD)operandLitValue(left) &
+			                         (TYPE_UDWORD)operandLitValue(right)));
       break;
     case '|':
-      retval = operandFromLit ((unsigned long) operandLitValue (left) |
-			       (unsigned long) operandLitValue (right));
+      retval = operandFromValue (valCastLiteral (type,
+                                                 (TYPE_UDWORD)operandLitValue(left) |
+			                         (TYPE_UDWORD)operandLitValue(right)));
       break;
     case '^':
-      retval = operandFromLit ((unsigned long) operandLitValue (left) ^
-			       (unsigned long) operandLitValue (right));
+      retval = operandFromValue (valCastLiteral (type,
+                                                 (TYPE_UDWORD)operandLitValue(left) ^
+			                         (TYPE_UDWORD)operandLitValue(right)));
       break;
     case AND_OP:
       retval = operandFromLit (operandLitValue (left) &&
@@ -963,7 +1281,7 @@ operandOperation (operand * left, operand * right,
       break;
     case RRC:
       {
-	long i = (long) operandLitValue (left);
+	TYPE_UDWORD i = (TYPE_UDWORD) operandLitValue (left);
 
 	retval = operandFromLit ((i >> (getSize (operandType (left)) * 8 - 1)) |
 				 (i << 1));
@@ -971,7 +1289,7 @@ operandOperation (operand * left, operand * right,
       break;
     case RLC:
       {
-	long i = (long) operandLitValue (left);
+	TYPE_UDWORD i = (TYPE_UDWORD) operandLitValue (left);
 
 	retval = operandFromLit ((i << (getSize (operandType (left)) * 8 - 1)) |
 				 (i >> 1));
@@ -979,11 +1297,12 @@ operandOperation (operand * left, operand * right,
       break;
 
     case UNARYMINUS:
-      retval = operandFromLit (-1 * operandLitValue (left));
+      retval = operandFromValue (valCastLiteral (type,
+                                                 -1 * operandLitValue (left)));
       break;
 
     case '~':
-      retval = operandFromLit (~((long) operandLitValue (left)));
+      retval = operandFromLit (~((TYPE_UDWORD) operandLitValue (left)));
       break;
 
     case '!':
@@ -1003,7 +1322,7 @@ operandOperation (operand * left, operand * right,
 /*-----------------------------------------------------------------*/
 /* isOperandEqual - compares two operand & return 1 if they r =    */
 /*-----------------------------------------------------------------*/
-int 
+int
 isOperandEqual (operand * left, operand * right)
 {
   /* if the pointers are equal then they are equal */
@@ -1038,9 +1357,9 @@ isOperandEqual (operand * left, operand * right)
   return 0;
 }
 
-/*-----------------------------------------------------------------*/
-/* isiCodeEqual - comapres two iCodes are returns true if yes      */
-/*-----------------------------------------------------------------*/
+/*-------------------------------------------------------------------*/
+/* isiCodeEqual - compares two iCodes are equal, returns true if yes */
+/*-------------------------------------------------------------------*/
 int 
 isiCodeEqual (iCode * left, iCode * right)
 {
@@ -1074,6 +1393,7 @@ isiCodeEqual (iCode * left, iCode * right)
 	  if (!isSymbolEqual (IC_FALSE (left), IC_FALSE (right)))
 	    return 0;
 	}
+      
       return 1;
     }
   return 0;
@@ -1122,7 +1442,7 @@ operandFromOperand (operand * op)
   nop->isLiteral = op->isLiteral;
   nop->usesDefs = op->usesDefs;
   nop->isParm = op->isParm;
-
+  
   switch (nop->type)
     {
     case SYMBOL:
@@ -1190,7 +1510,7 @@ operandFromSymbol (symbol * sym)
      register equivalent for a local symbol */
   if (sym->level && sym->etype && SPEC_OCLS (sym->etype) &&
       (IN_FARSPACE (SPEC_OCLS (sym->etype)) &&
-      /* (!TARGET_IS_DS390)) && */
+      !TARGET_IS_HC08 &&
       (!(options.model == MODEL_FLAT24)) ) &&
       options.stackAuto == 0)
     ok = 0;
@@ -1200,22 +1520,24 @@ operandFromSymbol (symbol * sym)
       !sym->_isparm &&		/* not a parameter  */
       sym->level &&		/* is a local variable */
       !sym->addrtaken &&	/* whose address has not been taken */
-      !sym->reqv &&		/* does not already have a register euivalence */
+      !sym->reqv &&		/* does not already have a reg equivalence */
       !IS_VOLATILE (sym->etype) &&	/* not declared as volatile */
       !IS_STATIC (sym->etype) &&	/* and not declared static  */
       !sym->islbl &&		/* not a label */
       ok &&			/* farspace check */
       !IS_BITVAR (sym->etype)	/* not a bit variable */
     )
-    {
+    {                                   
 
       /* we will use it after all optimizations
          and before liveRange calculation */
       sym->reqv = newiTempOperand (sym->type, 0);
       sym->reqv->key = sym->key;
+      OP_SYMBOL (sym->reqv)->prereqv = sym;
       OP_SYMBOL (sym->reqv)->key = sym->key;
       OP_SYMBOL (sym->reqv)->isreqv = 1;
       OP_SYMBOL (sym->reqv)->islocal = 1;
+      OP_SYMBOL (sym->reqv)->onStack = sym->onStack;
       SPIL_LOC (sym->reqv) = sym;
     }
 
@@ -1253,8 +1575,6 @@ operandFromSymbol (symbol * sym)
     }
   else
     IC_RESULT (ic)->isaddr = (!IS_AGGREGATE (sym->type));
-
-  IC_RESULT (ic)->operand.symOperand->args = sym->args;
 
   ADDTOCHAIN (ic);
 
@@ -1331,10 +1651,13 @@ operandFromAst (ast * tree,int lvl)
 
     case EX_LINK:
       return operandFromLink (tree->opval.lnk);
-    }
+      break;
 
-  assert (0);
-  /*  Just to keep the comiler happy */
+    default:
+      assert (0);
+    }
+  
+  /*  Just to keep the compiler happy */
   return (operand *) 0;
 }
 
@@ -1411,7 +1734,8 @@ getArraySizePtr (operand * op)
 /*-----------------------------------------------------------------*/
 /* perform "usual unary conversions"                               */
 /*-----------------------------------------------------------------*/
-operand *
+#if 0
+static operand *
 usualUnaryConversions (operand * op)
 {
   if (IS_INTEGRAL (operandType (op)))
@@ -1424,21 +1748,94 @@ usualUnaryConversions (operand * op)
     }
   return op;
 }
+#endif
 
 /*-----------------------------------------------------------------*/
 /* perform "usual binary conversions"                              */
 /*-----------------------------------------------------------------*/
-sym_link *
-usualBinaryConversions (operand ** op1, operand ** op2)
+
+static sym_link *
+usualBinaryConversions (operand ** op1, operand ** op2,
+                        bool resultIsInt, char op)
 {
   sym_link *ctype;
   sym_link *rtype = operandType (*op2);
   sym_link *ltype = operandType (*op1);
+
+#define OLDONEBYTEOPS 1
+
+#ifdef OLDONEBYTEOPS  
+  bool oldOneByteOps = FALSE;
+  static bool saidHello = FALSE;
   
-  ctype = computeType (ltype, rtype);
+  if (strcmp (port->target, "pic14") == 0)
+    oldOneByteOps = TRUE;
+  if (getenv ("SDCC_NEWONEBYTEOPS"))
+    {
+      if (!saidHello)
+        {
+	  fprintf (stderr, "Override: oldOneByteOps = FALSE\n");
+	  saidHello = TRUE;
+	}
+      oldOneByteOps = FALSE;
+    }
+  else if (getenv ("SDCC_OLDONEBYTEOPS"))
+    {
+      if (!saidHello)
+        {
+          fprintf (stderr, "Override: oldOneByteOps = TRUE\n");
+	  saidHello = TRUE;
+	}
+      oldOneByteOps = TRUE;
+    }
+
+
+  if (   oldOneByteOps
+      && (   (IS_CHAR (getSpec (ltype)) && !IS_UNSIGNED (getSpec (ltype)))
+	  || (IS_CHAR (getSpec (rtype)) && !IS_UNSIGNED (getSpec (rtype)))))
+    /* one or two signed char operands: promote to int */
+    resultIsInt = TRUE;
+#endif
+  
+  ctype = computeType (ltype, rtype, resultIsInt);
+
+#ifdef OLDONEBYTEOPS
+
+  if (oldOneByteOps)
+    {
+      if (   op == '*'
+          && IS_CHAR (getSpec (ltype)) && IS_UNSIGNED (getSpec (ltype))
+	  && IS_CHAR (getSpec (rtype)) && IS_UNSIGNED (getSpec (rtype)))
+	  {
+	    /* two unsigned char operands and Mult: no promotion */
+	    return ctype;
+	  }
+      *op1 = geniCodeCast (ctype, *op1, TRUE);
+      *op2 = geniCodeCast (ctype, *op2, TRUE);
+
+      return ctype;
+    }
+
+#endif
+
+  switch (op)
+    {
+      case '*':
+      case '/':
+      case '%':
+	if (IS_CHAR (getSpec (ltype)) && IS_CHAR (getSpec (rtype)))
+	  {
+	    /* one byte operations: keep signedness for code generator */
+	    return ctype;
+	  }
+	break;
+      default:
+	break;
+    }
+
   *op1 = geniCodeCast (ctype, *op1, TRUE);
   *op2 = geniCodeCast (ctype, *op2, TRUE);
-  
+	
   return ctype;
 }
 
@@ -1467,7 +1864,7 @@ geniCodeRValue (operand * op, bool force)
   /* if this is not a temp symbol then */
   if (!IS_ITEMP (op) &&
       !force &&
-      !IN_FARSPACE (SPEC_OCLS (etype)))
+      !(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_IS_HC08))
     {
       op = operandFromOperand (op);
       op->isaddr = 0;
@@ -1476,8 +1873,7 @@ geniCodeRValue (operand * op, bool force)
 
   if (IS_SPEC (type) &&
       IS_TRUE_SYMOP (op) &&
-      (!IN_FARSPACE (SPEC_OCLS (etype)) ||
-      /* TARGET_IS_DS390)) */
+      (!(IN_FARSPACE (SPEC_OCLS (etype)) && !TARGET_IS_HC08) ||
       (options.model == MODEL_FLAT24) ))
     {
       op = operandFromOperand (op);
@@ -1496,10 +1892,6 @@ geniCodeRValue (operand * op, bool force)
 
 /*     ic->supportRtn = ((IS_GENPTR(type) | op->isGptr) & op->isaddr); */
 
-  /* if the right is a symbol */
-  if (op->type == SYMBOL)
-    IC_RESULT (ic)->operand.symOperand->args =
-      op->operand.symOperand->args;
   ADDTOCHAIN (ic);
 
   return IC_RESULT (ic);
@@ -1508,13 +1900,14 @@ geniCodeRValue (operand * op, bool force)
 /*-----------------------------------------------------------------*/
 /* geniCodeCast - changes the value from one type to another       */
 /*-----------------------------------------------------------------*/
-operand *
+static operand *
 geniCodeCast (sym_link * type, operand * op, bool implicit)
 {
   iCode *ic;
   sym_link *optype;
   sym_link *opetype = getSpec (optype = operandType (op));
   sym_link *restype;
+  int errors=0;
 
   /* one of them has size zero then error */
   if (IS_VOID (optype))
@@ -1523,31 +1916,90 @@ geniCodeCast (sym_link * type, operand * op, bool implicit)
       return op;
     }
 
+  if (IS_ITEMP (op) && IS_ARRAY (OP_SYMBOL (op)->type))
+    {
+      geniCodeArray2Ptr (op);
+      op->isaddr = 0;
+    }
+    
   /* if the operand is already the desired type then do nothing */
   if (compareType (type, optype) == 1)
     return op;
 
   /* if this is a literal then just change the type & return */
   if (IS_LITERAL (opetype) && op->type == VALUE && !IS_PTR (type) && !IS_PTR (optype))
-    return operandFromValue (valCastLiteral (type,
-					     operandLitValue (op)));
-
-  /* if casting to some pointer type &&
-     the destination is not a generic pointer
-     then give a warning : (only for implicit casts) */
-  if (IS_PTR (optype) && implicit &&
-      (DCL_TYPE (optype) != DCL_TYPE (type)) &&
-      !IS_GENPTR (type))
     {
-      werror (W_INCOMPAT_CAST);
-      fprintf (stderr, "from type '");
-      printTypeChain (optype, stderr);
-      fprintf (stderr, "' to type '");
-      printTypeChain (type, stderr);
-      fprintf (stderr, "'\n");
+      return operandFromValue (valCastLiteral (type,
+					       operandLitValue (op)));
     }
 
+  /* if casting to/from pointers, do some checking */
+  if (IS_PTR(type)) { // to a pointer
+    if (!IS_PTR(optype) && !IS_FUNC(optype) && !IS_AGGREGATE(optype)) { // from a non pointer
+      if (IS_INTEGRAL(optype)) {
+	// maybe this is NULL, than it's ok.
+	if (!(IS_LITERAL(optype) && (SPEC_CVAL(optype).v_ulong ==0))) {
+	  if (port->s.gptr_size > port->s.fptr_size && IS_GENPTR(type)) {
+	    // no way to set the storage
+	    if (IS_LITERAL(optype)) {
+	      werror(E_LITERAL_GENERIC);
+	      errors++;
+	    } else {
+	      werror(E_NONPTR2_GENPTR);
+	      errors++;
+	    }
+	  } else if (implicit) {
+	    werror(W_INTEGRAL2PTR_NOCAST);
+	    errors++;
+	  }
+	}
+      }	else {
+	// shouldn't do that with float, array or structure unless to void
+	if (!IS_VOID(getSpec(type)) &&
+	    !(IS_CODEPTR(type) && IS_FUNC(type->next) && IS_FUNC(optype))) {
+	  werror(E_INCOMPAT_TYPES);
+	  errors++;
+	}
+      }
+    } else { // from a pointer to a pointer
+      if (port->s.gptr_size > port->s.fptr_size /*!TARGET_IS_Z80 && !TARGET_IS_GBZ80*/) {
+	// if not a pointer to a function
+	if (!(IS_CODEPTR(type) && IS_FUNC(type->next) && IS_FUNC(optype))) {
+	  if (implicit) { // if not to generic, they have to match
+	    if ((!IS_GENPTR(type) && (DCL_TYPE(optype) != DCL_TYPE(type)))) {
+	      werror(E_INCOMPAT_PTYPES);
+	      errors++;
+	    }
+	  }
+	}
+      }
+    }
+  } else { // to a non pointer
+    if (IS_PTR(optype)) { // from a pointer
+      if (implicit) { // sneaky
+	if (IS_INTEGRAL(type)) {
+	  werror(W_PTR2INTEGRAL_NOCAST);
+	  errors++;
+	} else { // shouldn't do that with float, array or structure
+	  werror(E_INCOMPAT_TYPES);
+	  errors++;
+	}
+      }
+    }
+  }
+  if (errors) {
+    printFromToType (optype, type);
+  }
+
   /* if they are the same size create an assignment */
+  
+  /* This seems very dangerous to me, since there are several */
+  /* optimizations (for example, gcse) that don't notice the  */
+  /* cast hidden in this assignement and may simplify an      */
+  /* iCode to use the original (uncasted) operand.            */
+  /* Unfortunately, other things break when this cast is      */
+  /* made explicit. Need to fix this someday.                 */
+  /* -- EEP, 2004/01/21                                       */
   if (getSize (type) == getSize (optype) &&
       !IS_BITFIELD (type) &&
       !IS_FLOAT (type) &&
@@ -1555,11 +2007,10 @@ geniCodeCast (sym_link * type, operand * op, bool implicit)
       ((IS_SPEC (type) && IS_SPEC (optype)) ||
        (!IS_SPEC (type) && !IS_SPEC (optype))))
     {
-
       ic = newiCode ('=', NULL, op);
       IC_RESULT (ic) = newiTempOperand (type, 0);
       SPIL_LOC (IC_RESULT (ic)) =
-	(IS_TRUE_SYMOP (op) ? OP_SYMBOL (op) : NULL);
+        (IS_TRUE_SYMOP (op) ? OP_SYMBOL (op) : NULL);
       IC_RESULT (ic)->isaddr = 0;
     }
   else
@@ -1573,7 +2024,8 @@ geniCodeCast (sym_link * type, operand * op, bool implicit)
   /* preserve the storage class & output class */
   /* of the original variable                  */
   restype = getSpec (operandType (IC_RESULT (ic)));
-  SPEC_SCLS (restype) = SPEC_SCLS (opetype);
+  if (!IS_LITERAL(opetype))
+      SPEC_SCLS (restype) = SPEC_SCLS (opetype);
   SPEC_OCLS (restype) = SPEC_OCLS (opetype);
 
   ADDTOCHAIN (ic);
@@ -1583,7 +2035,7 @@ geniCodeCast (sym_link * type, operand * op, bool implicit)
 /*-----------------------------------------------------------------*/
 /* geniCodeLabel - will create a Label                             */
 /*-----------------------------------------------------------------*/
-void 
+void
 geniCodeLabel (symbol * label)
 {
   iCode *ic;
@@ -1595,7 +2047,7 @@ geniCodeLabel (symbol * label)
 /*-----------------------------------------------------------------*/
 /* geniCodeGoto  - will create a Goto                              */
 /*-----------------------------------------------------------------*/
-void 
+void
 geniCodeGoto (symbol * label)
 {
   iCode *ic;
@@ -1608,7 +2060,7 @@ geniCodeGoto (symbol * label)
 /* geniCodeMultiply - gen intermediate code for multiplication     */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodeMultiply (operand * left, operand * right,int resultIsInt)
+geniCodeMultiply (operand * left, operand * right, bool resultIsInt)
 {
   iCode *ic;
   int p2 = 0;
@@ -1621,29 +2073,27 @@ geniCodeMultiply (operand * left, operand * right,int resultIsInt)
 				      right->operand.valOperand));
 
   if (IS_LITERAL(retype)) {
-    p2 = powof2 ((unsigned long) floatFromVal (right->operand.valOperand));
+    p2 = powof2 ((TYPE_UDWORD) floatFromVal (right->operand.valOperand));
   }
 
-  resType = usualBinaryConversions (&left, &right);
+  resType = usualBinaryConversions (&left, &right, resultIsInt, '*');
 #if 1
   rtype = operandType (right);
   retype = getSpec (rtype);
   ltype = operandType (left);
   letype = getSpec (ltype);
 #endif
-  if (resultIsInt)
-    {
-      SPEC_NOUN(getSpec(resType))=V_INT;
-    }
 
   /* if the right is a literal & power of 2 */
   /* then make it a left shift              */
-  /* code generated for 1 byte * 1 byte literal = 2 bytes result is more 
-     efficient in most cases than 2 bytes result = 2 bytes << literal 
+  /* code generated for 1 byte * 1 byte literal = 2 bytes result is more
+     efficient in most cases than 2 bytes result = 2 bytes << literal
      if port has 1 byte muldiv */
-  if (p2 && !IS_FLOAT (letype) &&
-      !((resultIsInt) && (getSize (resType) != getSize (ltype)) && 
-	(port->support.muldiv == 1)))
+  if (p2 && !IS_FLOAT (letype)
+      && !((resultIsInt) && (getSize (resType) != getSize (ltype))
+           && (port->support.muldiv == 1))
+      && strcmp (port->target, "pic14") != 0  /* don't shift for pic */
+      && strcmp (port->target, "pic16") != 0)
     {
       if ((resultIsInt) && (getSize (resType) != getSize (ltype)))
 	{
@@ -1671,7 +2121,7 @@ geniCodeMultiply (operand * left, operand * right,int resultIsInt)
 /* geniCodeDivision - gen intermediate code for division           */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodeDivision (operand * left, operand * right)
+geniCodeDivision (operand * left, operand * right, bool resultIsInt)
 {
   iCode *ic;
   int p2 = 0;
@@ -1681,13 +2131,15 @@ geniCodeDivision (operand * left, operand * right)
   sym_link *ltype = operandType (left);
   sym_link *letype = getSpec (ltype);
 
-  resType = usualBinaryConversions (&left, &right);
+  resType = usualBinaryConversions (&left, &right, resultIsInt, '/');
 
-  /* if the right is a literal & power of 2 */
-  /* then make it a right shift             */
+  /* if the right is a literal & power of 2
+     and left is unsigned then make it a
+     right shift */
   if (IS_LITERAL (retype) &&
       !IS_FLOAT (letype) &&
-      (p2 = powof2 ((unsigned long)
+      IS_UNSIGNED(letype) &&
+      (p2 = powof2 ((TYPE_UDWORD)
 		    floatFromVal (right->operand.valOperand)))) {
     ic = newiCode (RIGHT_OP, left, operandFromLit (p2)); /* right shift */
   }
@@ -1707,7 +2159,7 @@ geniCodeDivision (operand * left, operand * right)
 /* geniCodeModulus  - gen intermediate code for modulus            */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodeModulus (operand * left, operand * right)
+geniCodeModulus (operand * left, operand * right, bool resultIsInt)
 {
   iCode *ic;
   sym_link *resType;
@@ -1718,7 +2170,7 @@ geniCodeModulus (operand * left, operand * right)
     return operandFromValue (valMod (left->operand.valOperand,
 				     right->operand.valOperand));
 
-  resType = usualBinaryConversions (&left, &right);
+  resType = usualBinaryConversions (&left, &right, resultIsInt, '%');
 
   /* now they are the same size */
   ic = newiCode ('%', left, right);
@@ -1756,8 +2208,14 @@ geniCodePtrPtrSubtract (operand * left, operand * right)
   ADDTOCHAIN (ic);
 
 subtractExit:
+  if (IS_VOID(ltype->next) || IS_VOID(rtype->next)) {
+    return result;
+  }
+  
+  // should we really do this? is this ANSI?
   return geniCodeDivision (result,
-			   operandFromLit (getSize (ltype->next)));
+			   operandFromLit (getSize (ltype->next)),
+			   FALSE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1792,7 +2250,7 @@ geniCodeSubtract (operand * left, operand * right)
     }
   else
     {				/* make them the same size */
-      resType = usualBinaryConversions (&left, &right);
+      resType = usualBinaryConversions (&left, &right, FALSE, '-');
     }
 
   ic = newiCode ('-', left, right);
@@ -1812,48 +2270,53 @@ geniCodeSubtract (operand * left, operand * right)
 /* geniCodeAdd - generates iCode for addition                      */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodeAdd (operand * left, operand * right,int lvl)
+geniCodeAdd (operand * left, operand * right, int lvl)
 {
   iCode *ic;
   sym_link *resType;
   operand *size;
   int isarray = 0;
+  bool indexUnsigned;
   LRTYPE;
-
-  /* if left is an array then array access */
-  if (IS_ARRAY (ltype))
-    return geniCodeArray (left, right,lvl);
 
   /* if the right side is LITERAL zero */
   /* return the left side              */
-  if (IS_LITERAL (retype) && right->isLiteral && !floatFromVal (valFromType (retype)))
+  if (IS_LITERAL (retype) && right->isLiteral && !floatFromVal (valFromType (rtype)))
     return left;
 
   /* if left is literal zero return right */
-  if (IS_LITERAL (letype) && left->isLiteral && !floatFromVal (valFromType (letype)))
+  if (IS_LITERAL (letype) && left->isLiteral && !floatFromVal (valFromType (ltype)))
     return right;
 
-  /* if left is an array or pointer then size */
-  if (IS_PTR (ltype))
+  /* if left is a pointer then size */
+  if (IS_PTR (ltype) || IS_ARRAY(ltype))
     {
       isarray = left->isaddr;
       // there is no need to multiply with 1
-      if (getSize(ltype->next)!=1) {
-	size  =	operandFromLit (getSize (ltype->next));
-	right = geniCodeMultiply (right, size, (getArraySizePtr(left) >= INTSIZE));
-      }
+      if (getSize (ltype->next) != 1)
+        {
+	  size  = operandFromLit (getSize (ltype->next));
+	  SPEC_USIGN (getSpec (operandType (size))) = 1;
+	  indexUnsigned = IS_UNSIGNED (getSpec (operandType (right)));
+	  right = geniCodeMultiply (right, size, (getArraySizePtr(left) >= INTSIZE));
+	  /* Even if right is a 'unsigned char',
+	     the result will be a 'signed int' due to the promotion rules.
+	     It doesn't make sense when accessing arrays, so let's fix it here: */
+	  if (indexUnsigned)
+	    SPEC_USIGN (getSpec (operandType (right))) = 1;
+	}
       resType = copyLinkChain (ltype);
     }
   else
-    {				/* make them the same size */
-      resType = usualBinaryConversions (&left, &right);
+    { // make them the same size
+      resType = usualBinaryConversions (&left, &right, FALSE, '+');
     }
 
   /* if they are both literals then we know */
   if (IS_LITERAL (letype) && IS_LITERAL (retype)
       && left->isLiteral && right->isLiteral)
-    return operandFromValue (valPlus (valFromType (letype),
-				      valFromType (retype)));
+    return operandFromValue (valPlus (valFromType (ltype),
+				      valFromType (rtype)));
 
   ic = newiCode ('+', left, right);
 
@@ -1880,51 +2343,31 @@ aggrToPtr (sym_link * type, bool force)
   sym_link *etype;
   sym_link *ptype;
 
-
   if (IS_PTR (type) && !force)
     return type;
 
   etype = getSpec (type);
-  ptype = newLink ();
+  ptype = newLink (DECLARATOR);
 
   ptype->next = type;
-  /* if the output class is generic */
-  if ((DCL_TYPE (ptype) = PTR_TYPE (SPEC_OCLS (etype))) == CPOINTER)
-    DCL_PTR_CONST (ptype) = port->mem.code_ro;
 
-  /* if the variable was declared a constant */
-  /* then the pointer points to a constant */
-  if (IS_CONSTANT (etype))
-    DCL_PTR_CONST (ptype) = 1;
-
-  /* the variable was volatile then pointer to volatile */
-  if (IS_VOLATILE (etype))
-    DCL_PTR_VOLATILE (ptype) = 1;
+  /* set the pointer depending on the storage class */
+  DCL_TYPE (ptype) = PTR_TYPE (SPEC_OCLS (etype));
   return ptype;
 }
 
 /*-----------------------------------------------------------------*/
 /* geniCodeArray2Ptr - array to pointer                            */
 /*-----------------------------------------------------------------*/
-operand *
+static operand *
 geniCodeArray2Ptr (operand * op)
 {
   sym_link *optype = operandType (op);
   sym_link *opetype = getSpec (optype);
 
   /* set the pointer depending on the storage class */
-  if ((DCL_TYPE (optype) = PTR_TYPE (SPEC_OCLS (opetype))) == CPOINTER)
-    DCL_PTR_CONST (optype) = port->mem.code_ro;
+  DCL_TYPE (optype) = PTR_TYPE (SPEC_OCLS (opetype));
 
-
-  /* if the variable was declared a constant */
-  /* then the pointer points to a constant */
-  if (IS_CONSTANT (opetype))
-    DCL_PTR_CONST (optype) = 1;
-
-  /* the variable was volatile then pointer to volatile */
-  if (IS_VOLATILE (opetype))
-    DCL_PTR_VOLATILE (optype) = 1;
   op->isaddr = 0;
   return op;
 }
@@ -1933,11 +2376,13 @@ geniCodeArray2Ptr (operand * op)
 /*-----------------------------------------------------------------*/
 /* geniCodeArray - array access                                    */
 /*-----------------------------------------------------------------*/
-operand *
-geniCodeArray (operand * left, operand * right,int lvl)
+static operand *
+geniCodeArray (operand * left, operand * right, int lvl)
 {
   iCode *ic;
+  operand *size;
   sym_link *ltype = operandType (left);
+  bool indexUnsigned;
 
   if (IS_PTR (ltype))
     {
@@ -1945,21 +2390,29 @@ geniCodeArray (operand * left, operand * right,int lvl)
 	{
 	  left = geniCodeRValue (left, FALSE);
 	}
-      return geniCodeDerefPtr (geniCodeAdd (left, right,lvl),lvl);
+
+      return geniCodeDerefPtr (geniCodeAdd (left, right, lvl), lvl);
     }
-
-  right = geniCodeMultiply (right,
-			    operandFromLit (getSize (ltype->next)), (getArraySizePtr(left) >= INTSIZE));
-
+  size = operandFromLit (getSize (ltype->next));
+  SPEC_USIGN (getSpec (operandType (size))) = 1;
+  indexUnsigned = IS_UNSIGNED (getSpec (operandType (right)));
+  right = geniCodeMultiply (right, size, (getArraySizePtr(left) >= INTSIZE));
+  /* Even if right is a 'unsigned char', the result will be a 'signed int' due to the promotion rules.
+     It doesn't make sense when accessing arrays, so let's fix it here: */
+  if (indexUnsigned)
+    SPEC_USIGN (getSpec (operandType (right))) = 1;
   /* we can check for limits here */
+  /* already done in SDCCast.c
   if (isOperandLiteral (right) &&
       IS_ARRAY (ltype) &&
       DCL_ELEM (ltype) &&
       (operandLitValue (right) / getSize (ltype->next)) >= DCL_ELEM (ltype))
     {
-      werror (E_ARRAY_BOUND);
-      right = operandFromLit (0);
+      werror (W_IDX_OUT_OF_BOUNDS,
+	      (int) operandLitValue (right) / getSize (ltype->next),
+	      DCL_ELEM (ltype));
     }
+  */
 
   ic = newiCode ('+', left, right);
 
@@ -1970,11 +2423,12 @@ geniCodeArray (operand * left, operand * right,int lvl)
 
   IC_RESULT (ic)->isaddr = (!IS_AGGREGATE (ltype->next));
   ADDTOCHAIN (ic);
+
   return IC_RESULT (ic);
 }
 
 /*-----------------------------------------------------------------*/
-/* geniCodeStruct - generates intermediate code for structres      */
+/* geniCodeStruct - generates intermediate code for structures     */
 /*-----------------------------------------------------------------*/
 operand *
 geniCodeStruct (operand * left, operand * right, bool islval)
@@ -1986,6 +2440,8 @@ geniCodeStruct (operand * left, operand * right, bool islval)
   symbol *element = getStructElement (SPEC_STRUCT (etype),
 				      right->operand.symOperand);
 
+  wassert(IS_SYMOP(right));
+    
   /* add the offset */
   ic = newiCode ('+', left, operandFromLit (element->offset));
 
@@ -1997,12 +2453,12 @@ geniCodeStruct (operand * left, operand * right, bool islval)
   SPEC_SCLS (retype) = SPEC_SCLS (etype);
   SPEC_OCLS (retype) = SPEC_OCLS (etype);
   SPEC_VOLATILE (retype) |= SPEC_VOLATILE (etype);
-
+  SPEC_CONST (retype) |= SPEC_CONST (etype);
+  
   if (IS_PTR (element->type))
     setOperandType (IC_RESULT (ic), aggrToPtr (operandType (IC_RESULT (ic)), TRUE));
-
+  
   IC_RESULT (ic)->isaddr = (!IS_AGGREGATE (element->type));
-
 
   ADDTOCHAIN (ic);
   return (islval ? IC_RESULT (ic) : geniCodeRValue (IC_RESULT (ic), TRUE));
@@ -2058,7 +2514,7 @@ geniCodePostInc (operand * op)
 /* geniCodePreInc - generate code for preIncrement                 */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodePreInc (operand * op)
+geniCodePreInc (operand * op, bool lvalue)
 {
   iCode *ic;
   sym_link *optype = operandType (op);
@@ -2084,8 +2540,11 @@ geniCodePreInc (operand * op)
   IC_RESULT (ic) = result = newiTempOperand (roptype, 0);
   ADDTOCHAIN (ic);
 
-
-  return geniCodeAssign (op, result, 0);
+  (void) geniCodeAssign (op, result, 0);
+  if (lvalue || IS_TRUE_SYMOP (op))
+    return op;
+  else
+    return result;
 }
 
 /*-----------------------------------------------------------------*/
@@ -2138,7 +2597,7 @@ geniCodePostDec (operand * op)
 /* geniCodePreDec - generate code for pre  decrement               */
 /*-----------------------------------------------------------------*/
 operand *
-geniCodePreDec (operand * op)
+geniCodePreDec (operand * op, bool lvalue)
 {
   iCode *ic;
   sym_link *optype = operandType (op);
@@ -2164,8 +2623,11 @@ geniCodePreDec (operand * op)
   IC_RESULT (ic) = result = newiTempOperand (roptype, 0);
   ADDTOCHAIN (ic);
 
-
-  return geniCodeAssign (op, result, 0);
+  (void) geniCodeAssign (op, result, 0);
+  if (lvalue || IS_TRUE_SYMOP (op))
+    return op;
+  else
+    return result;
 }
 
 
@@ -2199,6 +2661,13 @@ geniCodeAddressOf (operand * op)
   sym_link *optype = operandType (op);
   sym_link *opetype = getSpec (optype);
 
+  if (IS_ITEMP (op) && op->isaddr && IS_PTR (optype))
+    {
+      op = operandFromOperand (op);
+      op->isaddr = 0;
+      return op;
+    }
+  
   /* lvalue check already done in decorateType */
   /* this must be a lvalue */
 /*     if (!op->isaddr && !IS_AGGREGATE(optype)) { */
@@ -2206,19 +2675,10 @@ geniCodeAddressOf (operand * op)
 /*  return op; */
 /*     } */
 
-  p = newLink ();
-  p->class = DECLARATOR;
+  p = newLink (DECLARATOR);
 
   /* set the pointer depending on the storage class */
-  if ((DCL_TYPE (p) = PTR_TYPE (SPEC_OCLS (opetype))) == CPOINTER)
-    DCL_PTR_CONST (p) = port->mem.code_ro;
-
-  /* make sure we preserve the const & volatile */
-  if (IS_CONSTANT (opetype))
-    DCL_PTR_CONST (p) = 1;
-
-  if (IS_VOLATILE (opetype))
-    DCL_PTR_VOLATILE (p) = 1;
+  DCL_TYPE (p) = PTR_TYPE (SPEC_OCLS (opetype));
 
   p->next = copyLinkChain (optype);
 
@@ -2288,16 +2748,19 @@ geniCodeDerefPtr (operand * op,int lvl)
   sym_link *rtype, *retype;
   sym_link *optype = operandType (op);
 
-  /* if this is a pointer then generate the rvalue */
-  if (IS_PTR (optype))
+  // if this is an array then array access
+  if (IS_ARRAY (optype)) {
+    // don't worry, this will be optimized out later
+    return geniCodeArray (op, operandFromLit (0), lvl);
+  }
+
+  // just in case someone screws up
+  wassert (IS_PTR (optype));
+
+  if (IS_TRUE_SYMOP (op))
     {
-      if (IS_TRUE_SYMOP (op))
-	{
-	  op->isaddr = 1;
-	  op = geniCodeRValue (op, TRUE);
-	}
-      else
-	op = geniCodeRValue (op, TRUE);
+      op->isaddr = 1;
+      op = geniCodeRValue (op, TRUE);
     }
 
   /* now get rid of the pointer part */
@@ -2308,18 +2771,11 @@ geniCodeDerefPtr (operand * op,int lvl)
   else
     {
       retype = getSpec (rtype = copyLinkChain (optype->next));
+      /* outputclass needs 2b updated */
+      setOClass (optype, retype);
     }
-
-  /* if this is a pointer then outputclass needs 2b updated */
-  if (IS_PTR (optype))
-    setOClass (optype, retype);
-
+  
   op->isGptr = IS_GENPTR (optype);
-
-  /* if the pointer was declared as a constant */
-  /* then we cannot allow assignment to the derefed */
-  if (IS_PTR_CONST (optype))
-    SPEC_CONST (retype) = 1;
 
   op->isaddr = (IS_PTR (rtype) ||
 		IS_STRUCT (rtype) ||
@@ -2381,12 +2837,6 @@ geniCodeRightShift (operand * left, operand * right)
   return IC_RESULT (ic);
 }
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define LONG_LONG __int64
-#else
-#define LONG_LONG long long
-#endif
-
 /*-----------------------------------------------------------------*/
 /* geniCodeLogic- logic code                                       */
 /*-----------------------------------------------------------------*/
@@ -2402,14 +2852,54 @@ geniCodeLogic (operand * left, operand * right, int op)
      check if the literal value is within bounds */
   if (IS_INTEGRAL (ltype) && IS_VALOP (right) && IS_LITERAL (rtype))
     {
-      int nbits = bitsForType (ltype);
-      long v = (long) operandLitValue (right);
-
-      if (v >= ((LONG_LONG) 1 << nbits) && v > 0)
-	werror (W_CONST_RANGE, " compare operation ");
+      checkConstantRange(ltype,
+			 OP_VALUE(right), "compare operation", 1);
     }
 
-  ctype = usualBinaryConversions (&left, &right);
+  /* if one operand is a pointer and the other is a literal generic void pointer,
+     change the type of the literal generic void pointer to match the other pointer */
+  if (IS_GENPTR (ltype) && IS_VOID (ltype->next) && IS_ITEMP (left)
+      && IS_PTR (rtype) && !IS_GENPTR(rtype))
+    {
+      /* find left's definition */
+      ic = (iCode *) setFirstItem (iCodeChain);
+      while (ic)
+        {
+          if (((ic->op == CAST) || (ic->op == '='))
+              && isOperandEqual(left, IC_RESULT (ic)))
+            break;
+          else
+            ic = setNextItem (iCodeChain);
+        }
+      /* if casting literal to generic pointer, then cast to rtype instead */
+      if (ic && (ic->op == CAST) && isOperandLiteral(IC_RIGHT (ic))) 
+        {
+          left = operandFromValue (valCastLiteral (rtype, operandLitValue (IC_RIGHT (ic))));
+          ltype = operandType(left);
+        }
+    }
+  if (IS_GENPTR (rtype) && IS_VOID (rtype->next) && IS_ITEMP (right)
+      && IS_PTR (ltype) && !IS_GENPTR(ltype))
+    {
+      /* find right's definition */
+      ic = (iCode *) setFirstItem (iCodeChain);
+      while (ic)
+        {
+          if (((ic->op == CAST) || (ic->op == '='))
+              && isOperandEqual(right, IC_RESULT (ic)))
+            break;
+          else
+            ic = setNextItem (iCodeChain);
+        }
+      /* if casting literal to generic pointer, then cast to rtype instead */
+      if (ic && (ic->op == CAST) && isOperandLiteral(IC_RIGHT (ic))) 
+        {
+          right = operandFromValue (valCastLiteral (ltype, operandLitValue (IC_RIGHT (ic))));
+          rtype = operandType(right);
+        }
+    }
+
+  ctype = usualBinaryConversions (&left, &right, FALSE, ' ');
 
   ic = newiCode (op, left, right);
   IC_RESULT (ic) = newiTempOperand (newCharLink (), 1);
@@ -2460,7 +2950,7 @@ geniCodeConditional (ast * tree,int lvl)
   true = ast2iCode (tree->right->left,lvl+1);
 
   /* move the value to a new Operand */
-  result = newiTempOperand (operandType (true), 0);
+  result = newiTempOperand (tree->right->ftype, 0);
   geniCodeAssign (result, geniCodeRValue (true, FALSE), 0);
 
   /* generate an unconditional goto */
@@ -2498,11 +2988,8 @@ geniCodeAssign (operand * left, operand * right, int nosupdate)
      check if the literal value is within bounds */
   if (IS_INTEGRAL (ltype) && right->type == VALUE && IS_LITERAL (rtype))
     {
-      int nbits = bitsForType (ltype);
-      long v = (long) operandLitValue (right);
-
-      if (v >= ((LONG_LONG) 1 << nbits) && v > 0)
-	werror (W_CONST_RANGE, " = operation");
+      checkConstantRange(ltype, 
+			 OP_VALUE(right), "= operation", 0);
     }
 
   /* if the left & right type don't exactly match */
@@ -2512,7 +2999,7 @@ geniCodeAssign (operand * left, operand * right, int nosupdate)
 
   /* first check the type for pointer assignement */
   if (left->isaddr && IS_PTR (ltype) && IS_ITEMP (left) &&
-      compareType (ltype, rtype) < 0)
+      compareType (ltype, rtype) <= 0)
     {
       if (compareType (ltype->next, rtype) < 0)
 	right = geniCodeCast (ltype->next, right, TRUE);
@@ -2520,11 +3007,12 @@ geniCodeAssign (operand * left, operand * right, int nosupdate)
   else if (compareType (ltype, rtype) < 0)
     right = geniCodeCast (ltype, right, TRUE);
 
-  /* if left is a true symbol & ! volatile
+  /* If left is a true symbol & ! volatile
      create an assignment to temporary for
      the right & then assign this temporary
-     to the symbol this is SSA . isn't it simple
-     and folks have published mountains of paper on it */
+     to the symbol. This is SSA (static single
+     assignment). Isn't it simple and folks have
+     published mountains of paper on it */
   if (IS_TRUE_SYMOP (left) &&
       !isOperandVolatile (left, FALSE) &&
       isOperandGlobal (left))
@@ -2553,6 +3041,24 @@ geniCodeAssign (operand * left, operand * right, int nosupdate)
 }
 
 /*-----------------------------------------------------------------*/
+/* geniCodeDummyRead - generate code for dummy read                */
+/*-----------------------------------------------------------------*/
+static void
+geniCodeDummyRead (operand * op)
+{
+  iCode *ic;
+  sym_link *type = operandType (op);
+
+  if (!IS_VOLATILE(type))
+    return;
+    
+  ic = newiCode (DUMMY_READ_VOLATILE, NULL, op);
+  ADDTOCHAIN (ic);
+
+  ic->nosupdate = 1;
+}
+
+/*-----------------------------------------------------------------*/
 /* geniCodeSEParms - generate code for side effecting fcalls       */
 /*-----------------------------------------------------------------*/
 static void 
@@ -2578,30 +3084,38 @@ geniCodeSEParms (ast * parms,int lvl)
       IS_ADDRESS_OF_OP (parms->right))
     parms->right->left->lvalue = 1;
 
-  parms->opval.oprnd =
+  parms->opval.oprnd = 
     geniCodeRValue (ast2iCode (parms,lvl+1), FALSE);
-
+		
   parms->type = EX_OPERAND;
+  AST_ARGREG(parms) = parms->etype ? SPEC_ARGREG(parms->etype) :
+  		SPEC_ARGREG(parms->ftype);
 }
 
 /*-----------------------------------------------------------------*/
 /* geniCodeParms - generates parameters                            */
 /*-----------------------------------------------------------------*/
-static void 
-geniCodeParms (ast * parms, int *stack, sym_link * fetype, symbol * func,int lvl)
+value *
+geniCodeParms (ast * parms, value *argVals, int *stack, 
+	       sym_link * ftype, int lvl)
 {
   iCode *ic;
   operand *pval;
 
   if (!parms)
-    return;
+    return argVals;
+
+  if (argVals==NULL) {
+    // first argument
+    argVals = FUNC_ARGS (ftype);
+  }
 
   /* if this is a param node then do the left & right */
   if (parms->type == EX_OP && parms->opval.op == PARAM)
     {
-      geniCodeParms (parms->left, stack, fetype, func,lvl);
-      geniCodeParms (parms->right, stack, fetype, func,lvl);
-      return;
+      argVals=geniCodeParms (parms->left, argVals, stack, ftype, lvl);
+      argVals=geniCodeParms (parms->right, argVals, stack, ftype, lvl);
+      return argVals;
     }
 
   /* get the parameter value */
@@ -2624,20 +3138,24 @@ geniCodeParms (ast * parms, int *stack, sym_link * fetype, symbol * func,int lvl
     }
 
   /* if register parm then make it a send */
-  if (((parms->argSym && IS_REGPARM (parms->argSym->etype)) ||
-       IS_REGPARM (parms->etype)) && !func->hasVargs)
+  if ((IS_REGPARM (parms->etype) && !IFFUNC_HASVARARGS(ftype)) ||
+      IFFUNC_ISBUILTIN(ftype))
     {
       ic = newiCode (SEND, pval, NULL);
+      ic->argreg = SPEC_ARGREG(parms->etype);
+      ic->builtinSEND = FUNC_ISBUILTIN(ftype);
       ADDTOCHAIN (ic);
     }
   else
     {
       /* now decide whether to push or assign */
-      if (!(options.stackAuto || IS_RENT (fetype)))
+      if (!(options.stackAuto || IFFUNC_ISREENT (ftype)))
 	{
 
 	  /* assign */
-	  operand *top = operandFromSymbol (parms->argSym);
+	  operand *top = operandFromSymbol (argVals->sym);
+	  /* clear useDef and other bitVectors */
+	  OP_USES(top)=OP_DEFS(top)=OP_SYMBOL(top)->clashes = NULL;
 	  geniCodeAssign (top, pval, 1);
 	}
       else
@@ -2652,6 +3170,8 @@ geniCodeParms (ast * parms, int *stack, sym_link * fetype, symbol * func,int lvl
 	}
     }
 
+  argVals=argVals->next;
+  return argVals;
 }
 
 /*-----------------------------------------------------------------*/
@@ -2663,12 +3183,13 @@ geniCodeCall (operand * left, ast * parms,int lvl)
   iCode *ic;
   operand *result;
   sym_link *type, *etype;
+  sym_link *ftype;
   int stack = 0;
 
   if (!IS_FUNC(OP_SYMBOL(left)->type) && 
       !IS_CODEPTR(OP_SYMBOL(left)->type)) {
     werror (E_FUNCTION_EXPECTED);
-    return NULL;
+    return operandFromValue(valueFromLit(0));
   }
 
   /* take care of parameters with side-effecting
@@ -2676,17 +3197,21 @@ geniCodeCall (operand * left, ast * parms,int lvl)
      of overlaying function parameters */
   geniCodeSEParms (parms,lvl);
 
+  ftype = operandType (left);
+  if (IS_CODEPTR (ftype))
+    ftype = ftype->next;
+    
   /* first the parameters */
-  geniCodeParms (parms, &stack, getSpec (operandType (left)), OP_SYMBOL (left),lvl);
+  geniCodeParms (parms, NULL, &stack, ftype, lvl);
 
   /* now call : if symbol then pcall */
-  if (IS_OP_POINTER (left) || IS_ITEMP(left))
+  if (IS_OP_POINTER (left) || IS_ITEMP(left)) {
     ic = newiCode (PCALL, left, NULL);
-  else
+  } else {
     ic = newiCode (CALL, left, NULL);
+  }
 
-  IC_ARGS (ic) = left->operand.symOperand->args;
-  type = copyLinkChain (operandType (left)->next);
+  type = copyLinkChain (ftype->next);
   etype = getSpec (type);
   SPEC_EXTR (etype) = 0;
   IC_RESULT (ic) = result = newiTempOperand (type, 1);
@@ -2708,7 +3233,7 @@ geniCodeReceive (value * args)
   /* for all arguments that are passed in registers */
   while (args)
     {
-
+      int first = 1;
       if (IS_REGPARM (args->etype))
 	{
 	  operand *opr = operandFromValue (args);
@@ -2721,9 +3246,8 @@ geniCodeReceive (value * args)
 	  if (!sym->addrtaken && !IS_VOLATILE (sym->etype))
 	    {
 
-	      if (IN_FARSPACE (SPEC_OCLS (sym->etype)) &&
+	      if ((IN_FARSPACE (SPEC_OCLS (sym->etype)) && !TARGET_IS_HC08) &&
 		  options.stackAuto == 0 &&
-		  /* !TARGET_IS_DS390) */
 		  (!(options.model == MODEL_FLAT24)) )
 		{
 		}
@@ -2739,8 +3263,12 @@ geniCodeReceive (value * args)
 		}
 	    }
 
-	  ic = newiCode (RECEIVE, NULL, NULL);
-	  currFunc->recvSize = getSize (sym->etype);
+	  ic = newiCode (RECEIVE, NULL, NULL);	  
+	  ic->argreg = SPEC_ARGREG(args->etype);
+	  if (first) {
+	      currFunc->recvSize = getSize (sym->type);
+	      first = 0;
+	  }
 	  IC_RESULT (ic) = opr;
 	  ADDTOCHAIN (ic);
 	}
@@ -2777,10 +3305,7 @@ geniCodeFunctionBody (ast * tree,int lvl)
 
   /* create a proc icode */
   ic = newiCode (FUNCTION, func, NULL);
-  /* if the function has parmas   then */
-  /* save the parameters information    */
-  ic->argLabel.args = tree->values.args;
-  ic->lineno = OP_SYMBOL (func)->lineDef;
+  lineno=ic->lineno = OP_SYMBOL (func)->lineDef;
 
   ADDTOCHAIN (ic);
 
@@ -2841,14 +3366,14 @@ geniCodeIfx (ast * tree,int lvl)
 	  if (tree->trueLabel)
 	    geniCodeGoto (tree->trueLabel);
 	  else
-	    assert (1);
+	    assert (0);
 	}
       else
 	{
 	  if (tree->falseLabel)
 	    geniCodeGoto (tree->falseLabel);
 	  else
-	    assert (1);
+	    assert (0);
 	}
       goto exit;
     }
@@ -2887,6 +3412,8 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   operand *boundary;
   symbol *falseLabel;
   set *labels = NULL;
+  int needRangeCheck = !optimize.noJTabBoundary
+                       || tree->values.switchVals.swDefault;
 
   if (!tree || !caseVals)
     return 0;
@@ -2895,7 +3422,8 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   /* all integer numbers between the maximum & minimum must */
   /* be present , the maximum value should not exceed 255 */
   min = max = (int) floatFromVal (vch = caseVals);
-  sprintf (buffer, "_case_%d_%d",
+  SNPRINTF (buffer, sizeof(buffer), 
+	    "_case_%d_%d",
 	   tree->values.switchVals.swNum,
 	   min);
   addSet (&labels, newiTempLabel (buffer));
@@ -2908,7 +3436,8 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
     {
       if (((t = (int) floatFromVal (vch)) - max) != 1)
 	return 0;
-      sprintf (buffer, "_case_%d_%d",
+      SNPRINTF (buffer, sizeof(buffer), 
+		"_case_%d_%d",
 	       tree->values.switchVals.swNum,
 	       t);
       addSet (&labels, newiTempLabel (buffer));
@@ -2920,25 +3449,30 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   /* if the number of case statements <= 2 then */
   /* it is not economical to create the jump table */
   /* since two compares are needed for boundary conditions */
-  if ((!optimize.noJTabBoundary && cnt <= 2) || max > (255 / 3))
+  if ((needRangeCheck && cnt <= 2) || max > (255 / 3))
     return 0;
 
   if (tree->values.switchVals.swDefault)
-    sprintf (buffer, "_default_%d", tree->values.switchVals.swNum);
+    {
+	SNPRINTF (buffer, sizeof(buffer), "_default_%d", tree->values.switchVals.swNum);
+    }
   else
-    sprintf (buffer, "_swBrk_%d", tree->values.switchVals.swNum);
+    {
+	SNPRINTF (buffer, sizeof(buffer), "_swBrk_%d", tree->values.switchVals.swNum);
+    }
+    
 
   falseLabel = newiTempLabel (buffer);
 
   /* so we can create a jumptable */
   /* first we rule out the boundary conditions */
   /* if only optimization says so */
-  if (!optimize.noJTabBoundary)
+  if (needRangeCheck)
     {
       sym_link *cetype = getSpec (operandType (cond));
       /* no need to check the lower bound if
          the condition is unsigned & minimum value is zero */
-      if (!(min == 0 && SPEC_USIGN (cetype)))
+      if (!(min == 0 && IS_UNSIGNED (cetype)))
 	{
 	  boundary = geniCodeLogic (cond, operandFromLit (min), '<');
 	  ic = newiCodeCondition (boundary, falseLabel, NULL);
@@ -2955,7 +3489,8 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
   if (min)
     {
       cond = geniCodeSubtract (cond, operandFromLit (min));
-      setOperandType (cond, UCHARTYPE);
+      if (!IS_LITERAL(getSpec(operandType(cond))))
+        setOperandType (cond, UCHARTYPE);
     }
 
   /* now create the jumptable */
@@ -2969,13 +3504,36 @@ geniCodeJumpTable (operand * cond, value * caseVals, ast * tree)
 /*-----------------------------------------------------------------*/
 /* geniCodeSwitch - changes a switch to a if statement             */
 /*-----------------------------------------------------------------*/
-void 
+void
 geniCodeSwitch (ast * tree,int lvl)
 {
   iCode *ic;
   operand *cond = geniCodeRValue (ast2iCode (tree->left,lvl+1), FALSE);
   value *caseVals = tree->values.switchVals.swVals;
   symbol *trueLabel, *falseLabel;
+      
+  /* If the condition is a literal, then just jump to the */
+  /* appropriate case label. */
+  if (IS_LITERAL(getSpec(operandType(cond))))
+    {
+      int switchVal, caseVal;
+      
+      switchVal = (int) floatFromVal (cond->operand.valOperand);
+      while (caseVals)
+        {
+          caseVal = (int) floatFromVal (caseVals);
+          if (caseVal == switchVal)
+            {
+              SNPRINTF (buffer, sizeof(buffer), "_case_%d_%d",
+	                tree->values.switchVals.swNum, caseVal);
+              trueLabel = newiTempLabel (buffer);
+              geniCodeGoto (trueLabel);
+              goto jumpTable;
+            }
+          caseVals = caseVals->next;
+        }
+      goto defaultOrBreak;
+    }
 
   /* if we can make this a jump table */
   if (geniCodeJumpTable (cond, caseVals, tree))
@@ -2989,7 +3547,7 @@ geniCodeSwitch (ast * tree,int lvl)
 					operandFromValue (caseVals),
 					EQ_OP);
 
-      sprintf (buffer, "_case_%d_%d",
+      SNPRINTF (buffer, sizeof(buffer), "_case_%d_%d",
 	       tree->values.switchVals.swNum,
 	       (int) floatFromVal (caseVals));
       trueLabel = newiTempLabel (buffer);
@@ -3000,12 +3558,16 @@ geniCodeSwitch (ast * tree,int lvl)
     }
 
 
-
+defaultOrBreak:
   /* if default is present then goto break else break */
   if (tree->values.switchVals.swDefault)
-    sprintf (buffer, "_default_%d", tree->values.switchVals.swNum);
+    {
+	SNPRINTF (buffer, sizeof(buffer), "_default_%d", tree->values.switchVals.swNum);
+    }
   else
-    sprintf (buffer, "_swBrk_%d", tree->values.switchVals.swNum);
+    {
+	SNPRINTF (buffer, sizeof(buffer), "_swBrk_%d", tree->values.switchVals.swNum);
+    }
 
   falseLabel = newiTempLabel (buffer);
   geniCodeGoto (falseLabel);
@@ -3030,7 +3592,7 @@ geniCodeInline (ast * tree)
 /*-----------------------------------------------------------------*/
 /* geniCodeArrayInit - intermediate code for array initializer     */
 /*-----------------------------------------------------------------*/
-static void 
+static void
 geniCodeArrayInit (ast * tree, operand *array)
 {
   iCode *ic;
@@ -3045,6 +3607,34 @@ geniCodeArrayInit (ast * tree, operand *array)
     OP_SYMBOL(right)=AST_SYMBOL(tree->right);
     ic = newiCode (ARRAYINIT, left, right);
   }
+  ADDTOCHAIN (ic);
+}
+	
+/*-----------------------------------------------------------------*/
+/* geniCodeCritical - intermediate code for a critical statement   */
+/*-----------------------------------------------------------------*/
+static void 
+geniCodeCritical (ast *tree, int lvl)
+{
+  iCode *ic;
+  operand *op = NULL;
+
+  /* If op is NULL, the original interrupt state will saved on */
+  /* the stack. Otherwise, it will be saved in op. */
+  
+  /* Generate a save of the current interrupt state & disabled */
+  ic = newiCode (CRITICAL, NULL, NULL);
+  IC_RESULT (ic) = op;
+  ADDTOCHAIN (ic);
+  
+  /* Generate the critical code sequence */
+  if (tree->left && tree->left->type == EX_VALUE)
+    geniCodeDummyRead (ast2iCode (tree->left,lvl+1));
+  else
+    ast2iCode (tree->left,lvl+1);
+  
+  /* Generate a restore of the original interrupt state */
+  ic = newiCode (ENDCRITICAL, NULL, op);
   ADDTOCHAIN (ic);
 }
 
@@ -3065,7 +3655,7 @@ lvalItem;
 /*-----------------------------------------------------------------*/
 void addLvaluereq(int lvl)
 {
-  lvalItem * lpItem = (lvalItem *)Safe_calloc (1, sizeof (lvalItem));
+  lvalItem * lpItem = (lvalItem *)Safe_alloc ( sizeof (lvalItem));
   lpItem->req=1;
   lpItem->lvl=lvl;
   addSetHead(&lvaluereqSet,lpItem);
@@ -3078,7 +3668,7 @@ void delLvaluereq()
 {
   lvalItem * lpItem;
   lpItem = getSet(&lvaluereqSet);
-  if(lpItem) free(lpItem);
+  if(lpItem) Safe_free(lpItem);
 }
 /*-----------------------------------------------------------------*/
 /* clearLvaluereq - clear lvalreq flag			           */
@@ -3120,6 +3710,7 @@ ast2iCode (ast * tree,int lvl)
   operand *right = NULL;
   if (!tree)
     return NULL;
+
   /* set the global variables for filename & line number */
   if (tree->filename)
     filename = tree->filename;
@@ -3129,6 +3720,8 @@ ast2iCode (ast * tree,int lvl)
     block = tree->block;
   if (tree->level)
     scopeLevel = tree->level;
+  if (tree->seqPoint)
+    seqPoint = tree->seqPoint;
 
   if (tree->type == EX_VALUE)
     return operandFromValue (tree->opval.val);
@@ -3141,8 +3734,14 @@ ast2iCode (ast * tree,int lvl)
      (tree->opval.op == NULLOP ||
      tree->opval.op == BLOCK))
     {
-      ast2iCode (tree->left,lvl+1);
-      ast2iCode (tree->right,lvl+1);
+      if (tree->left && tree->left->type == EX_VALUE)
+        geniCodeDummyRead (ast2iCode (tree->left,lvl+1));
+      else
+        ast2iCode (tree->left,lvl+1);
+      if (tree->right && tree->right->type == EX_VALUE)
+        geniCodeDummyRead (ast2iCode (tree->right,lvl+1));
+      else
+        ast2iCode (tree->right,lvl+1);
       return NULL;
     }
 
@@ -3155,7 +3754,8 @@ ast2iCode (ast * tree,int lvl)
       tree->opval.op != GOTO &&
       tree->opval.op != SWITCH &&
       tree->opval.op != FUNCTION &&
-      tree->opval.op != INLINEASM)
+      tree->opval.op != INLINEASM &&
+      tree->opval.op != CRITICAL)
     {
 
         if (IS_ASSIGN_OP (tree->opval.op) ||
@@ -3197,8 +3797,9 @@ ast2iCode (ast * tree,int lvl)
 
     case '[':			/* array operation */
       {
-	sym_link *ltype = operandType (left);
-	left = geniCodeRValue (left, IS_PTR (ltype->next) ? TRUE : FALSE);
+	//sym_link *ltype = operandType (left);
+	//left = geniCodeRValue (left, IS_PTR (ltype->next) ? TRUE : FALSE);
+	left = geniCodeRValue (left, FALSE);
 	right = geniCodeRValue (right, TRUE);
       }
 
@@ -3227,13 +3828,13 @@ ast2iCode (ast * tree,int lvl)
       if (left)
 	return geniCodePostInc (left);
       else
-	return geniCodePreInc (right);
+	return geniCodePreInc (right, tree->lvalue);
 
     case DEC_OP:		/* decrement operator */
       if (left)
 	return geniCodePostDec (left);
       else
-	return geniCodePreDec (right);
+	return geniCodePreDec (right, tree->lvalue);
 
     case '&':			/* bitwise and or address of operator */
       if (right)
@@ -3254,15 +3855,18 @@ ast2iCode (ast * tree,int lvl)
 
     case '/':
       return geniCodeDivision (geniCodeRValue (left, FALSE),
-			       geniCodeRValue (right, FALSE));
+			       geniCodeRValue (right, FALSE),
+			       IS_INT (tree->ftype));
 
     case '%':
       return geniCodeModulus (geniCodeRValue (left, FALSE),
-			      geniCodeRValue (right, FALSE));
+			      geniCodeRValue (right, FALSE),
+			      IS_INT (tree->ftype));
     case '*':
       if (right)
 	return geniCodeMultiply (geniCodeRValue (left, FALSE),
-				 geniCodeRValue (right, FALSE),IS_INT(tree->ftype));
+				 geniCodeRValue (right, FALSE),
+				 IS_INT (tree->ftype));
       else
 	return geniCodeDerefPtr (geniCodeRValue (left, FALSE),lvl);
 
@@ -3288,15 +3892,32 @@ ast2iCode (ast * tree,int lvl)
       return geniCodeRightShift (geniCodeRValue (left, FALSE),
 				 geniCodeRValue (right, FALSE));
     case CAST:
+#if 0 // this indeed needs a second thought
+      {
+	operand *op;
+
+	// let's keep this simple: get the rvalue we need
+	op=geniCodeRValue (right, FALSE);
+	// now cast it to whatever we want
+	op=geniCodeCast (operandType(left), op, FALSE);
+	// if this is going to be used as an lvalue, make it so
+	if (tree->lvalue) {
+	  op->isaddr=1;
+	}
+	return op;
+      }
+#else // bug #604575, is it a bug ????
       return geniCodeCast (operandType (left),
 			   geniCodeRValue (right, FALSE), FALSE);
+#endif
 
     case '~':
-    case '!':
     case RRC:
     case RLC:
+    case SWAP:
       return geniCodeUnary (geniCodeRValue (left, FALSE), tree->opval.op);
 
+    case '!':
     case GETHBIT:
       {
 	operand *op = geniCodeUnary (geniCodeRValue (left, FALSE), tree->opval.op);
@@ -3311,9 +3932,21 @@ ast2iCode (ast * tree,int lvl)
     case NE_OP:
     case AND_OP:
     case OR_OP:
+      /* different compilers (even different gccs) evaluate
+	 the two calls in a different order. to get the same
+	 result on all machines we've to specify a clear sequence.
       return geniCodeLogic (geniCodeRValue (left, FALSE),
-			    geniCodeRValue (right, FALSE),
-			    tree->opval.op);
+                            geniCodeRValue (right, FALSE),
+                            tree->opval.op);
+      */
+      {
+	operand *leftOp, *rightOp;
+
+	rightOp = geniCodeRValue (right, FALSE);
+	leftOp  = geniCodeRValue (left , FALSE);
+
+	return geniCodeLogic (leftOp, rightOp, tree->opval.op);
+      }
     case '?':
       return geniCodeConditional (tree,lvl);
 
@@ -3345,13 +3978,17 @@ ast2iCode (ast * tree,int lvl)
 	geniCodeAssign (left,
 		geniCodeDivision (geniCodeRValue (operandFromOperand (left),
 						  FALSE),
-				  geniCodeRValue (right, FALSE)), 0);
+				  geniCodeRValue (right, FALSE),
+				  IS_INT (tree->ftype)),
+			0);
     case MOD_ASSIGN:
       return
 	geniCodeAssign (left,
 		 geniCodeModulus (geniCodeRValue (operandFromOperand (left),
 						  FALSE),
-				  geniCodeRValue (right, FALSE)), 0);
+				  geniCodeRValue (right, FALSE),
+				  IS_INT (tree->ftype)),
+			0);
     case ADD_ASSIGN:
       {
 	sym_link *rtype = operandType (right);
@@ -3460,6 +4097,9 @@ ast2iCode (ast * tree,int lvl)
     case ARRAYINIT:
 	geniCodeArrayInit(tree, ast2iCode (tree->left,lvl+1));
 	return NULL;
+    
+    case CRITICAL:
+	geniCodeCritical (tree, lvl);
     }
 
   return NULL;
@@ -3496,4 +4136,36 @@ iCodeFromAst (ast * tree)
   entryLabel = newiTempLabel ("_entry");
   ast2iCode (tree,0);
   return reverseiCChain ();
+}
+
+static const char *opTypeToStr(OPTYPE op)
+{
+    switch(op)
+    {
+      case SYMBOL: return "symbol";
+      case VALUE: return "value";
+      case TYPE: return "type";
+    }
+    return "undefined type";    
+}
+
+
+operand *validateOpType(operand 	*op, 
+			const char 	*macro,
+			const char 	*args,
+			OPTYPE 		type,
+			const char 	*file, 
+			unsigned 	line)
+{    
+    if (op && op->type == type)
+    {
+	return op;
+    }
+    fprintf(stderr, 
+	    "Internal error: validateOpType failed in %s(%s) @ %s:%u:"
+	    " expected %s, got %s\n",
+	    macro, args, file, line, 
+	    opTypeToStr(type), op ? opTypeToStr(op->type) : "null op");
+    exit(-1);
+    return op; // never reached, makes compiler happy.
 }

@@ -1,4 +1,4 @@
-#'$Id: HTMLgen.py,v 1.1 2001/05/06 16:01:19 michaelh Exp $'
+#'$Id: HTMLgen.py,v 1.2 2003/05/04 08:44:07 bernhardheld Exp $'
 
 # COPYRIGHT (C) 1996-9  ROBIN FRIEDRICH  email:Robin.Friedrich@pdq.net
 # Permission to use, copy, modify, and distribute this software and
@@ -185,3 +185,23 @@ class TemplateDocument(StringTemplate):
         f = open(template)
         self.source = f.read()
         f.close()
+
+def compare_s2f(s, f2):
+    """Helper to compare a string to a file, return 0 if they are equal."""
+
+    BUFSIZE = 8192
+    i = 0
+    fp2 = open(f2)
+    try:
+        while 1:
+            try:
+                b1 = s[i: i + BUFSIZE]
+                i = i + BUFSIZE
+            except IndexError:
+                b1 = ''
+            b2 = fp2.read(BUFSIZE)
+            if not b1 and not b2: return 0
+            c = cmp(b1, b2)
+            if c: return c
+    finally:
+        fp2.close()

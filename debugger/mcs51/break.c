@@ -24,10 +24,13 @@
 #include "sdcdb.h"
 #include "symtab.h"
 #include "break.h"
+#include "cmd.h"
 #include "newalloc.h"
 
 static hTab *bptable = NULL;
+char doingSteps    = 0;
 char userBpPresent = 0;
+                                
 /* call stack can be 1024 deep */
 STACK_DCL(callStack,function *,1024);
 
@@ -41,25 +44,43 @@ char *debug_bp_type_strings[] =
     "STEP"    ,
     "NEXT"    ,
     "FENTRY"  ,
-    "FEXIT", "", ""};
+    "FEXIT", "TMPUSER", ""};
 #endif
+
+static long bpnum = 0;
+
+long getLastBreakptNumber()
+{
+    return bpnum;
+}
+
+void resetHitCount()
+{
+    int k;
+    breakp *bp;
+    for ( bp = hTabFirstItem(bptable,&k); bp ;
+          bp = hTabNextItem(bptable,&k)) 
+    {
+        bp->hitCnt    = 0;
+        bp->ignoreCnt = 0;
+    }
+}
 
 /*-----------------------------------------------------------------*/
 /* setBreakPoint - creates an entry in the break point table       */
 /*-----------------------------------------------------------------*/
 int setBreakPoint (unsigned addr, char addrType, char bpType,
-        int (*callBack)(unsigned,char,char,int,context *) ,
+        int (*callBack)(unsigned,breakp *,context *) ,
         char *fileName, int lineno)
 {
     breakp *bp, *bpl;
-    static long bpnum = 0;
     char simbuf[50];
 
     Dprintf(D_break, ("setBreakPoint: addr:%x atype:%s bpType:%s [%s:%d]\n",
         addr,
         debug_bp_type_strings[addrType],
         debug_bp_type_strings[bpType],
-        fileName, lineno));
+        fileName, lineno+1));
 
     /* allocate & init a new bp */
     bp = Safe_calloc(1,sizeof(breakp));
@@ -67,34 +88,38 @@ int setBreakPoint (unsigned addr, char addrType, char bpType,
     bp->addrType = addrType;
     bp->bpType = bpType;
     bp->callBack = callBack;
-    bp->bpnum = (bpType == USER ? ++bpnum : 0);
+    bp->bpnum = ((bpType == USER || bpType == TMPUSER)? ++bpnum : 0);
     bp->filename = fileName;
     bp->lineno = lineno;
 
     /* if this is an user break point then
        check if there already exists one for this address */
-    if (bpType == USER) {
-  for ( bpl = hTabFirstItemWK(bptable,addr) ; bpl;
-        bpl = hTabNextItemWK(bptable)) {
+    if (bpType == USER || bpType == TMPUSER)
+    {
+        for ( bpl = hTabFirstItemWK(bptable,addr) ; bpl;
+              bpl = hTabNextItemWK(bptable)) 
+        {
 
-      /* if also a user break point then issue Note : */
-      if (bpl->bpType == USER)
-    fprintf(stderr,"Note: breakpoint %d also set at pc 0x%x\n",
-      bpl->bpnum,bpl->addr);
-  }
+            /* if also a user break point then issue Note : */
+            if (bpl->bpType == USER || bpType == TMPUSER)
+                fprintf(stderr,"Note: breakpoint %d also set at pc 0x%x\n",
+                        bpl->bpnum,bpl->addr);
+        }
 
-  fprintf(stderr,"Breakpoint %d at 0x%x: file %s, line %d.\n",
-    bp->bpnum, addr, fileName, lineno);
+        fprintf(stderr,"Breakpoint %d at 0x%x: file %s, line %d.\n",
+                bp->bpnum, addr, fileName, lineno+1);
 
-  userBpPresent++;
+        userBpPresent++;
     }
 
-    /* if a break point does not already exist then
-       send command to simulator to add one */
-    if (!hTabSearch(bptable,addr))
-  /* send the break command to the simulator */
-  simSetBP (addr);
-
+    if (bpType != STEP && bpType != NEXT)
+    {
+        /* if a break point does not already exist then
+           send command to simulator to add one */
+        if (!hTabSearch(bptable,addr))
+            /* send the break command to the simulator */
+            simSetBP (addr);
+    }
 
     /* now add the break point to list */
     hTabAddItem(&bptable,addr,bp);
@@ -110,22 +135,18 @@ void deleteSTEPbp ()
     breakp *bp;
     int k;
 
-    Dprintf(D_break, ("Deleting all STEP BPs\n"));
+    Dprintf(D_break, ("break: Deleting all STEP BPs\n"));
     /* for break points delete if they are STEP */
     for ( bp = hTabFirstItem(bptable,&k); bp ;
-    bp = hTabNextItem(bptable,&k)) {
+          bp = hTabNextItem(bptable,&k)) 
+    {
 
-  /* if this is a step then delete */
-  if (bp->bpType == STEP) {
-      hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
-
-      /* if this leaves no other break points then
-         send command to simulator to delete bp from this addr */
-      if (hTabSearch(bptable,bp->addr) == NULL)
-    simClearBP (bp->addr);
-
-      free(bp);
-  }
+        /* if this is a step then delete */
+        if (bp->bpType == STEP) 
+        {
+            hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
+            Safe_free(bp);
+        }
     }
 
 }
@@ -139,27 +160,30 @@ void deleteNEXTbp ()
     int k;
     char simcmd[50];
 
-    Dprintf(D_break, ("Deleting all NEXT BPs\n"));
+    Dprintf(D_break, ("break: Deleting all NEXT BPs\n"));
 
     /* for break points delete if they are NEXT */
     for ( bp = hTabFirstItem(bptable,&k); bp ;
-    bp = hTabNextItem(bptable,&k)) {
+          bp = hTabNextItem(bptable,&k)) 
+    {
 
-  /* if this is a step then delete */
-  if (bp->bpType == NEXT) {
-      hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
-
-      /* if this leaves no other break points then
-         send command to simulator to delete bp from this addr */
-      if (hTabSearch(bptable,bp->addr) == NULL) {
-    simClearBP(bp->addr);
-
-      }
-
-      free(bp);
-  }
+        /* if this is a step then delete */
+        if (bp->bpType == NEXT) 
+        {
+            hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
+            Safe_free(bp);
+        }
     }
 
+}
+
+static void freeUSERbp(breakp *bp)
+{
+    if ( bp->commands )
+        Safe_free(bp->commands);
+    if ( bp->condition )
+        Safe_free(bp->condition);
+    Safe_free(bp);
 }
 
 /*-----------------------------------------------------------------*/
@@ -171,37 +195,112 @@ void deleteUSERbp (int bpnum)
     int k;
     char simcmd[50];
 
-    Dprintf(D_break, ("deleteUSERbp %d\n", bpnum));
+    Dprintf(D_break, ("break: deleteUSERbp %d\n", bpnum));
 
     /* for break points delete if they are STEP */
     for ( bp = hTabFirstItem(bptable,&k); bp ;
-    bp = hTabNextItem(bptable,&k)) {
+          bp = hTabNextItem(bptable,&k)) {
 
-  /* if this is a user then delete if break
-     point matches or bpnumber == -1 (meaning delete
-     all user break points */
-  if (bp->bpType == USER && ( bp->bpnum == bpnum || bpnum == -1)) {
-      hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
+        /* if this is a user then delete if break
+           point matches or bpnumber == -1 (meaning delete
+           all user break points */
+        if ((bp->bpType == USER || bp->bpType == TMPUSER )
+            && ( bp->bpnum == bpnum || bpnum == -1)) 
+        {
+            hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
 
-      /* if this leaves no other break points then
-         send command to simulator to delete bp from this addr */
-      if (hTabSearch(bptable,bp->addr) == NULL) {
-    simClearBP (bp->addr);
-    Dprintf(D_break, ("deleteUSERbp:simClearBP 0x%x\n", bp->addr));
+            /* if this leaves no other break points then
+               send command to simulator to delete bp from this addr */
+            if (hTabSearch(bptable,bp->addr) == NULL) {
+                simClearBP (bp->addr);
+                Dprintf(D_break, ("break: deleteUSERbp:simClearBP 0x%x\n", bp->addr));
 
-      }
-      fprintf(stdout,"Deleted breakpoint %d\n",
-        bp->bpnum);
-      userBpPresent --;
-      if (bpnum == -1)
-    continue ;
-      else
-    break;
-  }
+            }
+            fprintf(stdout,"Deleted breakpoint %d\n",bp->bpnum);
+            userBpPresent-- ;
+            freeUSERbp(bp);
+            if (bpnum == -1)
+                continue ;
+            else
+                break;
+        }
     }
 
     if (!bp && bpnum != -1)
-  fprintf(stderr,"No breakpoint number %d.\n",bpnum);
+        fprintf(stderr,"No breakpoint number %d.\n",bpnum);
+}
+
+/*-----------------------------------------------------------------*/
+/* setUserbpCommand - set commandstring for breakpoint             */
+/*-----------------------------------------------------------------*/
+void setUserbpCommand (int bpnum, char *cmds)
+{
+    breakp *bp;
+    int k;
+    Dprintf(D_break, ("break: setUserbpCommand %d: commands:\n%send\n",
+                      bpnum, cmds));
+
+    for ( bp = hTabFirstItem(bptable,&k); bp ;
+          bp = hTabNextItem(bptable,&k)) 
+    {
+        if ((bp->bpType == USER || bp->bpType == TMPUSER )
+            && ( bp->bpnum == bpnum )) 
+        {
+            if ( bp->commands )
+                Safe_free(bp->commands);
+            bp->commands = cmds;
+            return;
+        }
+    }
+    fprintf(stderr,"No breakpoint number %d.\n",bpnum);
+}
+
+/*-----------------------------------------------------------------*/
+/* setUserbpCondition - set condition string for breakpoint        */
+/*-----------------------------------------------------------------*/
+void setUserbpCondition (int bpnum, char *cond)
+{
+    breakp *bp;
+    int k;
+    Dprintf(D_break, ("break: setUserbpCondition %d: condition:'%s'\n",
+                      bpnum, cond?cond:""));
+
+    for ( bp = hTabFirstItem(bptable,&k); bp ;
+          bp = hTabNextItem(bptable,&k)) 
+    {
+        if ((bp->bpType == USER || bp->bpType == TMPUSER )
+            && ( bp->bpnum == bpnum )) 
+        {
+            if ( bp->condition )
+                Safe_free(bp->condition);
+            bp->condition = cond;
+            return;
+        }
+    }
+    fprintf(stderr,"No breakpoint number %d.\n",bpnum);
+}
+
+/*-----------------------------------------------------------------*/
+/* setUserbpIgnCount - set ignorecount for breakpoint              */
+/*-----------------------------------------------------------------*/
+void setUserbpIgnCount (int bpnum, int ignorecnt )
+{
+    breakp *bp;
+    int k;
+    Dprintf(D_break, ("break: setUserbpIgnCount %d: ignorecnt=%d\n",
+                      bpnum, ignorecnt));
+
+    for ( bp = hTabFirstItem(bptable,&k); bp ;
+          bp = hTabNextItem(bptable,&k)) 
+    {
+        if ((bp->bpType == USER || bp->bpType == TMPUSER )
+            && ( bp->bpnum == bpnum )) 
+        {
+            bp->ignoreCnt = bp->hitCnt + ignorecnt;
+            return;
+        }
+    }
+    fprintf(stderr,"No breakpoint number %d.\n",bpnum);
 }
 
 /*-----------------------------------------------------------------*/
@@ -210,23 +309,42 @@ void deleteUSERbp (int bpnum)
 void listUSERbp ()
 {
     breakp *bp;
-    int k;
+    int k, isuser;
 
     /* if there are none then say so & return */
     if (!userBpPresent) {
-  fprintf(stdout,"No breakpoints.\n");
-  return ;
+        fprintf(stdout,"No breakpoints.\n");
+        return ;
     }
-    fprintf(stdout,"Num Address What\n");
+    fprintf(stdout,"Num Type           Disp Enb Address    What\n");
     for ( bp = hTabFirstItem(bptable,&k) ; bp ;
-    bp = hTabNextItem(bptable,&k)) {
+          bp = hTabNextItem(bptable,&k)) {
 
-  if (bp->bpType == USER ) {
-      fprintf(stdout,"%-3d 0x%04x  at %s:%d\n",
-        bp->bpnum,bp->addr,
-        bp->filename,bp->lineno);
+        isuser = 0;
+        if (bp->bpType == USER ) {
+            fprintf(stdout,"%-3d breakpoint     keep y   0x%08x at %s:%d\n",
+                    bp->bpnum,bp->addr,
+                    bp->filename,bp->lineno+1);
+            isuser = 1;
+        }
+        else if (bp->bpType == TMPUSER ) {
+            fprintf(stdout,"%-3d breakpoint      del y   0x%08x at %s:%d\n",
+                    bp->bpnum,bp->addr,
+                    bp->filename,bp->lineno+1);
+            isuser = 1;
+        }
+        if ( ! isuser )
+            continue;
+        if ( bp->ignoreCnt > bp->hitCnt )
+            fprintf(stdout,"\tignore next %d hits\n",
+                    bp->ignoreCnt - bp->hitCnt );
+        if ( bp->condition )
+            fprintf(stdout,"\tstop only if %s\n",bp->condition );
+        if ( bp->hitCnt > 0 )
+            fprintf(stdout,"\tbreakpoint already hit %d time%s\n",
+                    bp->hitCnt,bp->hitCnt>1?"s":"" );
+        
 
-  }
     }
 }
 
@@ -250,27 +368,29 @@ void clearUSERbp ( unsigned int addr )
 
     /* for break points delete if they are STEP */
     for ( bp = hTabFirstItemWK(bptable,addr); bp ;
-    bp = hTabNextItemWK(bptable)) {
+          bp = hTabNextItemWK(bptable)) {
 
-  /* if this is a step then delete */
-  if (bp->bpType == USER) {
-      hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
+        /* if this is a step then delete */
+        if (bp->bpType == USER || bp->bpType == TMPUSER) 
+        {
+            hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
 
-      /* if this leaves no other break points then
-         send command to simulator to delete bp from this addr */
-      if (hTabSearch(bptable,bp->addr) == NULL) {
-    simClearBP(bp->addr);
-
-      }
-      fprintf(stdout,"Deleted breakpoint %d\n",
-        bp->bpnum);
-      userBpPresent-- ;
-      break;
-  }
+            /* if this leaves no other break points then
+               send command to simulator to delete bp from this addr */
+            if (hTabSearch(bptable,bp->addr) == NULL) 
+            {
+                simClearBP(bp->addr);
+            }
+            fprintf(stdout,"Deleted breakpoint %d\n",
+                    bp->bpnum);
+            userBpPresent-- ;
+            freeUSERbp(bp);
+            break;
+        }
     }
 
     if (!bp)
-  fprintf(stderr,"No breakpoint at address 0x%x.\n",addr);
+        fprintf(stderr,"No breakpoint at address 0x%x.\n",addr);
 }
 
 /*-----------------------------------------------------------------*/
@@ -281,24 +401,25 @@ int dispatchCB (unsigned addr, context *ctxt)
     breakp *bp;
     int rv =0;
 
-    Dprintf(D_break, ("dispatchCB: addr:0x%x \n", addr));
+    Dprintf(D_break, ("break: dispatchCB: addr:0x%x \n", addr));
 
     /* if no break points set for this address
        then use a simulator stop break point */
     if ((bp = hTabFirstItemWK(bptable,addr)) == NULL) {
+      if ( doingSteps == 2 ) return 1;
+      if ( doingSteps ) return 0;
+      if ( contsim    ) return 0;
       return simStopBPCB(addr);
     }
 
     /* dispatch the call back functions */
-    for (; bp; bp = hTabNextItemWK(bptable)) {
-
-      rv += (*bp->callBack)(addr,bp->addrType,
-          bp->bpType,bp->bpnum,ctxt);
-
+    for (; bp; bp = hTabNextItemWK(bptable)) 
+    {
+        rv += (*bp->callBack)(addr,bp,ctxt);
     }
 
     if (rv == 0) {
-      Dprintf(D_break, ("dispatchCB: WARNING rv==0\n", rv));
+      Dprintf(D_break, ("break: dispatchCB: WARNING rv==0\n", rv));
     }
 
     return rv;
@@ -309,14 +430,25 @@ int dispatchCB (unsigned addr, context *ctxt)
 /*-----------------------------------------------------------------*/
 BP_CALLBACK(fentryCB)
 {
-    Dprintf(D_break, ("fentryCB: BP_CALLBACK entry\n"));
+    function *func;
 
-    /* add the current function into the call stack */
-    STACK_PUSH(callStack,ctxt->func);
-
-    /* will have to add code here to get the value of SP
+    /* we save the value of SP
        which will be used to display the value of local variables
        and parameters on the stack */
+    ctxt->func->stkaddr = simGetValue (0x81,'I',1);
+
+    Dprintf(D_break, ("break: fentryCB: BP_CALLBACK entry %s sp=0x%02x %p\n",
+                      ctxt->func->sym->name, 
+                      ctxt->func->stkaddr, p_callStack));
+
+    /* and set laddr of calling function to return addr from stack */
+    if ((func = STACK_PEEK(callStack)))
+    { 
+        /* extern stack ?? 'A' */
+        func->laddr = simGetValue (ctxt->func->stkaddr-1,'B',2);
+    }
+    /* add the current function into the call stack */
+    STACK_PUSH(callStack,ctxt->func);
 
     return 0;
 }
@@ -326,10 +458,18 @@ BP_CALLBACK(fentryCB)
 /*-----------------------------------------------------------------*/
 BP_CALLBACK(fexitCB)
 {
-    Dprintf(D_break, ("fexitCB: BP_CALLBACK entry\n"));
-
+    function *func;
     /* pop the top most from the call stack */
-    STACK_POP(callStack);
+    func = STACK_POP(callStack);
+
+    Dprintf(D_break, ("break: fexitCB: BP_CALLBACK entry %s %p\n",func->sym->name, p_callStack));
+
+    /* check main function */
+    if ( STACK_EMPTY(callStack))
+    {
+        fprintf(stdout,"Program exited with code %d.\n",simGetValue (0x82,'I',2));
+        return 1;
+    }
     return 0;
 }
 /*-----------------------------------------------------------------*/
@@ -337,28 +477,60 @@ BP_CALLBACK(fexitCB)
 /*-----------------------------------------------------------------*/
 BP_CALLBACK(userBpCB)
 {
-    Dprintf(D_break, ("userBpCB: BP_CALLBACK entry\n"));
+    bp->hitCnt++ ;
+    Dprintf(D_break, ("break: userBpCB: BP_CALLBACK entry hit=%d ignor=%d\n",
+                      bp->hitCnt, bp->ignoreCnt));
 
-    if (srcMode == SRC_CMODE) {
-  fprintf(stdout,"Breakpoint %d, %s() at %s:%d\n",
-    bpnum,
-    ctxt->func->sym->name,
-    ctxt->func->mod->c_name,
-    ctxt->cline);
-  if (ctxt->func->mod && ctxt->cline > 0)
-      fprintf(stdout,"%d\t%s",ctxt->cline,
-        ctxt->func->mod->cLines[ctxt->cline]->src);
-    } else {
-  fprintf(stdout,"Breakpoint %d, %s() at %s:%d\n",
-    bpnum,
-    ctxt->func->sym->name,
-    ctxt->func->mod->asm_name,
-    ctxt->asmline);
-  if (ctxt->func->mod && ctxt->asmline > 0)
-      fprintf(stdout,"%d\t%s",ctxt->asmline,
-        ctxt->func->mod->asmLines[ctxt->asmline]->src);
+    if ( bp->ignoreCnt > bp->hitCnt )
+        return 0;
+
+    if ( bp->condition )
+    {
+        if (! conditionIsTrue( bp->condition, ctxt ))
+            return 0;
     }
 
+    if ( bp->commands )
+    {
+        Dprintf(D_break, ("break: userBpCB: commands:%d\n", bp->commands));
+        setCmdLine(bp->commands);
+    }
+    
+    if (srcMode == SRC_CMODE) {
+        fprintf(stdout,"Breakpoint %d, %s() at %s:%d\n",
+                bp->bpnum,
+                ctxt->func->sym->name,
+                ctxt->func->mod->c_name,
+                ctxt->cline+1);
+        if (ctxt->func->mod && ctxt->cline > 0)
+            fprintf(stdout,"%d\t%s",ctxt->cline+1,
+                    ctxt->func->mod->cLines[ctxt->cline]->src);
+    } else {
+        fprintf(stdout,"Breakpoint %d, %s() at %s:%d\n",
+                bp->bpnum,
+                ctxt->func->sym->name,
+                ctxt->func->mod->asm_name,
+                ctxt->asmline+1);
+        if (ctxt->func->mod && ctxt->asmline > 0)
+            fprintf(stdout,"%d\t%s",ctxt->asmline+1,
+                    ctxt->func->mod->asmLines[ctxt->asmline]->src);
+    }
+
+    if ( bp->bpType == TMPUSER && bp->bpnum > 0 )
+    {
+        hTabDeleteItem(&bptable,bp->addr,bp,DELETE_ITEM,NULL);
+
+        /* if this leaves no other break points then
+           send command to simulator to delete bp from this addr */
+        if (hTabSearch(bptable,bp->addr) == NULL) 
+        {
+            simClearBP (bp->addr);
+            Dprintf(D_break, ("break: simClearBP 0x%x\n", bp->addr));
+
+        }
+        userBpPresent-- ;
+        freeUSERbp(bp);
+    }
     return 1;
 }
 
@@ -369,17 +541,17 @@ BP_CALLBACK(stepBpCB)
 {
     static function *lfunc = NULL;
 
-    Dprintf(D_break, ("stepBpCB: BP_CALLBACK entry\n"));
+    Dprintf(D_break, ("break: stepBpCB: BP_CALLBACK entry\n"));
 
     if (srcMode == SRC_CMODE) {
   if ((lfunc && lfunc != ctxt->func) || !lfunc)
       fprintf(stdout,"%s () at %s:%d\n",
         ctxt->func->sym->name,
         ctxt->func->mod->c_name,
-        ctxt->cline);
+        ctxt->cline+1);
 
   if (ctxt->func->mod && ctxt->cline > 0) {
-      fprintf(stdout,"%d\t%s",ctxt->cline ,
+      fprintf(stdout,"%d\t%s",ctxt->cline+1 ,
         ctxt->func->mod->cLines[ctxt->cline]->src);
   }
     } else {
@@ -407,17 +579,17 @@ BP_CALLBACK(nextBpCB)
 {
     static function *lfunc = NULL;
 
-    Dprintf(D_break, ("nextBpCB: BP_CALLBACK entry\n"));
+    Dprintf(D_break, ("break: nextBpCB: BP_CALLBACK entry\n"));
 
     if (srcMode == SRC_CMODE) {
   if ((lfunc && lfunc != ctxt->func) || !lfunc)
       fprintf(stdout,"%s () at %s:%d\n",
         ctxt->func->sym->name,
         ctxt->func->mod->c_name,
-        ctxt->cline);
+        ctxt->cline+1);
 
   if (ctxt->func->mod && ctxt->cline > 0)
-      fprintf(stdout,"%d\t%s",ctxt->cline,
+      fprintf(stdout,"%d\t%s",ctxt->cline+1,
         ctxt->func->mod->cLines[ctxt->cline]->src);
     } else {
   if ((lfunc && lfunc != ctxt->func) || !lfunc)

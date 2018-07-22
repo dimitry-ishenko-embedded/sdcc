@@ -38,6 +38,7 @@ typedef struct eBBlock
     unsigned int hasFcall:1;	/* has a function call */
     unsigned int noPath:1;	/* there is no path from _entry to this block */
     unsigned int isLastInLoop:1;	/* is the last block in a loop */
+    struct eBBlock *isConditionalExitFrom; /* this block ends with a return or goto from a conditional block*/
     symbol *entryLabel;		/* entry label */
 
     iCode *sch;			/* pointer to start of code chain */
@@ -55,6 +56,7 @@ typedef struct eBBlock
     /* data flow analysis */
     set *inExprs;		/* in coming common expressions    */
     set *outExprs;		/* out going common expressions    */
+    set *killedExprs;		/* killed common expressions       */
     bitVect *inDefs;		/* in coming defintions            */
     bitVect *outDefs;		/* out going defintions            */
     bitVect *defSet;		/* symbols defined in block        */

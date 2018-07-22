@@ -120,7 +120,6 @@ eBBSuccessors (eBBlock ** ebbs, int count)
 
 	  if (ebbs[i]->ech)
 	    {
-
 	      if (ebbs[i]->ech->op != GOTO &&
 		  ebbs[i]->ech->op != RETURN &&
 		  ebbs[i]->ech->op != JUMPTABLE)
@@ -131,6 +130,12 @@ eBBSuccessors (eBBlock ** ebbs, int count)
 		    j++;
 
 		  addSuccessor (ebbs[i], ebbs[j]);	/* add it */
+		}
+	      else
+		{
+		  if (i && ebbs[i-1]->ech && ebbs[i-1]->ech->op==IFX) {
+		    ebbs[i]->isConditionalExitFrom=ebbs[i-1];
+		  }
 		}
 	    }			/* no instructions in the block */
 	  /* could happen for dummy blocks */
@@ -161,7 +166,7 @@ eBBSuccessors (eBBlock ** ebbs, int count)
 	      switch (ic->op)
 		{
 		case GOTO:	/* goto has edge to label */
-		  succ = eBBWithEntryLabel (ebbs, ic->argLabel.label, count);
+		  succ = eBBWithEntryLabel (ebbs, ic->label, count);
 		  break;
 
 		case IFX:	/* conditional jump */
@@ -276,7 +281,7 @@ immedDom (eBBlock ** ebbs, eBBlock * ebp)
     if (loop->dfnum > idom->dfnum)
       idom = loop;
 
-  setToNull ((void **) &iset);
+  setToNull ((void *) &iset);
   return idom;
 
 }
@@ -391,10 +396,10 @@ computeControlFlow (eBBlock ** ebbs, int count, int reSort)
 
   for (i = 0; i < count; i++)
     {
-      setToNull ((void **) &ebbs[i]->predList);
-      setToNull ((void **) &ebbs[i]->domVect);
-      setToNull ((void **) &ebbs[i]->succList);
-      setToNull ((void **) &ebbs[i]->succVect);
+      setToNull ((void *) &ebbs[i]->predList);
+      setToNull ((void *) &ebbs[i]->domVect);
+      setToNull ((void *) &ebbs[i]->succList);
+      setToNull ((void *) &ebbs[i]->succVect);
       ebbs[i]->visited = 0;
       ebbs[i]->dfnum = 0;
     }
@@ -403,7 +408,7 @@ computeControlFlow (eBBlock ** ebbs, int count, int reSort)
     /* sort it back by block number */
     qsort (ebbs, saveCount, sizeof (eBBlock *), bbNumCompare);
 
-  setToNull ((void **) &graphEdges);
+  setToNull ((void *) &graphEdges);
   /* this will put in the  */
   /* successor information for each blk */
   eBBSuccessors (ebbs, count);
@@ -424,4 +429,36 @@ computeControlFlow (eBBlock ** ebbs, int count, int reSort)
   /* sort it by dfnumber */
   qsort (ebbs, saveCount, sizeof (eBBlock *), dfNumCompare);
 
+}
+
+/*-----------------------------------------------------------------*/
+/* returnAtEnd - returns 1 if Basic Block has a return at the end  */
+/*               of it                                             */
+/*-----------------------------------------------------------------*/
+int returnAtEnd (eBBlock *ebp)
+{
+    /* case 1.
+       This basic block ends in a return statment 
+    */
+    if (ebp->ech && ebp->ech->op == RETURN) return 1;
+
+    /* case 2.
+       This basic block has only one successor and that
+       successor has only one return statement
+    */
+    if (elementsInSet(ebp->succList) == 1) {
+	eBBlock *succ = setFirstItem(ebp->succList);
+	/* could happen for dummy blocks */
+	if (!succ->sch || !succ->ech) return 0;
+
+	/* first iCode is a return */
+	if (succ->sch->op == RETURN) return 2;
+
+	/* or first iCode is a label & the next &
+	   last icode is a return */
+	if (succ->sch->op == LABEL && succ->sch->next == succ->ech &&
+	    succ->ech->op == RETURN ) return 2;
+    }
+
+    return 0;
 }

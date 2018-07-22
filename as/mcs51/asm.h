@@ -77,6 +77,19 @@
 #endif
 
 /*
+ * PATH_MAX
+ */
+#include <limits.h>
+#ifndef PATH_MAX		/* POSIX, but not required   */
+#if defined(_MSC_VER) || defined(__BORLANDC__)  /* Microsoft C or Borland C*/
+#include <stdlib.h>
+#define PATH_MAX	_MAX_PATH
+#else
+#define PATH_MAX		/* define a reasonable value */
+#endif
+#endif
+
+/*
  * Assembler definitions.
  */
 #define	LFTERM	'('		/* Left expression delimeter */
@@ -85,7 +98,7 @@
 #define NCPS	80		/* Chars. per symbol (JLH: change from 8) */
 #define	HUGE	1000		/* A huge number */
 #define NERR	3		/* Errors per line */
-#define	NINPUT	FILENAME_MAX	/* Input buffer size (BH: change from 128) */
+#define	NINPUT	1024		/* Input buffer size (icodes need space) */
 #define NCODE	128		/* Listing code buffer size */
 #define NTITL	64		/* Title buffer size */
 #define	NSBTL	64		/* SubTitle buffer size */
@@ -314,7 +327,8 @@ struct	sym
 #define	S_ORG		24	/* .org */
 #define	S_MODUL		25	/* .module */
 #define	S_ASCIS		26	/* .ascis */
-#define	S_FLAT24	27      /* .flat24 */
+#define	S_FLAT24	27  /* .flat24 */
+#define	S_OPTSDCC	28  /* .optsdcc */
 
 
 /*
@@ -370,16 +384,16 @@ extern	int	iflvl[MAXIF+1];	/*	array of IF-ELSE-ENDIF flevel
 				 *	values indexed by tlevel
 				 */
 extern	char
-	afn[FILENAME_MAX];		/*	afile() temporary filespec
+	afn[PATH_MAX];		/*	afile() temporary filespec
 				 */
 extern	char
-	srcfn[MAXFIL][FILENAME_MAX];	/*	array of source file names
+	srcfn[MAXFIL][PATH_MAX];	/*	array of source file names
 				 */
 extern	int
 	srcline[MAXFIL];	/*	current source file line
 				 */
 extern	char
-	incfn[MAXINC][FILENAME_MAX];	/*	array of include file names
+	incfn[MAXINC][PATH_MAX];	/*	array of include file names
 				 */
 extern	int
 	incline[MAXINC];	/*	current include file line
@@ -465,6 +479,8 @@ extern	char	tb[NTITL];	/*	Title string buffer
 				 */
 extern	char	stb[NSBTL];	/*	Subtitle string buffer
 				 */
+extern  char	optsdcc[NINPUT];	/*	sdcc compile options 
+			 */
 extern 	int	flat24Mode;	/* 	non-zero if we are using DS390 24 bit 
 			 	 *	flat mode (via .flat24 directive). 
 			 	 */
@@ -484,7 +500,7 @@ extern	FILE	*sfp[MAXFIL];	/*	array of assembler-source file handles
 				 */
 extern	FILE	*ifp[MAXINC];	/*	array of include-file file handles
 				 */
-extern	char	ctype[128];	/*	array of character types, one per
+extern	unsigned char	ctype[128];	/*	array of character types, one per
 				 *	ASCII character
 				 */
 
@@ -661,7 +677,3 @@ extern	struct	mne	mne[];
 
 extern	VOID		minit();
 extern VOID machine(struct mne *);
-
-/* SD added THIS define to change
-   strcmpi --> strcmp (strcmpi is NOT ANSI) */
-#define strcmpi strcmp

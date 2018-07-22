@@ -31,7 +31,7 @@ enum
     AOP_REG, AOP_DIR,
     AOP_DPTR, AOP_DPTR2, AOP_R0, AOP_R1,
     AOP_STK, AOP_IMMD, AOP_STR,
-    AOP_CRY, AOP_ACC
+    AOP_CRY, AOP_ACC, AOP_DPTRn, AOP_DUMMY
   };
 
 /* type asmop : a homogenised type for 
@@ -53,6 +53,8 @@ typedef struct asmop
 				   AOP_CRY    -  carry contains the value of this
 				   AOP_STR    -  array of strings
 				   AOP_ACC    -  result is in the acc:b pair
+				   AOP_DPTRn  -  is in dptr(n)
+				   AOP_DUMMY  -  read as 0, discard writes
 				 */
     short coff;			/* current offset */
     short size;			/* total size */
@@ -61,13 +63,18 @@ typedef struct asmop
     unsigned freed:1;		/* already freed    */
     union
       {
+	short dptr;             /* if AOP_DPTRn */
 	value *aop_lit;		/* if literal */
 	regs *aop_reg[4];	/* array of registers */
 	char *aop_dir;		/* if direct  */
 	regs *aop_ptr;		/* either -> to r0 or r1 */
-	char *aop_immd;		/* if immediate others are implied */
+	struct {
+		int  from_cast_remat;   /* cast remat created this : immd2 field used for highest order*/
+		char *aop_immd1;	/* if immediate others are implied */
+		char *aop_immd2;	/* cast remat will generate this   */
+	} aop_immd;
 	int aop_stk;		/* stack offset when AOP_STK */
-	char *aop_str[4];	/* just a string array containing the location */
+	char *aop_str[5];	/* just a string array containing the location */
       }
     aopu;
   }

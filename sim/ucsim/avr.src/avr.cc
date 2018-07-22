@@ -226,8 +226,8 @@ cl_avr::disass(t_addr addr, char *sep)
 		int k= code&0xfff;
 		if (code&0x800)
 		  k|= -4096;
-		sprintf(temp, "0x%06lx",
-			(k+1+(signed int)addr) % rom->size);
+		sprintf(temp, "0x%06"_A_"x",
+			t_addr((k+1+(signed int)addr) % rom->size));
 		break;
 	      }
 	    default:
@@ -277,32 +277,31 @@ cl_avr::print_regs(class cl_console *con)
 
   ram->dump(0, 31, 16, con);
 
-  con->printf("ITHSVNZC  SREG= 0x%02x %3d %c\n",
-	      sreg, sreg, isprint(sreg)?sreg:'.');
-  con->printf("%c%c%c%c%c%c%c%c  ",
-	      (sreg&BIT_I)?'1':'0',
-	      (sreg&BIT_T)?'1':'0',
-	      (sreg&BIT_H)?'1':'0',
-	      (sreg&BIT_S)?'1':'0',
-	      (sreg&BIT_V)?'1':'0',
-	      (sreg&BIT_N)?'1':'0',
-	      (sreg&BIT_Z)?'1':'0',
-	      (sreg&BIT_C)?'1':'0');
-  con->printf("SP  = 0x%06x\n",
-	      ram->get(SPH)*256+ram->get(SPL));
+  con->dd_printf("ITHSVNZC  SREG= 0x%02x %3d %c\n",
+		 sreg, sreg, isprint(sreg)?sreg:'.');
+  con->dd_printf("%c%c%c%c%c%c%c%c  ",
+		 (sreg&BIT_I)?'1':'0',
+		 (sreg&BIT_T)?'1':'0',
+		 (sreg&BIT_H)?'1':'0',
+		 (sreg&BIT_S)?'1':'0',
+		 (sreg&BIT_V)?'1':'0',
+		 (sreg&BIT_N)?'1':'0',
+		 (sreg&BIT_Z)?'1':'0',
+		 (sreg&BIT_C)?'1':'0');
+  con->dd_printf("SP  = 0x%06x\n", ram->get(SPH)*256+ram->get(SPL));
 
   x= ram->get(XH)*256 + ram->get(XL);
   data= ram->get(x);
-  con->printf("X= 0x%04x [X]= 0x%02x %3d %c  ", x,
-	      data, data, isprint(data)?data:'.');
+  con->dd_printf("X= 0x%04x [X]= 0x%02x %3d %c  ", x,
+		 data, data, isprint(data)?data:'.');
   y= ram->get(YH)*256 + ram->get(YL);
   data= ram->get(y);
-  con->printf("Y= 0x%04x [Y]= 0x%02x %3d %c  ", y,
-	      data, data, isprint(data)?data:'.');
+  con->dd_printf("Y= 0x%04x [Y]= 0x%02x %3d %c  ", y,
+		 data, data, isprint(data)?data:'.');
   z= ram->get(ZH)*256 + ram->get(ZL);
   data= ram->get(z);
-  con->printf("Z= 0x%04x [Z]= 0x%02x %3d %c\n", z,
-	      data, data, isprint(data)?data:'.');
+  con->dd_printf("Z= 0x%04x [Z]= 0x%02x %3d %c\n", z,
+		 data, data, isprint(data)?data:'.');
 
   print_disass(PC, con);
 }
@@ -455,26 +454,26 @@ cl_avr::exec_inst(void)
 	  switch (code & 0xfe0f)
 	    {
 	    case 0x9000: return(lds_Rd_k(code));
-	    case 0x9001: return(ld_Rd_Z$(code));
-	    case 0x9002: return(ld_Rd_$Z(code));
+	    case 0x9001: return(ld_Rd_ZS(code));
+	    case 0x9002: return(ld_Rd_SZ(code));
 	    case 0x9004: return(lpm_Rd_Z(code));
-	    case 0x9005: return(lpm_Rd_Z$(code));
+	    case 0x9005: return(lpm_Rd_ZS(code));
 	    case 0x9006: return(elpm_Rd_Z(code));
-	    case 0x9007: return(elpm_Rd_Z$(code));
-	    case 0x9009: return(ld_Rd_Y$(code));
-	    case 0x900a: return(ld_Rd_$Y(code));
+	    case 0x9007: return(elpm_Rd_ZS(code));
+	    case 0x9009: return(ld_Rd_YS(code));
+	    case 0x900a: return(ld_Rd_SY(code));
 	    case 0x900c: return(ld_Rd_X(code));
-	    case 0x900d: return(ld_Rd_X$(code));
-	    case 0x900e: return(ld_Rd_$X(code));
+	    case 0x900d: return(ld_Rd_XS(code));
+	    case 0x900e: return(ld_Rd_SX(code));
 	    case 0x900f: return(pop_Rd(code));
 	    case 0x9200: return(sts_k_Rr(code));
-	    case 0x9201: return(st_Z$_Rr(code));
-	    case 0x9202: return(st_$Z_Rr(code));
-	    case 0x9209: return(st_Y$_Rr(code));
-	    case 0x920a: return(st_$Y_Rr(code));
+	    case 0x9201: return(st_ZS_Rr(code));
+	    case 0x9202: return(st_SZ_Rr(code));
+	    case 0x9209: return(st_YS_Rr(code));
+	    case 0x920a: return(st_SY_Rr(code));
 	    case 0x920c: return(st_X_Rr(code));
-	    case 0x920d: return(st_X$_Rr(code));
-	    case 0x920e: return(st_$X_Rr(code));
+	    case 0x920d: return(st_XS_Rr(code));
+	    case 0x920e: return(st_SX_Rr(code));
 	    case 0x920f: return(push_Rr(code));
 	    }
 	case 0x9400:
@@ -561,12 +560,12 @@ cl_avr::push_data(t_mem data)
   spl= ram->read(SPL);
   sph= ram->read(SPH);
   sp= 0xffff & (256*sph + spl);
-  ram->write(sp, &data);
+  data= ram->write(sp, data);
   sp= 0xffff & (sp-1);
   spl= sp & 0xff;
   sph= (sp>>8) & 0xff;
-  ram->write(SPL, &spl);
-  ram->write(SPH, &sph);
+  ram->write(SPL, spl);
+  ram->write(SPH, sph);
   return(resGO);
 }
 
@@ -581,14 +580,14 @@ cl_avr::push_addr(t_addr addr)
   sp= 0xffff & (256*sph + spl);
   al= addr & 0xff;
   ah= (addr>>8) & 0xff;
-  ram->write(sp, &ah);
+  ram->write(sp, ah);
   sp= 0xffff & (sp-1);
-  ram->write(sp, &al);
+  ram->write(sp, al);
   sp= 0xffff & (sp-1);
   spl= sp & 0xff;
   sph= (sp>>8) & 0xff;
-  ram->write(SPL, &spl);
-  ram->write(SPH, &sph);
+  ram->write(SPL, spl);
+  ram->write(SPH, sph);
   return(resGO);
 }
 
@@ -605,8 +604,8 @@ cl_avr::pop_data(t_mem *data)
   *data= ram->read(sp);
   spl= sp & 0xff;
   sph= (sp>>8) & 0xff;
-  ram->write(SPL, &spl);
-  ram->write(SPH, &sph);
+  ram->write(SPL, spl);
+  ram->write(SPH, sph);
 
   return(resGO);
 }
@@ -627,8 +626,8 @@ cl_avr::pop_addr(t_addr *addr)
   *addr= ah*256 + al;
   spl= sp & 0xff;
   sph= (sp>>8) & 0xff;
-  ram->write(SPL, &spl);
-  ram->write(SPH, &sph);
+  ram->write(SPL, spl);
+  ram->write(SPH, sph);
   
   return(resGO);
 }

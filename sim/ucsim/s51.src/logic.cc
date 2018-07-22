@@ -44,11 +44,10 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 int
 t_uc51::inst_orl_addr_a(uchar code)
 {
-  uchar *addr;
+  class cl_cell *cell;
 
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)|= sfr->get(event_at.rs= ACC);
-  proc_write(addr);
+  cell= get_direct(fetch());
+  cell->write(cell->read(HW_PORT) | acc->read());
   return(resGO);
 }
 
@@ -60,15 +59,16 @@ t_uc51::inst_orl_addr_a(uchar code)
  */
 
 int
-t_uc51::inst_orl_addr_$data(uchar code)
+t_uc51::inst_orl_addr_Sdata(uchar code)
 {
-  uchar *addr;
+  class cl_cell *cell;
+  int res= resGO;
 
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)|= fetch();
-  proc_write(addr);
+  cell= get_direct(fetch());
+  t_mem d= fetch();
+  cell->write(cell->read(HW_PORT) | d);
   tick(1);
-  return(resGO);
+  return(res);
 }
 
 
@@ -79,12 +79,12 @@ t_uc51::inst_orl_addr_$data(uchar code)
  */
 
 int
-t_uc51::inst_orl_a_$data(uchar code)
+t_uc51::inst_orl_a_Sdata(uchar code)
 {
   uchar d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d|= fetch());
+  d= acc->read();
+  acc->write(d|= fetch());
   return(resGO);
 }
 
@@ -98,11 +98,12 @@ t_uc51::inst_orl_a_$data(uchar code)
 int
 t_uc51::inst_orl_a_addr(uchar code)
 {
-  uchar *addr, d;
+  t_mem d;
+  class cl_cell *cell;
 
-  addr= get_direct(fetch(), &event_at.ri, &event_at.rs);
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d|= read(addr));
+  cell= get_direct(fetch());
+  d= acc->read();
+  acc->write(d|= cell->read());
   return(resGO);
 }
 
@@ -114,15 +115,15 @@ t_uc51::inst_orl_a_addr(uchar code)
  */
 
 int
-t_uc51::inst_orl_a_$ri(uchar code)
+t_uc51::inst_orl_a_Sri(uchar code)
 {
-  uchar *addr, d;
-  int res;
+  t_mem d;
+  class cl_cell *cell;
 
-  addr= get_indirect(event_at.ri= *(get_reg(code & 0x01)), &res);
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d|= *addr);
-  return(res);
+  cell= iram->get_cell(get_reg(code & 0x01)->read());
+  d= acc->read();
+  acc->write(d|= cell->read());
+  return(resGO);
 }
 
 
@@ -135,10 +136,10 @@ t_uc51::inst_orl_a_$ri(uchar code)
 int
 t_uc51::inst_orl_a_rn(uchar code)
 {
-  uchar d;
+  t_mem d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d|= *(get_reg(code & 0x07, &event_at.ri)));
+  d= acc->read();
+  acc->write(d|= get_reg(code & 0x07)->read());
   return(resGO);
 }
 
@@ -152,11 +153,10 @@ t_uc51::inst_orl_a_rn(uchar code)
 int
 t_uc51::inst_anl_addr_a(uchar code)
 {
-  uchar *addr;
-
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)&= sfr->get(event_at.rs= ACC);
-  proc_write(addr);
+  class cl_cell *cell;
+  
+  cell= get_direct(fetch());
+  cell->write(cell->read(HW_PORT) & acc->read());
   return(resGO);
 }
 
@@ -168,13 +168,14 @@ t_uc51::inst_anl_addr_a(uchar code)
  */
 
 int
-t_uc51::inst_anl_addr_$data(uchar code)
+t_uc51::inst_anl_addr_Sdata(uchar code)
 {
-  uchar *addr;
+  class cl_cell *cell;
+  t_mem d;
 
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)&= fetch();
-  proc_write(addr);
+  cell= get_direct(fetch());
+  d= fetch();
+  cell->write(cell->read(HW_PORT) & d);
   tick(1);
   return(resGO);
 }
@@ -187,12 +188,12 @@ t_uc51::inst_anl_addr_$data(uchar code)
  */
 
 int
-t_uc51::inst_anl_a_$data(uchar code)
+t_uc51::inst_anl_a_Sdata(uchar code)
 {
   uchar d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d&= fetch());
+  d= acc->read();
+  acc->write(d & fetch());
   return(resGO);
 }
 
@@ -206,11 +207,12 @@ t_uc51::inst_anl_a_$data(uchar code)
 int
 t_uc51::inst_anl_a_addr(uchar code)
 {
-  uchar *addr, d;
+  t_mem d;
+  class cl_cell *cell;
 
-  addr= get_direct(fetch(), &event_at.ri, &event_at.rs);
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d&= read(addr));
+  cell= get_direct(fetch());
+  d= acc->read();
+  acc->write(d & cell->read());
   return(resGO);
 }
 
@@ -222,15 +224,15 @@ t_uc51::inst_anl_a_addr(uchar code)
  */
 
 int
-t_uc51::inst_anl_a_$ri(uchar code)
+t_uc51::inst_anl_a_Sri(uchar code)
 {
-  uchar *addr, d;
-  int res;
+  t_mem d;
+  class cl_cell *cell;
 
-  addr= get_indirect(event_at.ri= *(get_reg(code & 0x01)), &res);
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d&= *addr);
-  return(res);
+  cell= iram->get_cell(get_reg(code & 0x01)->read());
+  d= acc->read();
+  acc->write(d & cell->read());
+  return(resGO);
 }
 
 
@@ -245,8 +247,8 @@ t_uc51::inst_anl_a_rn(uchar code)
 {
   uchar d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d&= *(get_reg(code & 0x07, &event_at.ri)));
+  d= acc->read();
+  acc->write(d & get_reg(code & 0x07)->read());
   return(resGO);
 }
 
@@ -260,11 +262,10 @@ t_uc51::inst_anl_a_rn(uchar code)
 int
 t_uc51::inst_xrl_addr_a(uchar code)
 {
-  uchar *addr;
+  class cl_cell *cell;
 
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)^= sfr->get(event_at.rs= ACC);
-  proc_write(addr);
+  cell= get_direct(fetch());
+  cell->write(cell->read(HW_PORT) ^ acc->read());
   return(resGO);
 }
 
@@ -276,13 +277,12 @@ t_uc51::inst_xrl_addr_a(uchar code)
  */
 
 int
-t_uc51::inst_xrl_addr_$data(uchar code)
+t_uc51::inst_xrl_addr_Sdata(uchar code)
 {
-  uchar *addr;
+  class cl_cell *cell;
 
-  addr= get_direct(fetch(), &event_at.wi, &event_at.ws);
-  (*addr)^= fetch();
-  proc_write(addr);
+  cell= get_direct(fetch());
+  cell->write(cell->read(HW_PORT) ^ fetch());
   tick(1);
   return(resGO);
 }
@@ -295,12 +295,12 @@ t_uc51::inst_xrl_addr_$data(uchar code)
  */
 
 int
-t_uc51::inst_xrl_a_$data(uchar code)
+t_uc51::inst_xrl_a_Sdata(uchar code)
 {
   uchar d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d^= fetch());
+  d= acc->read();
+  acc->write(d ^ fetch());
   return(resGO);
 }
 
@@ -314,12 +314,12 @@ t_uc51::inst_xrl_a_$data(uchar code)
 int
 t_uc51::inst_xrl_a_addr(uchar code)
 {
-  uchar d;
+  t_mem d;
+  class cl_cell *cell;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d^= read(get_direct(fetch(),
-				    &event_at.ri,
-				    &event_at.ri)));
+  cell= get_direct(fetch());
+  d= acc->read();
+  acc->write(d ^ cell->read());
   return(resGO);
 }
 
@@ -331,15 +331,15 @@ t_uc51::inst_xrl_a_addr(uchar code)
  */
 
 int
-t_uc51::inst_xrl_a_$ri(uchar code)
+t_uc51::inst_xrl_a_Sri(uchar code)
 {
-  uchar *addr, d;
-  int res;
+  t_mem d;
+  class cl_cell *cell;
 
-  addr= get_indirect(event_at.ri= *(get_reg(code & 0x01)), &res);
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d^= *addr);
-  return(res);
+  cell= iram->get_cell(get_reg(code & 0x01)->read());
+  d= acc->read();
+  acc->write(d ^ cell->read());
+  return(resGO);
 }
 
 
@@ -352,10 +352,10 @@ t_uc51::inst_xrl_a_$ri(uchar code)
 int
 t_uc51::inst_xrl_a_rn(uchar code)
 {
-  uchar d;
+  t_mem d;
 
-  d= sfr->get(event_at.ws= ACC);
-  sfr->set(ACC, d^= *(get_reg(code & 0x07, &event_at.ri)));
+  d= acc->read();
+  acc->write(d ^ get_reg(code & 0x07)->read());
   return(resGO);
 }
 
@@ -369,7 +369,7 @@ t_uc51::inst_xrl_a_rn(uchar code)
 int
 t_uc51::inst_cpl_a(uchar code)
 {
-  sfr->set(event_at.ws= ACC, ~(sfr->get(ACC)));
+  acc->write(~(acc->read()));
   return(resGO);
 }
 

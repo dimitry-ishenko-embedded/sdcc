@@ -23,33 +23,42 @@
    what you give them.   Help stamp out software-hoarding!  
 -------------------------------------------------------------------------*/
 
-unsigned char _gptrput ()
+#define P2_PAGES_PDATA 0 /* not all devices use P2 to page pdata memory */
+
+void
+_gptrput (char *gptr, char c)
 {
+    gptr; c; /* hush the compiler */
+
     _asm
-        xch      a,r0
-	push     acc
-	xch      a,r0
 	push     acc
     ;
-    ;   depending on the pointer type
+    ;   depending on the pointer type acc. to SDCCsymt.h
     ;
         mov     a,b
-	jz      00001$
+	jz      00001$	; 0 near
         dec     a
-        jz      00002$
+        jz      00002$	; 1 far
         dec     a
-        jz      00003$
+        jz      00003$	; 2 code
         dec     a
-        jz      00004$
-	pop     acc
+        jz      00004$  ; 3 pdata
+	dec	a	; 4 skip generic pointer
+	dec	a
+	jz	00001$	; 5 idata
+
+ 00003$:
+	pop     acc    ; do nothing
 	sjmp    00005$
-;
+;  
 ;       store into near space
-;       
+;
  00001$:
 	pop     acc
+	push	ar0
 	mov     r0,dpl
 	mov     @r0,a
+	pop     ar0
 	sjmp    00005$
 
  00002$:
@@ -57,17 +66,83 @@ unsigned char _gptrput ()
 	movx    @dptr,a
 	sjmp    00005$
 
- 00003$:
-	pop     acc    ; do nothing
-	sjmp    00005$
-
  00004$:
+#if P2_PAGES_PDATA
 	pop     acc
+	mov     dph,p2	        ; p2 holds high byte for pdata access
+	movx    @dptr,a
+#else
+	pop     acc
+    	push 	ar0
 	mov     r0,dpl
-	movx    @r0,a
- 00005$:       
-	xch     a,r0
-	pop     acc
-	xch     a,r0
+        movx    @r0,a
+	pop	ar0
+#endif	
+
+ 00005$:
 _endasm;
 }
+
+#ifdef SDCC_ds390
+void
+_gptrputWord ()
+{
+    _asm
+	push     acc
+    ;
+    ;   depending on the pointer type acc. to SDCCsymt.h
+    ;
+        mov     a,b
+	jz      00011$	; 0 near
+        dec     a
+        jz      00012$	; 1 far
+        dec     a
+        jz      00013$	; 2 code
+        dec     a
+        jz      00014$  ; 3 pdata
+	dec	a	; 4 skip generic pointer
+	dec	a
+	jz	00011$	; 5 idata
+	pop     acc
+	sjmp    00016$
+;
+;       store into near space
+;
+ 00011$:
+	pop     acc
+	push	ar0
+	mov     r0,dpl
+	mov     @r0,_ap
+	inc	r0
+	mov	@r0,a
+	sjmp    00015$
+
+ 00012$:
+	mov	a, _ap
+	movx    @dptr,a
+	inc	dptr
+	pop	acc
+        movx    @dptr,a
+	sjmp    00016$
+
+ 00013$:
+	pop     acc    ; do nothing
+	sjmp    00016$
+
+ 00014$:
+	pop     acc
+	push	ar0
+	mov     r0,dpl
+	xch	a,_ap
+	movx    @r0,a
+	inc	r0
+	xch	a,_ap
+	movx	@r0, a
+ 00015$:	
+        inc	dptr
+	pop     ar0
+ 00016$:	
+    _endasm;
+}
+
+#endif

@@ -23,9 +23,9 @@
 
 #include "common.h"   // Include everything in the SDCC src directory
 #include "newalloc.h"
-
-
+//#define PCODE_DEBUG
 #include "pcode.h"
+#include "pcodeflow.h"
 #include "ralloc.h"
 
 #if defined(__BORLANDC__) || defined(_MSC_VER)
@@ -35,25 +35,29 @@
 #endif
 
 pCodeOp *popCopyGPR2Bit(pCodeOpReg *pc, int bitval);
+pCodeOp *popRegFromString(char *str, int size, int offset);
 
-
-pCodeOp *newpCodeOpWild(int id, pCodePeep *pcp, pCodeOp *subtype);
+pCodeOp *newpCodeOpWild(int id, pCodeWildBlock *pcwb, pCodeOp *subtype);
 pCode *newpCodeWild(int pCodeID, pCodeOp *optional_operand, pCodeOp *optional_label);
 pCode * findNextInstruction(pCode *pc);
-char *Safe_strdup(char *str);
 int getpCode(char *mnem,int dest);
+int getpCodePeepCommand(char *cmd);
 void pBlockMergeLabels(pBlock *pb);
 char *pCode2str(char *str, int size, pCode *pc);
+char *get_op( pCodeOp *pcop,char *buf,int buf_size);
 
 extern pCodeInstruction *pic14Mnemonics[];
+extern pCode * findPrevInstruction(pCode *pci);
 
+
+#define IS_PCCOMMENT(x) ( x && (x->type==PC_COMMENT))
 
 /****************************************************************/
 /*
- * rootRules - defined in SDCCpeep.c
- *  This is a pointer to the (parsed) peephole rules that are
- * defined in peep.def.
- */
+* rootRules - defined in SDCCpeep.c
+*  This is a pointer to the (parsed) peephole rules that are
+* defined in peep.def.
+*/
 
 //extern peepRule *rootRules;
 
@@ -63,16 +67,16 @@ extern pCodeInstruction *pic14Mnemonics[];
 /****************************************************************/
 /****************************************************************/
 typedef struct _DLL {
-  struct _DLL *prev;
-  struct _DLL *next;
-  //  void *data;
+	struct _DLL *prev;
+	struct _DLL *next;
+	//  void *data;
 } _DLL;
 
 
 typedef struct pCodePeepSnippets
 {
-  _DLL dll;
-  pCodePeep *peep;
+	_DLL dll;
+	pCodePeep *peep;
 } pCodePeepSnippets;
 
 
@@ -90,7 +94,7 @@ static pCodePeepSnippets  *peepSnippets=NULL;
 /*                                                              */
 /****************************************************************/
 
-static pCodePeep          *curPeep=NULL;
+//static pCodePeep          *curPeep=NULL;
 
 /****************************************************************/
 /*                                                              */
@@ -98,7 +102,7 @@ static pCodePeep          *curPeep=NULL;
 /*                                                              */
 /****************************************************************/
 
-static pBlock             *curBlock=NULL;
+//static pBlock             *curBlock=NULL;
 
 
 /****************************************************************/
@@ -107,19 +111,19 @@ static pBlock             *curBlock=NULL;
 /*                                                              */
 /****************************************************************/
 
-static int                sMaxWildVar   = 0;
-static int                sMaxWildMnem  = 0;
+//static int                sMaxWildVar   = 0;
+//static int                sMaxWildMnem  = 0;
 
 
 typedef struct pCodeToken 
 {
-  int tt;  // token type;
-  union {
-    char c;  // character
-    int  n;  // number
-    char *s; // string
-  } tok;
-
+	int tt;  // token type;
+	union {
+		char c;  // character
+		int  n;  // number
+		char *s; // string
+	} tok;
+	
 } pCodeToken;
 
 pCodeToken tokArr[50];
@@ -127,21 +131,23 @@ unsigned   tokIdx=0;
 
 
 typedef enum  {
-  PCT_NULL=0,
-  PCT_SPACE=1,
-  PCT_PERCENT,
-  PCT_COLON,
-  PCT_COMMA,
-  PCT_COMMENT,
-  PCT_STRING,
-  PCT_NUMBER
-
+	PCT_NULL=0,
+		PCT_SPACE=1,
+		PCT_PERCENT,
+		PCT_LESSTHAN,
+		PCT_GREATERTHAN,
+		PCT_COLON,
+		PCT_COMMA,
+		PCT_COMMENT,
+		PCT_STRING,
+		PCT_NUMBER
+		
 } pCodeTokens;
 
 
 typedef struct parsedPattern {
-  struct pcPattern *pcp;
-  pCodeToken *pct;
+	struct pcPattern *pcp;
+	pCodeToken *pct;
 } parsedPattern;
 
 #define MAX_PARSEDPATARR 50
@@ -150,13 +156,13 @@ unsigned int parsedPatIdx=0;
 
 
 typedef enum {
-  PCP_LABEL=1,
-  PCP_NUMBER,
-  PCP_STR,
-  PCP_WILDVAR,
-  PCP_WILDSTR,
-  PCP_COMMA,
-  PCP_COMMENT
+	PCP_LABEL=1,
+		PCP_NUMBER,
+		PCP_STR,
+		PCP_WILDVAR,
+		PCP_WILDSTR,
+		PCP_COMMA,
+		PCP_COMMENT
 } pCodePatterns;
 
 static char pcpat_label[]      = {PCT_PERCENT, PCT_NUMBER, PCT_COLON, 0};
@@ -169,34 +175,35 @@ static char pcpat_comment[]    = {PCT_COMMENT, 0};
 
 
 typedef struct pcPattern {
-  char pt;                 // Pattern type
-  char *tokens;           // list of tokens that describe the pattern
-  void * (*f) (void *);
+	char pt;                 // Pattern type
+	char *tokens;           // list of tokens that describe the pattern
+	void * (*f) (void *,pCodeWildBlock *);
 } pcPattern;
 
 pcPattern pcpArr[] = {
-  {PCP_LABEL,     pcpat_label,      NULL},
-  {PCP_WILDSTR,   pcpat_wildString, NULL},
-  {PCP_STR,       pcpat_string,     NULL},
-  {PCP_WILDVAR,   pcpat_wildVar,    NULL},
-  {PCP_COMMA,     pcpat_comma,      NULL},
-  {PCP_COMMENT,   pcpat_comment,    NULL},
-  {PCP_NUMBER,    pcpat_number,     NULL}
+	{PCP_LABEL,     pcpat_label,      NULL},
+	{PCP_WILDSTR,   pcpat_wildString, NULL},
+	{PCP_STR,       pcpat_string,     NULL},
+	{PCP_WILDVAR,   pcpat_wildVar,    NULL},
+	{PCP_COMMA,     pcpat_comma,      NULL},
+	{PCP_COMMENT,   pcpat_comment,    NULL},
+	{PCP_NUMBER,    pcpat_number,     NULL}
 };
 
 #define PCPATTERNS (sizeof(pcpArr)/sizeof(pcPattern))
 
 // Assembly Line Token
 typedef enum {
-  ALT_LABEL=1,
-  ALT_COMMENT,
-  ALT_MNEM0,
-  ALT_MNEM0A,
-  ALT_MNEM1,
-  ALT_MNEM1A,
-  ALT_MNEM1B,
-  ALT_MNEM2,
-  ALT_MNEM2A
+	ALT_LABEL=1,
+		ALT_COMMENT,
+		ALT_MNEM0,
+		ALT_MNEM0A,
+		ALT_MNEM1,
+		ALT_MNEM1A,
+		ALT_MNEM1B,
+		ALT_MNEM2,
+		ALT_MNEM2A,
+		ALT_MNEM3
 } altPatterns;
 
 static char alt_comment[]   = { PCP_COMMENT, 0};
@@ -208,28 +215,31 @@ static char alt_mnem1a[]    = { PCP_STR, PCP_WILDVAR, 0};
 static char alt_mnem1b[]    = { PCP_STR, PCP_NUMBER, 0};
 static char alt_mnem2[]     = { PCP_STR, PCP_STR, PCP_COMMA, PCP_STR, 0};
 static char alt_mnem2a[]    = { PCP_STR, PCP_WILDVAR, PCP_COMMA, PCP_STR, 0};
+static char alt_mnem3[]     = { PCP_STR, PCP_STR, PCP_COMMA, PCP_NUMBER, 0};
 
-static void * cvt_altpat_label(void *pp);
-static void * cvt_altpat_comment(void *pp);
-static void * cvt_altpat_mnem0(void *pp);
-static void * cvt_altpat_mnem0a(void *pp);
-static void * cvt_altpat_mnem1(void *pp);
-static void * cvt_altpat_mnem1a(void *pp);
-static void * cvt_altpat_mnem1b(void *pp);
-static void * cvt_altpat_mnem2(void *pp);
-static void * cvt_altpat_mnem2a(void *pp);
+static void * cvt_altpat_label(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_comment(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem0(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem0a(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem1(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem1a(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem1b(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem2(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb);
+static void * cvt_altpat_mnem3(void *pp,pCodeWildBlock *pcwb);
 
 pcPattern altArr[] = {
-  {ALT_LABEL,        alt_label,  cvt_altpat_label},
-  {ALT_COMMENT,      alt_comment,cvt_altpat_comment},
-  {ALT_MNEM2A,       alt_mnem2a, cvt_altpat_mnem2a},
-  {ALT_MNEM2,        alt_mnem2,  cvt_altpat_mnem2},
-  {ALT_MNEM1B,       alt_mnem1b, cvt_altpat_mnem1b},
-  {ALT_MNEM1A,       alt_mnem1a, cvt_altpat_mnem1a},
-  {ALT_MNEM1,        alt_mnem1,  cvt_altpat_mnem1},
-  {ALT_MNEM0A,       alt_mnem0a, cvt_altpat_mnem0a},
-  {ALT_MNEM0,        alt_mnem0,  cvt_altpat_mnem0},
-
+	{ALT_LABEL,        alt_label,  cvt_altpat_label},
+	{ALT_COMMENT,      alt_comment,cvt_altpat_comment},
+	{ALT_MNEM3,        alt_mnem3,  cvt_altpat_mnem3},
+	{ALT_MNEM2A,       alt_mnem2a, cvt_altpat_mnem2a},
+	{ALT_MNEM2,        alt_mnem2,  cvt_altpat_mnem2},
+	{ALT_MNEM1B,       alt_mnem1b, cvt_altpat_mnem1b},
+	{ALT_MNEM1A,       alt_mnem1a, cvt_altpat_mnem1a},
+	{ALT_MNEM1,        alt_mnem1,  cvt_altpat_mnem1},
+	{ALT_MNEM0A,       alt_mnem0a, cvt_altpat_mnem0a},
+	{ALT_MNEM0,        alt_mnem0,  cvt_altpat_mnem0},
+	
 };
 
 #define ALTPATTERNS (sizeof(altArr)/sizeof(pcPattern))
@@ -244,22 +254,22 @@ static void * DLL_append(_DLL *list, _DLL *next);
 /*-----------------------------------------------------------------*/
 static int cvt_extract_destination(parsedPattern *pp)
 {
-
-  if(pp->pct[0].tt == PCT_STRING) {
-
-    // just check first letter for now
-
-    if(toupper(*pp->pct[0].tok.s) == 'F')
-      return 1;
-
-  } else if (pp->pct[0].tt == PCT_NUMBER) {
-
-    if(pp->pct[0].tok.n)
-      return 1;
-  }
-
-  return 0;
-
+	
+	if(pp->pct[0].tt == PCT_STRING) {
+		
+		// just check first letter for now
+		
+		if(toupper(*pp->pct[0].tok.s) == 'F')
+			return 1;
+		
+	} else if (pp->pct[0].tt == PCT_NUMBER) {
+		
+		if(pp->pct[0].tok.n)
+			return 1;
+	}
+	
+	return 0;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -271,27 +281,27 @@ static int cvt_extract_destination(parsedPattern *pp)
 
 static pCodeOp *cvt_extract_status(char *reg, char *bit)
 {
-  int len;
-
-  if(STRCASECMP(reg, pc_status.pcop.name))
-    return NULL;
-
-  len = strlen(bit);
-
-  if(len == 1) {
-    // check C,Z
-    if(toupper(*bit) == 'C')
-      return PCOP(popCopyGPR2Bit(&pc_status,PIC_C_BIT));
-    if(toupper(*bit) == 'Z')
-      return PCOP(popCopyGPR2Bit(&pc_status,PIC_Z_BIT));
-  }
-
-  // Check DC
-  if(len ==2 && toupper(bit[0]) == 'D' && toupper(bit[1]) == 'C')
-    return PCOP(popCopyGPR2Bit(&pc_status,PIC_DC_BIT));
-
-  return NULL;
-
+	int len;
+	
+	if(STRCASECMP(reg, pc_status.pcop.name))
+		return NULL;
+	
+	len = strlen(bit);
+	
+	if(len == 1) {
+		// check C,Z
+		if(toupper(*bit) == 'C')
+			return PCOP(popCopyGPR2Bit(&pc_status,PIC_C_BIT));
+		if(toupper(*bit) == 'Z')
+			return PCOP(popCopyGPR2Bit(&pc_status,PIC_Z_BIT));
+	}
+	
+	// Check DC
+	if(len ==2 && toupper(bit[0]) == 'D' && toupper(bit[1]) == 'C')
+		return PCOP(popCopyGPR2Bit(&pc_status,PIC_DC_BIT));
+	
+	return NULL;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -304,13 +314,13 @@ static pCodeOp *cvt_extract_status(char *reg, char *bit)
 /* at this point, we wish to extract only the 'number'             */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_label(void *pp)
+static void * cvt_altpat_label(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-
-  fprintf(stderr,"altpat_label with ID = %d\n",p->pct[1].tok.n);
-  return newpCodeLabel(-p->pct[1].tok.n);
-
+	parsedPattern *p = pp;
+	
+	DFPRINTF((stderr,"altpat_label with ID = %d\n",p->pct[1].tok.n));
+	return newpCodeLabel(NULL,-p->pct[1].tok.n);
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -321,39 +331,51 @@ static void * cvt_altpat_label(void *pp)
 /*                                                                 */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_comment(void *pp)
+static void * cvt_altpat_comment(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-
-  fprintf(stderr,"altpat_comment  = %s\n",p->pct[0].tok.s);
-  return newpCodeCharP(p->pct[0].tok.s);
-
+	parsedPattern *p = pp;
+	
+	DFPRINTF((stderr,"altpat_comment  = %s\n",p->pct[0].tok.s));
+	return newpCodeCharP(p->pct[0].tok.s);
+	
 }
 
 /*-----------------------------------------------------------------*/
+/* cvt_altpat_mem0  - convert assembly line type to a wild pCode   */
+/*                    instruction                                  */
+/*                                                                 */
+/*  pp[0] - str                                                    */
+/*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem0(void *pp)
+static void * cvt_altpat_mnem0(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-  int opcode;
-
-  pCodeInstruction *pci=NULL;
-
-  fprintf(stderr,"altpat_mnem0 %s\n",  p->pct[0].tok.s);
-
-  opcode = getpCode(p->pct[0].tok.s,0);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  pci = PCI(newpCode(opcode, NULL));
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-
-  return pci;
+	parsedPattern *p = pp;
+	int opcode;
+	
+	pCodeInstruction *pci=NULL;
+	
+	DFPRINTF((stderr,"altpat_mnem0 %s\n",  p->pct[0].tok.s));
+	
+	opcode = getpCode(p->pct[0].tok.s,0);
+	
+	if(opcode < 0) {
+		/* look for special command strings like _NOTBITSKIP_ */
+		
+		//fprintf(stderr, "Bad mnemonic\n");
+		
+		opcode  = getpCodePeepCommand(p->pct[0].tok.s);
+		//if(opcode > 0)
+		//  fprintf(stderr,"  but valid peep command: %s, key = %d\n",p->pct[0].tok.s,opcode);
+		return NULL;
+	}
+	
+	pci = PCI(newpCode(opcode, NULL));
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	
+	return pci;
 }
 
 /*-----------------------------------------------------------------*/
@@ -363,19 +385,22 @@ static void * cvt_altpat_mnem0(void *pp)
 /*  pp[0] - wild var                                               */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem0a(void *pp)
+static void * cvt_altpat_mnem0a(void *pp, pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-
-  fprintf(stderr,"altpat_mnem0a wild mnem # %d\n",  p[0].pct[1].tok.n);
-
-  /* Save the index of the maximum wildcard mnemonic */
-
-  if(p[0].pct[1].tok.n > sMaxWildVar)
-    sMaxWildMnem = p[0].pct[1].tok.n;
-
-  return newpCodeWild(p[0].pct[1].tok.n,NULL,NULL);
-
+	parsedPattern *p = pp;
+	
+	DFPRINTF((stderr,"altpat_mnem0a wild mnem # %d\n",  p[0].pct[1].tok.n));
+	
+	/* Save the index of the maximum wildcard mnemonic */
+	
+	//if(p[0].pct[1].tok.n > sMaxWildVar)
+	//  sMaxWildMnem = p[0].pct[1].tok.n;
+	
+	if(p[0].pct[1].tok.n > pcwb->nwildpCodes)
+		pcwb->nwildpCodes = p[0].pct[1].tok.n;
+	
+	return newpCodeWild(p[0].pct[1].tok.n,NULL,NULL);
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -386,36 +411,40 @@ static void * cvt_altpat_mnem0a(void *pp)
 /*  pp[1] - Operand                                                */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem1(void *pp)
+static void * cvt_altpat_mnem1(void *pp,pCodeWildBlock *pcwb)
 {
-
-  parsedPattern *p = pp;
-  int opcode;
-
-  pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
-
-  fprintf(stderr,"altpat_mnem1 %s var %s\n",  p->pct[0].tok.s,p[1].pct[0].tok.s);
-
-  opcode = getpCode(p->pct[0].tok.s,0);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  if(pic14Mnemonics[opcode]->bit_inst)
-    pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_BIT);
-  else
-    pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
-
-
-  pci = PCI(newpCode(opcode, pcosubtype));
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-
-  return pci;
+	
+	parsedPattern *p = pp;
+	int opcode;
+	
+	pCodeInstruction *pci=NULL;
+	pCodeOp *pcosubtype;
+	
+	DFPRINTF((stderr,"altpat_mnem1 %s var %s\n",  p->pct[0].tok.s,p[1].pct[0].tok.s));
+	
+	opcode = getpCode(p->pct[0].tok.s,0);
+	if(opcode < 0) {
+		//fprintf(stderr, "Bad mnemonic\n");
+		opcode  = getpCodePeepCommand(p->pct[0].tok.s);
+		//if(opcode > 0)
+		//fprintf(stderr,"  but valid peep command: %s, key = %d\n",p->pct[0].tok.s,opcode);
+		
+		return NULL;
+	}
+	
+	if(pic14Mnemonics[opcode]->isBitInst)
+		pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_BIT);
+	else
+		pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
+	
+	
+	pci = PCI(newpCode(opcode, pcosubtype));
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	
+	return pci;
 }
 
 /*-----------------------------------------------------------------*/
@@ -426,112 +455,143 @@ static void * cvt_altpat_mnem1(void *pp)
 /*  pp[1] - wild var                                               */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem1a(void *pp)
+static void * cvt_altpat_mnem1a(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-  int opcode;
-
-  pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
-
-  fprintf(stderr,"altpat_mnem1a %s var %d\n",  p->pct[0].tok.s,p[1].pct[1].tok.n);
-
-  opcode = getpCode(p->pct[0].tok.s,0);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  if(pic14Mnemonics[opcode]->bit_inst)
-    pcosubtype = newpCodeOpBit(NULL,-1);
-  else
-    pcosubtype = newpCodeOp(NULL,PO_GPR_REGISTER);
-
-
-  pci = PCI(newpCode(opcode,
-		     newpCodeOpWild(p[1].pct[1].tok.n, curPeep, pcosubtype)));
-
-  /* Save the index of the maximum wildcard variable */
-  if(p[1].pct[1].tok.n > sMaxWildVar)
-    sMaxWildVar = p[1].pct[1].tok.n;
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-
-  return pci;
+	parsedPattern *p = pp;
+	int opcode;
+	
+	pCodeInstruction *pci=NULL;
+	pCodeOp *pcosubtype;
+	
+	DFPRINTF((stderr,"altpat_mnem1a %s var %d\n",  p->pct[0].tok.s,p[1].pct[1].tok.n));
+	
+	opcode = getpCode(p->pct[0].tok.s,0);
+	if(opcode < 0) {
+		int cmd_id = getpCodePeepCommand(p->pct[0].tok.s);
+		pCode *pc=NULL;
+		
+		if(cmd_id<0) {
+			fprintf(stderr, "Bad mnemonic\n");
+			return NULL;
+		}
+		
+		if(p[0].pct[1].tok.n > pcwb->nwildpCodes)
+			pcwb->nwildpCodes = p[0].pct[1].tok.n;
+		
+		pc =  newpCodeWild(p[1].pct[1].tok.n,NULL,NULL);
+		
+		switch(cmd_id) {
+		case NOTBITSKIP:
+			PCW(pc)->mustNotBeBitSkipInst = 1;
+			break;
+		case BITSKIP:
+			PCW(pc)->mustBeBitSkipInst = 1;
+			break;
+		case INVERTBITSKIP:
+			PCW(pc)->invertBitSkipInst = 1;
+		}
+		return pc;
+	}
+	
+	if(pic14Mnemonics[opcode]->isBitInst)
+		pcosubtype = newpCodeOpBit(NULL,-1,0);
+	else
+		pcosubtype = newpCodeOp(NULL,PO_GPR_REGISTER);
+	
+	
+	pci = PCI(newpCode(opcode,
+		newpCodeOpWild(p[1].pct[1].tok.n, pcwb, pcosubtype)));
+	
+	/* Save the index of the maximum wildcard variable */
+	//if(p[1].pct[1].tok.n > sMaxWildVar)
+	//  sMaxWildVar = p[1].pct[1].tok.n;
+	
+	if(p[1].pct[1].tok.n > pcwb->nvars)
+		pcwb->nvars = p[1].pct[1].tok.n;
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	
+	return pci;
 }
 
 /*-----------------------------------------------------------------*/
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem1b(void *pp)
+static void * cvt_altpat_mnem1b(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-  int opcode;
-
-  pCodeInstruction *pci=NULL;
-
-  fprintf(stderr,"altpat_mnem1b %s var %d\n",  p->pct[0].tok.s,p[1].pct[0].tok.n);
-
-  opcode = getpCode(p->pct[0].tok.s,0);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  pci = PCI(newpCode(opcode, newpCodeOpLit(p[1].pct[0].tok.n) ));
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-
-  return pci;
+	parsedPattern *p = pp;
+	int opcode;
+	
+	pCodeInstruction *pci=NULL;
+	
+	DFPRINTF((stderr,"altpat_mnem1b %s var %d\n",  p->pct[0].tok.s,p[1].pct[0].tok.n));
+	
+	opcode = getpCode(p->pct[0].tok.s,0);
+	if(opcode < 0) {
+		fprintf(stderr, "Bad mnemonic\n");
+		return NULL;
+	}
+	
+	pci = PCI(newpCode(opcode, newpCodeOpLit(p[1].pct[0].tok.n) ));
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	
+	return pci;
 }
 
 /*-----------------------------------------------------------------*/
+/* cvt_altpat_mnem2                                                */
+/*                                                                 */
+/*  pp[0] - mnem                                                   */
+/*  pp[1] - var                                                    */
+/*  pp[2] - comma                                                  */
+/*  pp[3] - destination                                            */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem2(void *pp)
+static void * cvt_altpat_mnem2(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-  int opcode;
-  int dest;
-
-  pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
-
-  dest = cvt_extract_destination(&p[3]);
-
-  fprintf(stderr,"altpat_mnem2 %s var %s destination %s(%d)\n",
-	  p->pct[0].tok.s,
-	  p[1].pct[0].tok.s,
-	  p[3].pct[0].tok.s,
-	  dest);
-
-
-  opcode = getpCode(p->pct[0].tok.s,dest);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  if(pic14Mnemonics[opcode]->bit_inst) {
-    pcosubtype = cvt_extract_status(p[1].pct[0].tok.s, p[3].pct[0].tok.s);
-    if(pcosubtype == NULL) {
-      fprintf(stderr, "bad operand?\n");
-      return NULL;
-    }
-      
-  } else
-    pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
-
-
-  pci = PCI(newpCode(opcode,pcosubtype));
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-  return pci;
-
+	parsedPattern *p = pp;
+	int opcode;
+	int dest;
+	
+	pCodeInstruction *pci=NULL;
+	pCodeOp *pcosubtype;
+	
+	dest = cvt_extract_destination(&p[3]);
+	
+	DFPRINTF((stderr,"altpat_mnem2 %s var %s destination %s(%d)\n",
+		p->pct[0].tok.s,
+		p[1].pct[0].tok.s,
+		p[3].pct[0].tok.s,
+		dest));
+	
+	
+	opcode = getpCode(p->pct[0].tok.s,dest);
+	if(opcode < 0) {
+		fprintf(stderr, "Bad mnemonic\n");
+		return NULL;
+	}
+	
+	if(pic14Mnemonics[opcode]->isBitInst) {
+		pcosubtype = cvt_extract_status(p[1].pct[0].tok.s, p[3].pct[0].tok.s);
+		if(pcosubtype == NULL) {
+			fprintf(stderr, "bad operand?\n");
+			return NULL;
+		}
+		
+	} else
+		pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
+	
+	
+	pci = PCI(newpCode(opcode,pcosubtype));
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	return pci;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -545,48 +605,115 @@ static void * cvt_altpat_mnem2(void *pp)
 /*  pp[3] - destination                                            */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-static void * cvt_altpat_mnem2a(void *pp)
+static void * cvt_altpat_mnem2a(void *pp,pCodeWildBlock *pcwb)
 {
-  parsedPattern *p = pp;
-  int opcode;
-  int dest;
+	parsedPattern *p = pp;
+	int opcode;
+	int dest;
+	
+	pCodeInstruction *pci=NULL;
+	pCodeOp *pcosubtype;
+	
+	if(!pcwb) {
+		fprintf(stderr,"ERROR %s:%d - can't assemble line\n",__FILE__,__LINE__);
+		return NULL;
+	}
+	
+	dest = cvt_extract_destination(&p[3]);
+	
+	DFPRINTF((stderr,"altpat_mnem2a %s var %d destination %s(%d)\n",
+		p->pct[0].tok.s,
+		p[1].pct[1].tok.n,
+		p[3].pct[0].tok.s,
+		dest));
+	
+	
+	opcode = getpCode(p->pct[0].tok.s,dest);
+	if(opcode < 0) {
+		fprintf(stderr, "Bad mnemonic\n");
+		return NULL;
+	}
+	
+	if(pic14Mnemonics[opcode]->isBitInst)
+		pcosubtype = newpCodeOp(NULL,PO_BIT);
+	else
+		pcosubtype = newpCodeOp(NULL,PO_GPR_REGISTER);
+	
+	
+	pci = PCI(newpCode(opcode,
+		newpCodeOpWild(p[1].pct[1].tok.n, pcwb, pcosubtype)));
+	
+	/* Save the index of the maximum wildcard variable */
+	//if(p[1].pct[1].tok.n > sMaxWildVar)
+	//  sMaxWildVar = p[1].pct[1].tok.n;
+	
+	if(p[1].pct[1].tok.n > pcwb->nvars)
+		pcwb->nvars = p[1].pct[1].tok.n;
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	return pci;
+	
+}
 
-  pCodeInstruction *pci=NULL;
-  pCodeOp *pcosubtype;
 
-  dest = cvt_extract_destination(&p[3]);
-
-  fprintf(stderr,"altpat_mnem2a %s var %d destination %s(%d)\n",
-	  p->pct[0].tok.s,
-	  p[1].pct[1].tok.n,
-	  p[3].pct[0].tok.s,
-	  dest);
-
-
-  opcode = getpCode(p->pct[0].tok.s,dest);
-  if(opcode < 0) {
-    fprintf(stderr, "Bad mnemonic\n");
-    return NULL;
-  }
-
-  if(pic14Mnemonics[opcode]->bit_inst)
-    pcosubtype = newpCodeOp(NULL,PO_BIT);
-  else
-    pcosubtype = newpCodeOp(NULL,PO_GPR_REGISTER);
-
-
-  pci = PCI(newpCode(opcode,
-		     newpCodeOpWild(p[1].pct[1].tok.n, curPeep, pcosubtype)));
-
-  /* Save the index of the maximum wildcard variable */
-  if(p[1].pct[1].tok.n > sMaxWildVar)
-    sMaxWildVar = p[1].pct[1].tok.n;
-
-  if(!pci)
-    fprintf(stderr,"couldn't find mnemonic\n");
-
-  return pci;
-
+/*-----------------------------------------------------------------*/
+/* cvt_altpat_mem3 -  convert assembly line type to a pCode        */
+/*                    This rule is for bsf/bcf type instructions   */
+/*                                                                 */
+/*                                                                 */
+/*  pp[0] - mnem                                                   */
+/*  pp[1] - register                                               */
+/*  pp[2] - comma                                                  */
+/*  pp[3] - number                                                 */
+/*                                                                 */
+/*-----------------------------------------------------------------*/
+static void * cvt_altpat_mnem3(void *pp,pCodeWildBlock *pcwb)
+{
+	parsedPattern *p = pp;
+	int opcode;
+	int dest;  // or could be bit position in the register
+	
+	pCodeInstruction *pci=NULL;
+	pCodeOp *pcosubtype=NULL;
+	
+	dest = cvt_extract_destination(&p[3]);
+	
+	DFPRINTF((stderr,"altpat_mnem3 %s var %s bit (%d)\n",
+		p->pct[0].tok.s,
+		p[1].pct[0].tok.s,
+		p[3].pct[0].tok.n));
+	
+	
+	opcode = getpCode(p->pct[0].tok.s,0);
+	if(opcode < 0) {
+		fprintf(stderr, "Bad mnemonic\n");
+		return NULL;
+	}
+	
+	
+	if(pic14Mnemonics[opcode]->isBitInst) {
+		//pcosubtype = cvt_extract_status(p[1].pct[0].tok.s, p[3].pct[0].tok.s);
+		
+		//if(pcosubtype == NULL) {
+		pcosubtype = newpCodeOpBit(p[1].pct[0].tok.s,p[3].pct[0].tok.n,0);
+		//}
+	} else
+		pcosubtype = newpCodeOp(p[1].pct[0].tok.s,PO_GPR_REGISTER);
+	
+	if(pcosubtype == NULL) {
+		fprintf(stderr, "Bad operand\n");
+		return NULL;
+	}
+	
+	pci = PCI(newpCode(opcode, pcosubtype));
+	
+	if(!pci)
+		fprintf(stderr,"couldn't find mnemonic\n");
+	
+	return pci;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -608,77 +735,89 @@ static void * cvt_altpat_mnem2a(void *pp)
 
 static void tokenizeLineNode(char *ln)
 {
-
-  tokIdx = 0;               // Starting off at the beginning
-  tokArr[0].tt = PCT_NULL;  // and assume invalid character for first token.
-
-  if(!ln || !*ln)
-    return;
-
-  while(*ln) {
-
-    if(isspace(*ln)) {
-      // add a SPACE token and eat the extra spaces.
-      tokArr[tokIdx++].tt = PCT_SPACE;
-      while (isspace (*ln))
-	ln++;
-      continue;
-    }
-
-    if(isdigit(*ln)) {
-
-      tokArr[tokIdx].tt = PCT_NUMBER;
-      tokArr[tokIdx++].tok.n = strtol(ln, &ln, 0);
-
-      continue;
-
-    }
-
-    switch(*ln) {
-    case '%':
-      tokArr[tokIdx++].tt = PCT_PERCENT;
-      break;
-    case ':':
-      tokArr[tokIdx++].tt = PCT_COLON;
-      break;
-    case ';':
-      tokArr[tokIdx].tok.s = Safe_strdup(ln);
-      tokArr[tokIdx++].tt = PCT_COMMENT;
-      tokArr[tokIdx].tt = PCT_NULL;
-      return;
-    case ',':
-      tokArr[tokIdx++].tt = PCT_COMMA;
-      break;
-
-
-    default:
-      if(isalpha(*ln)) {
-	char buffer[50];
-	int i=0;
-
-	while( (isalpha(*ln)  ||  isdigit(*ln)) && i<49)
-	  buffer[i++] = *ln++;
-
-	ln--;
-	buffer[i] = 0;
-
-	tokArr[tokIdx].tok.s = Safe_strdup(buffer);
-	tokArr[tokIdx++].tt = PCT_STRING;
-
-      }
-    }
-
-    /* Advance to next character in input string .
-     * Note, if none of the tests passed above, then 
-     * we effectively ignore the `bad' character.
-     * Since the line has already been parsed by SDCCpeeph,
-     * chance are that there are no invalid characters... */
-
-    ln++;
-
-  }
-
-  tokArr[tokIdx].tt = 0;
+	char *lnstart=ln;
+	tokIdx = 0;               // Starting off at the beginning
+	tokArr[0].tt = PCT_NULL;  // and assume invalid character for first token.
+	
+	if(!ln || !*ln)
+		return;
+	
+	
+	while(*ln) {
+		
+		if(isspace(*ln)) {
+			// add a SPACE token and eat the extra spaces.
+			tokArr[tokIdx++].tt = PCT_SPACE;
+			while (isspace (*ln))
+				ln++;
+			continue;
+		}
+		
+		if(isdigit(*ln)) {
+			
+			tokArr[tokIdx].tt = PCT_NUMBER;
+			tokArr[tokIdx++].tok.n = strtol(ln, &ln, 0);
+			
+			continue;
+			
+		}
+		
+		switch(*ln) {
+		case '%':
+			tokArr[tokIdx++].tt = PCT_PERCENT;
+			break;
+		case '<':
+			tokArr[tokIdx++].tt = PCT_LESSTHAN;
+			break;
+		case '>':
+			tokArr[tokIdx++].tt = PCT_GREATERTHAN;
+			break;
+		case ':':
+			tokArr[tokIdx++].tt = PCT_COLON;
+			break;
+		case ';':
+			tokArr[tokIdx].tok.s = Safe_strdup(ln);
+			tokArr[tokIdx++].tt = PCT_COMMENT;
+			tokArr[tokIdx].tt = PCT_NULL;
+			return;
+		case ',':
+			tokArr[tokIdx++].tt = PCT_COMMA;
+			break;
+			
+			
+		default:
+			if(isalpha(*ln) || (*ln == '_') ) {
+				char buffer[50];
+				int i=0;
+				
+				while( (isalpha(*ln)  ||  isdigit(*ln) || (*ln == '_')) && i<49)
+					buffer[i++] = *ln++;
+				
+				ln--;
+				buffer[i] = 0;
+				
+				tokArr[tokIdx].tok.s = Safe_strdup(buffer);
+				tokArr[tokIdx++].tt = PCT_STRING;
+				
+			} else {
+				fprintf(stderr, "Error while parsing peep rules (check peeph.def)\n");
+				fprintf(stderr, "Line: %s\n",lnstart);
+				fprintf(stderr, "Token: '%c'\n",*ln);
+				exit(1);
+			}
+		}
+		
+		/* Advance to next character in input string .
+		* Note, if none of the tests passed above, then 
+		* we effectively ignore the `bad' character.
+		* Since the line has already been parsed by SDCCpeeph,
+		* chance are that there are no invalid characters... */
+		
+		ln++;
+		
+	}
+	
+	tokArr[tokIdx].tt = 0;
 }
 
 
@@ -689,38 +828,43 @@ static void tokenizeLineNode(char *ln)
 
 void dump1Token(pCodeTokens tt)
 {
-
-  switch(tt) {
-  case PCT_SPACE:
-    fprintf(stderr, " space ");
-    break;
-  case PCT_PERCENT:
-    fprintf(stderr, " pct ");
-    fputc('%', stderr);
-    break;
-  case PCT_COLON:
-    fprintf(stderr, " col ");
-    fputc(':',stderr);
-    break;
-  case PCT_COMMA:
-    fprintf(stderr, " comma , ");
-    break;
-  case PCT_COMMENT:
-    fprintf(stderr, " comment ");
-    //fprintf(stderr,"%s",tokArr[i].tok.s);
-    break;
-  case PCT_STRING:
-    fprintf(stderr, " str ");
-    //fprintf(stderr,"%s",tokArr[i].tok.s);
-    break;
-  case PCT_NUMBER:
-    fprintf(stderr, " num ");
-    //fprintf(stderr,"%d",tokArr[i].tok.n);
-    break;
-  case PCT_NULL:
-    fprintf(stderr, " null ");
-
-  }
+	
+	switch(tt) {
+	case PCT_SPACE:
+		fprintf(stderr, " space ");
+		break;
+	case PCT_PERCENT:
+		fprintf(stderr, " pct %%");
+		break;
+	case PCT_LESSTHAN:
+		fprintf(stderr, " pct <");
+		break;
+	case PCT_GREATERTHAN:
+		fprintf(stderr, " pct >");
+		break;
+	case PCT_COLON:
+		fprintf(stderr, " col :");
+		break;
+	case PCT_COMMA:
+		fprintf(stderr, " comma , ");
+		break;
+	case PCT_COMMENT:
+		fprintf(stderr, " comment ");
+		//fprintf(stderr,"%s",tokArr[i].tok.s);
+		break;
+	case PCT_STRING:
+		fprintf(stderr, " str ");
+		//fprintf(stderr,"%s",tokArr[i].tok.s);
+		break;
+	case PCT_NUMBER:
+		fprintf(stderr, " num ");
+		//fprintf(stderr,"%d",tokArr[i].tok.n);
+		break;
+	case PCT_NULL:
+		fprintf(stderr, " null ");
+		
+	}
+	
 }
 
 
@@ -729,32 +873,32 @@ void dump1Token(pCodeTokens tt)
 
 int pcComparePattern(pCodeToken *pct, char *pat, int max_tokens)
 {
-  int i=0;
-
-  if(!pct || !pat || !*pat)
-    return 0;
-
-  //fprintf(stderr,"comparing against:\n");
-
-  while(i < max_tokens) {
-
-    if(*pat == 0){
-      //fprintf(stderr,"matched\n");
-      return (i+1);
-    }
-
-    //dump1Token(*pat); fprintf(stderr,"\n");
-
-    if(pct->tt != *pat) 
-      return 0;
-
-
-    pct++;
-    pat++;
-  }
-
-  return 0;
-
+	int i=0;
+	
+	if(!pct || !pat || !*pat)
+		return 0;
+	
+	//DFPRINTF((stderr,"comparing against:\n"));
+	
+	while(i < max_tokens) {
+		
+		if(*pat == 0){
+			//DFPRINTF((stderr,"matched\n"));
+			return (i+1);
+		}
+		
+		//dump1Token(*pat); DFPRINTF((stderr,"\n"));
+		
+		if(pct->tt != *pat) 
+			return 0;
+		
+		
+		pct++;
+		pat++;
+	}
+	
+	return 0;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -762,48 +906,48 @@ int pcComparePattern(pCodeToken *pct, char *pat, int max_tokens)
 
 int altComparePattern( char *pct, parsedPattern *pat, int max_tokens)
 {
-  int i=0;
-  
-  if(!pct || !pat || !*pct)
-    return 0;
-
-
-  while(i < max_tokens) {
-
-    if(*pct == 0) {
-      //fprintf(stderr,"matched\n");
-      return i;
-    }
-
-    //dump1Token(*pat); fprintf(stderr,"\n");
-
-    if( !pat || !pat->pcp )
-      return 0;
-
-    if (pat->pcp->pt != *pct)  
-      return 0;
-
-    //fprintf(stderr," pct=%d\n",*pct);
-    pct++;
-    pat++;
-    i++;
-  }
-
-  return 0;
-
+	int i=0;
+	
+	if(!pct || !pat || !*pct)
+		return 0;
+	
+	
+	while(i < max_tokens) {
+		
+		if(*pct == 0) {
+			//DFPRINTF((stderr,"matched\n"));
+			return i;
+		}
+		
+		//dump1Token(*pat); DFPRINTF((stderr,"\n"));
+		
+		if( !pat || !pat->pcp )
+			return 0;
+		
+		if (pat->pcp->pt != *pct)  
+			return 0;
+		
+		//DFPRINTF((stderr," pct=%d\n",*pct));
+		pct++;
+		pat++;
+		i++;
+	}
+	
+	return 0;
+	
 }
 /*-----------------------------------------------------------------*/
 /*-----------------------------------------------------------------*/
 
 int advTokIdx(int *v, int amt)
 {
-
-  if((unsigned) (*v + amt) > tokIdx)
-    return 1;
-
-  *v += amt;
-  return 0;
-
+	
+	if((unsigned) (*v + amt) > tokIdx)
+		return 1;
+	
+	*v += amt;
+	return 0;
+	
 }
 
 /*-----------------------------------------------------------------*/
@@ -824,248 +968,344 @@ int advTokIdx(int *v, int amt)
 /* pcode.                                                          */
 /*-----------------------------------------------------------------*/
 
-void parseTokens(void)
+int parseTokens(pCodeWildBlock *pcwb, pCode **pcret)
 {
-  unsigned i;
-  pCode *pc;
-
-  if(!tokIdx)
-    return;
-
-  for(i=0; i<=tokIdx; i++)
-    dump1Token(tokArr[i].tt);
-
-  fputc('\n',stderr);
-
-  {
-    int lparsedPatIdx=0;
-    int lpcpIdx;
-    int ltokIdx =0;
-    int matching = 0;
-    int j=0;
-    int k=0;
-
-    char * cPmnem  = NULL;     // Pointer to non-wild mnemonic (if any)
-    char * cP1stop = NULL;
-    char * cP2ndop = NULL;
-
-    //pCodeOp *pcl   = NULL;       // Storage for a label
-    //pCodeOp *pco1  = NULL;       // 1st operand
-    //pCodeOp *pco2  = NULL;       // 2nd operand
-    //pCode   *pc    = NULL;       // Mnemonic
-
-    typedef enum {
-      PS_START,
-      PS_HAVE_LABEL,
-      PS_HAVE_MNEM,
-      PS_HAVE_1OPERAND,
-      PS_HAVE_COMMA,
-      PS_HAVE_2OPERANDS
-    } ParseStates;
-
-    ParseStates state = PS_START;
-
-    do {
-
-      lpcpIdx=0;
-      matching = 0;
-
-      if(  ((tokArr[ltokIdx].tt == PCT_SPACE) )
-	   && (advTokIdx(&ltokIdx, 1)) ) // eat space
-	break;
-
-      do {
-	j = pcComparePattern(&tokArr[ltokIdx], pcpArr[lpcpIdx].tokens, tokIdx +1);
-	if( j ) {
-
-	  switch(pcpArr[lpcpIdx].pt) {
-	  case  PCP_LABEL:
-	    if(state == PS_START){
-	      fprintf(stderr,"  label\n");
-	      state = PS_HAVE_LABEL;
-	    } else 
-	      fprintf(stderr,"  bad state (%d) for label\n",state);
-	    break;
-
-	  case  PCP_STR:
-	    fprintf(stderr,"  %s is",tokArr[ltokIdx].tok.s);
-	    switch(state) {
-	    case PS_START:
-	    case PS_HAVE_LABEL:
-	      fprintf(stderr,"  mnem\n");
-	      cPmnem = tokArr[ltokIdx].tok.s;
-	      state = PS_HAVE_MNEM;
-	      break;
-	    case PS_HAVE_MNEM:
-	      fprintf(stderr,"  1st operand\n");
-	      cP1stop = tokArr[ltokIdx].tok.s;
-	      //pco1 = newpCodeOp(NULL,PO_GPR_REGISTER);
-	      state = PS_HAVE_1OPERAND;
-	      break;
-	    case PS_HAVE_1OPERAND:
-	      fprintf(stderr,"  error expecting comma\n");
-	      break;
-	    case PS_HAVE_COMMA:
-	      fprintf(stderr,"  2 operands\n");
-	      cP2ndop = tokArr[ltokIdx].tok.s;
-	      break;
-	    case PS_HAVE_2OPERANDS:
-	      break;
-	    }
-	    break;
-
-	  case  PCP_WILDVAR:
-	    switch(state) {
-	    case PS_START:
-	    case PS_HAVE_LABEL:
-	      fprintf(stderr,"  wild mnem\n");
-	      state = PS_HAVE_MNEM;
-	      break;
-	    case PS_HAVE_MNEM:
-	      fprintf(stderr,"  1st operand is wild\n");
-	      state = PS_HAVE_1OPERAND;
-	      break;
-	    case PS_HAVE_1OPERAND:
-	      fprintf(stderr,"  error expecting comma\n");
-	      break;
-	    case PS_HAVE_COMMA:
-	      fprintf(stderr,"  2nd operand is wild\n");
-	      break;
-	    case PS_HAVE_2OPERANDS:
-	      break;
-	    }
-	    break;
-
-	  case  PCP_NUMBER:
-	    switch(state) {
-	    case PS_START:
-	    case PS_HAVE_LABEL:
-	      fprintf(stderr,"  ERROR number\n");
-	      break;
-	    case PS_HAVE_MNEM:
-	      fprintf(stderr,"  1st operand is a number\n");
-	      state = PS_HAVE_1OPERAND;
-	      break;
-	    case PS_HAVE_1OPERAND:
-	      fprintf(stderr,"  error expecting comma\n");
-	      break;
-	    case PS_HAVE_COMMA:
-	      fprintf(stderr,"  2nd operand is a number\n");
-	      break;
-	    case PS_HAVE_2OPERANDS:
-	      break;
-	    }
-	    break;
-
-	  case  PCP_WILDSTR:
-	    break;
-	  case  PCP_COMMA:
-	    if(state == PS_HAVE_1OPERAND){
-	      fprintf(stderr,"  got a comma\n");
-	      state = PS_HAVE_COMMA;
-	    } else
-	      fprintf(stderr,"  unexpected comma\n");
-	  }
-
-	  matching = 1;
-	  parsedPatArr[lparsedPatIdx].pcp = &pcpArr[lpcpIdx];
-	  parsedPatArr[lparsedPatIdx].pct = &tokArr[ltokIdx];
-	  lparsedPatIdx++;
-
-	  //dump1Token(tokArr[ltokIdx].tt);
-
-	  if(advTokIdx(&ltokIdx, strlen(pcpArr[lpcpIdx].tokens) ) ) {
-	    fprintf(stderr," reached end \n");
-	    matching = 0;
-	    //return;
-	  }
+	pCode *pc;
+	int error = 0;
+	
+	if(!tokIdx)
+		return error;
+	
+#ifdef PCODE_DEBUG
+	{
+		unsigned i;
+		for(i=0; i<=tokIdx; i++)
+			dump1Token(tokArr[i].tt);
+		fputc('\n',stderr);
 	}
-
-
-      } while ((++lpcpIdx < PCPATTERNS) && !matching);
-
-    } while (matching);
-
-    parsedPatArr[lparsedPatIdx].pcp = NULL;
-    parsedPatArr[lparsedPatIdx].pct = NULL;
-
-    j=k=0;
-    do {
-      int c;
-
-      if( (c=altComparePattern( altArr[k].tokens, &parsedPatArr[j],10) ) ) {
-
-	if( altArr[k].f) {
-	  pc = altArr[k].f(&parsedPatArr[j]);
-	  if(pc && pc->print)
-	    pc->print(stderr,pc);
-	  //if(pc && pc->destruct) pc->destruct(pc); dumps core?
-	  if(curBlock && pc)
-	    addpCode2pBlock(curBlock, pc);
+#endif
+	
+	{
+		int lparsedPatIdx=0;
+		int lpcpIdx;
+		int ltokIdx =0;
+		int matching = 0;
+		int j=0;
+		int k=0;
+		
+		char * cPmnem  = NULL;     // Pointer to non-wild mnemonic (if any)
+		char * cP1stop = NULL;
+		char * cP2ndop = NULL;
+		
+		//pCodeOp *pcl   = NULL;       // Storage for a label
+		//pCodeOp *pco1  = NULL;       // 1st operand
+		//pCodeOp *pco2  = NULL;       // 2nd operand
+		//pCode   *pc    = NULL;       // Mnemonic
+		
+		typedef enum {
+			PS_START,
+				PS_HAVE_LABEL,
+				PS_HAVE_MNEM,
+				PS_HAVE_1OPERAND,
+				PS_HAVE_COMMA,
+				PS_HAVE_2OPERANDS
+		} ParseStates;
+		
+		ParseStates state = PS_START;
+		
+		do {
+			
+			lpcpIdx=0;
+			matching = 0;
+			
+			if(  ((tokArr[ltokIdx].tt == PCT_SPACE) )
+				&& (advTokIdx(&ltokIdx, 1)) ) // eat space
+				break;
+			
+			do {
+				j = pcComparePattern(&tokArr[ltokIdx], pcpArr[lpcpIdx].tokens, tokIdx +1);
+				if( j ) {
+					
+					switch(pcpArr[lpcpIdx].pt) {
+					case  PCP_LABEL:
+						if(state == PS_START){
+							DFPRINTF((stderr,"  label\n"));
+							state = PS_HAVE_LABEL;
+						} else 
+							DFPRINTF((stderr,"  bad state (%d) for label\n",state));
+						break;
+						
+					case  PCP_STR:
+						DFPRINTF((stderr,"  %s is",tokArr[ltokIdx].tok.s));
+						switch(state) {
+						case PS_START:
+						case PS_HAVE_LABEL:
+							DFPRINTF((stderr,"  mnem\n"));
+							cPmnem = tokArr[ltokIdx].tok.s;
+							state = PS_HAVE_MNEM;
+							break;
+						case PS_HAVE_MNEM:
+							DFPRINTF((stderr,"  1st operand\n"));
+							cP1stop = tokArr[ltokIdx].tok.s;
+							//pco1 = newpCodeOp(NULL,PO_GPR_REGISTER);
+							state = PS_HAVE_1OPERAND;
+							break;
+						case PS_HAVE_1OPERAND:
+							DFPRINTF((stderr,"  error expecting comma\n"));
+							break;
+						case PS_HAVE_COMMA:
+							DFPRINTF((stderr,"  2 operands\n"));
+							cP2ndop = tokArr[ltokIdx].tok.s;
+							break;
+						case PS_HAVE_2OPERANDS:
+							break;
+						}
+						break;
+						
+						case  PCP_WILDVAR:
+							switch(state) {
+							case PS_START:
+							case PS_HAVE_LABEL:
+								DFPRINTF((stderr,"  wild mnem\n"));
+								state = PS_HAVE_MNEM;
+								break;
+							case PS_HAVE_MNEM:
+								DFPRINTF((stderr,"  1st operand is wild\n"));
+								state = PS_HAVE_1OPERAND;
+								break;
+							case PS_HAVE_1OPERAND:
+								DFPRINTF((stderr,"  error expecting comma\n"));
+								break;
+							case PS_HAVE_COMMA:
+								DFPRINTF((stderr,"  2nd operand is wild\n"));
+								break;
+							case PS_HAVE_2OPERANDS:
+								break;
+							}
+							break;
+							
+							case  PCP_NUMBER:
+								switch(state) {
+								case PS_START:
+								case PS_HAVE_LABEL:
+									fprintf(stderr,"  ERROR number\n");
+									break;
+								case PS_HAVE_MNEM:
+									DFPRINTF((stderr,"  1st operand is a number\n"));
+									state = PS_HAVE_1OPERAND;
+									break;
+								case PS_HAVE_1OPERAND:
+									fprintf(stderr,"  error expecting comma\n");
+									break;
+								case PS_HAVE_COMMA:
+									DFPRINTF((stderr,"  2nd operand is a number\n"));
+									break;
+								case PS_HAVE_2OPERANDS:
+									break;
+								}
+								break;
+								
+								case  PCP_WILDSTR:
+									break;
+								case  PCP_COMMA:
+									if(state == PS_HAVE_1OPERAND){
+										DFPRINTF((stderr,"  got a comma\n"));
+										state = PS_HAVE_COMMA;
+									} else
+										fprintf(stderr,"  unexpected comma\n");
+									break;
+									
+					}
+					
+					matching = 1;
+					parsedPatArr[lparsedPatIdx].pcp = &pcpArr[lpcpIdx];
+					parsedPatArr[lparsedPatIdx].pct = &tokArr[ltokIdx];
+					lparsedPatIdx++;
+					
+					//dump1Token(tokArr[ltokIdx].tt);
+					
+					if(advTokIdx(&ltokIdx, strlen(pcpArr[lpcpIdx].tokens) ) ) {
+						DFPRINTF((stderr," reached end \n"));
+						matching = 0;
+						//return;
+					}
 	}
-	j += c;
-      }
-      k++;
-    }
-    while(j<=lparsedPatIdx && k<ALTPATTERNS);
-
-/*
-    fprintf(stderr,"\nConverting parsed line to pCode:\n\n");
-
-    j = 0;
-    do {
-      if(parsedPatArr[j].pcp && parsedPatArr[j].pcp->f )
-	parsedPatArr[j].pcp->f(&parsedPatArr[j]);
-      fprintf(stderr,"  %d",parsedPatArr[j].pcp->pt);
-      j++;
-    }
-    while(j<lparsedPatIdx);
-*/
-    fprintf(stderr,"\n");
-
+	
+	
+	  } while ((++lpcpIdx < PCPATTERNS) && !matching);
+	  
+	} while (matching);
+	
+	parsedPatArr[lparsedPatIdx].pcp = NULL;
+	parsedPatArr[lparsedPatIdx].pct = NULL;
+	
+	j=k=0;
+	do {
+		int c;
+		
+		if( (c=altComparePattern( altArr[k].tokens, &parsedPatArr[j],10) ) ) {
+			
+			if( altArr[k].f) {
+				pc = altArr[k].f(&parsedPatArr[j],pcwb);
+				//if(pc && pc->print)
+				//  pc->print(stderr,pc);
+				//if(pc && pc->destruct) pc->destruct(pc); dumps core?
+				
+				//if(curBlock && pc)
+				//addpCode2pBlock(curBlock, pc);
+				if(pc) {
+					if (pcret) {
+						*pcret = pc;
+						return 0;       // Only accept one line for now.
+					} else
+						addpCode2pBlock(pcwb->pb, pc);
+				} else
+					error++;
+			}
+			j += c;
+		}
+		k++;
+	}
+	while(j<=lparsedPatIdx && k<ALTPATTERNS);
+	
+	/*
+	DFPRINTF((stderr,"\nConverting parsed line to pCode:\n\n"));
+	
+	  j = 0;
+	  do {
+	  if(parsedPatArr[j].pcp && parsedPatArr[j].pcp->f )
+	  parsedPatArr[j].pcp->f(&parsedPatArr[j]);
+	  DFPRINTF((stderr,"  %d",parsedPatArr[j].pcp->pt));
+	  j++;
+	  }
+	  while(j<lparsedPatIdx);
+	*/
+	DFPRINTF((stderr,"\n"));
+	
   }
 
-
+  return error;
 }
 
 /*-----------------------------------------------------------------*/
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-void  peepRuleBlock2pCodeBlock(  lineNode *ln)
+void  peepRuleBlock2pCodeBlock(  lineNode *ln, pCodeWildBlock *pcwb)
 {
+	
+	if(!ln)
+		return;
+	
+	for( ; ln; ln = ln->next) {
+		
+		//DFPRINTF((stderr,"%s\n",ln->line));
+		
+		tokenizeLineNode(ln->line);
+		
+		if(parseTokens(pcwb,NULL)) {
+			int i;
+			fprintf(stderr,"ERROR assembling line:\n%s\n",ln->line);
+			fprintf(stderr,"Tokens:\n");
+			for(i=0; i<5; i++)
+				dump1Token(tokArr[i].tt);
+			fputc('\n',stderr);
+			exit (1);
+		}
+	}
+}
 
-  if(!ln)
-    return;
+/*-----------------------------------------------------------------*/
+/*                                                                 */
+/*-----------------------------------------------------------------*/
+pCode *AssembleLine(char *line)
+{
+	pCode *pc=NULL;
+	
+	if(!line || !*line) {
+		fprintf(stderr,"WARNING returning NULL in AssembleLine\n");
+		return NULL;
+	}
+	
+	tokenizeLineNode(line);
 
-  for( ; ln; ln = ln->next) {
-
-    fprintf(stderr,"%s\n",ln->line);
-
-    tokenizeLineNode(ln->line);
-    parseTokens();
-
-  }
+	if(parseTokens(NULL,&pc))
+		fprintf(stderr, "WARNING: unable to assemble line:\n%s\n",line);
+	
+	return pc;
+	
 }
 
 /*-----------------------------------------------------------------*/
 /* peepRuleCondition                                               */
 /*-----------------------------------------------------------------*/
-static void   peepRuleCondition(char *cond)
+static void   peepRuleCondition(char *cond, pCodePeep *pcp)
 {
-  if(!cond)
-    return;
-
-  fprintf(stderr,"\nCondition:  %s\n",cond);
-
-  /* brute force compares for now */
-
-  if(STRCASECMP(cond, "NZ") == 0) {
-    fprintf(stderr,"found NZ\n");
-    curPeep->postFalseCond = PCC_Z;
-
-  }
-
+	if(!cond || !pcp)
+		return;
+	
+	//DFPRINTF((stderr,"\nCondition:  %s\n",cond));
+	/* brute force compares for now */
+	
+	if(STRCASECMP(cond, "NZ") == 0) {
+		//DFPRINTF((stderr,"found NZ\n"));
+		pcp->postFalseCond = PCC_Z;
+		
+	}
+	
 }
+
+
+void initpCodeWildBlock(pCodeWildBlock *pcwb)
+{
+	
+	//  pcwb = Safe_calloc(1,sizeof(pCodeWildBlock));
+	
+	if(!pcwb)
+		return;
+	
+	pcwb->vars = NULL; 
+	pcwb->wildpCodes = NULL;
+	pcwb->wildpCodeOps = NULL;
+	
+	pcwb->nvars = 0; 
+	pcwb->nwildpCodes = 0;
+	pcwb->nops = 0;
+	
+}
+
+void postinit_pCodeWildBlock(pCodeWildBlock *pcwb)
+{
+	
+	if(!pcwb)
+		return;
+	
+	pcwb->nvars+=2;
+	pcwb->nops = pcwb->nvars;
+	
+	pcwb->vars = Safe_calloc(pcwb->nvars, sizeof(char *));
+	pcwb->wildpCodeOps = Safe_calloc(pcwb->nvars, sizeof(pCodeOp *));
+	
+	pcwb->nwildpCodes+=2;
+	pcwb->wildpCodes = Safe_calloc(pcwb->nwildpCodes, sizeof(pCode *));
+	
+}
+
+void initpCodePeep(pCodePeep *pcp)
+{
+	
+	//  pcwb = Safe_calloc(1,sizeof(pCodeWildBlock));
+	
+	if(!pcp)
+		return;
+	
+	initpCodeWildBlock(&pcp->target);
+	pcp->target.pb = newpCodeChain(NULL, 'W', NULL);
+	
+	initpCodeWildBlock(&pcp->replace);
+	pcp->replace.pb = newpCodeChain(NULL, 'W', NULL);
+	
+}
+
 /*-----------------------------------------------------------------*/
 /* peepRules2pCode - parse the "parsed" peep hole rules to generate*/
 /*                   pCode.                                        */
@@ -1077,93 +1317,99 @@ static void   peepRuleCondition(char *cond)
 /* taking raw text to produce machine code, it produces pCode.     */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
+extern void pic14initpCodePeepCommands(void);
 
 void  peepRules2pCode(peepRule *rules)
 {
-  peepRule *pr;
-
-  pCodePeepSnippets *pcps;
-
-  /* The rules are in a linked-list. Each rule has two portions */
-  /* There's the `target' and there's the `replace'. The target */
-  /* is compared against the SDCC generated code and if it      */
-  /* matches, it gets replaced by the `replace' block of code.  */
-  /*                                                            */
-  /* Here we loop through each rule and convert the target's and*/
-  /* replace's into pCode target and replace blocks             */
-
-  for (pr = rules; pr; pr = pr->next) {
-
-    fprintf(stderr,"\nRule:\n\n");
-
-    pcps = Safe_calloc(1,sizeof(pCodePeepSnippets));
-    curPeep = pcps->peep  = Safe_calloc(1,sizeof(pCodePeep));
-
-    curPeep->vars = NULL; 
-    curPeep->wildpCodes = NULL; curPeep->wildpCodeOps = NULL;
-    curPeep->postFalseCond = PCC_NONE;
-    curPeep->postTrueCond  = PCC_NONE;
-
-    peepSnippets = DLL_append((_DLL*)peepSnippets,(_DLL*)pcps);
-
-    curPeep->target = curBlock = newpCodeChain(NULL, 'W', NULL);
-    sMaxWildVar  = 0;
-    sMaxWildMnem = 0;
-
-    /* Convert the target block */
-    peepRuleBlock2pCodeBlock(pr->match);
-
-    fprintf(stderr,"finished target, here it is in pcode form:\n");
-    printpBlock(stderr, curBlock);
-
-    fprintf(stderr,"target with labels merged:\n");
-    pBlockMergeLabels(curBlock);
-    printpBlock(stderr, curBlock);
-
-    fprintf(stderr,"\nReplaced by:\n");
-
-
-    curPeep->replace = curBlock = newpCodeChain(NULL, 'W', NULL);
-
-    /* Convert the replace block */
-    peepRuleBlock2pCodeBlock(pr->replace);
-
-    fprintf(stderr,"finished replace block, here it is in pcode form:\n");
-    printpBlock(stderr, curBlock);
-
-    fprintf(stderr,"replace with labels merged:\n");
-    pBlockMergeLabels(curBlock);
-    printpBlock(stderr, curBlock);
-
-    peepRuleCondition(pr->cond);
-
-    /* The rule has been converted to pCode. Now allocate
-     * space for the wildcards */
-
-     ++sMaxWildVar;
-    curPeep->nvars = sMaxWildVar;
-    curPeep->vars = Safe_calloc(sMaxWildVar, sizeof(char *));
-
-    curPeep->nops = sMaxWildVar;
-    curPeep->wildpCodeOps = Safe_calloc(sMaxWildVar, sizeof(pCodeOp *));
-
-    curPeep->nwildpCodes = ++sMaxWildMnem;
-    curPeep->wildpCodes = Safe_calloc(sMaxWildMnem, sizeof(char *));
-
-
-    //return; // debug ... don't want to go through all the rules yet
-  }
-
+	peepRule *pr;
+	
+	pCodePeep *currentRule;
+	pCodePeepSnippets *pcps;
+	
+	pic14initpCodePeepCommands();
+	
+	/* The rules are in a linked-list. Each rule has two portions */
+	/* There's the `target' and there's the `replace'. The target */
+	/* is compared against the SDCC generated code and if it      */
+	/* matches, it gets replaced by the `replace' block of code.  */
+	/*                                                            */
+	/* Here we loop through each rule and convert the target's and*/
+	/* replace's into pCode target and replace blocks             */
+	
+	for (pr = rules; pr; pr = pr->next) {
+		
+		//DFPRINTF((stderr,"\nRule:\n\n"));
+		
+		pcps = Safe_calloc(1,sizeof(pCodePeepSnippets));
+		peepSnippets = DLL_append((_DLL*)peepSnippets,(_DLL*)pcps);
+		
+		currentRule = pcps->peep  = Safe_calloc(1,sizeof(pCodePeep));
+		initpCodePeep(currentRule);
+		
+		/* Convert the target block */
+		peepRuleBlock2pCodeBlock(pr->match, &currentRule->target);
+		
+		//DFPRINTF((stderr,"finished target, here it is in pcode form:\n"));
+		//printpBlock(stderr, currentRule->target.pb);
+		
+		//DFPRINTF((stderr,"target with labels merged:\n"));
+		//pBlockMergeLabels(curBlock);
+		pBlockMergeLabels(currentRule->target.pb);
+		//printpBlock(stderr, currentRule->replace.pb);
+		
+		//#ifdef PCODE_DEBUG
+		//    printpBlock(stderr, curBlock);
+		//#endif
+		//DFPRINTF((stderr,"\nReplaced by:\n"));
+		
+		
+		/* Convert the replace block */
+		peepRuleBlock2pCodeBlock(pr->replace, &currentRule->replace);
+		
+		//DFPRINTF((stderr,"finished replace block, here it is in pcode form:\n"));
+		//printpBlock(stderr, curBlock);
+		
+		//DFPRINTF((stderr,"replace with labels merged:\n"));
+		
+		pBlockMergeLabels(currentRule->replace.pb);
+		//printpBlock(stderr, currentRule->replace.pb);
+		
+		peepRuleCondition(pr->cond,currentRule);
+		
+		/* The rule has been converted to pCode. Now allocate
+		* space for the wildcards */
+		
+		postinit_pCodeWildBlock(&currentRule->target);
+		postinit_pCodeWildBlock(&currentRule->replace);
+		
+		//return; // debug ... don't want to go through all the rules yet
+	}
+	
+	{
+		pCodePeep *peepBlock;
+		_DLL *peeprules;
+		
+		peeprules = (_DLL *)peepSnippets;
+		//fprintf(stderr,"target rules\n");
+		while(peeprules) {
+			//fprintf(stderr,"   rule:\n");
+			peepBlock = ((pCodePeepSnippets*)peeprules)->peep;
+			//printpBlock(stderr, peepBlock->target.pb);
+			peeprules = peeprules->next;
+		}
+		//fprintf(stderr," ... done\n");
+	}
+	
 }
 
 void printpCodeString(FILE *of, pCode *pc, int max)
 {
-  int i=0;
-
-  while(pc && (i++<max)) {
-    pc->print(of,pc);
-    pc = pc->next;
-  }
+	int i=0;
+	
+	while(pc && (i++<max)) {
+		pc->print(of,pc);
+		pc = pc->next;
+	}
 }
 
 /*-----------------------------------------------------------------*/
@@ -1178,29 +1424,29 @@ void printpCodeString(FILE *of, pCode *pc, int max)
 
 static void * DLL_append(_DLL *list, _DLL *next)
 {
-  _DLL *b;
-
-
-  /* If there's no list, then create one: */
-  if(!list) {
-    next->next = next->prev = NULL;
-    return next;
-  }
-
-
-  /* Search for the end of the list. */
-  b = list;
-  while(b->next)
-    b = b->next;
-
-  /* Now append the new DLL object */
-  b->next = next;
-  b->next->prev = b;
-  b = b->next; 
-  b->next = NULL;
-
-  return list;
-  
+	_DLL *b;
+	
+	
+	/* If there's no list, then create one: */
+	if(!list) {
+		next->next = next->prev = NULL;
+		return next;
+	}
+	
+	
+	/* Search for the end of the list. */
+	b = list;
+	while(b->next)
+		b = b->next;
+	
+	/* Now append the new DLL object */
+	b->next = next;
+	b->next->prev = b;
+	b = b->next; 
+	b->next = NULL;
+	
+	return list;
+	
 }  
 
 
@@ -1208,239 +1454,19 @@ static void * DLL_append(_DLL *list, _DLL *next)
 
   pCode peephole optimization
 
+	
+	  The pCode "peep hole" optimization is not too unlike the peep hole
+	  optimization in SDCCpeeph.c. The major difference is that here we
+	  use pCode's whereas there we use ASCII strings. The advantage with
+	  pCode's is that we can ascertain flow information in the instructions
+	  being optimized.
+	  
+		
+		  <FIX ME> - elaborate...
+		  
+-----------------------------------------------------------------*/
 
-  The pCode "peep hole" optimization is not too unlike the peep hole
-  optimization in SDCCpeeph.c. The major difference is that here we
-  use pCode's whereas there we use ASCII strings. The advantage with
-  pCode's is that we can ascertain flow information in the instructions
-  being optimized.
 
-
-<FIX ME> - elaborate...
-
-  -----------------------------------------------------------------*/
-
-#if 0
-/*-----------------------------------------------------------------*/
-/* pCodePeep */
-/*-----------------------------------------------------------------*/
-int pCodePeepCompare(pCode *pc, pCodePeep *pcp)
-{
-  pCode *pcfrom,*pcto;
-
-  pcfrom = pc;
-  for( pcto=pcp->target; pcto; pcto=pcto->next) {
-
-    pcfrom = findNextInstruction(pcfrom);
-
-    if( pcfrom &&  
-	(PCI(pcfrom)->op == PCI(pcto)->op || 
-	 PCI(pcto)->op == POC_WILD))
-      continue;
-    return 0;
-  }
-  return 0;
-}
-
-/*-----------------------------------------------------------------*/
-/* pCodePeep */
-/*-----------------------------------------------------------------*/
-void pCodePeepSearch(pCodePeep *snippet)
-{
-  pBlock *pb;
-  pCode *pc;
-
-  if(!the_pFile)
-    return;
-
-  /* compare the chain to the pCode that we've 
-     got so far. If a match is found, then replace
-     the pCode chain.
-  */
-  for(pb = the_pFile->pbHead; pb; pb = pb->next) {
-    for(pc = pb->pcHead; pc; pc = pc->next) {
-      pCodePeepCompare(pc,snippet);
-    }
-  }
-
-}
-#endif
-
-#if 0
-pBlock *pBlockAppend(pBlock *pb1, pBlock *pb2)
-{
-  pBlock *pb;
-
-  if(!pb1->tail)
-    return pb2;
-
-  pb = pb1->tail;
-
-  pb2->head = pb1;
-  pb2->tail = NULL;
-  pb1->tail = pb2;
-
-}
-
-#endif
-
-void pCodePeepInit(void)
-{
-#if 0
-  pBlock *pb;
-  //  pCode *pc;
-  pCodePeep *pcp;
-  pCodePeepSnippets *pcps;
-
-  /* Declare a peep code snippet */
-  /* <FIXME> do I really need a separate struct just to DLL the snippets? */
-  /* e.g. I could put the DLL into the pCodePeep structure */
-
-  /* 
-
-     target:
-  
-     movwf %1
-     movf  %1,w
-  
-     replace:
-
-     movwf %1
-
-     Condition:
-     false condition - PCC_Z (Z bit is not used as input to subsequent code)
-     true condition - none
-  */
-  pcps = Safe_calloc(1,sizeof(pCodePeepSnippets));
-  pcp = pcps->peep  = Safe_calloc(1,sizeof(pCodePeep));
-  peepSnippets = DLL_append((_DLL*)peepSnippets,(_DLL*)pcps);
-
-
-  pb = newpCodeChain(NULL, 'W', newpCode(POC_MOVWF, newpCodeOpWild(0,pcp,newpCodeOp(NULL,PO_GPR_REGISTER))) );
-  addpCode2pBlock( pb,     newpCode(POC_MOVFW, newpCodeOpWild(0,pcp,newpCodeOp(NULL,PO_GPR_REGISTER))) );
-
-  pcp->target = pb;
-
-  pcp->replace = newpCodeChain(NULL, 'W',newpCode(POC_MOVWF, newpCodeOpWild(0,pcp,newpCodeOp(NULL,PO_GPR_REGISTER))) );
-
-  /* Allocate space to store pointers to the wildcard variables */
-  pcp->nvars = 1;
-  pcp->vars  = Safe_calloc(pcp->nvars, sizeof(char *));
-  pcp->nwildpCodes = 0;
-  pcp->wildpCodes  = NULL;
-
-  pcp->postFalseCond = PCC_Z;
-  pcp->postTrueCond  = PCC_NONE;
-
-  fprintf(stderr,"Peep rule\nTarget:\n");
-  printpCodeString(stderr,pcp->target->pcHead, 10);
-  fprintf(stderr,"Replaced with:\n");
-  printpCodeString(stderr,pcp->replace->pcHead, 10);
-
-  /* Now for another peep example */
-  pcps = Safe_calloc(1,sizeof(pCodePeepSnippets));
-  pcp = pcps->peep  = Safe_calloc(1,sizeof(pCodePeep));
-  peepSnippets = DLL_append((_DLL*)peepSnippets,(_DLL*)pcps);
-
-  {
-    /*
-      target:
-
-          btfsc  %0
-           goto  %1
-          %3
-      %1: %4
-
-      replace:
-          btfss  %0
-          %3
-      %1:  %4
-
-	  The %3 and %4 are wild opcodes. Since the opcodes
-	  are stored in a different array than the wild operands,
-	  they can have the same indices and not conflict. So
-	  below, the %3 is really a %0, %4 is a %1.
-
-     */
-    pCodeOp *pcl;
-    pCodeOp *pcw;
-    pCodeOp *pcwb;
-
-    // Create a new wild operand subtyped as a bit
-    pcwb =  newpCodeOpWild(0,pcp,newpCodeOpBit(NULL,-1));
-
-    // Create a 
-    pb = newpCodeChain(NULL, 'W',newpCode(POC_BTFSC,pcwb));
-
-    pcl = newpCodeOpLabel(-1);
-    pcw = newpCodeOpWild(1, pcp, pcl);
-    addpCode2pBlock( pb,     newpCode(POC_GOTO,  pcw));
-    addpCode2pBlock( pb,     newpCodeWild(0,NULL,NULL));
-    addpCode2pBlock( pb,     newpCodeWild(1,NULL,pcw));
-
-
-    pcp->target = pb;
-
-    pb = newpCodeChain(NULL, 'W',newpCode(POC_BTFSS, pcwb));
-    addpCode2pBlock( pb,     newpCodeWild(0,NULL,NULL));
-    addpCode2pBlock( pb,     newpCodeWild(1,NULL,pcw));
-
-    pcp->replace = pb;
-
-    /* Allocate space to store pointers to the wildcard variables */
-    pcp->nvars = 2;
-    pcp->vars = Safe_calloc(pcp->nvars, sizeof(char *));
-    pcp->nwildpCodes = 2;
-    pcp->wildpCodes = Safe_calloc(pcp->nwildpCodes, sizeof(pCode *));
-
-    pcp->postFalseCond = PCC_NONE;
-    pcp->postTrueCond  = PCC_NONE;
-  }
-
-
-
-
-
-
-
-
-
-
-  //-------------
-
-  /* Now for another peep example */
-  pcps = Safe_calloc(1,sizeof(pCodePeepSnippets));
-  pcp = pcps->peep  = Safe_calloc(1,sizeof(pCodePeep));
-  peepSnippets = DLL_append((_DLL*)peepSnippets,(_DLL*)pcps);
-
-  {
-    pCodeOp *pcw;
-
-    pcw = newpCodeOpWild(0,pcp,newpCodeOp(NULL,PO_GPR_REGISTER));
-
-    pb = newpCodeChain(NULL, 'W', newpCode(POC_MOVWF, pcw));
-    addpCode2pBlock( pb,     newpCode(POC_MOVWF, pcw));
-
-    pcp->target = pb;
-
-    pb = newpCodeChain(NULL, 'W',newpCode(POC_MOVWF, pcw));
-
-    pcp->replace = pb;
-
-    /* Allocate space to store pointers to the wildcard variables */
-    pcp->nvars = 1;
-    pcp->vars = Safe_calloc(pcp->nvars, sizeof(char *));
-    pcp->nwildpCodes = 0;
-    pcp->wildpCodes = NULL;
-
-    pcp->postFalseCond = PCC_NONE;
-    pcp->postTrueCond  = PCC_NONE;
-  }
-
-
-
-#endif
-}
 
 /*-----------------------------------------------------------------*/
 /* pCodeSearchCondition - Search a pCode chain for a 'condition'   */
@@ -1451,516 +1477,643 @@ void pCodePeepInit(void)
 /* -1 - The Condition was found for a pCode's output               */
 /*                                                                 */
 /*-----------------------------------------------------------------*/
-int pCodeSearchCondition(pCode *pc, unsigned int cond)
+int pCodeSearchCondition(pCode *pc, unsigned int cond, int contIfSkip)
 {
-
-  while(pc) {
-
-    /* If we reach a function end (presumably an end since we most
-       probably began the search in the middle of a function), then
-       the condition was not found. */
-    if(pc->type == PC_FUNCTION)
-      return 0;
-
-    if(pc->type == PC_OPCODE) {
-      if(PCI(pc)->inCond & cond)
-	return 1;
-      if(PCI(pc)->outCond & cond)
-	return -1;
-    }
-
-    pc = pc->next;
-  }
-
-  return 0;
+	while(pc) {
+		
+	/* If we reach a function end (presumably an end since we most
+	probably began the search in the middle of a function), then
+		the condition was not found. */
+		if(pc->type == PC_FUNCTION)
+			return 0;
+		
+		if(pc->type == PC_OPCODE) {
+			if(PCI(pc)->inCond & cond) {
+				if (contIfSkip) {
+					/* If previous instruction is a skip then continue search as condiction is not certain */
+					pCode *pcp = findPrevInstruction(pc);
+					if (pcp && !isPCI_SKIP(pcp)) {
+						return 1;
+					}
+				} else {
+					return 1;
+				}
+			}
+			if(PCI(pc)->outCond & cond) {
+				if (contIfSkip) {
+					/* If previous instruction is a skip then continue search as condiction is not certain */
+					pCode *pcp = findPrevInstruction(pc);
+					if (pcp && !isPCI_SKIP(pcp)) {
+						return -1;
+					}
+				} else {
+					return -1;
+				}
+			}
+		}
+		
+		pc = pc->next;
+	}
+	
+	return 0;
 }
+
+/*-----------------------------------------------------------------
+* int pCodeOpCompare(pCodeOp *pcops, pCodeOp *pcopd)
+*
+* Compare two pCodeOp's and return 1 if they're the same
+*-----------------------------------------------------------------*/
+int pCodeOpCompare(pCodeOp *pcops, pCodeOp *pcopd)
+{
+	char b[50], *n2;
+	
+	if(!pcops || !pcopd)
+		return 0;
+		/*
+		fprintf(stderr," Comparing operands %s",
+		get_op( pcops,NULL,0));
+		
+		  fprintf(stderr," to %s\n",
+		  get_op( pcopd,NULL,0));
+	*/
+	
+	if(pcops->type != pcopd->type) {
+		//fprintf(stderr,"  - fail - diff types\n");
+		return 0;  // different types
+	}
+	
+	if(pcops->type == PO_LITERAL) {
+		
+		if((PCOL(pcops)->lit >= 0) && (PCOL(pcops)->lit == PCOL(pcopd)->lit))
+			return 1;
+		
+		return 0;
+	}
+	
+	b[0]=0;
+	get_op(pcops,b,50);
+	
+	n2 = get_op(pcopd,NULL,0);
+	
+	if( !n2 || strcmp(b,n2)) {
+		//fprintf(stderr,"  - fail - diff names: %s, len=%d,  %s, len=%d\n",b,strlen(b), n2, strlen(n2) );
+		return 0;  // different names
+	}
+	
+	switch(pcops->type) {
+	case PO_DIR:
+		if( PCOR(pcops)->instance != PCOR(pcopd)->instance) {
+			//fprintf(stderr, "  - fail different instances\n");
+			return 0;
+		}
+		break;
+	default:
+		break;
+	}
+	
+	//fprintf(stderr,"  - pass\n");
+	
+	return 1;
+}
+
+int pCodePeepMatchLabels(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
+{
+	int labindex;
+	
+	/* Check for a label associated with this wild pCode */
+	// If the wild card has a label, make sure the source code does too.
+	if(PCI(pcd)->label) {
+		pCode *pcl = PCI(pcd)->label->pc;
+		
+#ifdef PCODE_DEBUG
+		int li = -PCL(pcl)->key;
+		
+		if(peepBlock->target.vars[li] == NULL) {
+			if(PCI(pcs)->label) {
+				DFPRINTF((stderr,"first time for a label: %d %s\n",li,PCL(PCI(pcs)->label->pc)->label));
+			}
+		} else {
+			// DFPRINTF((stderr,"label id = %d \n",PCL(PCI(pcd)->label->pc)->key));
+			DFPRINTF((stderr," label id: %d %s\n",li,peepBlock->target.vars[li]));
+			if(PCI(pcs)->label) {
+				DFPRINTF((stderr," src %s\n",PCL(PCI(pcs)->label->pc)->label));
+			}
+		}
+#endif
+		
+		
+		if(!PCI(pcs)->label)
+			return 0;
+		
+		labindex = -PCL(pcl)->key;
+		if(peepBlock->target.vars[labindex] == NULL) {
+			// First time to encounter this label
+			peepBlock->target.vars[labindex] = PCL(PCI(pcs)->label->pc)->label;
+			DFPRINTF((stderr,"first time for a label: %d %s\n",labindex,PCL(PCI(pcs)->label->pc)->label));
+			
+		} else {
+			if(strcmp(peepBlock->target.vars[labindex],PCL(PCI(pcs)->label->pc)->label) != 0) {
+				DFPRINTF((stderr,"labels don't match dest %s != src %s\n",peepBlock->target.vars[labindex],PCL(PCI(pcs)->label->pc)->label));
+				return 0;
+			}
+			DFPRINTF((stderr,"matched a label %d %s -hey\n",labindex,peepBlock->target.vars[labindex]));
+		}
+	} else {
+		//DFPRINTF((stderr,"destination doesn't have a label\n"));
+		
+		if(PCI(pcs)->label)
+			return 0;
+		
+		//DFPRINTF((stderr,"neither src nor dest have labels\n"));
+		
+	}
+	
+	return 1;
+
+}
+
 /*-----------------------------------------------------------------*/
 /* pCodePeepMatchLine - Compare source and destination pCodes to   */
 /*                      see they're the same.                      */
+/*                                                                 */
+/* In this context, "source" refers to the coded generated by gen.c*/
+/* and "destination" refers to a pcode in a peep rule. If the dest-*/
+/* ination has no wild cards, then MatchLine will compare the two  */
+/* pcodes (src and dest) for a one-to-one match. If the destination*/
+/* has wildcards, then those get expanded. When a wild card is     */
+/* encountered for the first time it autmatically is considered a  */
+/* match and the object that matches it is referenced in the       */
+/* variables or opcodes array (depending on the type of match).    */
+/*                                                                 */
+/*                                                                 */
+/* Inputs:                                                         */
+/*  *peepBlock - A pointer to the peepBlock that contains the      */
+/*               entire rule to which the destination pcode belongs*/
+/*  *pcs - a pointer to the source pcode                           */
+/*  *pcd - a pointer to the destination pcode                      */
+/*                                                                 */
+/* Returns:                                                        */
+/*  1 - pcodes match                                               */
+/*  0 - pcodes don't match                                         */
+/*                                                                 */
+/*                                                                 */
 /*-----------------------------------------------------------------*/
+
 int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 {
-  int index;   // index into wild card arrays
-
-  if(pcs->type == pcd->type) {
-
-    if(pcs->type == PC_OPCODE) {
-
-      /* If the opcodes don't match then the line doesn't match */
-      if(PCI(pcs)->op != PCI(pcd)->op)
-	return 0;
-
-      fprintf(stderr,"%s comparing\n",__FUNCTION__);
-      pcs->print(stderr,pcs);
-      pcd->print(stderr,pcd);
-
-      /* Compare the operands */
-      if(PCI(pcd)->pcop) {
-	if (PCI(pcd)->pcop->type == PO_WILD) {
-	  index = PCOW(PCI(pcd)->pcop)->id;
-
-	  fprintf(stderr,"destination is wild\n");
-#ifdef DEBUG_PCODEPEEP
-	  if (index > peepBlock->nops) {
-	    fprintf(stderr,"%s - variables exceeded\n",__FUNCTION__);
-	    exit(1);
-	  }
+	int index;   // index into wild card arrays
+	
+	/* one-for-one match. Here the source and destination opcodes 
+	* are not wild. However, there may be a label or a wild operand */
+	
+	if(pcs) {
+		if(PCI(pcs)->label) {
+			DFPRINTF((stderr,"Match line source label: %s\n",PCL(PCI(pcs)->label->pc)->label));
+		}
+	}
+	
+	if(pcs->type == pcd->type) {
+		
+		if(pcs->type == PC_OPCODE) {
+			
+			/* If the opcodes don't match then the line doesn't match */
+			if(PCI(pcs)->op != PCI(pcd)->op)
+				return 0;
+			
+#ifdef PCODE_DEBUG
+			DFPRINTF((stderr,"%s comparing\n",__FUNCTION__));
+			pcs->print(stderr,pcs);
+			pcd->print(stderr,pcd);
 #endif
-	  PCOW(PCI(pcd)->pcop)->matched = PCI(pcs)->pcop;
-	  if(!peepBlock->wildpCodeOps[index]) {
-	    peepBlock->wildpCodeOps[index] = PCI(pcs)->pcop;
+			
+			if(!pCodePeepMatchLabels(peepBlock, pcs, pcd))
+				return 0;
+			
+			/* Compare the operands */
+			if(PCI(pcd)->pcop) {
+				// Volatile types should not be deleted or modified, these include SFR, externs and publics
+				// They can be used as a matched, however if a match is found then the optimiser intends
+				// to change some aspect of a block of code, which is most likely a critcal one. As this
+				// method of optimisation does not allow a means to distiguishing what may change, it is
+				// best to just negate any match.
+				if (PCI(pcs)->pcop) {
+					struct regs *r;
+					pCodeOp *pcop = PCI(pcs)->pcop;
+					switch(pcop->type) {
+					case PO_W:
+					case PO_STATUS:
+					case PO_FSR:
+					case PO_INDF:
+					case PO_INTCON:
+					case PO_PCL:
+					case PO_PCLATH:
+					case PO_SFR_REGISTER:
+						return 0; // SFR - do not modify
+					case PO_DIR:
+					case PO_GPR_REGISTER:
+					case PO_GPR_BIT:
+					case PO_GPR_TEMP:
+					case PO_GPR_POINTER:
+						r = PCOR(pcop)->r;
+						if (r->isPublic||r->isExtern||r->isFixed) // Changes to these types of registers should not be changed as they may be used else where
+							return 0;
+					default:
+						break;
+					}
+				}
+				if (PCI(pcd)->pcop->type == PO_WILD) {
+					char *n;
+					index = PCOW(PCI(pcd)->pcop)->id;
+					//DFPRINTF((stderr,"destination is wild\n"));
+#ifdef DEBUG_PCODEPEEP
+					if (index > peepBlock->nops) {
+						DFPRINTF((stderr,"%s - variables exceeded\n",__FUNCTION__));
+						exit(1);
+					}
+#endif
+					n = PCI(pcs)->pcop->name;
+					if(peepBlock->target.vars[index]) {
+						if ((!n)||(strcmp(peepBlock->target.vars[index],n) != 0))
+							return 0; // variable is different
+					} else {
+						DFPRINTF((stderr,"first time for a variable: %d, %s\n",index,n));
+						peepBlock->target.vars[index] = n;
+					}
+					
+					PCOW(PCI(pcd)->pcop)->matched = PCI(pcs)->pcop;
+					if(!peepBlock->target.wildpCodeOps[index]) {
+						peepBlock->target.wildpCodeOps[index] = PCI(pcs)->pcop;
+						
+						//fprintf(stderr, "first time for wild opcode #%d\n",index);
+						return 1;
+						
+					} else {
+					/*
+					pcs->print(stderr,pcs);
+					pcd->print(stderr,pcd);
+					fprintf(stderr, "comparing operands of these instructions, result %d\n",
+					pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index])
+					);
+					*/
+						
+						return pCodeOpCompare(PCI(pcs)->pcop, peepBlock->target.wildpCodeOps[index]);
+					}
+					/*
+					{
+						char *n;
+					
+						switch(PCI(pcs)->pcop->type) {
+						case PO_GPR_TEMP:
+						case PO_FSR:
+						//case PO_INDF:
+							//n = PCOR(PCI(pcs)->pcop)->r->name;
+							n = PCI(pcs)->pcop->name;
 
-	    //if(PCI(pcs)->pcop->type == PO_GPR_TEMP) 
+						break;
+						default:
+							n = PCI(pcs)->pcop->name;
+						}
+						
+						if(peepBlock->target.vars[index])
+							return  (strcmp(peepBlock->target.vars[index],n) == 0);
+						else {
+							DFPRINTF((stderr,"first time for a variable: %d, %s\n",index,n));
+							peepBlock->target.vars[index] = n;
+							return 1;
+						}
+					}
+					*/
+				} else if (PCI(pcd)->pcop->type == PO_LITERAL) {
+				/*
+				pcs->print(stderr,pcs);
+				pcd->print(stderr,pcd);
+				
+				fprintf(stderr, "comparing literal operands of these instructions, result %d\n",
+				pCodeOpCompare(PCI(pcs)->pcop, PCI(pcd)->pcop));
+				*/
+					return pCodeOpCompare(PCI(pcs)->pcop, PCI(pcd)->pcop);
+					
+				} else {
+					/* FIXME - need an else to check the case when the destination 
+						* isn't a wild card */
+					/*
+					fprintf(stderr, "Destination is not wild: operand compare =%d\n",
+					pCodeOpCompare(PCI(pcs)->pcop, PCI(pcd)->pcop));
+					*/
+					return  pCodeOpCompare(PCI(pcs)->pcop, PCI(pcd)->pcop);
 
-	  }
-	  {
-	    char *n;
-
-	    if(PCI(pcs)->pcop->type == PO_GPR_TEMP) 
-	      n = PCOR(PCI(pcs)->pcop)->r->name;
-	    else
-	      n = PCI(pcs)->pcop->name;
-
-	    if(peepBlock->vars[index])
-	      return  (strcmp(peepBlock->vars[index],n) == 0);
-	    else {
-	      peepBlock->vars[index] = n; //PCI(pcs)->pcop->name;
-	      return 1;
-	    }
-	  }
+				}
+			} else
+				/* The pcd has no operand. Lines match if pcs has no operand either*/
+				return (PCI(pcs)->pcop == NULL);
+		}
 	}
-      } else
-	/* The pcd has no operand. Lines match if pcs has no operand either*/
-	return (PCI(pcs)->pcop == NULL);
-    }
-  }
 
+	/* Compare a wild instruction to a regular one. */
 
-  if((pcd->type == PC_WILD) && (pcs->type == PC_OPCODE)) {
+	if((pcd->type == PC_WILD) && (pcs->type == PC_OPCODE)) {
 
-    int labindex;
+		index = PCW(pcd)->id;
+#ifdef PCODE_DEBUG
+		DFPRINTF((stderr,"%s comparing wild cards\n",__FUNCTION__));
+		pcs->print(stderr,pcs);
+		pcd->print(stderr,pcd);
+#endif
+		peepBlock->target.wildpCodes[PCW(pcd)->id] = pcs;
+	  
+		if(!pCodePeepMatchLabels(peepBlock, pcs, pcd)) {
+			DFPRINTF((stderr," Failing because labels don't match\n"));
+			return 0;
+		}
 
-    index = PCW(pcd)->id;
+		if(PCW(pcd)->mustBeBitSkipInst & !(PCI(pcs)->isBitInst && PCI(pcs)->isSkip)) {
+			// doesn't match because the wild pcode must be a bit skip
+			DFPRINTF((stderr," Failing match because bit skip is req\n"));
+			//pcd->print(stderr,pcd);
+			//pcs->print(stderr,pcs);
+			return 0;
+		} 
 
-    fprintf(stderr,"%s comparing wild cards\n",__FUNCTION__);
-    pcs->print(stderr,pcs);
-    pcd->print(stderr,pcd);
+		if(PCW(pcd)->mustNotBeBitSkipInst & (PCI(pcs)->isBitInst && PCI(pcs)->isSkip)) {
+			// doesn't match because the wild pcode must *not* be a bit skip
+			DFPRINTF((stderr," Failing match because shouldn't be bit skip\n"));
+			//pcd->print(stderr,pcd);
+			//pcs->print(stderr,pcs);
+			return 0;
+		} 
 
-    peepBlock->wildpCodes[PCW(pcd)->id] = pcs;
+		if(PCW(pcd)->operand) {
+			PCOW(PCI(pcd)->pcop)->matched = PCI(pcs)->pcop;
+			if(peepBlock->target.vars[index]) {
+				int i = (strcmp(peepBlock->target.vars[index],PCI(pcs)->pcop->name) == 0);
+#ifdef PCODE_DEBUG
 
-    /* Check for a label associated with this wild pCode */
-    // If the wild card has a label, make sure the source code does too.
-    if(pcd->label) {
-      pCode *pcl;
+				if(i)
+					DFPRINTF((stderr," (matched)\n"));
+				else {
+					DFPRINTF((stderr," (no match: wild card operand mismatch\n"));
+					DFPRINTF((stderr,"  peepblock= %s,  pcodeop= %s\n",
+						peepBlock->target.vars[index],
+						PCI(pcs)->pcop->name));
+				}
+#endif
+				return i;
+			} else {
+				DFPRINTF((stderr," (matched %s\n",PCI(pcs)->pcop->name));
+				peepBlock->target.vars[index] = PCI(pcs)->pcop->name;
+				return 1;
+			}
+		}
 
-      if(!pcs->label)
+		pcs = findNextInstruction(pcs->next); 
+		if(pcs) {
+			//DFPRINTF((stderr," (next to match)\n"));
+			//pcs->print(stderr,pcs);
+		} else if(pcd->next) {
+			/* oops, we ran out of code, but there's more to the rule */
+			return 0;
+		}
+
+		return 1; /*  wild card matches */
+	}
+
 	return 0;
-
-      pcl = pcd->label->pc;
-
-      labindex = PCOW(pcl)->id;
-      if(peepBlock->vars[labindex] == NULL) {
-	// First time to encounter this label
-	peepBlock->vars[labindex] = PCL(pcs->label->pc)->label;
-	fprintf(stderr,"first time for a label\n");
-      } else {
-	if(strcmp(peepBlock->vars[labindex],PCL(pcs->label->pc)->label) != 0) {
-	  fprintf(stderr,"labels don't match\n");
-	  return 0;
-	}
-	fprintf(stderr,"matched a label\n");
-      }
-    } else 
-      fprintf(stderr,"wild card doesn't have a label\n");
-
-    if(PCW(pcd)->operand) {
-      PCOW(PCI(pcd)->pcop)->matched = PCI(pcs)->pcop;
-      if(peepBlock->vars[index]) {
-	int i = (strcmp(peepBlock->vars[index],PCI(pcs)->pcop->name) == 0);
-	if(i)
-	  fprintf(stderr," (matched)\n");
-	else {
-	  fprintf(stderr," (no match: wild card operand mismatch\n");
-	  fprintf(stderr,"  peepblock= %s,  pcodeop= %s\n",
-		  peepBlock->vars[index],
-		  PCI(pcs)->pcop->name);
-	}
-	return i;
-      } else {
-	peepBlock->vars[index] = PCI(pcs)->pcop->name;
-	return 1;
-      }
-    }
-
-    pcs = findNextInstruction(pcs->next); 
-    if(pcs) {
-      fprintf(stderr," (next to match)\n");
-      pcs->print(stderr,pcs);
-    }
-
-    return 1; /*  wild card matches */
-  }
-
-  return 0;
 }
 
 /*-----------------------------------------------------------------*/
 /*-----------------------------------------------------------------*/
 void pCodePeepClrVars(pCodePeep *pcp)
 {
-
-  int i;
-  if(!pcp)
-    return;
-
-  for(i=0;i<pcp->nvars; i++) {
-    pcp->vars[i] = NULL;
-    pcp->wildpCodeOps[i] = NULL;
-  }
+	
+	int i;
+	if(!pcp)
+		return;
+	/*
+	DFPRINTF((stderr," Clearing peep rule vars\n"));
+	DFPRINTF((stderr," %d %d %d  %d %d %d\n",
+	pcp->target.nvars,pcp->target.nops,pcp->target.nwildpCodes,
+	pcp->replace.nvars,pcp->replace.nops,pcp->replace.nwildpCodes));
+	*/
+	for(i=0;i<pcp->target.nvars; i++)
+		pcp->target.vars[i] = NULL;
+	for(i=0;i<pcp->target.nops; i++)
+		pcp->target.wildpCodeOps[i] = NULL;
+	for(i=0;i<pcp->target.nwildpCodes; i++)
+		pcp->target.wildpCodes[i] = NULL;
+	
+	for(i=0;i<pcp->replace.nvars; i++)
+		pcp->replace.vars[i] = NULL;
+	for(i=0;i<pcp->replace.nops; i++)
+		pcp->replace.wildpCodeOps[i] = NULL;
+	for(i=0;i<pcp->replace.nwildpCodes; i++)
+		pcp->replace.wildpCodes[i] = NULL;
+	
+	
+	
 }
 
-/*-----------------------------------------------------------------*/
-/*  pCodeInsertAfter - splice in the pCode chain starting with pc2 */
-/*                     into the pCode chain containing pc1         */
-/*-----------------------------------------------------------------*/
-void pCodeInsertAfter(pCode *pc1, pCode *pc2)
-{
-
-  if(!pc1 || !pc2)
-    return;
-
-  pc2->next = pc1->next;
-  if(pc1->next)
-    pc1->next->prev = pc2;
-
-  pc2->pb = pc1->pb;
-  pc2->prev = pc1;
-  pc1->next = pc2;
-
-}
-
-/*-----------------------------------------------------------------*/
-/* pCodeOpCopy - copy a pcode operator                             */
-/*-----------------------------------------------------------------*/
-static pCodeOp *pCodeOpCopy(pCodeOp *pcop)
-{
-  pCodeOp *pcopnew=NULL;
-
-  if(!pcop)
-    return NULL;
-
-  switch(pcop->type) { 
-  case PO_CRY:
-  case PO_BIT:
-    fprintf(stderr,"pCodeOpCopy bit\n");
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpBit) );
-    PCOB(pcopnew)->bit = PCOB(pcop)->bit;
-    PCOB(pcopnew)->inBitSpace = PCOB(pcop)->inBitSpace;
-
-    break;
-
-  case PO_WILD:
-    /* Here we expand the wild card into the appropriate type: */
-    /* By recursively calling pCodeOpCopy */
-    fprintf(stderr,"pCodeOpCopy wild\n");
-    if(PCOW(pcop)->matched)
-      pcopnew = pCodeOpCopy(PCOW(pcop)->matched);
-    else {
-      // Probably a label
-      pcopnew = pCodeOpCopy(PCOW(pcop)->subtype);
-      pcopnew->name = Safe_strdup(PCOW(pcop)->pcp->vars[PCOW(pcop)->id]);
-      fprintf(stderr,"copied a wild op named %s\n",pcopnew->name);
-    }
-
-    return pcopnew;
-    break;
-
-  case PO_LABEL:
-    fprintf(stderr,"pCodeOpCopy label\n");
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpLabel) );
-    PCOLAB(pcopnew)->key =  PCOLAB(pcop)->key;
-    break;
-
-  case PO_LITERAL:
-  case PO_IMMEDIATE:
-    fprintf(stderr,"pCodeOpCopy lit\n");
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpLit) );
-    PCOL(pcopnew)->lit = PCOL(pcop)->lit;
-    break;
-
-  case PO_GPR_REGISTER:
-  case PO_GPR_TEMP:
-    fprintf(stderr,"pCodeOpCopy GPR register\n");
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpReg) );
-    PCOR(pcopnew)->r = PCOR(pcop)->r;
-    PCOR(pcopnew)->rIdx = PCOR(pcop)->rIdx;
-    fprintf(stderr," register index %d\n", PCOR(pcop)->r->rIdx);
-    break;
-
-  case PO_DIR:
-    fprintf(stderr,"pCodeOpCopy PO_DIR\n");
-  case PO_SFR_REGISTER:
-  case PO_STR:
-  case PO_NONE:
-  case PO_W:
-  case PO_STATUS:
-  case PO_FSR:
-  case PO_INDF:
-
-    fprintf(stderr,"pCodeOpCopy register type %d\n", pcop->type);
-    pcopnew = Safe_calloc(1,sizeof(pCodeOp) );
-
-  }
-
-  pcopnew->type = pcop->type;
-  pcopnew->name = Safe_strdup(pcop->name);
-
-  return pcopnew;
-}
-
-#if 0
-/*-----------------------------------------------------------------*/
-/* pCodeCopy - copy a pcode                                        */
-/*-----------------------------------------------------------------*/
-static pCode *pCodeCopy(pCode *pc)
-{
-
-  pCode *pcnew;
-
-  pcnew = newpCode(pc->type,pc->pcop);
-}
-#endif
-/*-----------------------------------------------------------------*/
-/*-----------------------------------------------------------------*/
-void pCodeDeleteChain(pCode *f,pCode *t)
-{
-  pCode *pc;
-
-
-  while(f && f!=t) {
-    fprintf(stderr,"delete pCode:\n");
-    pc = f->next;
-    f->print(stderr,f);
-    //f->delete(f);  this dumps core...
-
-    f = pc;
-
-  }
-
-}
 /*-----------------------------------------------------------------*/
 /*-----------------------------------------------------------------*/
 int pCodePeepMatchRule(pCode *pc)
 {
-  pCodePeep *peepBlock;
-  pCode *pct, *pcin;
-  _DLL *peeprules;
-  int matched;
-
-  peeprules = (_DLL *)peepSnippets;
-
-  while(peeprules) {
-    peepBlock = ((pCodePeepSnippets*)peeprules)->peep;
-    if(!peepBlock || !peepBlock->target || !peepBlock->target->pcHead)
-      goto next_rule;
-
-    pCodePeepClrVars(peepBlock);
-
-    pcin = pc;
-    pct = peepBlock->target->pcHead;
-    matched = 0;
-    while(pct && pcin) {
-
-      if(! (matched = pCodePeepMatchLine(peepBlock, pcin,pct)))
-	break;
-
-      pcin = findNextInstruction(pcin->next);
-      pct = pct->next;
-      //debug:
-      fprintf(stderr,"    matched\n");
-      if(!pcin)
-	fprintf(stderr," end of code\n");
-      if(!pct)
-	fprintf(stderr," end of rule\n");
-    }
-
-    if(matched && pcin) {
-
-      /* So far we matched the rule up to the point of the conditions .
-       * In other words, all of the opcodes match. Now we need to see
-       * if the post conditions are satisfied.
-       * First we check the 'postFalseCond'. This means that we check
-       * to see if any of the subsequent pCode's in the pCode chain 
-       * following the point just past where we have matched depend on
-       * the `postFalseCond' as input then we abort the match
-       */
-      fprintf(stderr,"    matched rule so far, now checking conditions\n");
-      if (peepBlock->postFalseCond && 
-	  (pCodeSearchCondition(pcin,peepBlock->postFalseCond) > 0) )
-	matched = 0;
-    }
-
-    if(matched && pcin) {
-
-      pCode *pcprev;
-      pCode *pcr;
-
-
-      /* We matched a rule! Now we have to go through and remove the
-	 inefficient code with the optimized version */
-
-      fprintf(stderr, "Found a pcode peep match:\nRule:\n");
-      printpCodeString(stderr,peepBlock->target->pcHead,10);
-      fprintf(stderr,"first thing matched\n");
-      pc->print(stderr,pc);
-      fprintf(stderr,"last thing matched\n");
-      pcin->print(stderr,pcin);
-
-      /* Unlink the original code */
-      pcprev = pc->prev;
-      pcprev->next = pcin;
-      pcin->prev = pc->prev;
-
-      {
-	/*     DEBUG    */
-	/* Converted the deleted pCodes into comments */
-
-	char buf[256];
-
-	buf[0] = ';';
-	buf[1] = '#';
-
-	while(pc &&  pc!=pcin) {
-	  pCode2str(&buf[2], 254, pc);
-	  pCodeInsertAfter(pcprev, newpCodeCharP(buf));
-	  pcprev = pcprev->next;
-	  pc = pc->next;
+	pCodePeep *peepBlock;
+	pCode *pct, *pcin;
+	pCodeCSource *pc_cline=NULL;
+	_DLL *peeprules;
+	int matched;
+	
+	peeprules = (_DLL *)peepSnippets;
+	
+	while(peeprules) {
+		peepBlock = ((pCodePeepSnippets*)peeprules)->peep;
+		
+		if(!peepBlock || /*!peepBlock->target ||*/ !peepBlock->target.pb->pcHead) {
+			fprintf(stderr, "skipping rule because target pb is NULL\n");
+			goto next_rule;
+		}
+		
+		pCodePeepClrVars(peepBlock);
+		/*
+		pcin = pc;
+		if(IS_PCCOMMENT(pcin))
+		pc = pcin = findNextInstruction(pcin->next);
+		*/
+		pcin = pc = findNextInstruction(pc);
+		
+		pct = peepBlock->target.pb->pcHead;
+#ifdef PCODE_DEBUG
+		{
+			pCode *pcr = peepBlock->replace.pb->pcHead;
+			if(pcr) pct->print(stderr,pcr);
+		}
+#endif
+		matched = 0;
+		while(pct && pcin) {
+			
+			if(! (matched = pCodePeepMatchLine(peepBlock, pcin,pct)))
+				break;
+			
+			pcin = findNextInstruction(pcin->next);
+			pct = pct->next;
+			//debug:
+			//DFPRINTF((stderr,"    matched\n"));
+			
+			if(!pcin && pct) {
+				DFPRINTF((stderr," partial match... no more code\n"));
+				matched = 0; 
+			}
+			if(!pct) {
+				DFPRINTF((stderr," end of rule\n"));
+			}
+		}
+		
+		if(matched && pcin) {
+			
+		/* So far we matched the rule up to the point of the conditions .
+		* In other words, all of the opcodes match. Now we need to see
+		* if the post conditions are satisfied.
+		* First we check the 'postFalseCond'. This means that we check
+		* to see if any of the subsequent pCode's in the pCode chain 
+		* following the point just past where we have matched depend on
+		* the `postFalseCond' as input then we abort the match
+		*/
+			DFPRINTF((stderr,"    matched rule so far, now checking conditions\n"));
+			//pcin->print(stderr,pcin);
+			
+			if (pcin && peepBlock->postFalseCond && 
+				(pCodeSearchCondition(pcin,peepBlock->postFalseCond,0) > 0) )
+				matched = 0;
+			
+			//fprintf(stderr," condition results = %d\n",pCodeSearchCondition(pcin,peepBlock->postFalseCond));
+			
+			
+			//if(!matched) fprintf(stderr,"failed on conditions\n");
+		}
+		
+		if(matched) {
+			
+			pCode *pcprev;
+			pCode *pcr;
+			
+			
+			/* We matched a rule! Now we have to go through and remove the
+			inefficient code with the optimized version */
+#ifdef PCODE_DEBUG
+			DFPRINTF((stderr, "Found a pcode peep match:\nRule:\n"));
+			printpCodeString(stderr,peepBlock->target.pb->pcHead,10);
+			DFPRINTF((stderr,"first thing matched\n"));
+			pc->print(stderr,pc);
+			if(pcin) {
+				DFPRINTF((stderr,"last thing matched\n"));
+				pcin->print(stderr,pcin);
+			}
+#endif
+			
+			
+			/* Unlink the original code */
+			pcprev = pc->prev;
+			pcprev->next = pcin;
+			if(pcin) 
+				pcin->prev = pc->prev;
+			
+			
+#if 0
+			{
+				/*     DEBUG    */
+				/* Converted the deleted pCodes into comments */
+				
+				char buf[256];
+				pCodeCSource *pc_cline2=NULL;
+				
+				buf[0] = ';';
+				buf[1] = '#';
+				
+				while(pc &&  pc!=pcin) {
+					
+					if(pc->type == PC_OPCODE && PCI(pc)->cline) {
+						if(pc_cline) {
+							pc_cline2->pc.next = PCODE(PCI(pc)->cline);
+							pc_cline2 = PCCS(pc_cline2->pc.next);
+						} else {
+							pc_cline = pc_cline2 = PCI(pc)->cline;
+							pc_cline->pc.seq = pc->seq;
+						}
+					}
+					
+					pCode2str(&buf[2], 254, pc);
+					pCodeInsertAfter(pcprev, newpCodeCharP(buf));
+					pcprev = pcprev->next;
+					pc = pc->next;
+					
+				}
+				if(pc_cline2)
+					pc_cline2->pc.next = NULL;
+			}
+#endif
+			
+			if(pcin)
+				pCodeDeleteChain(pc,pcin);
+			
+			/* Generate the replacement code */
+			pc = pcprev;
+			pcr = peepBlock->replace.pb->pcHead;  // This is the replacement code
+			while (pcr) {
+				pCodeOp *pcop=NULL;
+				
+				/* If the replace pcode is an instruction with an operand, */
+				/* then duplicate the operand (and expand wild cards in the process). */
+				if(pcr->type == PC_OPCODE) {
+					if(PCI(pcr)->pcop) {
+					/* The replacing instruction has an operand.
+						* Is it wild? */
+						if(PCI(pcr)->pcop->type == PO_WILD) {
+							int index = PCOW(PCI(pcr)->pcop)->id;
+							//DFPRINTF((stderr,"copying wildopcode\n"));
+							if(peepBlock->target.wildpCodeOps[index])
+								pcop = pCodeOpCopy(peepBlock->target.wildpCodeOps[index]);
+							else
+								DFPRINTF((stderr,"error, wildopcode in replace but not source?\n"));
+						} else
+							pcop = pCodeOpCopy(PCI(pcr)->pcop);
+					}
+					//DFPRINTF((stderr,"inserting pCode\n"));
+					pCodeInsertAfter(pc, newpCode(PCI(pcr)->op,pcop));
+				} else if (pcr->type == PC_WILD) {
+					if(PCW(pcr)->invertBitSkipInst)
+						DFPRINTF((stderr,"We need to invert the bit skip instruction\n"));
+					pCodeInsertAfter(pc,
+						pCodeInstructionCopy(PCI(peepBlock->target.wildpCodes[PCW(pcr)->id]),
+						PCW(pcr)->invertBitSkipInst));
+				} else if (pcr->type == PC_COMMENT) {
+					pCodeInsertAfter(pc, newpCodeCharP( ((pCodeComment *)(pcr))->comment));
+				}
+				
+				
+				pc = pc->next;
+#ifdef PCODE_DEBUG
+				DFPRINTF((stderr,"  NEW Code:"));
+				if(pc) pc->print(stderr,pc);
+#endif
+				pcr = pcr->next;
+			}
+			
+			/* We have just replaced the inefficient code with the rule.
+			* Now, we need to re-add the C-source symbols if there are any */
+			pc = pcprev;
+			while(pc_cline ) {
+				
+				pc =  findNextInstruction(pc->next);
+				PCI(pc)->cline = pc_cline;
+				pc_cline = PCCS(pc_cline->pc.next);
+				
+			}
+			
+			return 1;
 	}
-      }
-
-      pCodeDeleteChain(pc,pcin);
-
-      /* Generate the replacement code */
-      pc = pcprev;
-      pcr = peepBlock->replace->pcHead;  // This is the replacement code
-      while (pcr) {
-	pCodeOp *pcop=NULL;
-	/* If the replace pcode is an instruction with an operand, */
-	/* then duplicate the operand (and expand wild cards in the process). */
-	if(pcr->type == PC_OPCODE) {
-	  if(PCI(pcr)->pcop) {
-	    /* The replacing instruction has an operand.
-	     * Is it wild? */
-	    if(PCI(pcr)->pcop->type == PO_WILD) {
-	      int index = PCOW(PCI(pcr)->pcop)->id;
-	      fprintf(stderr,"copying wildopcode\n");
-	      if(peepBlock->wildpCodeOps[index])
-		pcop = pCodeOpCopy(peepBlock->wildpCodeOps[index]);
-	      else
-		fprintf(stderr,"error, wildopcode in replace but not source?\n");
-	    } else
-	      pcop = pCodeOpCopy(PCI(pcr)->pcop);
-	  }
-	  fprintf(stderr,"inserting pCode\n");
-	  pCodeInsertAfter(pc, newpCode(PCI(pcr)->op,pcop));
-	} else if (pcr->type == PC_WILD) {
-	  pCodeInsertAfter(pc,peepBlock->wildpCodes[PCW(pcr)->id]);
-	} else if (pcr->type == PC_COMMENT) {
-	  pCodeInsertAfter(pc, newpCodeCharP( ((pCodeComment *)(pcr))->comment));
-	}
-
-
-	pc = pc->next;
-	pc->print(stderr,pc);
-	pcr = pcr->next;
-      }
-
-      return 1;
-    }
-  next_rule:
-    peeprules = peeprules->next;
+next_rule:
+	peeprules = peeprules->next;
   }
+  DFPRINTF((stderr," no rule matched\n"));
 
   return 0;
 }
-
-
-
-
-
-
-
-
-
-
-#if 0
-/*******************/
-pCode *parseLineNode(char *ln)
-{
-  char buffer[50], *s;
-  int state=0;          //0 label, 1 mnemonic, 2 operand, 3 operand, 4 comment
-  int var;
-  pCode *pc = NULL;
-  //  pCodeLabel *pcl = NULL;
-
-  if(!ln || !*ln)
-    return pc;
-
-  s = buffer;
-  *s = 0;
-
-  while(*ln) {
-
-    /* skip white space */
-    while (isspace (*ln))
-      ln++;
-
-    switch(state) {
-
-    case 0:   // look for a label
-    case 1:   // look for mnemonic
-
-      if(*ln == '%') {
-
-	// Wild
-
-	ln++;
-	if(!isdigit(*ln) )
-	  break;
-	  //goto next_state;
-
-	var = strtol(ln, &ln, 10);
-	if(*ln  == ':') {
-	  // valid wild card label
-	  fprintf(stderr, " wildcard label: %d\n",var);
-	  ln++;
-	} else
-	  fprintf(stderr, " wild opcode: %d\n",var), state++;
-
-      } else {
-	// not wild
-	// Extract the label/mnemonic from the line
-
-	s = buffer;
-	while(*ln && !(isspace(*ln) || *ln == ':'))
-	  *s++ = *ln++;
-
-	*s = 0;
-	if(*ln == ':')
-	  fprintf(stderr," regular label: %s\n",buffer), ln++;
-	else
-	  fprintf(stderr," regular mnem: %s\n",buffer), state++;
-      }
-      state++;
-      break;
-
-    default:
-      ln++;
-
-    }
-  }
-
-  return pc;
-  
-}
-#endif

@@ -1,3 +1,5 @@
+#include <float.h>
+
 /* convert signed long to float */
 float __slong2fs (signed long sl) {
   if (sl<0) 

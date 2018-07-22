@@ -138,7 +138,10 @@ struct ht;
 \
   TK(CPP_COMMENT,	SPELL_STRING)	/* Only if output comments.  */ \
   TK(CPP_MACRO_ARG,	SPELL_NONE)	/* Macro argument.  */		\
-  OP(CPP_EOF,		"EOL")		/* End of line or file.  */
+  OP(CPP_EOF,		"EOL")		/* End of line or file.  */	\
+\
+  /* SDCC _asm specific */						\
+  TK(CPP_ASM,		SPELL_STRING)   /* _asm ... _endasm ; */
 
 #define OP(e, s) e,
 #define TK(e, s) e,
@@ -384,6 +387,15 @@ struct cpp_options
      options.  Stand-alone CPP should then bail out after option
      parsing; drivers might want to continue printing help.  */
   unsigned char help_only;
+    
+  /* SDCC abuse by Kevin: allow naked '#' characters in expanded macros
+   * (see _cpp_create_definition in cppmacro.c)
+   */
+  unsigned char allow_naked_hash;
+
+  /* SDCC _asm specific
+     switch _asm block preprocessing on / off */
+  unsigned char preproc_asm;
 };
 
 /* This structure is passed to the call back when changing file.  */

@@ -47,7 +47,7 @@ extern char *filename;
 
 FILE *yyin;
 
-int yylineno;
+int mylineno;
 char *currFname;
 char *yytext;
 
@@ -234,12 +234,12 @@ check_token (const char *sz)
   /* check if it is in the typedef table */
   if (findSym (TypedefTab, NULL, sz))
     {
-      strcpy (yylval.yychar, sz);
+      strncpyz (yylval.yychar, sz, sizeof(yylval.yychar));
       return TYPE_NAME;
     }
   else
     {
-      strcpy (yylval.yychar, sz);
+      strncpyz (yylval.yychar, sz, sizeof(yylval.yychar));
       return IDENTIFIER;
     }
 }
@@ -292,8 +292,8 @@ handle_line (void)
   if (line[0] == '\0')
     error ("Error in number in #line");
   /* This is weird but cpp seems to add an extra three to the line no */
-  yylineno = atoi (line) - 3;
-  lineno = yylineno;
+  mylineno = atoi (line) - 3;
+  lineno = mylineno;
   /* Fetch the filename if there is one */
   while (c == '\t' || c == ' ')
     c = GETC ();
@@ -309,7 +309,7 @@ handle_line (void)
       if (c == '\"')
 	{
 	  *p = '\0';
-	  currFname = gc_strdup (line);
+	  currFname = Safe_strdup (line);
 	}
       filename = currFname;
     }
@@ -325,8 +325,8 @@ static INLINE int
 check_newline (void)
 {
   int c;
-  yylineno++;
-  lineno = yylineno;
+  mylineno++;
+  lineno = mylineno;
 
   /* Skip any leading white space */
   c = GETC ();
@@ -916,7 +916,7 @@ int
 altlex_testparse (const char *input)
 {
   /* Fiddle with the read-ahead buffer to insert ourselves */
-  strcpy (linebuf, input);
+  strncpyz (linebuf, input, sizeof(linebuf));
   linelen = strlen (linebuf) + 1;
   linepos = 0;
 

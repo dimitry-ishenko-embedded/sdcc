@@ -58,32 +58,54 @@ GENERATE_CASES = generate-cases.py
 
 # Magically generate the list of configured ports to test.
 # Each directory under ports/ is used as a port name.  Each port is tested.
-# The port name must be the same as the one used in the SDCC '-mxxx' argument.
 # Each port must have a spec.mk which describes how to build the object
 # files and how to run the emulator.
-ALL_PORTS = $(filter-out CVS mcs51 gbz80,$(notdir $(wildcard $(PORTS_DIR)/*)))
+ALL_PORTS = $(filter-out CVS xa51 mcs51 mcs51-large mcs51-stack-auto ds390 gbz80 hc08,$(notdir $(wildcard $(PORTS_DIR)/*)))
+
+# These  ports will be cleaned with 'make clean'
+CLEAN_PORTS = $(filter-out CVS,$(notdir $(wildcard $(PORTS_DIR)/*)))
 
 all: test-ports
 
 # Test all of the ports
 test-ports:
-	for i in $(ALL_PORTS); do $(MAKE) inter-port-clean test-port PORT=$$i; done
+	for i in $(ALL_PORTS); do $(MAKE) test-port PORT=$$i; done
 
 # Helper rule for testing the z80 port only
 test-z80:
-	$(MAKE) inter-port-clean test-port PORT=z80
+	$(MAKE) test-port PORT=z80
 
 # Helper rule for testing the z80 port only
 test-gbz80:
-	$(MAKE) inter-port-clean test-port PORT=gbz80
+	$(MAKE) test-port PORT=gbz80
 
-# Helper rule for testing the mcs51 small model port only
+# Helper rule for testing the mcs51 port only
 test-mcs51:
-	$(MAKE) inter-port-clean test-port PORT=mcs51
+	$(MAKE) test-port PORT=mcs51
+test-mcs51-large:
+	$(MAKE) test-port PORT=mcs51-large
+test-mcs51-stack-auto:
+	$(MAKE) make-library test-port PORT=mcs51-stack-auto
 
-# Helper rule for testing the host cc only
+# Helper rule for testing the ds390 port only
+test-ds390:
+	$(MAKE) test-port PORT=ds390
+
+# Helper rule for testing the z80 port only(use ucSim simulator)
+test-ucz80:
+	$(MAKE) test-port PORT=ucz80
+
+# Helper rule for testing the hc08 port only(use ucSim simulator)
+test-hc08:
+	$(MAKE) test-port PORT=hc08
+
+# Helper rule for testing the xa51 port only(use ucSim simulator)
+test-xa51:
+	$(MAKE) test-port PORT=xa51
+
+### Helper rule for testing the host cc only
 test-host:
-	$(MAKE) inter-port-clean test-port PORT=host
+	$(MAKE) test-port PORT=host
 
 test-host2:
 	$(MAKE) test-port PORT=host
@@ -101,17 +123,18 @@ PORT_RESULTS = $(ALL_TESTS:$(TESTS_DIR)/%.c=$(PORT_RESULTS_DIR)/%.out)
 SDCC_DIR = ../..
 SDCC_EXTRA_DIR = ../../../sdcc-extra
 
+
 # Defaults.  Override in spec.mk if required.
 # Path to SDCC
 SDCC = $(SDCC_DIR)/bin/sdcc
 # Base flags.
-SDCCFLAGS = -m$(PORT)
+SDCCFLAGS +=
 # Extension of object intermediate files
 OBJEXT = .o
 # Extension of files that can be run in the emulator
 EXEEXT = .bin
 # Currently unused.  Extension to append to intermediate directories.
-DIREXT = 
+DIREXT =
 
 # Only include if we're in a per-port call.
 ifdef PORT
@@ -127,11 +150,9 @@ SDCCFLAGS += -Ifwk/include -Itests
 # Rule to generate the iterations of a test suite off the soure suite.
 $(PORT_CASES_DIR)/%/iterations.stamp: $(TESTS_DIR)/%.c $(GENERATE_CASES)
 	echo Processing $<
-	rm -rf $(CASES_DIR)/$(TESTS_NAME)
-	mkdir -p $(CASES_DIR)/$(TESTS_NAME)
+	rm -rf `dirname $@`
 	mkdir -p `dirname $@`
-	python $(GENERATE_CASES) $< > /dev/null
-	cp $(CASES_DIR)/$(TESTS_NAME)/*.c `dirname $@`
+	python $(GENERATE_CASES) $< `dirname $@` > /dev/null
 	touch $@
 
 # Rule linking the combined results log to all of the files in the
@@ -179,7 +200,5 @@ $(RESULTS): $(SUB_RESULTS)
 # BeginGeneric rules
 
 clean:
-	rm -rf $(CASES_DIR) $(RESULTS_DIR) *.pyc
-
-inter-port-clean:
-	rm -f  fwk/lib/*.o fwk/lib/*.asm fwk/lib/*.rst fwk/lib/*.lst fwk/lib/*.rel
+	rm -rf $(CASES_DIR) $(RESULTS_DIR) *.pyc fwk/lib/timeout fwk/lib/timeout.exe
+	for i in $(CLEAN_PORTS); do $(MAKE) -f $(PORTS_DIR)/$$i/spec.mk _clean PORTS_DIR=$(PORTS_DIR) PORT=$$i; done

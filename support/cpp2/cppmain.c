@@ -249,7 +249,9 @@ scan_buffer (pfile)
 	  cpp_output_token (token, print.outf);
 	  print.printed = 1;
 	  if (token->type == CPP_STRING || token->type == CPP_WSTRING
-	      || token->type == CPP_COMMENT)
+            || token->type == CPP_COMMENT
+            /* SDCC _asm specific */
+            || token->type == CPP_ASM)
 	    check_multiline_token (&token->val.str);
 	}
     }
@@ -342,14 +344,8 @@ print_line (special_flags)
     putc ('\n', print.outf);
   print.printed = 0;
 
-  /* SDCC likes #line, not # number. Should be fixed... */
-#if 0  
   fprintf (print.outf, "# %u \"%s\"%s%s\n",
 	   print.lineno, print.last_fname, special_flags, print.syshdr_flags);
-#else
-  fprintf (print.outf, "#line %u \"%s\"%s%s\n",
-	   print.lineno, print.last_fname, special_flags, print.syshdr_flags);
-#endif	   
 }
 
 /* Callbacks.  */

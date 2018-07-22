@@ -26,13 +26,32 @@
 #define  SIMI_H
 
 #define MAX_SIM_BUFF 8*1024
-#define SIMNAME "s51"
+
+#define MAX_CACHE_SIZE 2048
+/* number of cache */
+#define IMEM_CACHE     0
+#define XMEM_CACHE     1
+#define SREG_CACHE     2
+#define NMEM_CACHE     3
+/* special index */
+#define  BIT_CACHE     4
+
+typedef struct _memcache
+{
+    int addr;
+    int size;
+    char buffer[MAX_CACHE_SIZE];
+} memcache_t;
+
+//#define SIMNAME "s51"
+extern int sock;
 extern char simactive;
 void  openSimulator (char **,int);
-void  waitForSim ();
+void waitForSim(int timeout_ms, char *expect);
 void  closeSimulator ();
 void  sendSim(char *);
 char *simResponse();
+void  simSetPC (unsigned int);
 void  simSetBP (unsigned int);
 void  simClearBP (unsigned int);
 void  simLoadFile(char *);
@@ -40,5 +59,5 @@ void  simReset ();
 char  *simRegs() ;
 unsigned int simGoTillBp (unsigned int);
 unsigned long simGetValue (unsigned int ,char , int );
-
+int simSetValue (unsigned int ,char , int, unsigned long );
 #endif

@@ -25,6 +25,29 @@
 #define TARGET_STRING		"gbz80"
 #endif
 
+#ifdef WIN32T
+#include <time.h>
+
+void Timer(int action, char * message)
+{
+	static double start, end, total=0.0;
+    static const double secs_per_tick = 1.0 / CLOCKS_PER_SEC;
+
+    if(action==0) start=clock()*secs_per_tick;
+    else if(action==1)
+    {
+    	end=clock() * secs_per_tick;
+		printf("%s \t%f seconds.\n", message, (end-start));
+		total+=end-start;
+    }
+    else
+    {
+		printf("Total time: \t%f seconds.\n", total);
+		total=0.0;
+    }
+}
+#endif
+
 /*)Module	lkmain.c
  *
  *	The module lkmain.c contains the functions which
@@ -164,6 +187,10 @@ char *argv[];
 {
 	register char *p;
 	register int c, i;
+
+#ifdef WIN32T
+    Timer(0, "");
+#endif
 
 #ifdef GAMEBOY
 	nb_rom_banks = 2;
@@ -376,6 +403,9 @@ char *argv[];
 			reloc('E');
 		}
 	}
+#ifdef WIN32T
+    Timer(1, "Linker time");
+#endif
 	lkexit(lkerr);
 
         /* Never get here. */
@@ -458,6 +488,29 @@ link()
 	if ((c=endline()) == 0) { return; }
 	switch (c) {
 
+    case 'O': /*For some important sdcc options*/
+        if (pass == 0)
+        {
+            if(strlen(sdccopt)==0)
+            {
+                strcpy(sdccopt, &ip[1]);
+                strcpy(sdccopt_module, curr_module);
+            }
+            else
+            {
+                if(strcmp(sdccopt, &ip[1])!=0)
+                {
+				    fprintf(stderr,
+				    "?ASlink-Warning-Conflicting sdcc options:\n"
+                    "   \"%s\" in module \"%s\" and\n"
+                    "   \"%s\" in module \"%s\".\n",
+                    sdccopt, sdccopt_module, &ip[1], curr_module);
+				    lkerr++;
+                }
+            }
+        }
+		break;
+
 	case 'X':
 		radix = 16;
 		break;
@@ -487,7 +540,10 @@ link()
 
 	case 'M':
 		if (pass == 0)
+        {
+            strcpy(curr_module, &ip[1]);
 			module();
+        }
 		break;
 
 	case 'A':
