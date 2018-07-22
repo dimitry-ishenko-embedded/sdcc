@@ -51,7 +51,7 @@ static bool matchLine (char *, char *, hTab **);
 bool isLabelDefinition (const char *line, const char **start, int *len);
 
 #define FBYNAME(x) int x (hTab *vars, lineNode *currPl, lineNode *endPl, \
-	lineNode *head, const char *cmdLine)
+	lineNode *head, char *cmdLine)
 
 #if !OPT_DISABLE_PIC
 void peepRules2pCode(peepRule *);
@@ -64,134 +64,6 @@ void pic16_peepRules2pCode(peepRule *);
 /*-----------------------------------------------------------------*/
 /* pcDistance - afinds a label back ward or forward                */
 /*-----------------------------------------------------------------*/
-int
-mcs51_instruction_size(const char *inst)
-{
-	char *op, op1[256], op2[256];
-	int opsize;
-	const char *p;
-
-	while (*inst && isspace(*inst)) inst++;
-
-	#define ISINST(s) (strncmp(inst, (s), sizeof(s)-1) == 0)
-
-	/* Based on the current (2003-08-22) code generation for the
-	   small library, the top instruction probability is:
-	   
-	     57% mov/movx/movc
-	      6% push
-	      6% pop
-	      4% inc
-	      4% lcall
-	      4% add
-	      3% clr
-	      2% subb
-	*/
-	/* mov, push, & pop are the 69% of the cases. Check them first! */
-	if (ISINST("mov"))
-	  {
-	    if (*(inst+3)=='x') return 1; /* movx */
-	    if (*(inst+3)=='c') return 1; /* movc */
-	    goto checkoperands;           /* mov  */
-	  }
-	if (ISINST("push")) return 2;
-	if (ISINST("pop")) return 2;
-
-	if (ISINST("lcall")) return 3;
-	if (ISINST("ret")) return 1;
-	if (ISINST("ljmp")) return 3;
-	if (ISINST("sjmp")) return 2;
-	if (ISINST("rlc")) return 1;
-	if (ISINST("rrc")) return 1;
-	if (ISINST("rl")) return 1;
-	if (ISINST("rr")) return 1;
-	if (ISINST("swap")) return 1;
-	if (ISINST("jc")) return 2;
-	if (ISINST("jnc")) return 2;
-	if (ISINST("jb")) return 3;
-	if (ISINST("jnb")) return 3;
-	if (ISINST("jbc")) return 3;
-	if (ISINST("jmp")) return 1;	// always jmp @a+dptr
-	if (ISINST("jz")) return 2;
-	if (ISINST("jnz")) return 2;
-	if (ISINST("cjne")) return 3;
-	if (ISINST("mul")) return 1;
-	if (ISINST("div")) return 1;
-	if (ISINST("da")) return 1;
-	if (ISINST("xchd")) return 1;
-	if (ISINST("reti")) return 1;
-	if (ISINST("nop")) return 1;
-	if (ISINST("acall")) return 1;
-	if (ISINST("ajmp")) return 2;
-
-checkoperands:
-	p = inst;
-	while (*p && isalnum(*p)) p++;
-	for (op = op1, opsize=0; *p && *p != ',' && opsize < sizeof(op1); p++) {
-		if (!isspace(*p)) *op++ = *p, opsize++;
-	}
-	*op = '\0';
-	if (*p == ',') p++;
-	for (op = op2, opsize=0; *p && *p != ',' && opsize < sizeof(op2); p++) {
-		if (!isspace(*p)) *op++ = *p, opsize++;
-	}
-	*op = '\0';
-
-	#define IS_A(s) (*(s) == 'a' && *(s+1) == '\0')
-	#define IS_C(s) (*(s) == 'c' && *(s+1) == '\0')
-	#define IS_Rn(s) (*(s) == 'r' && *(s+1) >= '0' && *(s+1) <= '7')
-	#define IS_atRi(s) (*(s) == '@' && *(s+1) == 'r')
-
-	if (ISINST("mov")) {
-		if (IS_C(op1) || IS_C(op2)) return 2;
-		if (IS_A(op1)) {
-			if (IS_Rn(op2) || IS_atRi(op2)) return 1;
-			return 2;
-		}
-		if (IS_Rn(op1) || IS_atRi(op1)) {
-			if (IS_A(op2)) return 1;
-			return 2;
-		}
-		if (strcmp(op1, "dptr") == 0) return 3;
-		if (IS_A(op2) || IS_Rn(op2) || IS_atRi(op2)) return 2;
-		return 3;
-	}
-	if (ISINST("add") || ISINST("addc") || ISINST("subb") || ISINST("xch")) {
-		if (IS_Rn(op2) || IS_atRi(op2)) return 1;
-		return 2;
-	}
-	if (ISINST("inc") || ISINST("dec")) {
-		if (IS_A(op1) || IS_Rn(op1) || IS_atRi(op1)) return 1;
-		if (strcmp(op1, "dptr") == 0) return 1;
-		return 2;
-	}
-	if (ISINST("anl") || ISINST("orl") || ISINST("xrl")) {
-		if (IS_C(op1)) return 2;
-		if (IS_A(op1)) {
-			if (IS_Rn(op2) || IS_atRi(op2)) return 1;
-			return 2;
-		} else {
-			if (IS_A(op2)) return 2;
-			return 3;
-		}
-	}
-	if (ISINST("clr") || ISINST("setb") || ISINST("cpl")) {
-		if (IS_A(op1) || IS_C(op1)) return 1;
-		return 2;
-	}
-	if (ISINST("djnz")) {
-		if (IS_Rn(op1)) return 2;
-		return 3;
-	}
-
-	if (*inst == 'a' && *(inst+1) == 'r' && *(inst+2) >= '0' && *(inst+2) <= '7' && op1[0] == '=') {
-		/* ignore ar0 = 0x00 type definitions */
-		return 0;
-	}
-
-	fprintf(stderr, "Warning, peephole unrecognized instruction: %s\n", inst);
-	return 3;
-}
 
 int 
 pcDistance (lineNode * cpos, char *lbl, bool back)
@@ -208,8 +80,8 @@ pcDistance (lineNode * cpos, char *lbl, bool back)
 	  *pl->line != ';' &&
 	  pl->line[strlen (pl->line) - 1] != ':' &&
 	  !pl->isDebug) {
-	        if (TARGET_IS_MCS51) {
-			dist += mcs51_instruction_size(pl->line);
+	        if (port->peep.getSize) {
+			dist += port->peep.getSize(pl);
 		} else {
 			dist += 3;
 		}
@@ -306,6 +178,51 @@ FBYNAME (labelInRange)
   return TRUE;
 }
 
+
+/*-----------------------------------------------------------------*/
+/* labelJTInRange - will check to see if label %5 and up are       */
+/* within range.                                                   */
+/* Specifically meant to optimize long (3-byte) jumps to short     */
+/* (2-byte) jumps in jumptables                                    */
+/*-----------------------------------------------------------------*/
+FBYNAME (labelJTInRange)
+{
+  char *lbl;
+  int dist, count, i;
+
+  if (!getenv("SDCC_SJMP_JUMPTABLE"))
+    return FALSE;
+  
+  /* Only optimize within a jump table */
+  if (currPl->ic && currPl->ic->op != JUMPTABLE)
+    return FALSE;
+  
+  count = elementsInSet( IC_JTLABELS (currPl->ic) );
+  
+  /* check all labels (this is needed if the case statements are unsorted) */
+  for (i=0; i<count; i++)
+    {
+      /* assumes that the %5 pattern variable has the first ljmp label */
+      lbl = hTabItemWithKey (vars, 5+i);
+      if (!lbl)
+        return FALSE;
+    
+      dist = pcDistance (currPl, lbl, FALSE);
+
+      /* three terms used to calculate allowable distance */
+// printf("\nlabel %s %i dist %i cdist 0x%02x 0x%02x\n", lbl, i, dist, dist -(count-i-1)-(7+3*i), 127+(count-i-1)+(7+3*i) - dist);
+      if (!dist ||
+          dist > 127+           /* range of sjmp */
+                 (7+3*i)+       /* offset between this jump and currPl, 
+                                   should use pcDistance instead? */
+                 (count-i-1)    /* if peephole applies distance is shortened */
+         )
+        return FALSE;
+    }
+  return TRUE;
+}
+
+
 /*-----------------------------------------------------------------*/
 /* labelIsReturnOnly - Check if label %5 is followed by RET        */
 /*-----------------------------------------------------------------*/
@@ -315,13 +232,14 @@ FBYNAME (labelIsReturnOnly)
   const char *label, *p;
   const lineNode *pl;
   int len;
+  char * retInst;
 
   label = hTabItemWithKey (vars, 5);
   if (!label) return FALSE;
   len = strlen(label);
 
   for(pl = currPl; pl; pl = pl->next) {
-	if (pl->line && !pl->isDebug &&
+	if (pl->line && !pl->isDebug && !pl->isComment &&
 	  pl->line[strlen(pl->line)-1] == ':') {
 		if (strncmp(pl->line, label, len) == 0) break; /* Found Label */
 		if (strlen(pl->line) != 7 || !isdigit(*(pl->line)) ||
@@ -334,11 +252,17 @@ FBYNAME (labelIsReturnOnly)
   }
   if (!pl) return FALSE; /* did not find the label */
   pl = pl->next;
+  while (pl && (pl->isDebug || pl->isComment))
+    pl = pl->next;
   if (!pl || !pl->line || pl->isDebug) return FALSE; /* next line not valid */
   p = pl->line;
   for (p = pl->line; *p && isspace(*p); p++)
 	  ;
-  if (strcmp(p, "ret") == 0) return TRUE;
+  
+  retInst = "ret";
+  if (TARGET_IS_HC08)
+    retInst = "rts";
+  if (strcmp(p, retInst) == 0) return TRUE;
   return FALSE;
 }
 
@@ -648,6 +572,84 @@ FBYNAME (labelRefCount)
   return rc;
 }
 
+
+/* labelRefCountChange:
+ * takes two parameters: a variable (bound to a label name)
+ * and a signed int for changing the reference count.
+ *
+ * Please note, this function is not a conditional. It unconditionally
+ * changes the label. It should be passed as the 'last' function
+ * so it only is applied if all other conditions have been met.
+ *
+ * should always return TRUE
+ */
+FBYNAME (labelRefCountChange)
+{
+  int varNumber, RefCountDelta;
+  bool rc = FALSE;
+
+  /* If we don't have the label hash table yet, build it. */
+  if (!labelHash)
+    {
+      buildLabelRefCountHash (head);
+    }
+
+  if (sscanf (cmdLine, "%*[ \t%]%d %i", &varNumber, &RefCountDelta) == 2)
+    {
+      char *label = hTabItemWithKey (vars, varNumber);
+
+      if (label)
+        {
+          labelHashEntry *entry;
+
+          entry = hTabFirstItemWK (labelHash, hashSymbolName (label));
+
+          while (entry)
+            {
+              if (!strcmp (label, entry->name))
+                {
+                  break;
+                }
+              entry = hTabNextItemWK (labelHash);
+            }
+          if (entry)
+            {
+              if (0 <= entry->refCount + RefCountDelta)
+                {
+                  entry->refCount += RefCountDelta;
+                  rc = TRUE;
+                }
+              else
+                {
+                  fprintf (stderr, "*** internal error: label %s may not get"
+                          " negative refCount in %s peephole.\n",
+                           label, __FUNCTION__);
+                }
+            }
+            else
+            {
+              fprintf (stderr, "*** internal error: no label has entry for"
+                       " %s in %s peephole.\n",
+                       label, __FUNCTION__);
+            }
+        }
+      else
+        {
+          fprintf (stderr, "*** internal error: var %d not bound"
+                   " in peephole %s rule.\n", 
+                   varNumber, __FUNCTION__);
+        }
+    }
+  else
+    {
+      fprintf (stderr,
+               "*** internal error: labelRefCount peephole restriction"
+               " malformed: %s\n", cmdLine);
+    }
+  return rc;
+}
+
+
 /* Within the context of the lines currPl through endPl, determine
 ** if the variable var contains a symbol that is volatile. Returns
 ** TRUE only if it is certain that this was not volatile (the symbol
@@ -833,6 +835,128 @@ error:
            " malformed: %s\n", cmdLine);
   return FALSE;
 }
+
+
+/*------------------------------------------------------------------*/
+/* setFromConditionArgs - parse a peephole condition's arguments    */
+/* to produce a set of strings, one per argument. Variables %x will */
+/* be replaced with their values. String literals (in single quotes)*/
+/* are accepted and return in unquoted form.                         */
+/*------------------------------------------------------------------*/
+static set *
+setFromConditionArgs (char *cmdLine, hTab * vars)
+{
+  int varNumber;
+  char *var;
+  char *digitend;
+  set *operands = NULL;
+
+  if (!cmdLine)
+    return NULL;
+  
+  while (*cmdLine && isspace(*cmdLine))
+    cmdLine++;
+
+  while (*cmdLine)
+    {
+      if (*cmdLine == '%')
+        {
+          cmdLine++;
+          if (!isdigit(*cmdLine))
+            goto error;
+          varNumber = strtol(cmdLine, &digitend, 10);
+          cmdLine = digitend;
+
+          var = hTabItemWithKey (vars, varNumber);
+
+          if (var)
+            {
+              addSetHead (&operands, var);
+            }
+          else
+            goto error;
+        }
+      else if (*cmdLine == '\'' )
+        {
+          char quote = *cmdLine;
+          
+          var = ++cmdLine;
+          while (*cmdLine && *cmdLine != quote)
+            cmdLine++;
+          if (*cmdLine == quote)
+            *cmdLine++ = '\0';
+          else
+            goto error;
+          addSetHead (&operands, var);
+        }
+      else
+        goto error;
+        
+      while (*cmdLine && isspace(*cmdLine))
+        cmdLine++;
+    }
+
+  return operands;
+
+error:
+  deleteSet (&operands);
+  return NULL;
+}
+
+static const char *
+operandBaseName (const char *op)
+{
+  if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
+    {
+      if (!strcmp (op, "acc") || !strncmp (op, "acc.", 4))
+        return "a";
+      if (!strncmp (op, "ar", 2) && isdigit(*(op+2)) && !*(op+3))
+        return op+1;
+    }
+
+  return op;
+}
+
+
+/*-------------------------------------------------------------------*/
+/* operandsNotRelated - returns true of the condition's operands are */
+/* not related (taking into account register name aliases). N-way    */
+/* comparison performed between all operands.                        */
+/*-------------------------------------------------------------------*/
+FBYNAME (operandsNotRelated)
+{
+  set *operands;
+  const char *op1, *op2;
+  
+  operands = setFromConditionArgs (cmdLine, vars);
+
+  if (!operands)
+    {
+      fprintf (stderr,
+               "*** internal error: operandsNotRelated peephole restriction"
+               " malformed: %s\n", cmdLine);
+      return FALSE;
+    }  
+
+  while ((op1 = setFirstItem (operands)))
+    {
+      deleteSetItem (&operands, (void*)op1);
+      op1 = operandBaseName (op1);
+            
+      for (op2 = setFirstItem (operands); op2; op2 = setNextItem (operands))
+        {
+          op2 = operandBaseName (op2);
+          if (strcmp (op1, op2) == 0)
+            {
+              deleteSet (&operands);
+              return FALSE;
+            }
+        }
+    }
+
+  deleteSet (&operands);
+  return TRUE;
+}
     
 
 /*-----------------------------------------------------------------*/
@@ -848,12 +972,16 @@ callFuncByName (char *fname,
   struct ftab
   {
     char *fname;
-    int (*func) (hTab *, lineNode *, lineNode *, lineNode *, const char *);
+    int (*func) (hTab *, lineNode *, lineNode *, lineNode *, char *);
   }
   ftab[] =
   {
     {
       "labelInRange", labelInRange
+    }
+    ,
+    {
+      "labelJTInRange", labelJTInRange
     }
     ,
     {
@@ -910,40 +1038,93 @@ callFuncByName (char *fname,
     },
     {
       "notVolatile", notVolatile
+    },
+    {
+      "operandsNotRelated", operandsNotRelated
+    },
+    {
+      "labelRefCountChange", labelRefCountChange
     }
   };
   int 	i;
-  char  *cmdCopy, *funcName, *funcArgs;
-  int 	rc = -1;
+  char  *cmdCopy, *funcName, *funcArgs, *cmdTerm;
+  char  c;
+  int 	rc;
     
   /* Isolate the function name part (we are passed the full condition 
    * string including arguments) 
    */
-  cmdCopy = Safe_strdup(fname);
-  funcName = strtok(cmdCopy, " \t");
-  funcArgs = strtok(NULL, "");
-
-    for (i = 0; i < ((sizeof (ftab)) / (sizeof (struct ftab))); i++)
+  cmdTerm = cmdCopy = Safe_strdup(fname);
+  
+  do
     {
-	if (strcmp (ftab[i].fname, funcName) == 0)
-	{
-	    rc = (*ftab[i].func) (vars, currPl, endPl, head,
-				  funcArgs);
-	}
-    }
+      funcArgs = funcName = cmdTerm;
+      while ((c = *funcArgs) && c != ' ' && c != '\t' && c != '(')
+        funcArgs++;
+      *funcArgs = '\0';  /* terminate the function name */
+      if (c)
+        funcArgs++;
+      
+      /* Find the start of the arguments */
+      if (c == ' ' || c == '\t')
+        while ((c = *funcArgs) && (c == ' ' || c == '\t'))
+          funcArgs++;
+      
+      /* If the arguments started with an opening parenthesis,  */
+      /* use the closing parenthesis for the end of the         */
+      /* arguments and look for the start of another condition  */
+      /* that can optionally follow. If there was no opening    */
+      /* parethesis, then everything that follows are arguments */
+      /* and there can be no additional conditions.             */
+      if (c == '(')
+        {
+          cmdTerm = funcArgs;
+          while ((c = *cmdTerm) && c != ')')
+            cmdTerm++;
+          *cmdTerm = '\0';  /* terminate the arguments */
+          if (c == ')')
+            {
+              cmdTerm++;
+              while ((c = *cmdTerm) && (c == ' ' || c == '\t' || c == ','))
+                cmdTerm++;
+              if (!*cmdTerm)
+                cmdTerm = NULL;
+            }
+          else
+            cmdTerm = NULL; /* closing parenthesis missing */
+        }
+      else
+        cmdTerm = NULL;
+
+      if (!*funcArgs)
+        funcArgs = NULL;
+        
+      rc = -1;
+      for (i = 0; i < ((sizeof (ftab)) / (sizeof (struct ftab))); i++)
+        {
+	  if (strcmp (ftab[i].fname, funcName) == 0)
+	    {
+	      rc = (*ftab[i].func) (vars, currPl, endPl, head,
+				    funcArgs);
+              break;
+	    }
+        }
     
-    if (rc == -1)
-    {
-	fprintf (stderr, 
-		 "could not find named function \"%s\" in "
-		 "peephole function table\n",
-		 funcName);
-        // If the function couldn't be found, let's assume it's
-	// a bad rule and refuse it.
-	rc = FALSE;
+      if (rc == -1)
+        {
+	  fprintf (stderr, 
+		   "could not find named function \"%s\" in "
+		   "peephole function table\n",
+		   funcName);
+          // If the function couldn't be found, let's assume it's
+	  // a bad rule and refuse it.
+	  rc = FALSE;
+          break;
+        }
     }
-
-    Safe_free(cmdCopy);
+  while (rc && cmdTerm);
+  
+  Safe_free(cmdCopy);
     
   return rc;
 }
@@ -1073,6 +1254,7 @@ getPeepLine (lineNode ** head, char **bpp)
 {
   char lines[MAX_PATTERN_LEN];
   char *lp;
+  int isComment;
 
   lineNode *currL = NULL;
   char *bp = *bpp;
@@ -1103,18 +1285,22 @@ getPeepLine (lineNode ** head, char **bpp)
       lp = lines;
       while ((*bp != '\n' && *bp != '}') && *bp)
 	*lp++ = *bp++;
-
       *lp = '\0';
-      if (!currL)
-	*head = currL = newLineNode (lines);
-      else
-	currL = connectLine (currL, newLineNode (lines));
-
+      
       lp = lines;
       while (*lp && isspace(*lp))
         lp++;
-      if (*lp==';')
-        currL->isComment = 1;
+      isComment = (*lp == ';');
+        
+      if (!isComment || (isComment && !options.noPeepComments))
+	{
+	  if (!currL)
+	    *head = currL = newLineNode (lines);
+	  else
+	    currL = connectLine (currL, newLineNode (lines));
+	  currL->isComment = isComment;
+	}
+
     }
 
   *bpp = bp;
@@ -1686,23 +1872,35 @@ replaceRule (lineNode ** shead, lineNode * stail, peepRule * pr)
       lhead = comment;
     }
 
-  /* determine which iCodes the replacment lines relate to */
-  reassociate_ic(*shead,stail,lhead,cl);
+  if (lhead)
+    {
+      /* determine which iCodes the replacment lines relate to */
+      reassociate_ic(*shead,stail,lhead,cl);
 
-  /* now we need to connect / replace the original chain */
-  /* if there is a prev then change it */
-  if ((*shead)->prev)
-    {
-      (*shead)->prev->next = lhead;
-      lhead->prev = (*shead)->prev;
+      /* now we need to connect / replace the original chain */
+      /* if there is a prev then change it */
+      if ((*shead)->prev)
+	{
+	  (*shead)->prev->next = lhead;
+	  lhead->prev = (*shead)->prev;
+	}
+      *shead = lhead;
+      /* now for the tail */
+      if (stail && stail->next)
+	{
+	  stail->next->prev = cl;
+	  if (cl)
+	    cl->next = stail->next;
+	}
     }
-  *shead = lhead;
-  /* now for the tail */
-  if (stail && stail->next)
+  else
     {
-      stail->next->prev = cl;
-      if (cl)
-	cl->next = stail->next;
+      /* the replacement is empty - delete the source lines */
+      if ((*shead)->prev)
+        (*shead)->prev->next = stail->next;
+      if (stail->next)
+        stail->next->prev = (*shead)->prev;
+      *shead = stail->next;
     }
 }
 
@@ -1796,6 +1994,12 @@ buildLabelRefCountHash (lineNode * head)
 	  memcpy (entry->name, label, labelLen);
 	  entry->name[labelLen] = 0;
 	  entry->refCount = -1;
+          
+          /* Assume function entry points are referenced somewhere,   */
+          /* even if we can't find a reference (might be from outside */
+          /* the function) */
+          if (line->ic && (line->ic->op == FUNCTION))
+            entry->refCount++;
 
 	  hTabAddItem (&labelHash, hashSymbolName (entry->name), entry);
 	}

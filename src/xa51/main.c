@@ -53,7 +53,7 @@ void   _xa51_genAssemblerEnd (FILE * of)
   //rewinds==1 ? '\0' : 's');
 }
 
-void xa51_assignRegisters (eBBlock ** ebbs, int count);
+void xa51_assignRegisters (ebbIndex *);
 
 static int regParmFlg = 0;	/* determine if we can register a parameter */
 
@@ -64,7 +64,7 @@ _xa51_init (void)
 }
 
 static void
-_xa51_reset_regparm ()
+_xa51_reset_regparm (void)
 {
   regParmFlg = 0;
 }
@@ -275,6 +275,7 @@ PORT xa51_port =
     "CSEG    (CODE)",
     "DSEG    (DATA)",
     NULL, //"ISEG    (DATA)",
+    NULL, //"PSEG    (PAG,XDATA)",
     "XSEG    (XDATA)",
     "BSEG    (BIT)",
     NULL, //"RSEG    (DATA)",
@@ -301,9 +302,23 @@ PORT xa51_port =
   {
     2, -2
   },
+  {
+    xa51_emitDebuggerSymbol
+  },
+  {
+    255/3,      /* maxCount */
+    3,          /* sizeofElement */
+    /* The rest of these costs are bogus. They approximate */
+    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+    {4,4,4},    /* sizeofMatchJump[] */
+    {0,0,0},    /* sizeofRangeCompare[] */
+    0,          /* sizeofSubtract */
+    3,          /* sizeofDispatch */
+  },
   "_",
   _xa51_init,
   _xa51_parseOptions,
+  NULL,
   NULL,
   _xa51_finaliseOptions,
   _xa51_setDefaultOptions,
@@ -314,6 +329,7 @@ PORT xa51_port =
   _xa51_genAssemblerEnd,
   _xa51_genIVT,
   _xa51_genXINIT,
+  NULL, 			/* genInitStartup */
   _xa51_reset_regparm,
   _xa51_regparm,
   NULL, // process_pragma()

@@ -176,7 +176,10 @@ cnvToFcall (iCode * ic, eBBlock * ebp)
   IC_RESULT (newic) = IC_RESULT (ic);
   newic->lineno = lineno;
   newic->parmBytes+=bytesPushed;
-
+  ebp->hasFcall = 1;
+  if (currFunc)
+    FUNC_HASFCALL (currFunc->type) = 1;
+    
   if(TARGET_IS_PIC16) {
 	/* normally these functions aren't marked external, so we can use their
 	 * _extern field to marked as already added to symbol table */
@@ -264,6 +267,9 @@ found:
   newic = newiCode (CALL, operandFromSymbol (func), NULL);
   IC_RESULT (newic) = IC_RESULT (ic);
   newic->parmBytes+=bytesPushed;
+  ebp->hasFcall = 1;
+  if (currFunc)
+    FUNC_HASFCALL (currFunc->type) = 1;
 
   if(TARGET_IS_PIC16) {
 	/* normally these functions aren't marked external, so we can use their
@@ -354,6 +360,9 @@ found:
   newic = newiCode (CALL, operandFromSymbol (func), NULL);
   IC_RESULT (newic) = IC_RESULT (ic);
   newic->parmBytes+=bytesPushed;
+  ebp->hasFcall = 1;
+  if (currFunc)
+    FUNC_HASFCALL (currFunc->type) = 1;
 
   if(TARGET_IS_PIC16) {
 	/* normally these functions aren't marked external, so we can use their
@@ -388,33 +397,7 @@ convilong (iCode * ic, eBBlock * ebp, sym_link * type, int op)
   int su;
   int bytesPushed=0;
 
-  // Easy special case which avoids function call: modulo by a literal power 
-  // of two can be replaced by a bitwise AND.
-  if (op == '%' && isOperandLiteral(IC_RIGHT(ic)))
-  {
-      unsigned litVal = (unsigned)(operandLitValue(IC_RIGHT(ic)));
-      
-      // See if literal value is a power of 2.
-      while (litVal && !(litVal & 1))
-      {
-	  litVal >>= 1;
-      }
-      if (litVal)
-      {
-	  // discard first high bit set.
-	  litVal >>= 1;
-      }
-	  
-      if (!litVal)
-      {
-	  ic->op = BITWISEAND;
-	  IC_RIGHT(ic) = operandFromLit(operandLitValue(IC_RIGHT(ic)) - 1);
-	  return;
-      }
-  }
-    
   remiCodeFromeBBlock (ebp, ic);    
-    
     
   /* depending on the type */
   for (bwd = 0; bwd < 3; bwd++)
@@ -517,6 +500,9 @@ found:
   IC_RESULT (newic) = IC_RESULT (ic);
   newic->lineno = lineno;
   newic->parmBytes+=bytesPushed; // to clear the stack after the call
+  ebp->hasFcall = 1;
+  if (currFunc)
+    FUNC_HASFCALL (currFunc->type) = 1;
 
   if(TARGET_IS_PIC16) {
 	/* normally these functions aren't marked external, so we can use their
@@ -570,6 +556,32 @@ convertToFcall (eBBlock ** ebbs, int count)
 		cnvToFloatCast (ic, ebbs[i]);
 	    }
 
+          // Easy special case which avoids function call: modulo by a literal power
+          // of two can be replaced by a bitwise AND.
+          if (ic->op == '%' && isOperandLiteral(IC_RIGHT(ic)) &&
+              IS_UNSIGNED(operandType(IC_LEFT(ic))))
+            {
+              unsigned litVal = abs((int)operandLitValue(IC_RIGHT(ic)));
+
+              // See if literal value is a power of 2.
+              while (litVal && !(litVal & 1))
+                {
+                  litVal >>= 1;
+                }
+              if (litVal)
+                {
+                  // discard lowest set bit.
+                  litVal >>= 1;
+                }
+
+              if (!litVal)
+                {
+                  ic->op = BITWISEAND;
+                  IC_RIGHT(ic) = operandFromLit(operandLitValue(IC_RIGHT(ic)) - 1);
+                  continue;
+                }
+            }
+
 	  /* if long / int mult or divide or mod */
 	  if (ic->op == '*' || ic->op == '/' || ic->op == '%')
 	    {
@@ -611,10 +623,7 @@ convertToFcall (eBBlock ** ebbs, int count)
 static int
 isLocalWithoutDef (symbol * sym)
 {
-  if (!sym->level)
-    return 0;
-  
-  if (IS_STATIC (sym->etype))
+  if (!IS_AUTO (sym))
     return 0;
   
   if (IS_VOLATILE (sym->type))
@@ -636,15 +645,17 @@ isLocalWithoutDef (symbol * sym)
 /* replaceRegEqv - replace all local variables with their reqv     */
 /*-----------------------------------------------------------------*/
 static void 
-replaceRegEqv (eBBlock ** ebbs, int count)
+replaceRegEqv (ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->bbOrder;
+  int count = ebbi->count;
   int i;
 
   /* Update the symbols' def bitvector so we know if there is   */
   /* a defining iCode or not. Only replace a local variable     */
   /* with its register equivalent if there is a defining iCode; */
   /* otherwise, the port's register allocater may choke.        */
-  cseAllBlocks (ebbs, count, TRUE);
+  cseAllBlocks (ebbi, TRUE);
 
   for (i = 0; i < count; i++)
     {
@@ -771,11 +782,58 @@ replaceRegEqv (eBBlock ** ebbs, int count)
 }
 
 /*-----------------------------------------------------------------*/
+/* findReqv - search for a register equivalent                     */
+/*-----------------------------------------------------------------*/
+operand *
+findReqv (symbol * prereqv, eBBlock ** ebbs, int count)
+{
+  int i;
+  iCode * ic;
+  
+  /* for all blocks do */
+  for (i=0; i<count; i++)
+    {
+      /* for all instructions in the block do */
+      for (ic = ebbs[i]->sch; ic; ic = ic->next)
+	{
+	  if (ic->op == IFX)
+	    {
+	      if (IS_ITEMP (IC_COND (ic))
+		  && OP_SYMBOL (IC_COND (ic))->prereqv == prereqv)
+		return IC_COND (ic);
+	    }
+	  else if (ic->op == JUMPTABLE)
+	    {
+	      if (IS_ITEMP (IC_JTCOND (ic))
+		  && OP_SYMBOL (IC_JTCOND (ic))->prereqv == prereqv)
+		return IC_JTCOND (ic);
+	    }
+	  else
+	    {
+	      if (IS_ITEMP (IC_LEFT (ic))
+		  && OP_SYMBOL (IC_LEFT (ic))->prereqv == prereqv)
+		return IC_LEFT (ic);
+	      if (IS_ITEMP (IC_RIGHT (ic))
+		  && OP_SYMBOL (IC_RIGHT (ic))->prereqv == prereqv)
+		return IC_RIGHT (ic);
+	      if (IS_ITEMP (IC_RESULT (ic))
+		  && OP_SYMBOL (IC_RESULT (ic))->prereqv == prereqv)
+		return IC_RESULT (ic);
+	    }
+	}
+    }
+  
+  return NULL;
+}
+
+/*-----------------------------------------------------------------*/
 /* killDeadCode - eliminates dead assignments                      */
 /*-----------------------------------------------------------------*/
 int 
-killDeadCode (eBBlock ** ebbs, int count)
+killDeadCode (ebbIndex * ebbi)
 {
+  eBBlock ** ebbs = ebbi->dfOrder;
+  int count = ebbi->count;
   int change = 1;
   int gchange = 0;
   int i = 0;
@@ -829,7 +887,8 @@ killDeadCode (eBBlock ** ebbs, int count)
 	      if (IC_RESULT (ic) && POINTER_SET (ic))
 		continue;
               
-              if (POINTER_GET (ic) && IS_VOLATILE (operandType (IC_LEFT (ic))->next))
+              if (POINTER_GET (ic) && IS_VOLATILE (operandType (IC_LEFT (ic))->next)
+	          && !SPIL_LOC (IC_RESULT (ic)))
                 continue;
 
 	      /* if the result is used in the remainder of the */
@@ -881,7 +940,7 @@ killDeadCode (eBBlock ** ebbs, int count)
 		  /* a dead address-of operation should die, even if volatile */
 		  if (ic->op == ADDRESS_OF)
 		    volLeft = FALSE;
-
+              
 		  if (ic->next && ic->seqPoint == ic->next->seqPoint
 		      && (ic->next->op == '+' || ic->next->op == '-'))
 		    {
@@ -893,6 +952,16 @@ killDeadCode (eBBlock ** ebbs, int count)
 		        volRight = FALSE;
 		    }
 		  
+		  if (POINTER_GET (ic) && IS_VOLATILE (operandType (IC_LEFT (ic))->next))
+		    {
+		      if (SPIL_LOC (IC_RESULT (ic)))
+			{
+			  IC_RESULT (ic) = newiTempFromOp (IC_RESULT (ic));
+			  SPIL_LOC (IC_RESULT (ic)) = NULL;
+			}
+		      continue;
+		    }
+		                  
 		  change = 1;
 		  gchange++;
 		  
@@ -902,6 +971,29 @@ killDeadCode (eBBlock ** ebbs, int count)
 
 		  /* and defset of the block */
 		  bitVectUnSetBit (ebbs[i]->defSet, ic->key);
+
+		  /* If this is the last of a register equivalent, */
+		  /* look for a successor register equivalent. */
+		  bitVectUnSetBit (OP_DEFS (IC_RESULT (ic)), ic->key);
+		  if (IS_ITEMP (IC_RESULT (ic))
+		      && OP_SYMBOL (IC_RESULT (ic))->isreqv
+		      && bitVectIsZero (OP_DEFS (IC_RESULT (ic))))
+		    {
+		      symbol * resultsym = OP_SYMBOL (IC_RESULT (ic));
+		      symbol * prereqv = resultsym->prereqv;
+		      
+		      if (prereqv && prereqv->reqv && (OP_SYMBOL (prereqv->reqv) == resultsym))
+			{
+			  operand * newreqv;
+
+			  IC_RESULT (ic) = NULL;
+			  newreqv = findReqv (prereqv, ebbs, count);
+			  if (newreqv)
+			    {
+			      prereqv->reqv = newreqv;
+			    }
+			}
+		    }
 
 		  /* delete the result */
 		  IC_RESULT (ic) = NULL;
@@ -935,7 +1027,7 @@ killDeadCode (eBBlock ** ebbs, int count)
 	    }			/* end of all instructions */
 
 	  if (!ebbs[i]->sch && !ebbs[i]->noPath)
-	    disconBBlock (ebbs[i], ebbs, count);
+	    disconBBlock (ebbs[i], ebbi);
 
 	}			/* end of for all blocks */
 
@@ -996,15 +1088,83 @@ discardDeadParamReceives (eBBlock ** ebbs, int count)
 }
 
 /*-----------------------------------------------------------------*/
+/* optimizeCastCast - remove unneeded intermediate casts.          */
+/* Integer promotion may cast (un)signed char to int and then      */
+/* recast the int to (un)signed long. If the signedness of the     */
+/* char and long are the same, the cast can be safely performed in */
+/* a single step.                                                  */
+/*-----------------------------------------------------------------*/
+static void 
+optimizeCastCast (eBBlock ** ebbs, int count)
+{
+  int i;
+  iCode *ic;
+  iCode *uic;
+  sym_link * type1;
+  sym_link * type2;
+  sym_link * type3;
+  symbol * sym;
+
+  for (i = 0; i < count; i++)
+    {
+      for (ic = ebbs[i]->sch; ic; ic = ic->next)
+	{
+	  
+	  if (ic->op == CAST && IC_RESULT (ic) && IS_ITEMP (IC_RESULT (ic)))
+	    {
+	      type1 = operandType (IC_RIGHT (ic));
+	      type2 = operandType (IC_RESULT (ic));
+
+	      /* Look only for a cast from an integer type to an */
+	      /* integer type that has no loss of bits */
+	      if (!IS_INTEGRAL (type1) || !IS_INTEGRAL (type2))
+	        continue;
+	      if (getSize (type2) < getSize (type1))
+	        continue;
+	      
+	      /* There must be only one use of this first result */
+	      if (bitVectnBitsOn (OP_USES (IC_RESULT (ic))) != 1)
+	        continue;
+	      
+	      /* This use must be a second cast */
+	      uic = hTabItemWithKey (iCodehTab,
+			bitVectFirstBit (OP_USES (IC_RESULT (ic))));
+	      if (!uic || uic->op != CAST)
+	        continue;
+  
+	      /* It must be a cast to another integer type that */
+	      /* has no loss of bits */
+	      type3 = operandType (IC_RESULT (uic));
+	      if (!IS_INTEGRAL (type3))
+		 continue;
+	      if (getSize (type3) < getSize (type2))
+		 continue;
+	      
+	      /* The signedness between the first and last types */
+	      /* must match */
+	      if (SPEC_USIGN (type3) != SPEC_USIGN (type1))
+		 continue;
+
+	      /* Change the first cast to a simple assignment and */
+	      /* let the second cast do all the work */
+	      ic->op = '=';
+	      IC_LEFT (ic) = NULL;
+	      sym = OP_SYMBOL (IC_RESULT (ic));
+	      sym->type = copyLinkChain (type1);
+	      sym->etype = getSpec (sym->type);
+	    }
+	}
+    }
+}
+
+/*-----------------------------------------------------------------*/
 /* eBBlockFromiCode - creates extended basic blocks from iCode     */
 /*                    will return an array of eBBlock pointers     */
 /*-----------------------------------------------------------------*/
 eBBlock **
 eBBlockFromiCode (iCode * ic)
 {
-  eBBlock **ebbs = NULL;
-  int count = 0;
-  int saveCount = 0;
+  ebbIndex *ebbi = NULL;
   int change = 1;
   int lchange = 0;
   int kchange = 0;
@@ -1014,7 +1174,6 @@ eBBlockFromiCode (iCode * ic)
   if (!ic)
     return NULL;
 
-  count = 0;
   eBBNum = 0;
 
   /* optimize the chain for labels & gotos 
@@ -1023,71 +1182,72 @@ eBBlockFromiCode (iCode * ic)
   ic = iCodeLabelOptimize (ic);
 
   /* break it down into basic blocks */
-  ebbs = iCodeBreakDown (ic, &count);
-  saveCount = count;
-
+  ebbi = iCodeBreakDown (ic);
+  
   /* hash the iCode keys so that we can quickly index */
   /* them in the rest of the optimization steps */
   setToNull ((void *) &iCodehTab);
   iCodehTab = newHashTable (iCodeKey);
-  hashiCodeKeys (ebbs, count);
+  hashiCodeKeys (ebbi->bbOrder, ebbi->count);
   
   /* compute the control flow */
-  computeControlFlow (ebbs, count, 0);
+  computeControlFlow (ebbi);
 
   /* dumpraw if asked for */
   if (options.dump_raw)
-    dumpEbbsToFileExt (DUMP_RAW0, ebbs, count);
+    dumpEbbsToFileExt (DUMP_RAW0, ebbi);
 
   /* replace the local variables with their
      register equivalents : the liveRange computation
      along with the register allocation will determine
      if it finally stays in the registers */
-  replaceRegEqv (ebbs, count);
+  replaceRegEqv (ebbi);
 
   /* create loop regions */
-  loops = createLoopRegions (ebbs, count);
+  loops = createLoopRegions (ebbi);
 
   /* dumpraw if asked for */
   if (options.dump_raw)
-    dumpEbbsToFileExt (DUMP_RAW1, ebbs, count);
+    dumpEbbsToFileExt (DUMP_RAW1, ebbi);
 
+  optimizeCastCast (ebbi->bbOrder, ebbi->count);
+    
   /* do common subexpression elimination for each block */
-  change = cseAllBlocks (ebbs, saveCount, FALSE);
+  change = cseAllBlocks (ebbi, FALSE);
 
   /* dumpraw if asked for */
   if (options.dump_raw)
-    dumpEbbsToFileExt (DUMP_CSE, ebbs, count);
+    dumpEbbsToFileExt (DUMP_CSE, ebbi);
 
   /* compute the data flow */
-  computeDataFlow (ebbs, saveCount);
+  computeDataFlow (ebbi);
 
   /* dumpraw if asked for */
   if (options.dump_raw)
-    dumpEbbsToFileExt (DUMP_DFLOW, ebbs, count);
+    dumpEbbsToFileExt (DUMP_DFLOW, ebbi);
 
   /* global common subexpression elimination  */
   if (optimize.global_cse)
     {
-      change += cseAllBlocks (ebbs, saveCount, FALSE);
+      change += cseAllBlocks (ebbi, FALSE);
       if (options.dump_gcse)
-	dumpEbbsToFileExt (DUMP_GCSE, ebbs, saveCount);
+	dumpEbbsToFileExt (DUMP_GCSE, ebbi);
     }
   else
     {
       // compute the dataflow only
-      assert(cseAllBlocks (ebbs, saveCount, TRUE)==0);
+      assert(cseAllBlocks (ebbi, TRUE)==0);
     }
   /* kill dead code */
-  kchange = killDeadCode (ebbs, saveCount);
+  kchange = killDeadCode (ebbi);
 
   if (options.dump_kill)
-    dumpEbbsToFileExt (DUMP_DEADCODE, ebbs, count);
+    dumpEbbsToFileExt (DUMP_DEADCODE, ebbi);
 
   /* do loop optimizations */
-  change += (lchange = loopOptimizations (loops, ebbs, count));
+  change += (lchange = loopOptimizations (loops, ebbi));
   if (options.dump_loop)
-    dumpEbbsToFileExt (DUMP_LOOP, ebbs, count);
+    dumpEbbsToFileExt (DUMP_LOOP, ebbi);
 
   /* recompute the data flow and apply global cse again 
      if loops optimizations or dead code caused a change:
@@ -1098,24 +1258,24 @@ eBBlockFromiCode (iCode * ic)
      subexpression once more */
   if (lchange || kchange)
     {
-      computeDataFlow (ebbs, saveCount);
-      change += cseAllBlocks (ebbs, saveCount, FALSE);
+      computeDataFlow (ebbi);
+      change += cseAllBlocks (ebbi, FALSE);
       if (options.dump_loop)
-	dumpEbbsToFileExt (DUMP_LOOPG, ebbs, count);
+	dumpEbbsToFileExt (DUMP_LOOPG, ebbi);
 
       /* if loop optimizations caused a change then do
          dead code elimination once more : this will
          get rid of the extra assignments to the induction
          variables created during loop optimizations */
-      killDeadCode (ebbs, saveCount);
+      killDeadCode (ebbi);
 
       if (options.dump_loop)
-	dumpEbbsToFileExt (DUMP_LOOPD, ebbs, count);
+	dumpEbbsToFileExt (DUMP_LOOPD, ebbi);
 
     }
 
   /* sort it back by block number */
-  qsort (ebbs, saveCount, sizeof (eBBlock *), bbNumCompare);
+  //qsort (ebbs, saveCount, sizeof (eBBlock *), bbNumCompare);
 
   if (!options.lessPedantic) {
     // this is a good place to check missing return values
@@ -1125,9 +1285,9 @@ eBBlockFromiCode (iCode * ic)
        && !FUNC_ISNAKED(currFunc->type)) {
 	eBBlock *bp;
 	// make sure all predecessors of the last block end in a return
-	for (bp=setFirstItem(ebbs[saveCount-1]->predList); 
+	for (bp=setFirstItem(ebbi->bbOrder[ebbi->count-1]->predList); 
 	     bp; 
-	     bp=setNextItem(ebbs[saveCount-1]->predList)) {
+	     bp=setNextItem(ebbi->bbOrder[ebbi->count-1]->predList)) {
 	  if (bp->ech->op != RETURN) {
 	    werrorfl (bp->ech->filename, bp->ech->lineno,
 		      W_VOID_FUNC, currFunc->name);
@@ -1139,31 +1299,30 @@ eBBlockFromiCode (iCode * ic)
 
   /* if cyclomatic info requested then print it */
   if (options.cyclomatic)
-    printCyclomatic (ebbs, saveCount);
+    printCyclomatic (ebbi->bbOrder, ebbi->count);
 
   /* convert operations with support routines
      written in C to function calls : Iam doing
      this at this point since I want all the
      operations to be as they are for optimzations */
-  convertToFcall (ebbs, count);
+  convertToFcall (ebbi->bbOrder, ebbi->count);
 
   /* compute the live ranges */
-  computeLiveRanges (ebbs, count);
+  computeLiveRanges (ebbi->bbOrder, ebbi->count);
 
   if (options.dump_range)
-    dumpEbbsToFileExt (DUMP_RANGE, ebbs, count);
+    dumpEbbsToFileExt (DUMP_RANGE, ebbi);
 
   /* Now that we have the live ranges, discard parameter
    * receives for unused parameters.
    */
-  discardDeadParamReceives (ebbs, count);
+  discardDeadParamReceives (ebbi->bbOrder, ebbi->count);
 
   /* allocate registers & generate code */
-  port->assignRegisters (ebbs, count);
+  port->assignRegisters (ebbi);
 
   /* throw away blocks */
   setToNull ((void *) &graphEdges);
-  ebbs = NULL;
   
   return NULL;
 }

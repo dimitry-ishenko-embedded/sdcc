@@ -121,3 +121,68 @@ testMod(void)
    r16 = 0;
    cL = -128; ucR =    5; r16 =  cL % ucR; ASSERT(r16 == -3);
 }
+
+void
+testOr(void)
+{
+  {attrL}           char  cL;
+  {attrL}  unsigned char ucL;
+  {attrR}           char  cR;
+  {attrR}  unsigned char ucR;
+  volatile         short r16, r16b;
+
+   cL = 0x00;  cR = 0x80; r16 =  cL |  cR; r16b =  cR |  cL; ASSERT(r16 == (short) 0xff80); ASSERT(r16b == (short) 0xff80);
+  ucL = 0x80;  cR = 0x00; r16 = ucL |  cR; r16b =  cR | ucL; ASSERT(r16 ==           0x80); ASSERT(r16b ==           0x80);
+  ucL = 0x80; ucR = 0x80; r16 = ucL | ucR; r16b = ucR | ucL; ASSERT(r16 ==           0x80); ASSERT(r16b ==           0x80);
+}
+
+void
+testXor(void)
+{
+  {attrL}           char  cL;
+  {attrL}  unsigned char ucL;
+  {attrR}           char  cR;
+  {attrR}  unsigned char ucR;
+  volatile         short r16, r16b;
+
+   cL = 0x80;  cR = 0x80; r16 =  cL ^  cR; r16b =  cR ^  cL; ASSERT(r16 ==              0); ASSERT(r16b ==              0);
+   cL = 0x80;  cR = 0x00; r16 =  cL ^  cR; r16b =  cR ^  cL; ASSERT(r16 == (short) 0xff80); ASSERT(r16b == (short) 0xff80);
+
+  ucL = 0x80;  cR = 0x80; r16 = ucL ^  cR; r16b =  cR ^ ucL; ASSERT(r16 == (short) 0xff00); ASSERT(r16b == (short) 0xff00);
+  ucL = 0x80;  cR =    0; r16 = ucL ^  cR; r16b =  cR ^ ucL; ASSERT(r16 ==           0x80); ASSERT(r16b ==           0x80);
+  ucL =    0;  cR = 0x80; r16 = ucL ^  cR; r16b =  cR ^ ucL; ASSERT(r16 == (short) 0xff80); ASSERT(r16b == (short) 0xff80);
+
+  ucL = 0x80; ucR = 0x80; r16 = ucL ^ ucR; r16b = ucR ^ ucL; ASSERT(r16 ==      0); ASSERT(r16b ==      0);
+  ucL =    0; ucR = 0x80; r16 = ucL ^ ucR; r16b = ucR ^ ucL; ASSERT(r16 ==   0x80); ASSERT(r16b ==   0x80);
+}
+
+void
+testAnd(void)
+{
+  {attrL}           char  cL;
+  {attrL}  unsigned char ucL;
+  {attrR}           char  cR;
+  {attrR}  unsigned char ucR;
+  volatile         short r16, r16b;
+
+   cL = 0x80;  cR = 0x80; r16 =  cL &  cR; r16b =  cR &  cL; ASSERT(r16 == (short) 0xff80); ASSERT(r16b == (short) 0xff80);
+  ucL = 0x80;  cR = 0x80; r16 = ucL &  cR; r16b =  cR & ucL; ASSERT(r16 ==           0x80); ASSERT(r16b ==           0x80);
+  ucL = 0x80; ucR = 0x80; r16 = ucL & ucR; r16b = ucR & ucL; ASSERT(r16 ==           0x80); ASSERT(r16b ==           0x80);
+}
+
+void
+testComplement(void)
+{
+  {attrR}           char  c;
+  {attrR}  unsigned char uc;
+  volatile         short r16;
+
+   c = 0x00;  r16 = ~ c; ASSERT(r16    == (short) 0xffff); ASSERT(  ~ c < 0);
+  uc = 0x00;  r16 = ~uc; ASSERT(r16    == (short) 0xffff); ASSERT(  ~uc < 0);
+  ASSERT(~ (char)          0x00 == (short) 0xffff); ASSERT(~ (char)          0x00 < 0);
+  ASSERT(~ (unsigned char) 0x00 == (short) 0xffff); ASSERT(~ (unsigned char) 0x00 < 0);
+   c = 0x80;  r16 = ~ c; ASSERT(r16 == (short) 0x007f); ASSERT(~ c > 0);
+  uc = 0x80;  r16 = ~uc; ASSERT(r16 == (short) 0xff7f); ASSERT(~uc < 0);
+  ASSERT(~ (char)          0x80 == (short) 0x007f); ASSERT(~ (char)          0x80 > 0);
+  ASSERT(~ (unsigned char) 0x80 == (short) 0xff7f); ASSERT(~ (unsigned char) 0x80 < 0);
+}

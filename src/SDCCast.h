@@ -49,6 +49,7 @@ typedef struct ast
     unsigned rvalue:1;
     unsigned lvalue:1;
     unsigned initMode:1;
+    unsigned reversed:1;
     int level;			/* level for expr */
     int block;			/* block number   */
     int seqPoint;		/* sequence point */
@@ -111,7 +112,7 @@ ast;
 
 
 /* easy access macros   */
-#define  IS_AST_OP(x)			(x && x->type == EX_OP)
+#define  IS_AST_OP(x)			((x) && (x)->type == EX_OP)
 #define IS_CALLOP(x)   (IS_AST_OP(x) && x->opval.op == CALL)
 #define IS_BITOR(x) (IS_AST_OP(x) && x->opval.op == '|')
 #define IS_BITAND(x) (IS_AST_OP(x) && x->opval.op == '&' && \
@@ -119,7 +120,7 @@ ast;
 #define IS_FOR_STMT(x) (IS_AST_OP(x) && x->opval.op == FOR)
 #define IS_LEFT_OP(x) (IS_AST_OP(x) && x->opval.op == LEFT_OP)
 #define IS_RIGHT_OP(x) (IS_AST_OP(x) && x->opval.op == RIGHT_OP)
-#define  IS_AST_VALUE(x)	(x && x->type == EX_VALUE && x->opval.val)
+#define  IS_AST_VALUE(x)	((x) && (x)->type == EX_VALUE && (x)->opval.val)
 #define  IS_AST_LINK(x)		(x->type == EX_LINK)
 #define  IS_AST_NOT_OPER(x)	(x && IS_AST_OP(x) && x->opval.op == '!')
 #define  IS_ARRAY_OP(x) (IS_AST_OP(x) && x->opval.op == '[')
@@ -130,14 +131,14 @@ ast;
 				   x->opval.op == GE_OP	||		\
 				   x->opval.op == EQ_OP	||		\
 				   x->opval.op == NE_OP	))
-#define IS_CAST_OP(x) (IS_AST_OP(x) && x->opval.op == CAST)
+#define IS_CAST_OP(x) (IS_AST_OP(x) && (x)->opval.op == CAST)
 #define IS_TERNARY_OP(x) (IS_AST_OP(x) && x->opval.op == '?')
 #define IS_COLON_OP(x) (IS_AST_OP(x) && x->opval.op == ':')
 #define IS_ADDRESS_OF_OP(x)    (IS_AST_OP(x)            &&              \
 				x->opval.op == '&'      &&              \
 				x->right == NULL )
 #define IS_AST_LIT_VALUE(x) (IS_AST_VALUE(x) && \
-                             IS_LITERAL(x->opval.val->etype))
+                             IS_LITERAL((x)->opval.val->etype))
 #define IS_AST_SYM_VALUE(x)     (IS_AST_VALUE(x) && x->opval.val->sym)
 #define AST_LIT_VALUE(x)        (floatFromVal(x->opval.val))
 #define AST_SYMBOL(x)           (x->opval.val->sym)
@@ -169,17 +170,6 @@ ast;
 			  x == MUL_ASSIGN || x == DIV_ASSIGN || x == XOR_ASSIGN ||\
 			  x == AND_ASSIGN || x == OR_ASSIGN || x == INC_OP || x == DEC_OP)
 #define IS_DEREF_OP(x) (( x->opval.op == '*' && x->right == NULL) || x->opval.op == '.')
-
-typedef enum
-{
-  RESULT_TYPE_NONE = 0,
-  RESULT_CHECK = 0, /* TODO: replace all occurences with the appropriate type and remove me */
-  RESULT_TYPE_BIT,
-  RESULT_TYPE_CHAR,
-  RESULT_TYPE_INT,
-  RESULT_TYPE_OTHER,
-  RESULT_TYPE_IFX,
-} RESULT_TYPE;
 
 /* forward declarations for global variables */
 extern ast *staticAutos;

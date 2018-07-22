@@ -32,6 +32,7 @@
 #include "pcoderegs.h"
 
 extern unsigned int stackPos;
+extern unsigned int stackLen;
 
 enum
   {
@@ -107,59 +108,89 @@ extern set *pic16_rel_udata;
 extern set *pic16_fix_udata;
 extern set *pic16_equ_data;
 extern set *pic16_int_regs;
+extern set *pic16_acs_udata;
 
 regs *pic16_regWithIdx (int);
 regs *pic16_typeRegWithIdx(int, int, int);
 regs *pic16_dirregWithName (char *name );
+regs *pic16_allocregWithName(char *name);
+regs *pic16_regWithName(char *name);
 void  pic16_freeAllRegs ();
 void  pic16_deallocateAllRegs ();
 regs *pic16_findFreeReg(short type);
+regs *pic16_findFreeRegNext(short type, regs *creg);
 regs *pic16_allocWithIdx (int idx);
 
 regs *pic16_allocDirReg (operand *op );
-regs *pic16_allocRegByName (char *name, int size );
+regs *pic16_allocRegByName (char *name, int size, operand *op);
+extern char *pic16_decodeOp(unsigned int op);
 
 regs* newReg(short type, short pc_type, int rIdx, char *name, int size, int alias, operand *refop);
 
 /* Define register address that are constant across PIC16 family */
 #define IDX_TMR0    0xfd6
-#define IDX_PCL     0xff9
 #define IDX_STATUS  0xfd8
-#define IDX_PCLATH  0xffa
 #define IDX_INTCON  0xff2
 #define IDX_WREG    0xfe8
+#define IDX_BSR     0xfe0
+
+#define IDX_PCL     0xff9
+#define IDX_PCLATH  0xffa
+#define IDX_PCLATU  0xffb 
+
+#define IDX_TOSL    0xffd
+#define IDX_TOSH    0xffe
+#define IDX_TOSU    0xfff
+
+#define IDX_TBLPTRL 0xff6
+#define IDX_TBLPTRH 0xff7
+#define IDX_TBLPTRU 0xff8
+#define IDX_TABLAT  0xff5
 
 #define IDX_FSR0    0xfe9
 #define IDX_FSR0L   0xfe9
 #define IDX_FSR0H   0xfea
-#define IDX_FSR1L	0xfe1
-#define IDX_FSR1H	0xfe2
-#define IDX_FSR2L	0xfd9
-#define IDX_FSR2H	0xfda
 
-#define IDX_INDF0		0xfef
-#define IDX_POSTINC0	0xfee
-#define IDX_POSTDEC0	0xfed
-#define IDX_PREINC0		0xfec
-#define IDX_PLUSW0		0xfeb
+#define IDX_FSR1    0xfe1
+#define IDX_FSR1L   0xfe1
+#define IDX_FSR1H   0xfe2
 
-#define IDX_INDF1		0xfe7
-#define IDX_POSTINC1	0xfe6
-#define IDX_POSTDEC1	0xfe5
-#define IDX_PREINC1		0xfe4
-#define IDX_PLUSW1		0xfe3
+#define IDX_FSR2    0xfd9
+#define IDX_FSR2L   0xfd9
+#define IDX_FSR2H   0xfda
 
-#define IDX_INDF2		0xfdf
-#define IDX_POSTINC2	0xfde
-#define IDX_POSTDEC2	0xfdd
-#define IDX_PREINC2		0xfdc
-#define IDX_PLUSW2		0xfdb
+#define IDX_INDF0       0xfef
+#define IDX_POSTINC0    0xfee
+#define IDX_POSTDEC0    0xfed
+#define IDX_PREINC0     0xfec
+#define IDX_PLUSW0      0xfeb
 
-#define IDX_PRODL	0xff3
-#define IDX_PRODH	0xff4
+#define IDX_INDF1       0xfe7
+#define IDX_POSTINC1    0xfe6
+#define IDX_POSTDEC1    0xfe5
+#define IDX_PREINC1     0xfe4
+#define IDX_PLUSW1      0xfe3
+
+#define IDX_INDF2       0xfdf
+#define IDX_POSTINC2    0xfde
+#define IDX_POSTDEC2    0xfdd
+#define IDX_PREINC2     0xfdc
+#define IDX_PLUSW2      0xfdb
+
+#define IDX_PRODL       0xff3
+#define IDX_PRODH       0xff4
+
+/* EEPROM registers */
+#define IDX_EECON1	0xfa6
+#define IDX_EECON2	0xfa7
+#define IDX_EEDATA	0xfa8
+#define IDX_EEADR	0xfa9
 
 #define IDX_KZ      0x7fff   /* Known zero - actually just a general purpose reg. */
 #define IDX_WSAVE   0x7ffe
 #define IDX_SSAVE   0x7ffd
+
+#define IDX_GPSIMIO	0xf7f
+#define IDX_GPSIMIO2	0xf7e
 
 #endif

@@ -42,7 +42,7 @@ _avr_init (void)
 }
 
 static void
-_avr_reset_regparm ()
+_avr_reset_regparm (void)
 {
 	regParmFlg = 0;
 }
@@ -69,7 +69,7 @@ _avr_regparm (sym_link * l)
 	return 0;
 }
 
-void avr_assignRegisters (eBBlock ** ebbs, int count);
+void avr_assignRegisters (ebbIndex *);
 
 static bool
 _avr_parseOptions (int *pargc, char **argv, int *i)
@@ -207,6 +207,7 @@ PORT avr_port = {
 	 "CSEG",
 	 "DSEG",
 	 "ISEG",
+	 NULL, //PSEG
 	 "XSEG",
 	 "BSEG",
 	 "RSEG",
@@ -227,9 +228,23 @@ PORT avr_port = {
 	{
           1, -1
         },
+	{
+          avr_emitDebuggerSymbol
+	},
+	{
+	  255/3,      /* maxCount */
+	  3,          /* sizeofElement */
+	  /* The rest of these costs are bogus. They approximate */
+	  /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+	  {4,4,4},    /* sizeofMatchJump[] */
+	  {0,0,0},    /* sizeofRangeCompare[] */
+	  0,          /* sizeofSubtract */
+	  3,          /* sizeofDispatch */
+	},
 	"_",
 	_avr_init,
 	_avr_parseOptions,
+	NULL,
 	NULL,
 	_avr_finaliseOptions,
 	_avr_setDefaultOptions,
@@ -240,6 +255,7 @@ PORT avr_port = {
 	NULL,				/* no genAssemblerEnd */
 	_avr_genIVT,
 	NULL, // _avr_genXINIT
+	NULL,			/* genInitStartup */
 	_avr_reset_regparm,
 	_avr_regparm,
         NULL,

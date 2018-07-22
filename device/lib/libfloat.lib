@@ -4,6 +4,7 @@ _fsdiv
 _fseq
 _fsgt
 _fslt
+_fscmp
 _fsmul
 _fsneq
 _fssub
@@ -46,3 +47,10 @@ floorf
 ceilf
 modff
 errno
+_fsget1arg
+_fsget2args
+_fsnormalize
+_fsreturnval
+_fsrshift
+_fsswapargs
+_logexpf

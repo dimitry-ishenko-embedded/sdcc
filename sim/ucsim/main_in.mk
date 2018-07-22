@@ -26,10 +26,10 @@ CFLAGS          = @CFLAGS@ -I$(PRJDIR) -Wall
 CXXFLAGS        = @CXXFLAGS@ -I$(PRJDIR) -Wall
 M_OR_MM         = @M_OR_MM@
 
-EXEEXT          = @EXEEXT@
+EXEEXT		= @EXEEXT@
 
-LIB_LIST	= util sim cmd sim
-UCSIM_LIBS	= $(patsubst %,-l%,$(LIB_LIST))
+LIB_LIST	= util cmd sim
+UCSIM_LIBS	= -Wl,--start-group $(patsubst %,-l%,$(LIB_LIST)) -Wl,--end-group
 UCSIM_LIB_FILES	= $(patsubst %,lib%.a,$(LIB_LIST))
 
 prefix          = @prefix@
@@ -69,10 +69,10 @@ install: all installdirs
 # Deleting all the installed files
 # --------------------------------
 uninstall:
-	rm -f $(bindir)/s51$(EXEEXT)
-	rm -f $(bindir)/savr$(EXEEXT)
-	rm -f $(bindir)/serialview$(EXEEXT)
-	rm -f $(bindir)/portmon$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/s51$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/savr$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/serialview$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/portmon$(EXEEXT)
 
 
 # Performing self-test
@@ -122,18 +122,10 @@ ucsim: $(UCSIM_OBJECTS) $(UCSIM_LIB_FILES)
 	echo $(UCSIM_LIB_FILES)
 	$(CXX) $(CXXFLAGS) -o $@ $< -L$(PRJDIR) $(UCSIM_LIBS)
 
+ptt: ptt.o
+	$(CXX) $(CXXFLAGS) -o $@ $< -lpthread
 .cc.o:
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $< -o $@
-
-.y.cc:
-	rm -f $*.cc $*.h
-	$(YACC) -d $<
-	mv y.tab.c $*.cc
-	mv y.tab.h $*.h
-
-.l.cc:
-	rm -f $*.cc
-	$(LEX) -t $< >$*.cc
 
 
 # Remaking configuration

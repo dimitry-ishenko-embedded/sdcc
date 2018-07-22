@@ -81,6 +81,8 @@ static char *_keywords[] =
   "banked",
   "at",       //.p.t.20030714 adding support for 'sfr at ADDR' construct
   "_naked",   //.p.t.20030714 adding support for '_naked' functions
+  "critical",
+  "interrupt",
   NULL
 };
 
@@ -111,7 +113,7 @@ _gbz80_init (void)
 }
 
 static void
-_reset_regparm ()
+_reset_regparm (void)
 {
   _G.regParams = 0;
 }
@@ -602,6 +604,7 @@ PORT z80_port =
     "CODE",
     "DATA",
     "ISEG",
+    NULL, /* pdata */
     "XSEG",
     "BSEG",
     "RSEG",
@@ -623,10 +626,24 @@ PORT z80_port =
   {
     0, 2
   },
+  {
+    z80_emitDebuggerSymbol
+  },
+  {
+    255,        /* maxCount */
+    3,          /* sizeofElement */
+    /* The rest of these costs are bogus. They approximate */
+    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+    {4,4,4},    /* sizeofMatchJump[] */
+    {0,0,0},    /* sizeofRangeCompare[] */
+    0,          /* sizeofSubtract */
+    3,          /* sizeofDispatch */
+  },
   "_",
   _z80_init,
   _parseOptions,
   _z80_options,
+  NULL,
   _finaliseOptions,
   _setDefaultOptions,
   z80_assignRegisters,
@@ -636,6 +653,7 @@ PORT z80_port =
   NULL,				/* no genAssemblerEnd */
   0,				/* no local IVT generation code */
   0,                            /* no genXINIT code */
+  NULL, 			/* genInitStartup */
   _reset_regparm,
   _reg_parm,
   _process_pragma,
@@ -702,6 +720,7 @@ PORT gbz80_port =
     "CODE",
     "DATA",
     "ISEG",
+    NULL, /* pdata */
     "XSEG",
     "BSEG",
     "RSEG",
@@ -723,10 +742,24 @@ PORT gbz80_port =
   {
     0, 2
   },
+  {
+    z80_emitDebuggerSymbol
+  },
+  {
+    255,        /* maxCount */
+    3,          /* sizeofElement */
+    /* The rest of these costs are bogus. They approximate */
+    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
+    {4,4,4},    /* sizeofMatchJump[] */
+    {0,0,0},    /* sizeofRangeCompare[] */
+    0,          /* sizeofSubtract */
+    3,          /* sizeofDispatch */
+  },
   "_",
   _gbz80_init,
   _parseOptions,
   _gbz80_options,
+  NULL,
   _finaliseOptions,
   _setDefaultOptions,
   z80_assignRegisters,
@@ -736,6 +769,7 @@ PORT gbz80_port =
   NULL,				/* no genAssemblerEnd */
   0,				/* no local IVT generation code */
   0,                            /* no genXINIT code */
+  NULL, 			/* genInitStartup */
   _reset_regparm,
   _reg_parm,
   _process_pragma,

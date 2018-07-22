@@ -490,18 +490,165 @@ _mullong_dummy (void) _naked
 	_endasm ;
 }
 
+#elif defined(SDCC_USE_XSTACK) && defined(SDCC_STACK_AUTO)
+
+void
+_mullong_dummy (void) _naked
+{
+	_asm
+
+	__mullong:
+
+		.globl __mullong
+
+					; the result c will be stored in r4...r7
+		#define c0 r4
+		#define c1 r5
+		#define c2 r6
+		#define c3 r7
+
+		#define a0 dpl
+		#define a1 dph
+		#define a2 r2
+		#define a3 r3
+
+		#define b0 r1
+
+	; c0  a0 * b0
+	; c1  a1 * b0 + a0 * b1
+	; c2  a2 * b0 + a1 * b1 + a0 * b2
+	; c3  a3 * b0 + a2 * b1 + a1 * b2 + a0 * b3
+
+
+					; parameter a comes in a, b, dph, dpl
+		mov	r2,b		; save parameter a
+		mov	r3,a
+
+		mov	a,#-4		;  1  b 4 bytes
+		add	a,_spx		;  1
+		mov	r0,a		;  1  r0 points to b0
+
+					;	Byte 0
+		movx	a,@r0		; b0
+		mov	b0,a		; we need b0 several times
+		inc	r0		; r0 points to b1
+		mov	b,a0
+		mul	ab		; a0 * b0
+		mov	c0,a
+		mov	c1,b
+
+					;	Byte 1
+		mov	a,a1
+		mov	b,b0
+		mul	ab		; a1 * b0
+		add	a,c1
+		mov	c1,a
+		clr	a
+		addc	a,b
+		mov	c2,a
+
+
+		mov	b,a0
+		movx	a,@r0		; b1
+		mul	ab		; a0 * b1
+		add	a,c1
+		mov	c1,a
+		mov	a,b
+		addc	a,c2
+		mov	c2,a
+		clr	a
+		rlc	a
+		mov	c3,a
+
+					;	Byte 2
+		mov	a,a2
+		mov	b,b0
+		mul	ab		; a2 * b0
+		add	a,c2
+		mov	c2,a
+		mov	a,b
+		addc	a,c3
+		mov	c3,a
+
+		mov	b,a1
+		movx	a,@r0		; b1
+		mul	ab		; a1 * b1
+		add	a,c2
+		mov	c2,a
+		mov	a,b
+		addc	a,c3
+		mov	c3,a
+
+		mov	b,a0
+		inc	r0
+		movx	a,@r0		; b2
+		mul	ab		; a0 * b2
+		add	a,c2
+		mov	c2,a
+		mov	a,b
+		addc	a,c3
+		mov	c3,a
+
+					;	Byte 3
+		mov	a,a3
+		mov	b,b0
+		mul	ab		; a3 * b0
+		add	a,c3
+		mov	c3,a
+
+		mov	b,a1
+		movx	a,@r0		; b2
+		mul	ab		; a1 * b2
+		add	a,c3
+		mov	c3,a
+
+		mov	b,a2
+		dec	r0
+		movx	a,@r0		; b1
+		mul	ab		; a2 * b1
+		add	a,c3
+		mov	c3,a
+
+		mov	b,a0
+		inc	r0
+		inc	r0
+		movx	a,@r0		; b3
+		mul	ab		; a0 * b3
+		add	a,c3
+
+		mov	b,c2
+		mov	dph,c1
+		mov	dpl,c0
+
+		ret
+
+	_endasm ;
+}
+
 #else // _MULLONG_ASM
 
 struct some_struct {
 	short a ;
 	char b;
 	long c ;};
+#if defined(SDCC_hc08)
+/* big endian order */
+union bil {
+        struct {unsigned char b3,b2,b1,b0 ;} b;
+        struct {unsigned short hi,lo ;} i;
+        unsigned long l;
+        struct { unsigned char b3; unsigned short i12; unsigned char b0;} bi;
+} ;
+#else
+/* little endian order */
 union bil {
         struct {unsigned char b0,b1,b2,b3 ;} b;
         struct {unsigned short lo,hi ;} i;
         unsigned long l;
         struct { unsigned char b0; unsigned short i12; unsigned char b3;} bi;
 } ;
+#endif
+
 #if defined(SDCC_USE_XSTACK)
 #  define bcast(x) ((union bil pdata *)&(x))
 #elif (defined(SDCC_MODEL_LARGE) || defined (SDCC_ds390) || defined (SDCC_ds400)) && !defined(SDCC_STACK_AUTO)
@@ -530,6 +677,34 @@ union bil {
                         |3.0|         G
                           |-------> only this side 32 x 32 -> 32
 */
+#if defined(SDCC_USE_XSTACK)
+// currently the original code without u fails with --xstack
+// it runs out of pointer registers
+long
+_mullong (long a, long b)
+{
+        union bil t, u;
+
+        t.i.hi   = bcast(a)->b.b0 * bcast(b)->b.b2;          // A
+        t.i.lo   = bcast(a)->b.b0 * bcast(b)->b.b0;          // A
+        u.bi.b3  = bcast(a)->b.b0 * bcast(b)->b.b3;          // B
+        u.bi.i12 = bcast(a)->b.b0 * bcast(b)->b.b1;          // B
+        u.bi.b0  = 0;                                        // B
+        t.l += u.l;
+
+        t.b.b3  += bcast(a)->b.b3 * bcast(b)->b.b0;          // G
+        t.b.b3  += bcast(a)->b.b2 * bcast(b)->b.b1;          // F
+        t.i.hi  += bcast(a)->b.b2 * bcast(b)->b.b0;          // E
+        t.i.hi  += bcast(a)->b.b1 * bcast(b)->b.b1;          // D
+
+        u.bi.b3  = bcast(a)->b.b1 * bcast(b)->b.b2;          // C
+        u.bi.i12 = bcast(a)->b.b1 * bcast(b)->b.b0;          // C
+        u.bi.b0  = 0;                                        // C
+        t.l += u.l;
+
+        return t.l;
+}
+#else
 long
 _mullong (long a, long b)
 {
@@ -560,5 +735,6 @@ _mullong (long a, long b)
 
         return t.l + b;
 }
+#endif
 
 #endif // _MULLONG_ASM

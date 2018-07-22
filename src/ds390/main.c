@@ -58,8 +58,8 @@ static builtins __ds390_builtins[] = {
     { "__builtin_memcmp_x2x","c",3,{"cx*","cx*","i"}}, /* void __builtin_memcmp_x2x (xdata char *,xdata char *,int) */
     { "__builtin_memcmp_c2x","c",3,{"cx*","cp*","i"}}, /* void __builtin_memcmp_c2x (xdata char *,code  char *,int) */
     { NULL , NULL,0, {NULL}} 			   /* mark end of table */
-};    
-void ds390_assignRegisters (eBBlock ** ebbs, int count);
+};
+void ds390_assignRegisters (ebbIndex * ebbi);
 
 static int regParmFlg = 0;	/* determine if we can register a parameter */
 
@@ -70,7 +70,7 @@ _ds390_init (void)
 }
 
 static void
-_ds390_reset_regparm ()
+_ds390_reset_regparm (void)
 {
   regParmFlg = 0;
 }
@@ -78,7 +78,8 @@ _ds390_reset_regparm ()
 static int
 _ds390_regparm (sym_link * l)
 {
-
+    if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
+        return 0;
     if (options.parms_in_bank1 == 0) {
 	/* simple can pass only the first parameter in a register */
 	if (regParmFlg)
@@ -102,7 +103,7 @@ _ds390_regparm (sym_link * l)
 	    return 0;
 	}
 	regParmFlg += size ;
-	return regParmFlg - size + 1;	
+	return regParmFlg - size + 1;
     }
 }
 
@@ -145,9 +146,9 @@ _ds390_finaliseOptions (void)
 
     port->stack.isr_overhead += 2;	/* Will save dpx on ISR entry. */
 
-    port->stack.call_overhead += 2;	/* This acounts for the extra byte 
+    port->stack.call_overhead += 2;	/* This acounts for the extra byte
 				 * of return addres on the stack.
-				 * but is ugly. There must be a 
+				 * but is ugly. There must be a
 				 * better way.
 				 */
 
@@ -161,11 +162,11 @@ _ds390_finaliseOptions (void)
     } else {
 	if (!options.stack_loc) options.stack_loc = 0x400008;
     }
-    
+
     /* generate native code 16*16 mul/div */
-    if (options.useAccelerator) 
+    if (options.useAccelerator)
 	    port->support.muldiv=2;
-    else 
+    else
 	    port->support.muldiv=1;
 
      /* Fixup the memory map for the stack; it is now in
@@ -195,30 +196,36 @@ _ds390_getRegName (struct regs *reg)
   return "err";
 }
 
+extern char * iComments2;
+
 static void
 _ds390_genAssemblerPreamble (FILE * of)
 {
+      fputs (iComments2, of);
+      fputs ("; CPU specific extensions\n",of);
+      fputs (iComments2, of);
+
       if (options.model == MODEL_FLAT24)
         fputs (".flat24 on\t\t; 24 bit flat addressing\n", of);
 
-      fputs ("dpx = 0x93\t\t; dpx register unknown to assembler\n", of);
-      fputs ("dps = 0x86\t\t; dps register unknown to assembler\n", of);
-      fputs ("dpl1 = 0x84\t\t; dpl1 register unknown to assembler\n", of);
-      fputs ("dph1 = 0x85\t\t; dph1 register unknown to assembler\n", of);
-      fputs ("dpx1 = 0x95\t\t; dpx1 register unknown to assembler\n", of);
-      fputs ("ap = 0x9C\t\t; ap register unknown to assembler\n", of);
-      fputs ("_ap = 0x9C\t\t; _ap register unknown to assembler\n", of);
-      fputs ("mcnt0 = 0xD1\t\t; mcnt0 register unknown to assembler\n", of);
-      fputs ("mcnt1 = 0xD2\t\t; mcnt1 register unknown to assembler\n", of);
-      fputs ("ma = 0xD3\t\t; ma register unknown to assembler\n", of);
-      fputs ("mb = 0xD4\t\t; mb register unknown to assembler\n", of);
-      fputs ("mc = 0xD5\t\t; mc register unknown to assembler\n", of);
-      fputs ("F1 = 0xD1\t\t; F1 user flag unknown to assembler\n", of);
-      fputs ("esp = 0x9B\t\t; ESP user flag unknown to assembler\n", of);
+      fputs ("dpl1\t=\t0x84\n", of);
+      fputs ("dph1\t=\t0x85\n", of);
+      fputs ("dps\t=\t0x86\n", of);
+      fputs ("dpx\t=\t0x93\n", of);
+      fputs ("dpx1\t=\t0x95\n", of);
+      fputs ("esp\t=\t0x9B\n", of);
+      fputs ("ap\t=\t0x9C\n", of);
+      fputs ("_ap\t=\t0x9C\n", of);
+      fputs ("mcnt0\t=\t0xD1\n", of);
+      fputs ("mcnt1\t=\t0xD2\n", of);
+      fputs ("ma\t=\t0xD3\n", of);
+      fputs ("mb\t=\t0xD4\n", of);
+      fputs ("mc\t=\t0xD5\n", of);
+      fputs ("F1\t=\t0xD1\t; user flag\n", of);
       if (options.parms_in_bank1) {
 	  int i ;
 	  for (i=0; i < 8 ; i++ )
-	      fprintf (of,"b1_%d = 0x%x \n",i,8+i);
+	      fprintf (of,"b1_%d\t=\t0x%02X\n",i,8+i);
       }
 }
 
@@ -230,8 +237,25 @@ _ds390_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 
   if (options.model != MODEL_FLAT24)
     {
-      /* Let the default code handle it. */
-      return FALSE;
+      fprintf (of, "\tljmp\t__sdcc_gsinit_startup\n");
+
+      /* now for the other interrupts */
+      for (i = 0; i < maxInterrupts; i++)
+        {
+          if (interrupts[i])
+            {
+              fprintf (of, "\tljmp\t%s\n", interrupts[i]->rname);
+              if ( i != maxInterrupts - 1 )
+                fprintf (of, "\t.ds\t5\n");
+            }
+          else
+            {
+              fprintf (of, "\treti\n");
+              if ( i != maxInterrupts - 1 )
+                fprintf (of, "\t.ds\t7\n");
+            }
+        }
+      return TRUE;
     }
 
   fprintf (of, "\tajmp\t__reset_vect\n");
@@ -292,11 +316,11 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
     sym_link *result_type = operandType(result);
     //sym_link *right_type  = (right ? operandType(right) : 0);
     //sym_link *left_type   = (left  ? operandType(left)  : 0);
-    
+
     /* if it is a pointer then return ok for now */
     if (IC_RESULT(ic) && IS_PTR(result_type)) return 1;
-    
-    /* if bitwise | add & subtract then no since mcs51 is pretty good at it 
+
+    /* if bitwise | add & subtract then no since mcs51 is pretty good at it
        so we will cse only if they are local (i.e. both ic & pdic belong to
        the same basic block */
     if (IS_BITWISE_OP(ic) || ic->op == '+' || ic->op == '-') {
@@ -304,7 +328,7 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
 	if (ic->eBBlockNum == pdic->eBBlockNum) return 1;
 	else return 0;
     }
-	
+
     /* for others it is cheaper to do the cse */
     return 1;
 }
@@ -334,8 +358,448 @@ oclsExpense (struct memmap *oclass)
 {
   if (IN_FARSPACE(oclass))
     return 1;
-    
+
   return 0;
+}
+
+static int
+instructionSize(char *inst, char *op1, char *op2)
+{
+  int isflat24 = (options.model == MODEL_FLAT24);
+
+  #define ISINST(s) (strncmp(inst, (s), sizeof(s)-1) == 0)
+  #define IS_A(s) (*(s) == 'a' && *(s+1) == '\0')
+  #define IS_C(s) (*(s) == 'c' && *(s+1) == '\0')
+  #define IS_Rn(s) (*(s) == 'r' && *(s+1) >= '0' && *(s+1) <= '7')
+  #define IS_atRi(s) (*(s) == '@' && *(s+1) == 'r')
+
+  /* Based on the current (2003-08-22) code generation for the
+     small library, the top instruction probability is:
+
+       57% mov/movx/movc
+        6% push
+        6% pop
+        4% inc
+        4% lcall
+        4% add
+        3% clr
+        2% subb
+  */
+  /* mov, push, & pop are the 69% of the cases. Check them first! */
+  if (ISINST ("mov"))
+    {
+      if (*(inst+3)=='x') return 1; /* movx */
+      if (*(inst+3)=='c') return 1; /* movc */
+      if (IS_C (op1) || IS_C (op2)) return 2;
+      if (IS_A (op1))
+	{
+	  if (IS_Rn (op2) || IS_atRi (op2)) return 1;
+	  return 2;
+	}
+      if (IS_Rn(op1) || IS_atRi(op1))
+	{
+	  if (IS_A(op2)) return 1;
+	  return 2;
+	}
+      if (strcmp (op1, "dptr") == 0) return 3+isflat24;
+      if (IS_A (op2) || IS_Rn (op2) || IS_atRi (op2)) return 2;
+      return 3;
+    }
+
+  if (ISINST ("push")) return 2;
+  if (ISINST ("pop")) return 2;
+
+  if (ISINST ("lcall")) return 3+isflat24;
+  if (ISINST ("ret")) return 1;
+  if (ISINST ("ljmp")) return 3+isflat24;
+  if (ISINST ("sjmp")) return 2;
+  if (ISINST ("rlc")) return 1;
+  if (ISINST ("rrc")) return 1;
+  if (ISINST ("rl")) return 1;
+  if (ISINST ("rr")) return 1;
+  if (ISINST ("swap")) return 1;
+  if (ISINST ("jc")) return 2;
+  if (ISINST ("jnc")) return 2;
+  if (ISINST ("jb")) return 3;
+  if (ISINST ("jnb")) return 3;
+  if (ISINST ("jbc")) return 3;
+  if (ISINST ("jmp")) return 1;	// always jmp @a+dptr
+  if (ISINST ("jz")) return 2;
+  if (ISINST ("jnz")) return 2;
+  if (ISINST ("cjne")) return 3;
+  if (ISINST ("mul")) return 1;
+  if (ISINST ("div")) return 1;
+  if (ISINST ("da")) return 1;
+  if (ISINST ("xchd")) return 1;
+  if (ISINST ("reti")) return 1;
+  if (ISINST ("nop")) return 1;
+  if (ISINST ("acall")) return 2+isflat24;
+  if (ISINST ("ajmp")) return 2+isflat24;
+
+
+  if (ISINST ("add") || ISINST ("addc") || ISINST ("subb") || ISINST ("xch"))
+    {
+      if (IS_Rn(op2) || IS_atRi(op2)) return 1;
+      return 2;
+    }
+  if (ISINST ("inc") || ISINST ("dec"))
+    {
+      if (IS_A(op1) || IS_Rn(op1) || IS_atRi(op1)) return 1;
+      if (strcmp(op1, "dptr") == 0) return 1;
+      return 2;
+    }
+  if (ISINST ("anl") || ISINST ("orl") || ISINST ("xrl"))
+    {
+      if (IS_C(op1)) return 2;
+      if (IS_A(op1))
+	{
+	  if (IS_Rn(op2) || IS_atRi(op2)) return 1;
+	  return 2;
+	}
+      else
+	{
+	  if (IS_A(op2)) return 2;
+	  return 3;
+	}
+    }
+  if (ISINST ("clr") || ISINST ("setb") || ISINST ("cpl"))
+    {
+      if (IS_A(op1) || IS_C(op1)) return 1;
+      return 2;
+    }
+  if (ISINST ("djnz"))
+    {
+      if (IS_Rn(op1)) return 2;
+      return 3;
+    }
+
+  /* If the instruction is unrecognized, we shouldn't try to optimize. */
+  /* Return a large value to discourage optimization.                  */
+  return 999;
+}
+
+asmLineNode *
+ds390newAsmLineNode (int currentDPS)
+{
+  asmLineNode *aln;
+
+  aln = Safe_alloc ( sizeof (asmLineNode));
+  aln->size = 0;
+  aln->regsRead = NULL;
+  aln->regsWritten = NULL;
+  aln->initialized = 0;
+  aln->currentDPS = currentDPS;
+
+  return aln;
+}
+
+
+typedef struct ds390operanddata
+  {
+    char name[6];
+    int regIdx1;
+    int regIdx2;
+  }
+ds390operanddata;
+
+static ds390operanddata ds390operandDataTable[] =
+  {
+    {"_ap", AP_IDX, -1},
+    {"a", A_IDX, -1},
+    {"ab", A_IDX, B_IDX},
+    {"ac", CND_IDX, -1},
+    {"ap", AP_IDX, -1},
+    {"acc", A_IDX, -1},
+    {"ar0", R0_IDX, -1},
+    {"ar1", R1_IDX, -1},
+    {"ar2", R2_IDX, -1},
+    {"ar3", R3_IDX, -1},
+    {"ar4", R4_IDX, -1},
+    {"ar5", R5_IDX, -1},
+    {"ar6", R6_IDX, -1},
+    {"ar7", R7_IDX, -1},
+    {"b", B_IDX, -1},
+    {"c", CND_IDX, -1},
+    {"cy", CND_IDX, -1},
+    {"dph", DPH_IDX, -1},
+    {"dph0", DPH_IDX, -1},
+    {"dph1", DPH1_IDX, -1},
+    {"dpl", DPL_IDX, -1},
+    {"dpl0", DPL_IDX, -1},
+    {"dpl1", DPL1_IDX, -1},
+/*  {"dptr", DPL_IDX, DPH_IDX}, */ /* dptr is special, based on currentDPS */
+    {"dps", DPS_IDX, -1},
+    {"dpx", DPX_IDX, -1},
+    {"dpx0", DPX_IDX, -1},
+    {"dpx1", DPX1_IDX, -1},
+    {"f0", CND_IDX, -1},
+    {"f1", CND_IDX, -1},
+    {"ov", CND_IDX, -1},
+    {"p", CND_IDX, -1},
+    {"psw", CND_IDX, -1},
+    {"r0", R0_IDX, -1},
+    {"r1", R1_IDX, -1},
+    {"r2", R2_IDX, -1},
+    {"r3", R3_IDX, -1},
+    {"r4", R4_IDX, -1},
+    {"r5", R5_IDX, -1},
+    {"r6", R6_IDX, -1},
+    {"r7", R7_IDX, -1},
+  };
+
+static int
+ds390operandCompare (const void *key, const void *member)
+{
+  return strcmp((const char *)key, ((ds390operanddata *)member)->name);
+}
+
+static void
+updateOpRW (asmLineNode *aln, char *op, char *optype, int currentDPS)
+{
+  ds390operanddata *opdat;
+  char *dot;
+  int regIdx1 = -1;
+  int regIdx2 = -1;
+  int regIdx3 = -1;
+
+  dot = strchr(op, '.');
+  if (dot)
+    *dot = '\0';
+
+  opdat = bsearch (op, ds390operandDataTable,
+		   sizeof(ds390operandDataTable)/sizeof(ds390operanddata),
+		   sizeof(ds390operanddata), ds390operandCompare);
+
+  if (opdat)
+    {
+      regIdx1 = opdat->regIdx1;
+      regIdx2 = opdat->regIdx2;
+    }
+  if (!strcmp(op, "dptr"))
+    {
+      if (!currentDPS)
+	{
+	  regIdx1 = DPL_IDX;
+	  regIdx2 = DPH_IDX;
+	  regIdx3 = DPX_IDX;
+	}
+      else
+	{
+	  regIdx1 = DPL1_IDX;
+	  regIdx2 = DPH1_IDX;
+	  regIdx3 = DPX1_IDX;
+	}
+    }
+
+  if (strchr(optype,'r'))
+    {
+      if (regIdx1 >= 0)
+        aln->regsRead = bitVectSetBit (aln->regsRead, regIdx1);
+      if (regIdx2 >= 0)
+        aln->regsRead = bitVectSetBit (aln->regsRead, regIdx2);
+      if (regIdx3 >= 0)
+        aln->regsRead = bitVectSetBit (aln->regsRead, regIdx3);
+    }
+  if (strchr(optype,'w'))
+    {
+      if (regIdx1 >= 0)
+        aln->regsWritten = bitVectSetBit (aln->regsWritten, regIdx1);
+      if (regIdx2 >= 0)
+        aln->regsWritten = bitVectSetBit (aln->regsWritten, regIdx2);
+      if (regIdx3 >= 0)
+        aln->regsWritten = bitVectSetBit (aln->regsWritten, regIdx3);
+    }
+  if (op[0] == '@')
+    {
+      if (!strcmp(op, "@r0"))
+        aln->regsRead = bitVectSetBit (aln->regsRead, R0_IDX);
+      if (!strcmp(op, "@r1"))
+        aln->regsRead = bitVectSetBit (aln->regsRead, R1_IDX);
+      if (strstr(op, "dptr"))
+	{
+	  if (!currentDPS)
+	    {
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPL_IDX);
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPH_IDX);
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPX_IDX);
+	    }
+	  else
+	    {
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPL1_IDX);
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPH1_IDX);
+	      aln->regsRead = bitVectSetBit (aln->regsRead, DPX1_IDX);
+	    }
+	}
+      if (strstr(op, "a+"))
+	aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+    }
+}
+
+typedef struct ds390opcodedata
+  {
+    char name[6];
+    char class[3];
+    char pswtype[3];
+    char op1type[3];
+    char op2type[3];
+  }
+ds390opcodedata;
+
+static ds390opcodedata ds390opcodeDataTable[] =
+  {
+    {"acall","j", "",   "",   ""},
+    {"add",  "",  "w",  "rw", "r"},
+    {"addc", "",  "rw", "rw", "r"},
+    {"ajmp", "j", "",   "",   ""},
+    {"anl",  "",  "",   "rw", "r"},
+    {"cjne", "j", "w",  "r",  "r"},
+    {"clr",  "",  "",   "w",  ""},
+    {"cpl",  "",  "",   "rw", ""},
+    {"da",   "",  "rw", "rw", ""},
+    {"dec",  "",  "",   "rw", ""},
+    {"div",  "",  "w",  "rw", ""},
+    {"djnz", "j", "",  "rw",  ""},
+    {"inc",  "",  "",   "rw", ""},
+    {"jb",   "j", "",   "r",  ""},
+    {"jbc",  "j", "",  "rw",  ""},
+    {"jc",   "j", "",   "",   ""},
+    {"jmp",  "j", "",  "",    ""},
+    {"jnb",  "j", "",   "r",  ""},
+    {"jnc",  "j", "",   "",   ""},
+    {"jnz",  "j", "",  "",    ""},
+    {"jz",   "j", "",  "",    ""},
+    {"lcall","j", "",   "",   ""},
+    {"ljmp", "j", "",   "",   ""},
+    {"mov",  "",  "",   "w",  "r"},
+    {"movc", "",  "",   "w",  "r"},
+    {"movx", "",  "",   "w",  "r"},
+    {"mul",  "",  "w",  "rw", ""},
+    {"nop",  "",  "",   "",   ""},
+    {"orl",  "",  "",   "rw", "r"},
+    {"pop",  "",  "",   "w",  ""},
+    {"push", "",  "",   "r",  ""},
+    {"ret",  "j", "",   "",   ""},
+    {"reti", "j", "",   "",   ""},
+    {"rl",   "",  "",   "rw", ""},
+    {"rlc",  "",  "rw", "rw", ""},
+    {"rr",   "",  "",   "rw", ""},
+    {"rrc",  "",  "rw", "rw", ""},
+    {"setb", "",  "",   "w",  ""},
+    {"sjmp", "j", "",   "",   ""},
+    {"subb", "",  "rw", "rw", "r"},
+    {"swap", "",  "",   "rw", ""},
+    {"xch",  "",  "",   "rw", "rw"},
+    {"xchd", "",  "",   "rw", "rw"},
+    {"xrl",  "",  "",   "rw", "r"},
+  };
+
+static int
+ds390opcodeCompare (const void *key, const void *member)
+{
+  return strcmp((const char *)key, ((ds390opcodedata *)member)->name);
+}
+
+static asmLineNode *
+asmLineNodeFromLineNode (lineNode *ln, int currentDPS)
+{
+  asmLineNode *aln = ds390newAsmLineNode(currentDPS);
+  char *op, op1[256], op2[256];
+  int opsize;
+  const char *p;
+  char inst[8];
+  ds390opcodedata *opdat;
+
+  aln->initialized = 1;
+
+  p = ln->line;
+
+  while (*p && isspace(*p)) p++;
+  for (op = inst, opsize=1; *p; p++)
+    {
+      if (isspace(*p) || *p == ';' || *p == ':' || *p == '=')
+        break;
+      else
+        if (opsize < sizeof(inst))
+	  *op++ = tolower(*p), opsize++;
+    }
+  *op = '\0';
+
+  if (*p == ';' || *p == ':' || *p == '=')
+    return aln;
+
+  while (*p && isspace(*p)) p++;
+  if (*p == '=')
+    return aln;
+
+  for (op = op1, opsize=1; *p && *p != ','; p++)
+    {
+      if (!isspace(*p) && opsize < sizeof(op1))
+        *op++ = tolower(*p), opsize++;
+    }
+  *op = '\0';
+
+  if (*p == ',') p++;
+  for (op = op2, opsize=1; *p && *p != ','; p++)
+    {
+      if (!isspace(*p) && opsize < sizeof(op2))
+        *op++ = tolower(*p), opsize++;
+    }
+  *op = '\0';
+
+  aln->size = instructionSize(inst, op1, op2);
+
+  aln->regsRead = newBitVect (END_IDX);
+  aln->regsWritten = newBitVect (END_IDX);
+
+  opdat = bsearch (inst, ds390opcodeDataTable,
+		   sizeof(ds390opcodeDataTable)/sizeof(ds390opcodedata),
+		   sizeof(ds390opcodedata), ds390opcodeCompare);
+
+  if (opdat)
+    {
+      updateOpRW (aln, op1, opdat->op1type, currentDPS);
+      updateOpRW (aln, op2, opdat->op2type, currentDPS);
+      if (strchr(opdat->pswtype,'r'))
+        aln->regsRead = bitVectSetBit (aln->regsRead, CND_IDX);
+      if (strchr(opdat->pswtype,'w'))
+        aln->regsWritten = bitVectSetBit (aln->regsWritten, CND_IDX);
+    }
+
+  return aln;
+}
+
+static void
+initializeAsmLineNode (lineNode *line)
+{
+  if (!line->aln)
+    line->aln = asmLineNodeFromLineNode (line, 0);
+  else if (line->aln && !line->aln->initialized)
+    {
+      int currentDPS = line->aln->currentDPS;
+      free(line->aln);
+      line->aln = asmLineNodeFromLineNode (line, currentDPS);
+    }
+}
+
+static int
+getInstructionSize (lineNode *line)
+{
+  initializeAsmLineNode (line);
+  return line->aln->size;
+}
+
+static bitVect *
+getRegsRead (lineNode *line)
+{
+  initializeAsmLineNode (line);
+  return line->aln->regsRead;
+}
+
+static bitVect *
+getRegsWritten (lineNode *line)
+{
+  initializeAsmLineNode (line);
+  return line->aln->regsWritten;
 }
 
 
@@ -350,7 +814,8 @@ static const char *_linkCmd[] =
   "aslink", "-nf", "\"$1\"", NULL
 };
 
-/* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */   static const char *_asmCmd[] =
+/* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
+static const char *_asmCmd[] =
 {
   "asx8051", "$l", "$3", "\"$1.asm\"", NULL
 };
@@ -385,7 +850,10 @@ PORT ds390_port =
     1
   },
   {
-    _defaultRules
+    _defaultRules,
+    getInstructionSize,
+    getRegsRead,
+    getRegsWritten
   },
   {
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
@@ -397,6 +865,7 @@ PORT ds390_port =
     "CSEG    (CODE)",
     "DSEG    (DATA)",
     "ISEG    (DATA)",
+    "PSEG    (PAG,XDATA)",
     "XSEG    (XDATA)",
     "BSEG    (BIT)",
     "RSEG    (DATA)",
@@ -418,9 +887,21 @@ PORT ds390_port =
   {
     2, -1
   },
+  {
+    ds390_emitDebuggerSymbol
+  },
+  {
+    255/4,      /* maxCount */
+    4,          /* sizeofElement */
+    {8,12,20},  /* sizeofMatchJump[] */
+    {10,14,22}, /* sizeofRangeCompare[] */
+    4,          /* sizeofSubtract */
+    7,          /* sizeofDispatch */
+  },
   "_",
   _ds390_init,
   _ds390_parseOptions,
+  NULL,
   NULL,
   _ds390_finaliseOptions,
   _ds390_setDefaultOptions,
@@ -431,6 +912,7 @@ PORT ds390_port =
   NULL,				/* no genAssemblerEnd */
   _ds390_genIVT,
   _ds390_genXINIT,
+  NULL, 			/* genInitStartup */
   _ds390_reset_regparm,
   _ds390_regparm,
   NULL,
@@ -486,31 +968,31 @@ static void _tininative_finaliseOptions (void)
     }
     port->s.fptr_size = 3;
     port->s.gptr_size = 4;
-    
+
     port->stack.isr_overhead += 2;	/* Will save dpx on ISR entry. */
-    
-    port->stack.call_overhead += 2;	/* This acounts for the extra byte 
+
+    port->stack.call_overhead += 2;	/* This acounts for the extra byte
 					 * of return addres on the stack.
-					 * but is ugly. There must be a 
+					 * but is ugly. There must be a
 					 * better way.
 					 */
-    
+
     port->mem.default_local_map = xdata;
     port->mem.default_globl_map = xdata;
-    
+
     if (!options.stack10bit) {
 	options.stack10bit = 1;
 	fprintf(stderr,"TININative supports only stack10bit \n");
     }
-    
+
     if (!options.stack_loc) options.stack_loc = 0x400008;
-    
+
     /* generate native code 16*16 mul/div */
-    if (options.useAccelerator) 
+    if (options.useAccelerator)
 	port->support.muldiv=2;
-    else 
+    else
 	port->support.muldiv=1;
-    
+
     /* Fixup the memory map for the stack; it is now in
      * far space and requires a FPOINTER to access it.
      */
@@ -519,9 +1001,9 @@ static void _tininative_finaliseOptions (void)
     options.cc_only =1;
 }
 
-static int _tininative_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts) 
+static int _tininative_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 {
-    return 1;
+    return TRUE;
 }
 static void _tininative_genAssemblerPreamble (FILE * of)
 {
@@ -570,7 +1052,7 @@ static void _tininative_do_assemble (set *asmOptions)
     buildCmdLine(buffer,a390Cmd,dstFileName,NULL,NULL,asmOptions);
     if (my_system(buffer)) {
 	exit(1);
-    }    
+    }
 }
 
 /* list of key words used by TININative */
@@ -645,7 +1127,7 @@ static builtins __tininative_builtins[] = {
     { "System_GetCurrentProcessId","c",0,{NULL}},      /* char System_GetCurrentProcessId() */
     { "System_GetCurrentThreadId","c",0,{NULL}},       /* char System_GetCurrentThreadId() */
     { NULL , NULL,0, {NULL}} 			   /* mark end of table */
-};    
+};
 
 static const char *_a390Cmd[] =
 {
@@ -680,7 +1162,10 @@ PORT tininative_port =
     1
   },
   {
-    _defaultRules
+    _defaultRules,
+    getInstructionSize,
+    getRegsRead,
+    getRegsWritten
   },
   {
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
@@ -692,13 +1177,14 @@ PORT tininative_port =
     "CSEG    (CODE)",
     "DSEG    (DATA)",
     "ISEG    (DATA)",
+    "PSEG    (PAG,XDATA)",
     "XSEG    (XDATA)",
     "BSEG    (BIT)",
     "RSEG    (DATA)",
     "GSINIT  (CODE)",
     "OSEG    (OVR,DATA)",
     "GSFINAL (CODE)",
-    "HOME	 (CODE)",
+    "HOME    (CODE)",
     NULL,
     NULL,
     NULL,
@@ -713,9 +1199,21 @@ PORT tininative_port =
   {
     2, -1
   },
+  {
+    ds390_emitDebuggerSymbol
+  },
+  {
+    255/4,      /* maxCount */
+    4,          /* sizeofElement */
+    {8,12,20},  /* sizeofMatchJump[] */
+    {10,14,22}, /* sizeofRangeCompare[] */
+    4,          /* sizeofSubtract */
+    7,          /* sizeofDispatch */
+  },
   "",
   _tininative_init,
   _ds390_parseOptions,
+  NULL,
   NULL,
   _tininative_finaliseOptions,
   _tininative_setDefaultOptions,
@@ -726,6 +1224,7 @@ PORT tininative_port =
   _tininative_genAssemblerEnd,
   _tininative_genIVT,
   NULL,
+  NULL, 			/* genInitStartup */
   _ds390_reset_regparm,
   _ds390_regparm,
   NULL,
@@ -755,7 +1254,7 @@ _ds400_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 {
     /* We can't generate a static IVT, since the boot rom creates one
      * for us in rom_init.
-     * 
+     *
      * we must patch it as part of the C startup.
      */
      fprintf (of, ";\tDS80C400 IVT must be generated at runtime.\n");
@@ -766,7 +1265,7 @@ _ds400_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
      return TRUE;
 }
 
-    
+
 
 static void
 _ds400_finaliseOptions (void)
@@ -778,7 +1277,7 @@ _ds400_finaliseOptions (void)
   // hackhack: we're a superset of the 390.
   addSet(&preArgvSet, Safe_strdup("-DSDCC_ds390"));
   addSet(&preArgvSet, Safe_strdup("-D__ds390"));
-    
+
   /* Hack-o-matic: if we are using the flat24 model,
    * adjust pointer sizes.
    */
@@ -802,9 +1301,9 @@ _ds400_finaliseOptions (void)
 
     port->stack.isr_overhead += 2;	/* Will save dpx on ISR entry. */
 
-    port->stack.call_overhead += 2;	/* This acounts for the extra byte 
+    port->stack.call_overhead += 2;	/* This acounts for the extra byte
 				 * of return addres on the stack.
-				 * but is ugly. There must be a 
+				 * but is ugly. There must be a
 				 * better way.
 				 */
 
@@ -819,11 +1318,11 @@ _ds400_finaliseOptions (void)
 	if (!options.stack_loc) options.stack_loc = 0xffdc00;
 	// assumes IDM1:0 = 1:0, CMA = 1.
     }
-    
+
     /* generate native code 16*16 mul/div */
-    if (options.useAccelerator) 
+    if (options.useAccelerator)
 	    port->support.muldiv=2;
-    else 
+    else
 	    port->support.muldiv=1;
 
      /* Fixup the memory map for the stack; it is now in
@@ -835,14 +1334,12 @@ _ds400_finaliseOptions (void)
     if (options.parms_in_bank1) {
 	addSet(&preArgvSet, Safe_strdup("-DSDCC_PARMS_IN_BANK1"));
     }
-     
+
     // the DS400 rom calling interface uses register bank 3.
     RegBankUsed[3] = 1;
-      
+
   }  /* MODEL_FLAT24 */
 }
-
-extern char * iComments2;
 
 static void _ds400_generateRomDataArea(FILE *fp, bool isMain)
 {
@@ -892,7 +1389,10 @@ PORT ds400_port =
     1
   },
   {
-    _defaultRules
+    _defaultRules,
+    getInstructionSize,
+    getRegsRead,
+    getRegsWritten
   },
   {
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
@@ -904,6 +1404,7 @@ PORT ds400_port =
     "CSEG    (CODE)",
     "DSEG    (DATA)",
     "ISEG    (DATA)",
+    "PSEG    (PAG,XDATA)",
     "XSEG    (XDATA)",
     "BSEG    (BIT)",
     "RSEG    (DATA)",
@@ -925,9 +1426,21 @@ PORT ds400_port =
   {
     2, -1
   },
+  {
+    ds390_emitDebuggerSymbol
+  },
+  {
+    255/4,      /* maxCount */
+    4,          /* sizeofElement */
+    {8,12,20},  /* sizeofMatchJump[] */
+    {10,14,22}, /* sizeofRangeCompare[] */
+    4,          /* sizeofSubtract */
+    7,          /* sizeofDispatch */
+  },
   "_",
   _ds390_init,
   _ds390_parseOptions,
+  NULL,
   NULL,
   _ds400_finaliseOptions,
   _ds390_setDefaultOptions,
@@ -938,6 +1451,7 @@ PORT ds400_port =
   NULL,				/* no genAssemblerEnd */
   _ds400_genIVT,
   _ds390_genXINIT,
+  NULL, 			/* genInitStartup */
   _ds390_reset_regparm,
   _ds390_regparm,
   NULL,

@@ -8,22 +8,29 @@ S51B = $(SDCC_DIR)/bin/s51
 
 S51 = $(shell if [ -f $(S51A) ]; then echo $(S51A); else echo $(S51B); fi)
 
-SDCCFLAGS +=--less-pedantic -DREENTRANT=reentrant
+SDCCFLAGS +=--nostdinc --less-pedantic -DREENTRANT=reentrant -I$(INC_DIR)/mcs51
+LINKFLAGS = --nostdlib
+LINKFLAGS += mcs51.lib libsdcc.lib liblong.lib libint.lib libfloat.lib
+LIBDIR = $(SDCC_DIR)/device/lib/build/small
 
 OBJEXT = .rel
 EXEEXT = .ihx
 
 EXTRAS = $(PORTS_DIR)/$(PORT)/testfwk$(OBJEXT) $(PORTS_DIR)/$(PORT)/support$(OBJEXT)
+FWKLIB = $(PORTS_DIR)/$(PORT)/T2_isr$(OBJEXT)
 
 # Rule to link into .ihx
-%$(EXEEXT): %$(OBJEXT) $(EXTRAS)
-	$(SDCC) $(SDCCFLAGS) $(EXTRAS) $< -o $@
+%$(EXEEXT): %$(OBJEXT) $(EXTRAS) $(FWKLIB) $(PORTS_DIR)/$(PORT)/fwk.lib
+	$(SDCC) $(SDCCFLAGS) $(LINKFLAGS) -L $(LIBDIR) $(EXTRAS) $(PORTS_DIR)/$(PORT)/fwk.lib $< -o $@
 
 %$(OBJEXT): %.c
 	$(SDCC) $(SDCCFLAGS) -c $< -o $@
 
 $(PORTS_DIR)/$(PORT)/testfwk$(OBJEXT): fwk/lib/testfwk.c
 	$(SDCC) $(SDCCFLAGS) -c $< -o $@
+
+$(PORTS_DIR)/$(PORT)/fwk.lib:
+	cp $(PORTS_DIR)/mcs51/fwk.lib $(PORTS_DIR)/$(PORT)/fwk.lib
 
 # run simulator with 30 seconds timeout
 %.out: %$(EXEEXT) fwk/lib/timeout

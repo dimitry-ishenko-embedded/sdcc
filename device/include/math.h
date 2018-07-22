@@ -42,38 +42,54 @@ union float_long
     long l;
 };
 
+#if defined(SDCC_MATH_LIB) && defined(SDCC_mcs51) && !defined(SDCC_USE_XSTACK) && !defined(SDCC_STACK_AUTO) && !defined(_SDCC_NO_ASM_LIB_FUNCS)
+// Compile the mcs51 assembly version only when all these
+// conditions are met.  Since not all the functions are
+// reentrant, do not compile with --stack-auto is used.
+#define MATH_ASM_MCS51
+#endif
+
+
+/* Functions on the z80 & gbz80 are always reentrant and so the "reentrant" */
+/* keyword is not defined. */
+#if defined(SDCC_z80) || defined(SDCC_gbz80)
+#define _FLOAT_FUNC_REENTRANT
+#else
+#define _FLOAT_FUNC_REENTRANT __reentrant
+#endif
+
 /**********************************************
  * Prototypes for float ANSI C math functions *
  **********************************************/
 
 /* Trigonometric functions */
-float sinf(const float x);
-float cosf(const float x);
-float tanf(const float x);
-float cotf(const float x);
-float asinf(const float x);
-float acosf(const float x);
-float atanf(const float x);
+float sinf(const float x) _FLOAT_FUNC_REENTRANT;
+float cosf(const float x) _FLOAT_FUNC_REENTRANT;
+float tanf(const float x) _FLOAT_FUNC_REENTRANT;
+float cotf(const float x) _FLOAT_FUNC_REENTRANT;
+float asinf(const float x) _FLOAT_FUNC_REENTRANT;
+float acosf(const float x) _FLOAT_FUNC_REENTRANT;
+float atanf(const float x) _FLOAT_FUNC_REENTRANT;
 float atan2f(const float x, const float y);
 
 /* Hyperbolic functions */
-float sinhf(const float x);
-float coshf(const float x);
-float tanhf(const float x);
+float sinhf(const float x) _FLOAT_FUNC_REENTRANT;
+float coshf(const float x) _FLOAT_FUNC_REENTRANT;
+float tanhf(const float x) _FLOAT_FUNC_REENTRANT;
 
 /* Exponential, logarithmic and power functions */
 float expf(const float x);
-float logf(const float x);
-float log10f(const float x);
+float logf(const float x) _FLOAT_FUNC_REENTRANT;
+float log10f(const float x) _FLOAT_FUNC_REENTRANT;
 float powf(const float x, const float y);
-float sqrtf(const float a);
+float sqrtf(const float a) _FLOAT_FUNC_REENTRANT;
 
 /* Nearest integer, absolute value, and remainder functions */
-float fabsf(const float x);
+float fabsf(const float x) _FLOAT_FUNC_REENTRANT;
 float frexpf(const float x, int *pw2);
 float ldexpf(const float x, const int pw2);
-float ceilf(float x);
-float floorf(float x);
+float ceilf(float x) _FLOAT_FUNC_REENTRANT;
+float floorf(float x) _FLOAT_FUNC_REENTRANT;
 float modff(float x, float * y);
 
 #endif  /* _INC_MATH */

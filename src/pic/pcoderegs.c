@@ -418,13 +418,14 @@ int regUsedinRange(pCode *pc1, pCode *pc2, regs *reg)
 		if(testreg && (testreg->rIdx == reg->rIdx)) {
 			return 1;
 		}
+		if (i++ > 1000) {
+			fprintf(stderr, "warning, regUsedinRange searched through too many pcodes\n");
+			return 0;
+		}
 		
 		pc1 = findNextInstruction(pc1->next);
 		
-	} while (pc1 && (pc1 != pc2) && (i++ < 100)) ;
-	
-	if(i >= 100)
-		fprintf(stderr, "warning, regUsedinRange searched through too many pcodes\n");
+	} while (pc1 && (pc1 != pc2)) ;
 	
 	return 0;
 }
@@ -611,17 +612,6 @@ int pCodeOptime2pCodes(pCode *pc1, pCode *pc2, pCode *pcfl_used, regs *reg, int 
 					total_registers_saved++;  // debugging stats.
 					
 				}
-				/* Note this else if is same conditional as the if - DELETE ME 
-				} else if ( (PCI(pct1)->op == POC_MOVWF) &&
-					(PCI(pc2)->op == POC_MOVFW)) {
-					DFPRINTF(stderr, "   optimising MOVF reg1,W MOVWF reg ... MOVF reg,W\n");
-					if(optimize_level > 1 && can_free) {
-						pct2 = newpCode(POC_MOVFW, PCI(pc1)->pcop);
-						pCodeInsertAfter(pc2, pct2);
-						Remove2pcodes(pcfl_used, pc1, pc2, reg, 1);
-					total_registers_saved++;  // debugging stats.
-				}
-				*/
 			}
 		}
   }
@@ -664,10 +654,9 @@ void OptimizeRegUsage(set *fregs, int optimize_multi_uses, int optimize_level)
 		
 		used = elementsInSet(reg->reglives.usedpCodes);
 		if(used == 2) { 
-			
-		/*
-		* In this section, all registers that are used in only in two 
-		* instructions are examined. If possible, they're optimized out.
+			/*
+			In this section, all registers that are used in only in two 
+			instructions are examined. If possible, they're optimized out.
 			*/
 			
 			/*
@@ -680,11 +669,10 @@ void OptimizeRegUsage(set *fregs, int optimize_multi_uses, int optimize_level)
 			pc2 = setNextItem(reg->reglives.usedpCodes);
 			
 			if(pcfl_used && pcfl_assigned) {
-				
-			/* 
-			expected case - the register has been assigned a value and is
-			subsequently used 
-			*/
+				/* 
+				expected case - the register has been assigned a value and is
+				subsequently used 
+				*/
 				
 				//fprintf(stderr," used only twice\n");
 				if(pcfl_used->seq == pcfl_assigned->seq) {
@@ -775,10 +763,9 @@ void OptimizeRegUsage(set *fregs, int optimize_multi_uses, int optimize_level)
 				}
 			}
 		}
-		
-  }
-
+	}
 }
+
 /*-----------------------------------------------------------------*
 * void pCodeRegOptimeRegUsage(pBlock *pb) 
 *-----------------------------------------------------------------*/

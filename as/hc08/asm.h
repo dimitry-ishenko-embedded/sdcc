@@ -175,6 +175,9 @@ struct	area
 #define A_XDATA 0100		/* external data space */
 #define A_BIT   0200		/* bit addressable space */
 
+#define A_NOLOAD  0400		/* nonloadable */
+#define A_LOAD  0000		/* loadable (default) */
+
 /*
  *	The "R_" relocation constants define values used in
  *	generating the assembler relocation output data for
@@ -329,7 +332,8 @@ struct	sym
 #define	S_ASCIS		26	/* .ascis */
 #define	S_FLAT24	27  /* .flat24 */
 #define	S_OPTSDCC	28  /* .optsdcc */
-
+#define S_ULEB128	29	/* .uleb128 */
+#define S_SLEB128	30	/* .sleb128 */
 
 /*
  *	The tsym structure is a linked list of temporary

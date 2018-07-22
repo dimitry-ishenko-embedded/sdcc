@@ -38,7 +38,7 @@
 
 # Uncomment this to show only errors and the summary.
 # Comment this out for debugging.
-#.SILENT:
+.SILENT:
 
 # All original tests live in TESTS_DIR and below
 TESTS_DIR = tests
@@ -60,16 +60,18 @@ GENERATE_CASES = generate-cases.py
 # Each directory under ports/ is used as a port name.  Each port is tested.
 # Each port must have a spec.mk which describes how to build the object
 # files and how to run the emulator.
-ALL_PORTS = $(filter-out CVS xa51 mcs51 mcs51-large mcs51-stack-auto ds390 gbz80 hc08,$(notdir $(wildcard $(PORTS_DIR)/*)))
+ALL_PORTS = $(filter-out CVS xa51 ucz80 gbz80,$(notdir $(wildcard $(PORTS_DIR)/*)))
 
 # These  ports will be cleaned with 'make clean'
 CLEAN_PORTS = $(filter-out CVS,$(notdir $(wildcard $(PORTS_DIR)/*)))
+
+MAKE_LIBRARY =
 
 all: test-ports
 
 # Test all of the ports
 test-ports:
-	for i in $(ALL_PORTS); do $(MAKE) test-port PORT=$$i; done
+	for i in $(ALL_PORTS); do $(MAKE) make_library test-port PORT=$$i; done
 
 # Helper rule for testing the z80 port only
 test-z80:
@@ -82,10 +84,15 @@ test-gbz80:
 # Helper rule for testing the mcs51 port only
 test-mcs51:
 	$(MAKE) test-port PORT=mcs51
+
 test-mcs51-large:
 	$(MAKE) test-port PORT=mcs51-large
+
 test-mcs51-stack-auto:
-	$(MAKE) make-library test-port PORT=mcs51-stack-auto
+	$(MAKE) make_library test-port PORT=mcs51-stack-auto
+
+test-mcs51-xstack-auto:
+	$(MAKE) make_library test-port PORT=mcs51-xstack-auto
 
 # Helper rule for testing the ds390 port only
 test-ds390:
@@ -122,7 +129,7 @@ PORT_RESULTS = $(ALL_TESTS:$(TESTS_DIR)/%.c=$(PORT_RESULTS_DIR)/%.out)
 
 SDCC_DIR = ../..
 SDCC_EXTRA_DIR = ../../../sdcc-extra
-
+INC_DIR = $(SDCC_DIR)/device/include
 
 # Defaults.  Override in spec.mk if required.
 # Path to SDCC
@@ -141,7 +148,9 @@ ifdef PORT
 include $(PORTS_DIR)/$(PORT)/spec.mk
 endif
 
-SDCCFLAGS += -Ifwk/include -Itests
+make_library: $(MAKE_LIBRARY)
+
+SDCCFLAGS += -Ifwk/include -Itests -I$(INC_DIR)
 
 # List of intermediate files to keep.  Pretty much keep everything as
 # disk space is free.

@@ -32,6 +32,11 @@
 #include "SDCCmacro.h"
 #include "SDCCutil.h"
 #include "newalloc.h"
+#ifndef _WIN32
+#include "findme.h"
+#endif
+
+#include "version.h"
 
 /** Given an array of name, value string pairs creates a new hash
     containing all of the pairs.
@@ -143,18 +148,29 @@ getBinPath(const char *prel)
 char *
 getBinPath(const char *prel)
 {
-  char *p;
-  size_t len;
   static char path[PATH_MAX];
-    
-  if ((p = strrchr(prel, DIR_SEPARATOR_CHAR)) == NULL)
+  const char *ret_path;
+
+  if (NULL != (ret_path = findProgramPath(prel))) {
+    char *p;
+    size_t len;
+
+    if (NULL != (p = strrchr(ret_path, DIR_SEPARATOR_CHAR)) &&
+      PATH_MAX > (len = p - ret_path)) {
+      memcpy(path, ret_path, len);
+      path[len] = '\0';
+      free((void *)ret_path);
+
+      return path;
+    }
+    else {
+      free((void *)ret_path);
+
+      return NULL;
+    }
+  }
+  else
     return NULL;
-
-  len = min((sizeof path) - 1, p - prel);
-  strncpy(path, prel, len);
-  path[len] = '\0';
-
-  return path;
 }
 #endif
 
@@ -270,6 +286,16 @@ char *strncatz(char *dest, const char *src, size_t n)
     dest[n - 1] = 0;
     return dest;
 }
+
+
+/*-----------------------------------------------------------------*/
+/* getBuildNumber - return build number                            */
+/*-----------------------------------------------------------------*/
+const char *getBuildNumber(void)
+{
+  return (SDCC_BUILD_NUMBER);
+}
+
 
 
 #if defined(HAVE_VSNPRINTF) || defined(HAVE_VSPRINTF)

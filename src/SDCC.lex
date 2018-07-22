@@ -40,6 +40,11 @@ IS      (u|U|l|L)*
 #define TKEYWORD(token) return (isTargetKeyword(yytext) ? token :\
                                 check_type())
 
+#define TKEYWORDSDCC(token) return (options.std_sdcc && isTargetKeyword(yytext)\
+                                    ? token : check_type())
+
+#define TKEYWORD99(token) return (options.std_c99 ? token : check_type())
+
 extern int lineno, column;
 extern char *filename;
 
@@ -61,18 +66,27 @@ static int checkCurrFile(char *s);
 
 %x asm
 %%
-"_asm"         {
+_?"_asm"         {
   count();
+  if (!options.std_sdcc && yytext[1] != '_')
+    return check_type();
   assert(asmbuff.alloc == 0 && asmbuff.len == 0 && asmbuff.buf == NULL);
   dbuf_init(&asmbuff, INITIAL_INLINEASM);
   BEGIN(asm);
 }
-<asm>"_endasm" {
+<asm>_?"_endasm" {
   count();
-  yylval.yyinline = dbuf_c_str(&asmbuff);
-  dbuf_detach(&asmbuff);
-  BEGIN(INITIAL);
-  return (INLINEASM);
+  if (!options.std_sdcc && yytext[1] != '_')
+    {
+      dbuf_append(&asmbuff, yytext, strlen(yytext));
+    }
+  else
+    {
+      yylval.yyinline = dbuf_c_str(&asmbuff);
+      dbuf_detach(&asmbuff);
+      BEGIN(INITIAL);
+      return (INLINEASM);
+    }
 }
 <asm>\n        {
   count();
@@ -81,47 +95,69 @@ static int checkCurrFile(char *s);
 <asm>.         {
   dbuf_append(&asmbuff, yytext, 1);
 }
-"at"           { count(); TKEYWORD(AT); }
+"at"           { count(); TKEYWORDSDCC(AT); }
+"__at"         { count(); TKEYWORD(AT); }
 "auto"         { count(); return(AUTO); }
-"bit"          { count(); TKEYWORD(BIT); }
+"bit"          { count(); TKEYWORDSDCC(BIT); }
+"__bit"        { count(); TKEYWORD(BIT); }
 "break"        { count(); return(BREAK); }
 "case"         { count(); return(CASE); }
 "char"         { count(); return(CHAR); }
-"code"         { count(); TKEYWORD(CODE); }
+"code"         { count(); TKEYWORDSDCC(CODE); }
+"__code"       { count(); TKEYWORD(CODE); }
 "const"        { count(); return(CONST); }
 "continue"     { count(); return(CONTINUE); }
-"critical"     { count(); TKEYWORD(CRITICAL); }
-"data"         { count(); TKEYWORD(DATA); }
+"critical"     { count(); TKEYWORDSDCC(CRITICAL); }
+"__critical"   { count(); TKEYWORD(CRITICAL); }
+"data"         { count(); TKEYWORDSDCC(DATA); }
+"__data"       { count(); TKEYWORD(DATA); }
 "default"      { count(); return(DEFAULT); }
 "do"           { count(); return(DO); }
 "double"       { count(); werror(W_DOUBLE_UNSUPPORTED);return(FLOAT); }
 "else"         { count(); return(ELSE); }
 "enum"         { count(); return(ENUM); }
 "extern"       { count(); return(EXTERN); }
-"far"          { count(); TKEYWORD(XDATA); }
-"eeprom"       { count(); TKEYWORD(EEPROM); }
+"far"          { count(); TKEYWORDSDCC(XDATA); }
+"__far"        { count(); TKEYWORD(XDATA); }
+"eeprom"       { count(); TKEYWORDSDCC(EEPROM); }
+"__eeprom"     { count(); TKEYWORD(EEPROM); }
 "float"        { count(); return(FLOAT); }
-"flash"        { count(); TKEYWORD(CODE); }
+"flash"        { count(); TKEYWORDSDCC(CODE); }
+"__flash"      { count(); TKEYWORD(CODE); }
 "for"          { count(); return(FOR); }
 "goto"         { count(); return(GOTO); }
-"idata"        { count(); TKEYWORD(IDATA); }
+"idata"        { count(); TKEYWORDSDCC(IDATA); }
+"__idata"      { count(); TKEYWORD(IDATA); }
 "if"           { count(); return(IF); }
 "int"          { count(); return(INT); }
-"interrupt"    { count(); return(INTERRUPT); }
-"nonbanked"    { count(); TKEYWORD(NONBANKED); }
-"banked"       { count(); TKEYWORD(BANKED); }
+"interrupt"    { count(); TKEYWORDSDCC(INTERRUPT); }
+"__interrupt"  { count(); TKEYWORD(INTERRUPT); }
+"nonbanked"    { count(); TKEYWORDSDCC(NONBANKED); }
+"__nonbanked"  { count(); TKEYWORD(NONBANKED); }
+"banked"       { count(); TKEYWORDSDCC(BANKED); }
+"__banked"     { count(); TKEYWORD(BANKED); }
 "long"         { count(); return(LONG); }
-"near"         { count(); TKEYWORD(DATA); }
-"pdata"        { count(); TKEYWORD(PDATA); }
-"reentrant"    { count(); TKEYWORD(REENTRANT); }
+"near"         { count(); TKEYWORDSDCC(DATA); }
+"__near"       { count(); TKEYWORD(DATA); }
+"pdata"        { count(); TKEYWORDSDCC(PDATA); }
+"__pdata"      { count(); TKEYWORD(PDATA); }
+"reentrant"    { count(); TKEYWORDSDCC(REENTRANT); }
+"__reentrant"  { count(); TKEYWORD(REENTRANT); }
+"shadowregs"   { count(); TKEYWORDSDCC(SHADOWREGS); }
+"__shadowregs" { count(); TKEYWORD(SHADOWREGS); }
+"wparam"       { count(); TKEYWORDSDCC(WPARAM); }
+"__wparam"     { count(); TKEYWORD(WPARAM); }
 "register"     { count(); return(REGISTER); }
 "return"       { count(); return(RETURN); }
-"sfr"          { count(); TKEYWORD(SFR); }
-"sbit"         { count(); TKEYWORD(SBIT); }
+"sfr"          { count(); TKEYWORDSDCC(SFR); }
+"__sfr"        { count(); TKEYWORD(SFR); }
+"sbit"         { count(); TKEYWORDSDCC(SBIT); }
+"__sbit"       { count(); TKEYWORD(SBIT); }
 "short"        { count(); return(SHORT); }
 "signed"       { count(); return(SIGNED); }
 "sizeof"       { count(); return(SIZEOF); }
-"sram"         { count(); TKEYWORD(XDATA); }
+"sram"         { count(); TKEYWORDSDCC(XDATA); }
+"__sram"       { count(); TKEYWORD(XDATA); }
 "static"       { count(); return(STATIC); }
 "struct"       { count(); return(STRUCT); }
 "switch"       { count(); return(SWITCH); }
@@ -130,18 +166,24 @@ static int checkCurrFile(char *s);
 "unsigned"     { count(); return(UNSIGNED); }
 "void"         { count(); return(VOID); }
 "volatile"     { count(); return(VOLATILE); }
-"using"        { count(); TKEYWORD(USING); }
-"_naked"       { count(); TKEYWORD(NAKED); }
+"using"        { count(); TKEYWORDSDCC(USING); }
+"__using"      { count(); TKEYWORD(USING); }
+"_naked"       { count(); TKEYWORDSDCC(NAKED); }
+"__naked"      { count(); TKEYWORD(NAKED); }
 "while"        { count(); return(WHILE); }
-"xdata"        { count(); TKEYWORD(XDATA); }
+"xdata"        { count(); TKEYWORDSDCC(XDATA); }
+"__xdata"      { count(); TKEYWORD(XDATA); }
 "..."          { count(); return(VAR_ARGS); }
 "__typeof"     { count(); return TYPEOF; }
 "_JavaNative"  { count(); TKEYWORD(JAVANATIVE); }
-"_overlay"     { count(); TKEYWORD(OVERLAY); }
+"_overlay"     { count(); TKEYWORDSDCC(OVERLAY); }
+"__overlay"    { count(); TKEYWORD(OVERLAY); }
+"inline"       { count(); TKEYWORD99(INLINE); }
+"restrict"     { count(); TKEYWORD99(RESTRICT); }
 {L}({L}|{D})*  { count(); return(check_type()); }
 0[xX]{H}+{IS}? { count(); yylval.val = constVal(yytext); return(CONSTANT); }
-0{D}+{IS}?     { count(); yylval.val = constVal(yytext); return(CONSTANT); }
-{D}+{IS}?      { count(); yylval.val = constVal(yytext); return(CONSTANT); }
+0[0-7]*{IS}?     { count(); yylval.val = constVal(yytext); return(CONSTANT); }
+[1-9]{D}*{IS}?      { count(); yylval.val = constVal(yytext); return(CONSTANT); }
 '(\\.|[^\\'])+' { count();yylval.val = charVal (yytext); return(CONSTANT); /* ' make syntax highliter happy */ }
 {D}+{E}{FS}?   { count(); yylval.val = constFloatVal(yytext);return(CONSTANT); }
 {D}*"."{D}+({E})?{FS}?  { count(); yylval.val = constFloatVal(yytext);return(CONSTANT); }
@@ -414,8 +456,16 @@ enum pragma_id {
      P_EXCLUDE,
      P_NOIV,
      P_LOOPREV,
-     P_OVERLAY_      /* I had a strange conflict with P_OVERLAY while */
+     P_OVERLAY_,     /* I had a strange conflict with P_OVERLAY while */
                      /* cross-compiling for MINGW32 with gcc 3.2 */
+     P_DISABLEWARN,
+     P_OPTCODESPEED,
+     P_OPTCODESIZE,
+     P_OPTCODEBALANCED,
+     P_STD_C89,
+     P_STD_C99,
+     P_STD_SDCC89,
+     P_STD_SDCC99
 };
 
 
@@ -424,6 +474,7 @@ enum pragma_id {
 
 STACK_DCL(options_stack, struct options *, SAVE_RESTORE_SIZE)
 STACK_DCL(optimize_stack, struct optimize *, SAVE_RESTORE_SIZE)
+STACK_DCL(SDCCERRG_stack, struct SDCCERRG *, SAVE_RESTORE_SIZE)
 
 /*
  * cloneXxx functions should be updated every time a new set is
@@ -452,12 +503,24 @@ static struct optimize *cloneOptimize(struct optimize *opt)
 {
   struct optimize *new_opt;
 
-  new_opt = Safe_malloc(sizeof (struct options));
+  new_opt = Safe_malloc(sizeof (struct optimize));
 
   /* clone scalar values */
   *new_opt = *opt;
 
   return new_opt;
+}
+
+static struct SDCCERRG *cloneSDCCERRG (struct SDCCERRG *val)
+{
+  struct SDCCERRG *new_val;
+
+  new_val = Safe_malloc(sizeof (struct SDCCERRG));
+
+  /* clone scalar values */
+  *new_val = *val;
+
+  return new_val;
 }
 
 static void copyAndFreeOptions(struct options *dest, struct options *src)
@@ -468,7 +531,7 @@ static void copyAndFreeOptions(struct options *dest, struct options *src)
   /* not implemented yet: */
   /* deleteSet(&dest->olaysSet); */
 
-  /* dopy src to dest */
+  /* copy src to dest */
   *dest = *src;
 
   Safe_free(src);
@@ -476,7 +539,15 @@ static void copyAndFreeOptions(struct options *dest, struct options *src)
 
 static void copyAndFreeOptimize(struct optimize *dest, struct optimize *src)
 {
-  /* dopy src to dest */
+  /* copy src to dest */
+  *dest = *src;
+
+  Safe_free(src);
+}
+
+static void copyAndFreeSDCCERRG(struct SDCCERRG *dest, struct SDCCERRG *src)
+{
+  /* copy src to dest */
   *dest = *src;
 
   Safe_free(src);
@@ -484,11 +555,14 @@ static void copyAndFreeOptimize(struct optimize *dest, struct optimize *src)
 
 static void doPragma(int op, char *cp)
 {
+  int i;
+
   switch (op) {
   case P_SAVE:
     {
       STACK_PUSH(options_stack, cloneOptions(&options));
       STACK_PUSH(optimize_stack, cloneOptimize(&optimize));
+      STACK_PUSH(SDCCERRG_stack, cloneSDCCERRG(&_SDCCERRG));
     }
     break;
 
@@ -496,12 +570,16 @@ static void doPragma(int op, char *cp)
     {
       struct options *optionsp;
       struct optimize *optimizep;
+      struct SDCCERRG *sdccerrgp;
 
       optionsp = STACK_POP(options_stack);
       copyAndFreeOptions(&options, optionsp);
 
       optimizep = STACK_POP(optimize_stack);
       copyAndFreeOptimize(&optimize, optimizep);
+
+      sdccerrgp = STACK_POP(SDCCERRG_stack);
+      copyAndFreeSDCCERRG(&_SDCCERRG, sdccerrgp);
     }
     break;
 
@@ -535,6 +613,7 @@ static void doPragma(int op, char *cp)
 
   case P_LESSPEDANTIC:
     options.lessPedantic = 1;
+    setErrorLogLevel(ERROR_LEVEL_WARNING);
     break;
 
   case P_CALLEE_SAVES:
@@ -560,6 +639,48 @@ static void doPragma(int op, char *cp)
 
   case P_OVERLAY_:
     break; /* notyet */
+
+  case P_DISABLEWARN:
+    if (sscanf(cp, "%d", &i) && (i<MAX_ERROR_WARNING))
+      {
+        setWarningDisabled(i);
+      }
+    break;
+  
+  case P_OPTCODESPEED:
+    optimize.codeSpeed = 1;
+    optimize.codeSize = 0;
+    break;
+
+  case P_OPTCODESIZE:
+    optimize.codeSpeed = 0;
+    optimize.codeSize = 1;
+    break;
+
+  case P_OPTCODEBALANCED:
+    optimize.codeSpeed = 0;
+    optimize.codeSize = 0;
+    break;
+  
+  case P_STD_C89:
+    options.std_c99 = 0;
+    options.std_sdcc = 0;
+    break;
+  
+  case P_STD_C99:
+    options.std_c99 = 1;
+    options.std_sdcc = 0;
+    break;
+  
+  case P_STD_SDCC89:
+    options.std_c99 = 0;
+    options.std_sdcc = 1;
+    break;
+  
+  case P_STD_SDCC99:
+    options.std_c99 = 1;
+    options.std_sdcc = 1;
+    break;
   }
 }
 
@@ -590,6 +711,14 @@ static int process_pragma(char *s)
     { "noiv",           P_NOIV,         0 },
     { "overlay",        P_OVERLAY_,     0 },
     { "less_pedantic",  P_LESSPEDANTIC, 0 },
+    { "disable_warning",P_DISABLEWARN,  0 },
+    { "opt_code_speed", P_OPTCODESPEED, 0 },
+    { "opt_code_size",  P_OPTCODESIZE,  0 },
+    { "opt_code_balanced",  P_OPTCODEBALANCED,  0 },
+    { "std_c89",	P_STD_C89, 0 },
+    { "std_c99",	P_STD_C99, 0 },
+    { "std_sdcc89",	P_STD_SDCC89, 0 },
+    { "std_sdcc99",	P_STD_SDCC99, 0 },
 
     /*
      * The following lines are deprecated pragmas,
@@ -630,6 +759,10 @@ static int process_pragma(char *s)
   while ((!isspace(*s)) && (*s != '\n'))
     s++ ;
 
+  /* skip separating whitespace */
+  while (isspace(*s) && (*s != '\n'))
+    s++;
+
   /* First give the port a chance */
   if (port->process_pragma && !port->process_pragma(cp))
     return 0;
@@ -644,7 +777,7 @@ static int process_pragma(char *s)
           if (pragma_tbl[i].deprecated != 0)
             werror(W_DEPRECATED_PRAGMA, pragma_tbl[i].name);
 
-          doPragma(pragma_tbl[i].id, cp + len);
+          doPragma(pragma_tbl[i].id, s);
           return 0;
         }
     }
@@ -661,12 +794,30 @@ static int isTargetKeyword(char *s)
 
   if (port->keywords == NULL)
     return 0;
-  for (i = 0 ; port->keywords[i] ; i++ ) {
-    if (strcmp(port->keywords[i],s) == 0)
-      return 1;
-  }
+  
+  if (s[0] == '_' && s[1] == '_')
+    {
+      /* Keywords in the port's array have either 0 or 1 underscore, */
+      /* so skip over the appropriate number of chars when comparing */
+      for (i = 0 ; port->keywords[i] ; i++ )
+        {
+          if (port->keywords[i][0] == '_' &&
+              strcmp(port->keywords[i],s+1) == 0)
+            return 1;
+          else if (strcmp(port->keywords[i],s+2) == 0)
+            return 1;
+        }
+    }
+  else
+    {
+      for (i = 0 ; port->keywords[i] ; i++ )
+        {
+          if (strcmp(port->keywords[i],s) == 0)
+            return 1;
+        }
+    }
 
-    return 0;
+  return 0;
 }
 
 int yywrap(void)

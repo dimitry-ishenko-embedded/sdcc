@@ -144,7 +144,17 @@ void openSimulator (char **args, int nargs)
     int retry = 0;
     int i ;
     Dprintf(D_simi, ("simi: openSimulator\n"));
-
+#ifdef SDCDB_DEBUG
+    if (D_simi & sdcdbDebug)
+    {
+        printf("simi: openSimulator: ");
+        for (i=0; i < nargs; i++ )
+        {
+            printf("arg%d: %s ",i,args[i]);
+        }
+        printf("\n");
+    }
+#endif
     invalidateCache(XMEM_CACHE);
     invalidateCache(IMEM_CACHE);
     invalidateCache(SREG_CACHE);
@@ -321,6 +331,7 @@ int simSetValue (unsigned int addr,char mem, int size, unsigned long val)
     sendSim(buffer);
     waitForSim(100,NULL);
     simResponse();   
+    return 0;
 }
 
 
@@ -420,7 +431,7 @@ void simLoadFile (char *s)
 {
     char buff[128];
 
-    sprintf(buff,"l \"%s\"\n",s);
+    sprintf(buff,"file \"%s\"\n",s);
     printf(buff);
     sendSim(buff);
     waitForSim(500,NULL);

@@ -118,7 +118,10 @@ get_name_entry(struct name_entry tabl[], char *name, class cl_uc *uc)
   while (tabl[i].name &&
 	 (!(tabl[i].cpu_type & uc->type) ||
 	 (strcmp(tabl[i].name, name) != 0)))
-    i++;
+    {
+      //printf("tabl[%d].name=%s <-> %s\n",i,tabl[i].name,name);
+      i++;
+    }
   if (tabl[i].name != NULL)
     return(&tabl[i]);
   else
@@ -285,6 +288,56 @@ proc_escape(char *string, int *len)
   *p= '\0';
   *len= p-str;
   return(str);
+}
+
+
+
+extern "C" int vasprintf(char **strp, const  char *format, va_list ap);
+extern "C" int vsnprintf(char *str, size_t size,const char *format,va_list ap);
+
+int
+cmd_vfprintf(FILE *f, char *format, va_list ap)
+{
+  int ret;
+  if (!f)
+    return(0);
+#ifdef HAVE_VASPRINTF
+  char *msg= NULL;
+  vasprintf(&msg, format, ap);
+  ret= fprintf(f, "%s", msg);
+  free(msg);
+#else
+#  ifdef HAVE_VSNPRINTF
+  char msg[80*25];
+  vsnprintf(msg, 80*25, format, ap);
+  ret= fprintf(f, "%s", msg);
+#  else
+#    ifdef HAVE_VPRINTF
+  char msg[80*25];
+  vsprintf(msg, format, ap); /* Dangerous */
+  ret= fprintf(f, "%s", msg);
+#    else
+#      ifdef HAVE_DOPRNT
+  /* ??? */
+  /*strcpy(msg, "Unimplemented printf has called.\n");*/
+#      else
+  /*strcpy(msg, "printf can not be implemented, upgrade your libc.\n");*/
+#      endif
+#    endif
+#  endif
+#endif
+  fflush(f);
+  return(ret);
+}
+
+int
+cmd_fprintf(FILE *f, char *format, ...)
+{
+  va_list ap;
+  va_start(ap, format);
+  int ret= cmd_vfprintf(f, format, ap);
+  va_end(ap);
+  return(ret);
 }
 
 

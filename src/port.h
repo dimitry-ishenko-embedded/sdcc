@@ -7,6 +7,7 @@
 
 #include "SDCCicode.h"
 #include "SDCCargs.h"
+#include "SDCCpeeph.h"
 
 #define TARGET_ID_MCS51    1
 #define TARGET_ID_GBZ80    2
@@ -42,6 +43,8 @@ typedef struct builtins
     int  nParms;		/* number of parms : max 8 */
     char *parm_types[MAX_BUILTIN_ARGS]; /* each parm type as string : see typeFromStr */
 } builtins ;
+
+struct ebbIndex;
 
 /* Processor specific names */
 typedef struct
@@ -113,6 +116,9 @@ typedef struct
       {
 /** Default peephole rules */
 	char *default_rules;
+	int (*getSize)(lineNode *line);
+	bitVect * (*getRegsRead)(lineNode *line);
+	bitVect * (*getRegsWritten)(lineNode *line);
       }
     peep;
 
@@ -140,6 +146,7 @@ typedef struct
 	const char *code_name;
 	const char *data_name;
 	const char *idata_name;
+	const char *pdata_name;
 	const char *xdata_name;
 	const char *bit_name;
 	const char *reg_name;
@@ -191,6 +198,35 @@ typedef struct
       }
     support;
 
+    struct
+      {
+	void (*emitDebuggerSymbol) (char *);
+	struct
+	  {
+	    int (*regNum) (struct regs *);
+	    bitVect * cfiSame;
+	    bitVect * cfiUndef;
+	    int addressSize;
+	    int regNumRet;
+	    int regNumSP;
+	    int regNumBP;
+	    int offsetSP;
+	  }
+	dwarf;
+      }
+    debugger;
+
+    struct
+      {
+        int maxCount;
+        int sizeofElement;
+        int sizeofMatchJump[3];
+        int sizeofRangeCompare[3];
+        int sizeofSubtract;
+        int sizeofDispatch;
+      }
+    jumptableCost;
+        
 /** Prefix to add to a C function (eg "_") */
     const char *fun_prefix;
 
@@ -204,13 +240,15 @@ typedef struct
 /** Optional list of automatically parsed options.  Should be
     implemented to at least show the help text correctly. */
     OPTION *poptions;
+/** Initialise port spectific paths */
+    void (*initPaths)(void);
 /** Called after all the options have been parsed. */
     void (*finaliseOptions) (void);
     /** Called after the port has been selected but before any
 	options are parsed. */
     void (*setDefaultOptions) (void);
 /** Does the dirty work. */
-    void (*assignRegisters) (struct eBBlock **, int);
+    void (*assignRegisters) (struct ebbIndex *);
 
     /** Returns the register name of a symbol.
 	Used so that 'regs' can be an incomplete type. */
@@ -232,9 +270,12 @@ typedef struct
     int (*genIVT) (FILE * of, symbol ** intTable, int intCount);
 
     void (*genXINIT) (FILE * of);
+    
+    /* Write port specific startup code */
+    void (*genInitStartup) (FILE * of);
 
     /* parameter passing in register related functions */
-    void (*reset_regparms) ();	/* reset the register count */
+    void (*reset_regparms) (void);	/* reset the register count */
     int (*reg_parm) (struct sym_link *);	/* will return 1 if can be passed in register */
 
     /** Process the pragma string 'sz'.  Returns 0 if recognised and

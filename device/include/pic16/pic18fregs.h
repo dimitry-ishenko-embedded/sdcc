@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18fregs.h,v 1.1 2004/02/16 23:11:45 vrokas Exp $
+ * $Id: pic18fregs.h,v 1.6 2005/03/31 16:24:44 vrokas Exp $
  *
  */
 
@@ -17,6 +17,9 @@
 
 
 #if defined(pic18f242)
+#  include <pic18f242.h>
+
+#elif defined(pic18f248)
 #  include <pic18f248.h>
 
 #elif defined(pic18f252)
@@ -35,11 +38,48 @@
 #  include <pic18f452.h>
 
 #elif defined(pic18f458)
-# include <pic18f458.h>
+#  include <pic18f458.h>
+
+#elif defined(pic18f1220)
+#  include <pic18f1220.h>
+
+#elif defined(pic18f2220)
+#  include <pic18f2220.h>
+
+#elif defined(pic18f6520)
+#  include <pic18f6520.h>
+
+#elif defined(pic18f6620)
+#  include <pic18f6620.h>
+
+#elif defined(pic18f6680)
+#  include <pic18f6680.h>
+
+#elif defined(pic18f6720)
+#  include <pic18f6720.h>
+
+#elif defined(pic18f8520)
+#  include <pic18f8520.h>
+
+#elif defined(pic18f8620)
+#  include <pic18f8620.h>
+
+#elif defined(pic18f8680)
+#  include <pic18f8680.h>
+
+#elif defined(pic18f8720)
+#  include <pic18f8720.h>
 
 #else
 #  error Unsupported processor
 
 #endif
+
+
+#define Nop()           { _asm nop _endasm; }
+#define ClrWdt()        { _asm clrwdt _endasm; }
+#define Sleep()         { _asm sleep _endasm; }
+#define Reset()         { _asm reset _endasm; }
+
 
 #endif /* __PIC18FREGS_H__ */

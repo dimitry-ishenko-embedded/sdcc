@@ -31,11 +31,13 @@
 typedef struct cseDef
   {
 
-    unsigned int key;
+    int key;
     operand *sym;		/* defining symbol */
     iCode *diCode;		/* defining instruction */
     bitVect *ancestors;		/* keys of the symbol's ancestors */
     int fromGlobal:1;		/* defining symbol's value computed from a global */
+    int fromAddrTaken:1;	/* defining symbol's value computed from a */
+				/*   symbol whose address was taken */
   }
 cseDef;
 
@@ -50,9 +52,8 @@ int ifDefSymIs (set *, operand *);
 DEFSETFUNC (findPrevIc);
 DEFSETFUNC (ifOperandsHave);
 DEFSETFUNC (findCheaperOp);
-int cseBBlock (eBBlock *, int, eBBlock **, int);
-int cseAllBlocks (eBBlock **, int, int computeOnly);
-void ifxOptimize (iCode *, set *, int, eBBlock *, int *, eBBlock **, int);
+int cseBBlock (eBBlock *, int, ebbIndex *);
+int cseAllBlocks (ebbIndex *, int computeOnly);
 void unsetDefsAndUses (iCode *);
 void updateSpillLocation (iCode * ic,int);
 void setUsesDefs (operand *, bitVect *, bitVect *, bitVect **);

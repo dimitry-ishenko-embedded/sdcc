@@ -9,19 +9,19 @@ all: $(MANUAL).pdf $(MANUAL).html/index.html $(MANUAL).txt \
 	$(CDB).pdf $(CDB).html/index.html $(CDB).txt
 
 install:
-	$(INSTALL) -d $(docdir)
-	cp -rf *.txt z80 avr $(docdir)
-	if [ -f $(MANUAL).html/index.html ]; then cp -rf $(MANUAL).html $(docdir); fi
-	if [ -f $(TSS).html/index.html    ]; then cp -rf $(TSS).html    $(docdir); fi
-	if [ -f $(CDB).html/index.html    ]; then cp -rf $(CDB).html    $(docdir); fi
-	if [ -f $(MANUAL).pdf             ]; then cp -rf $(MANUAL).pdf  $(docdir); fi
-	if [ -f $(TSS).pdf                ]; then cp -rf $(TSS).pdf     $(docdir); fi
-	if [ -f $(CDB).pdf                ]; then cp -rf $(CDB).pdf     $(docdir); fi
-	rm -rf `find $(docdir) -name CVS -type d`
-	rm -f $(docdir)/*/WARNINGS $(docdir)/*/*.pl $(docdir)/*/images.*
+	$(INSTALL) -d $(DESTDIR)$(docdir)
+	cp -rf *.txt z80 avr $(DESTDIR)$(docdir)
+	if [ -f $(MANUAL).html/index.html ]; then cp -rf $(MANUAL).html $(DESTDIR)$(docdir); fi
+	if [ -f $(TSS).html/index.html    ]; then cp -rf $(TSS).html    $(DESTDIR)$(docdir); fi
+	if [ -f $(CDB).html/index.html    ]; then cp -rf $(CDB).html    $(DESTDIR)$(docdir); fi
+	if [ -f $(MANUAL).pdf             ]; then cp -rf $(MANUAL).pdf  $(DESTDIR)$(docdir); fi
+	if [ -f $(TSS).pdf                ]; then cp -rf $(TSS).pdf     $(DESTDIR)$(docdir); fi
+	if [ -f $(CDB).pdf                ]; then cp -rf $(CDB).pdf     $(DESTDIR)$(docdir); fi
+	rm -rf `find $(DESTDIR)$(docdir) -name CVS -type d`
+	rm -f $(DESTDIR)$(docdir)/*/WARNINGS $(DESTDIR)$(docdir)/*/*.pl $(DESTDIR)$(docdir)/*/images.*
 
 uninstall:
-	rm -rf $(docdir)
+	rm -rf $(DESTDIR)$(docdir)
 
 $(MANUAL).html/index.html: $(MANUAL).tex $(MANUAL).ind ;#$(MANUAL).glo
 	mkdir -p `dirname $@`
@@ -30,7 +30,7 @@ $(MANUAL).html/index.html: $(MANUAL).tex $(MANUAL).ind ;#$(MANUAL).glo
 	mv $< `basename $< .tex`.orig.tex
 	sed 's,-\\/-,-\\/-\\/-,g' < `basename $< .tex`.orig.tex | \
 	sed 's,\\tabularnewline$$,\\\\,g' > $<
-	-latex2html -split 5 -show_section_numbers -local_icons -dir $(MANUAL).html $(MANUAL)
+	-latex2html -split 5 -show_section_numbers -local_icons -info "" -dir $(MANUAL).html $(MANUAL)
 	mv `basename $< .tex`.orig.tex $<
 
 $(TSS).html/index.html: $(TSS).tex
@@ -40,7 +40,7 @@ $(TSS).html/index.html: $(TSS).tex
 	mv $< `basename $< .tex`.orig.tex
 	sed 's,-\\/-,-\\/-\\/-,g' < `basename $< .tex`.orig.tex | \
 	sed 's,\\tabularnewline$$,\\\\,g' > $<
-	-latex2html -split 0 -local_icons -dir $(TSS).html $(TSS)
+	-latex2html -split 0 -local_icons -info "" -dir $(TSS).html $(TSS)
 	mv `basename $< .tex`.orig.tex $<
 
 $(CDB).html/index.html: $(CDB).tex
@@ -50,7 +50,7 @@ $(CDB).html/index.html: $(CDB).tex
 	mv $< `basename $< .tex`.orig.tex
 	sed 's,-\\/-,-\\/-\\/-,g' < `basename $< .tex`.orig.tex | \
 	sed 's,\\tabularnewline$$,\\\\,g' > $<
-	-latex2html -split 0 -show_section_numbers -local_icons -dir $(CDB).html $(CDB)
+	-latex2html -split 0 -show_section_numbers -local_icons -info "" -dir $(CDB).html $(CDB)
 	mv `basename $< .tex`.orig.tex $<
 
 %.txt: %.lyx
@@ -80,5 +80,22 @@ $(CDB).html/index.html: $(CDB).tex
 %.glo: %.dvi
 	# the glossary, not implemented yet
 	# makeindex -s l2hglo.ist -o $@ $<
+
+archive: all
+	rm -rf sdcc-doc sdcc-doc.tar.bz2
+	mkdir sdcc-doc
+	rsync -rCt avr z80 *.pdf *.txt sdcc-doc
+
+	for doc in $(MANUAL) $(TSS) $(CDB); do \
+	  rsync -Rt $$doc.html/*.html $$doc.html/*.png $$doc.html/*.css sdcc-doc/; \
+	done
+
+	mkdir sdcc-doc/as
+	rsync -rCt ../as/doc/* sdcc-doc/as/
+
+	mkdir sdcc-doc/ucsim
+	cd ../sim/ucsim/doc; rsync *.html *.jpg *.gif *.fig ../../../doc/sdcc-doc/ucsim/
+
+	tar -c sdcc-doc | bzip2 -9 > sdcc-doc.tar.bz2
 
 include clean.mk

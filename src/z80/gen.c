@@ -443,6 +443,19 @@ emitDebug (const char *szFormat,...)
 }
 
 /*-----------------------------------------------------------------*/
+/* z80_emitDebuggerSymbol - associate the current code location    */
+/*   with a debugger symbol                                        */
+/*-----------------------------------------------------------------*/
+void
+z80_emitDebuggerSymbol (char * debugSym)
+{
+  _G.lines.isDebug = 1;
+  emit2 ("%s !equ .", debugSym);
+  emit2 ("!global", debugSym);
+  _G.lines.isDebug = 0;
+}
+
+/*-----------------------------------------------------------------*/
 /* emit2 - writes the code into a file : for now it is simple    */
 /*-----------------------------------------------------------------*/
 void
@@ -934,9 +947,9 @@ operandsEqu (operand * op1, operand * op2)
   if (sym1 == sym2)
     return 1;
 
-  if (strcmp (sym1->rname, sym2->rname) == 0)
+  if (sym1->rname[0] && sym2->rname[0]
+      && strcmp (sym1->rname, sym2->rname) == 0)
     return 2;
-
 
   /* if left is a tmp & right is not */
   if (IS_ITEMP (op1) &&
@@ -1866,48 +1879,46 @@ aopPut (asmop * aop, const char *s, int offset)
 
     case AOP_SFR:
       if( IS_GB )
-      {
-        //  wassert (IS_GB);
-        if (strcmp (s, "a"))
-          emit2 ("ld a,%s", s);
-        emit2 ("ldh (%s+%d),a", aop->aopu.aop_dir, offset);
-      }
+        {
+          //  wassert (IS_GB);
+          if (strcmp (s, "a"))
+            emit2 ("ld a,%s", s);
+          emit2 ("ldh (%s+%d),a", aop->aopu.aop_dir, offset);
+        }
       else
-      { /*.p.t.20030716 handling for i/o port read access for Z80 */
-        if( aop->paged )
-        { /* banked mode */
-          if( aop->bcInUse )  emit2( "push bc" );
+        { /*.p.t.20030716 handling for i/o port read access for Z80 */
+          if (aop->paged)
+            { /* banked mode */
+              if (aop->bcInUse)
+                emit2( "push bc" );
 
-          emit2( "ld bc,#%s", aop->aopu.aop_dir );
-
-          if(( s[0] == '#'    ) /* immediate number */
-           ||( s[0] == '('    ) /* indirect register (ix or iy ??)*/
-           ||( isdigit( s[0] )))/* indirect register with offset (ix or iy ??)*/
-          {
-            emit2( "ld a,%s", s );
-            emit2( "out (c),a"  );
-          }
-          else
-          {
-            emit2( "out (c),%s", s );
-          }
+              if (strlen(s) != 1
+                  || (s[0] != 'a' && s[0] != 'd' && s[0] != 'e'
+                      && s[0] != 'h' && s[0] != 'l'))
+                {
+                  emit2( "ld a,%s", s );
+                  s = "a";
+                }
+              
+              emit2( "ld bc,#%s", aop->aopu.aop_dir );
+              emit2( "out (c),%s", s );
         
-          if( aop->bcInUse )
-            emit2( "pop bc"    );
+              if( aop->bcInUse )
+                emit2( "pop bc"    );
+              else
+                spillPair (PAIR_BC);
+            }
+          else if( z80_opts.port_mode == 180 )
+            { /* z180 in0/out0 mode */
+              emit2( "ld a,%s", s );
+              emit2( "out0 (%s),a", aop->aopu.aop_dir );
+            }
           else
-            spillPair (PAIR_BC);
+            { /* 8 bit mode */
+              emit2( "ld a,%s", s );
+              emit2( "out (%s),a", aop->aopu.aop_dir );
+            }
         }
-        else if( z80_opts.port_mode == 180 )
-        { /* z180 in0/out0 mode */
-          emit2( "ld a,%s", s );
-          emit2( "out0 (%s),a", aop->aopu.aop_dir );
-        }
-        else
-        { /* 8 bit mode */
-          emit2( "ld a,%s", s );
-          emit2( "out (%s),a", aop->aopu.aop_dir );
-        }
-      }
       break;
 
     case AOP_REG:
@@ -2384,7 +2395,7 @@ genUminusFloat (operand * op, operand * result)
   emitDebug("; genUminusFloat");
 
   /* for this we just need to flip the
-     first it then copy the rest in place */
+     first bit then copy the rest in place */
   size = AOP_SIZE (op) - 1;
 
   _moveA(aopGet (AOP (op), MSB32, FALSE));
@@ -3089,8 +3100,11 @@ genFunction (iCode * ic)
   
   /* Create the function header */
   emit2 ("!functionheader", sym->name);
-  sprintf (buffer, "%s_start", sym->rname);
-  emit2 ("!labeldef", buffer);
+  if (!IS_STATIC(sym->etype))
+    {
+      sprintf (buffer, "%s_start", sym->rname);
+      emit2 ("!labeldef", buffer);
+    }
   emit2 ("!functionlabeldef", sym->rname);
 
   if (options.profile) 
@@ -3100,14 +3114,21 @@ genFunction (iCode * ic)
 
   ftype = operandType (IC_LEFT (ic));
 
-  /* if critical function then turn interrupts off */
-  if (IFFUNC_ISCRITICAL (ftype))
-    emit2 ("!di");
-
   /* if this is an interrupt service routine then save all potentially used registers. */
   if (IFFUNC_ISISR (sym->type))
     {
-      emit2 ("!pusha");
+      if (!FUNC_ISNAKED( sym->type ))
+        {
+          emit2 ("!pusha");
+	}
+    }
+  else
+    {
+      /* if critical function then turn interrupts off */
+      if (IFFUNC_ISCRITICAL (sym->type))
+        {
+          emit2 ("!di");
+	}
     }
 
   /* PENDING: callee-save etc */
@@ -3205,74 +3226,83 @@ genEndFunction (iCode * ic)
 {
   symbol *sym = OP_SYMBOL (IC_LEFT (ic));
 
+
+  /* PENDING: calleeSave */
+  if (IS_Z80 && _G.omitFramePtr)
+    {
+      if (_G.stack.offset)
+        emit2 ("!ldaspsp", _G.stack.offset);
+    }
+  else if (_G.stack.offset && IS_GB && _G.stack.offset > INT8MAX)
+    {
+      emit2 ("!leavexl", _G.stack.offset);
+    }
+  else if (_G.stack.offset)
+    {
+      emit2 ("!leavex", _G.stack.offset);
+    }
+  else if( !FUNC_ISNAKED( sym->type )) /*.p.t.20030716 - now supporting Naked funcitons */
+    {
+      emit2 ("!leave");
+    }
+      
+  if (_G.calleeSaves.pushedDE) 
+    {
+      emit2 ("pop de");
+      _G.calleeSaves.pushedDE = FALSE;
+    }
+
+  if (_G.calleeSaves.pushedBC) 
+    {
+      emit2 ("pop bc");
+      _G.calleeSaves.pushedBC = FALSE;
+    }
+
+  if (options.profile) 
+    {
+      emit2 ("!profileexit");
+    }
+
+  /* if this is an interrupt service routine then restore all potentially used registers. */
   if (IFFUNC_ISISR (sym->type))
     {
-      wassertl (0, "Tried to close an interrupt support function");
+      if (!FUNC_ISNAKED( sym->type ))
+        {
+          emit2 ("!popa");
+        }
     }
   else
     {
+      /* if critical function then turn interrupts back on */
       if (IFFUNC_ISCRITICAL (sym->type))
-	emit2 ("!ei");
+        emit2 ("!ei");
+    }
 
-      /* PENDING: calleeSave */
-
-      if (IS_Z80 && _G.omitFramePtr)
-        {
-          if (_G.stack.offset)
-            emit2 ("!ldaspsp", _G.stack.offset);
-        }
-      else if (_G.stack.offset && IS_GB && _G.stack.offset > INT8MAX)
-        {
-          emit2 ("!leavexl", _G.stack.offset);
-        }
-      else if (_G.stack.offset)
-        {
-          emit2 ("!leavex", _G.stack.offset);
-        }
-      else if( !FUNC_ISNAKED( sym->type )) /*.p.t.20030716 - now supporting Naked funcitons */
-        {
-          emit2 ("!leave");
-        }
-
-      if (_G.calleeSaves.pushedDE) 
-        {
-          emit2 ("pop de");
-          _G.calleeSaves.pushedDE = FALSE;
-        }
-
-      if (_G.calleeSaves.pushedBC) 
-        {
-          emit2 ("pop bc");
-          _G.calleeSaves.pushedBC = FALSE;
-        }
-
-      if (options.profile) 
-        {
-          emit2 ("!profileexit");
-        }
-
-
-      if (options.debug && currFunc)
-	{
-	  _G.lines.isDebug = 1;
-	  sprintf (buffer, "C$%s$%d$%d$%d",
-		    FileBaseName (ic->filename), currFunc->lastLine,
-		    ic->level, ic->block);
-          emit2 ("!labeldef", buffer);
-	  if (IS_STATIC (currFunc->etype))
-	    sprintf (buffer, "XF%s$%s$0$0", moduleName, currFunc->name);
-	  else
-	    sprintf (buffer, "XG$%s$0$0", currFunc->name);
-          emit2 ("!labeldef", buffer);
-	  _G.lines.isDebug = 0;
-	}
+  if (options.debug && currFunc)
+    {
+      debugFile->writeEndFunction (currFunc, ic, 1);
+    }
       
+  if (IFFUNC_ISISR (sym->type))
+    {
+      /* "critical interrupt" is used to imply NMI handler */
+      if (IS_Z80 && IFFUNC_ISCRITICAL (sym->type))
+        emit2 ("retn");
+      else
+        emit2 ("reti");
+    }
+  else
+    {
       /* Both banked and non-banked just ret */
       emit2 ("ret");
-
+    }
+      
+  if (!IS_STATIC(sym->etype))
+    {
       sprintf (buffer, "%s_end", sym->rname);
       emit2 ("!labeldef", buffer);
     }
+  
   _G.flushStatics = 1;
   _G.stack.pushed = 0;
   _G.stack.offset = 0;
@@ -6011,6 +6041,9 @@ genLeftShift (iCode * ic)
   aopOp (left, ic, FALSE, FALSE);
   aopOp (result, ic, FALSE, FALSE);
 
+  if (AOP_TYPE (left) != AOP_REG || AOP_TYPE (result) != AOP_REG)
+     _push (PAIR_AF);
+  
   /* now move the left to the result if they are not the
      same */
 
@@ -6032,6 +6065,9 @@ genLeftShift (iCode * ic)
   offset = 0;
   tlbl1 = newiTempLabel (NULL);
 
+  if (AOP_TYPE (left) != AOP_REG || AOP_TYPE (result) != AOP_REG)
+     _pop (PAIR_AF);
+  
   emit2 ("!shortjp !tlabel", tlbl1->key + 100);
   emitLabel (tlbl->key + 100);
   l = aopGet (AOP (result), offset, FALSE);
@@ -6285,6 +6321,9 @@ genRightShift (iCode * ic)
   aopOp (left, ic, FALSE, FALSE);
   aopOp (result, ic, FALSE, FALSE);
 
+  if (AOP_TYPE (left) != AOP_REG || AOP_TYPE (result) != AOP_REG)
+     _push (PAIR_AF);
+  
   /* now move the left to the result if they are not the
      same */
   if (!sameRegs (AOP (left), AOP (result)))
@@ -6304,6 +6343,9 @@ genRightShift (iCode * ic)
   tlbl1 = newiTempLabel (NULL);
   size = AOP_SIZE (result);
   offset = size - 1;
+  
+  if (AOP_TYPE (left) != AOP_REG || AOP_TYPE (result) != AOP_REG)
+     _pop (PAIR_AF);
 
   emit2 ("!shortjp !tlabel", tlbl1->key + 100);
   emitLabel (tlbl->key + 100);
@@ -6812,7 +6854,7 @@ genGenPointerSet (operand * right,
     {
       fetchPair (pairId, AOP (result));
     }
-  /* so hl know contains the address */
+  /* so hl now contains the address */
   freeAsmop (result, NULL, ic);
 
   /* if bit then unpack */
@@ -7405,7 +7447,7 @@ _rleCommit(RLECTX *self)
     chunks.
 */
 static void
-_rleAppend(RLECTX *self, int c)
+_rleAppend(RLECTX *self, unsigned c)
 {
   int i;
 
@@ -7488,12 +7530,26 @@ genArrayInit (iCode * ic)
     
   if (type && type->next)
     {
-      elementSize = getSize(type->next);
+      if (IS_SPEC(type->next) || IS_PTR(type->next))
+        {
+          elementSize = getSize(type->next);
+        }
+      else if (IS_ARRAY(type->next) && type->next->next)
+        {
+          elementSize = getSize(type->next->next);
+        }
+      else
+        {
+	  printTypeChainRaw (type, NULL);
+          wassertl (0, "Can't determine element size in genArrayInit.");
+        }
     }
   else
     {
       wassertl (0, "Can't determine element size in genArrayInit.");
     }
+
+  wassertl ((elementSize > 0) && (elementSize <= 4), "Illegal element size in genArrayInit.");
 
   iLoop = IC_ARRAYILIST(ic);
   lastVal = (unsigned)-1;
@@ -7507,17 +7563,14 @@ genArrayInit (iCode * ic)
     {
       ix = iLoop->count;
 
-      if (ix != 0)
+      for (i = 0; i < ix; i++)
         {
-          for (i = 0; i < ix; i++)
+          for (eIndex = 0; eIndex < elementSize; eIndex++)
             {
-              for (eIndex = 0; eIndex < elementSize; eIndex++)
-                {
-                  val = (((int)iLoop->literalValue) >> (eIndex * 8)) & 0xff;
-                  _rleAppend(&rle, val);
-                }
+              val = (((int)iLoop->literalValue) >> (eIndex * 8)) & 0xff;
+              _rleAppend(&rle, val);
             }
-	}
+        }
 	
       iLoop = iLoop->next;
     }
@@ -7835,14 +7888,7 @@ genZ80Code (iCode * lic)
   /* if debug information required */
   if (options.debug && currFunc)
     {
-      debugFile->writeFunction(currFunc);
-      _G.lines.isDebug = 1;
-      if (IS_STATIC (currFunc->etype))
-	sprintf (buffer, "F%s$%s$0$0", moduleName, currFunc->name);
-      else
-	sprintf (buffer, "G$%s$0$0", currFunc->name);
-      emit2 ("!labeldef", buffer);
-      _G.lines.isDebug = 0;
+      debugFile->writeFunction (currFunc, lic);
     }
 
   for (ic = lic; ic; ic = ic->next)
@@ -7853,13 +7899,7 @@ genZ80Code (iCode * lic)
 	{
 	  if (options.debug)
 	    {
-	      _G.lines.isDebug = 1;
-	      sprintf (buffer, "C$%s$%d$%d$%d",
-			FileBaseName (ic->filename), ic->lineno,
-			ic->level, ic->block);
-              emit2 ("%s !equ .", buffer);
-              emit2 ("!global", buffer);
-	      _G.lines.isDebug = 0;
+	      debugFile->writeCLine (ic);
 	    }
 	  if (!options.noCcodeInAsm) {
 	    emit2 (";%s:%d: %s", ic->filename, ic->lineno,

@@ -39,8 +39,9 @@ static PIC_device Pics[] = {
 		{"p16f627", "16f627", "pic16f627", "f627"}, /* processor name */
 		(memRange *)NULL,
 		(memRange *)NULL,
-		0,                               /* max ram address (calculated) */
-		0x80,                            /* Bank Mask */
+		0,                /* max ram address (calculated) */
+		0x1ff,            /* default max ram address */
+		0x80,             /* Bank Mask */
 	},
 	
 	{
@@ -48,6 +49,7 @@ static PIC_device Pics[] = {
 		(memRange *)NULL,
 		(memRange *)NULL,
 		0,
+		0x1ff,
 		0x80,
 	},
 	
@@ -56,6 +58,7 @@ static PIC_device Pics[] = {
 			(memRange *)NULL,
 			(memRange *)NULL,
 			0,
+			0x4f, /* 68 register available 0x0C to 0x4F (0x8C to 0xCF mapped to bank 0) */
 			0x80,
 	},
 	
@@ -64,6 +67,7 @@ static PIC_device Pics[] = {
 			(memRange *)NULL,
 			(memRange *)NULL,
 			0,
+			0x1ff,
 			0x180,
 	},
 
@@ -72,6 +76,7 @@ static PIC_device Pics[] = {
 			(memRange *)NULL,
 			(memRange *)NULL,
 			0,
+			0x1ff,
 			0x180,
 	},
 	
@@ -80,14 +85,13 @@ static PIC_device Pics[] = {
 			(memRange *)NULL,
 			(memRange *)NULL,
 			0,
+			0x1ff,
 			0x80,
 	},
 
 };
 
 static int num_of_supported_PICS = sizeof(Pics)/sizeof(PIC_device);
-
-#define DEFAULT_PIC "f877"
 
 static PIC_device *pic=NULL;
 
@@ -155,6 +159,7 @@ void setMaxRAM(int size)
 	for(i=0; i<=pic->maxRAMaddress; i++) {
 		finalMapping[i].reg = NULL;
 		finalMapping[i].isValid = 0;
+		finalMapping[i].bank = (i>>7);
 	}
 }
 
@@ -235,9 +240,9 @@ void dump_sfr(FILE *of)
 		} else {
 			if(start>=0) {
 				
-			/* clear the lower 7-bits of the start address of the first
-			* variable declared in this bank. The upper bits for the mid
-			* range pics are the bank select bits.
+				/* clear the lower 7-bits of the start address of the first
+				* variable declared in this bank. The upper bits for the mid
+				* range pics are the bank select bits.
 				*/
 				
 				bank_base = start & 0xfff8;
@@ -617,4 +622,26 @@ int getConfigWord(int address)
 	else
 		return 0;
 	
+}
+
+/*-----------------------------------------------------------------*
+*  
+*-----------------------------------------------------------------*/
+void setDefMaxRam(void)
+{
+	unsigned i;
+	setMaxRAM(pic->defMaxRAMaddrs); /* Max RAM has not been included, so use default setting */
+	/* Validate full memory range for use by general purpose RAM */
+	for (i=pic->defMaxRAMaddrs; i--; ) {
+		finalMapping[i].bank = (i>>7);
+		finalMapping[i].isValid = 1;
+	}
+}
+
+/*-----------------------------------------------------------------*
+*  
+*-----------------------------------------------------------------*/
+unsigned getMaxRam(void)
+{
+	return pic->defMaxRAMaddrs;
 }

@@ -1,6 +1,6 @@
 #
 # configure.in - input script to autoconf to
-#		configure directory
+#                configure directory
 #
 # This file is part of the GNU PIC Library.
 #
@@ -8,7 +8,7 @@
 # The GNU PIC Library is maintained by,
 # 	Vangelis Rokas <vrokas@otenet.gr>
 #
-# $Id: configure.in,v 1.2 2004/01/13 11:00:57 bernhardheld Exp $
+# $Id: configure.in,v 1.2 2005/01/22 18:02:13 vrokas Exp $
 #
 
 # Process this file with autoconf to produce a configure script.
@@ -36,6 +36,8 @@ AC_CHECK_PROG(SED,	sed,	sed, :)
 # Checks for typedefs, structures, and compiler characteristics.
 
 # Checks for library functions.
+
+cp pics.all pics.build
 
 AC_CONFIG_FILES([Makefile.common])
 AC_OUTPUT

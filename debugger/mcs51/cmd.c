@@ -385,27 +385,31 @@ DEFSETFUNC(symWithAddr)
 /*-----------------------------------------------------------------*/
 static void setBPatModLine (module *mod, int line, char bpType )
 {
-  int next_line;
+    int next_line;
 
     /* look for the first executable line after the line
-       specified & get the break point there */    
+       specified & get the break point there */   
+
+    if ( line < 0 )
+        return;
+
     if (srcMode == SRC_CMODE && line > mod->ncLines) {
-	fprintf(stderr,"No line %d in file \"%s\".\n",
-		line,mod->c_name);
-	return ;
+        fprintf(stderr,"No line %d in file \"%s\".\n",
+                line,mod->c_name);
+        return ;
     }
     
     if (srcMode == SRC_AMODE && line > mod->nasmLines) {
-	fprintf(stderr,"No line %d in file \"%s\".\n",
-		line,mod->asm_name);
-	return ;
+        fprintf(stderr,"No line %d in file \"%s\".\n",
+                line,mod->asm_name);
+        return ;
     }
 
     next_line = line;
     for ( ; next_line < (srcMode == SRC_CMODE ? mod->ncLines : mod->nasmLines ) ; 
 	  next_line++ ) {
 	if (srcMode == SRC_CMODE) {
-	    if (mod->cLines[next_line]->addr) {
+	    if (mod->cLines[next_line]->addr != INT_MAX) {
 		setBreakPoint (mod->cLines[next_line]->addr, CODE, bpType, 
 			       userBpCB, mod->c_name, next_line);
 		return;
@@ -413,7 +417,7 @@ static void setBPatModLine (module *mod, int line, char bpType )
 	    }
 	}
 	else {
-	   if (mod->asmLines[next_line]->addr) {
+	   if (mod->asmLines[next_line]->addr != INT_MAX) {
 	       setBreakPoint (mod->asmLines[next_line]->addr, CODE, bpType, 
 			      userBpCB, mod->asm_name, next_line);
 		return;
@@ -653,10 +657,10 @@ context *discoverContext (unsigned addr, function *func)
 
     /* find the function we are in */
     if (!func && !applyToSet(functions,funcInAddr,addr,&func)) {
-        if (!applyToSet(functions,funcWithName,"main",&func) ||
+        if (!applyToSet(functions,funcWithName,"_main",&func) ||
             !applyToSet(modules,moduleLineWithAddr,addr,&mod,NULL))
         {
-            fprintf(stderr, "Error?:discoverContext: cannot apply addr 0x%x\n",addr);
+            fprintf(stderr, "addr 0x%x in no module/function (runtime env?)\n",addr);
             return NULL;
         }
         currCtxt->func = func;
@@ -678,15 +682,15 @@ context *discoverContext (unsigned addr, function *func)
                   &line,&currCtxt->block,&currCtxt->level)) 
             currCtxt->cline = func->lline = line;
         else
-            currCtxt->cline = func->exitline;
+            currCtxt->cline = -1;
     }    
     /* find the asm line number */
     line = 0;
     if (applyToSet(func->afpoints,lineAtAddr,addr,
 		   &line,NULL,NULL))
-	currCtxt->asmline = line;       
+        currCtxt->asmline = line;       
     else
-	currCtxt->asmline = -1;
+        currCtxt->asmline = -1;
         
     return currCtxt ;
 }
@@ -706,6 +710,12 @@ void simGo (unsigned int gaddr)
     {
         userinterrupt = 0;
         return;
+    }
+    if ( gaddr == 0 )
+    {
+        function *func = NULL;;
+        if (applyToSet(functions,funcInAddr,gaddr,&func))
+            STACK_PUSH(callStack,func);
     }
     addr = simGoTillBp (gaddr);
 
@@ -734,7 +744,7 @@ void simGo (unsigned int gaddr)
 }
 
 /*-----------------------------------------------------------------*/
-/* preparePrint - common parse function for                        */
+/* preparePrint - common parse function for  set variable,         */
 /*                output, print and display                        */
 /*-----------------------------------------------------------------*/
 static char *preparePrint(char *s, context *cctxt, int *fmt, symbol **sym)
@@ -775,12 +785,13 @@ static char *preparePrint(char *s, context *cctxt, int *fmt, symbol **sym)
         s++;
         while (isspace(*s)) s++;
     }
-    for ( bp = s; *bp && ( isalnum( *bp ) || *bp == '_'); bp++ );
+    for ( bp = s; *bp && ( isalnum( *bp ) || *bp == '_' || *bp == '$'); bp++ );
     save_ch = *bp;
     if ( *bp )
         *bp = '\0';
 
-    *sym = symLookup(s,cctxt);
+    if ( *s )
+        *sym = symLookup(s,cctxt);
     *bp = save_ch;
 
     if ( ! *sym )
@@ -926,6 +937,14 @@ static int cmdDisasm (char *s, context *cctxt, int args)
         
     }
     fprintf(stderr,"No function contains specified address.\n");
+    if( saddr >= 0 )
+    {
+        char lbuf[64];
+        sprintf(lbuf,"dis 0x%lx 0 %ld\n",saddr,( eaddr == -1 )?1L:eaddr-saddr);
+        sendSim(lbuf);
+        waitForSim(1000, NULL);
+        fputs(simResponse(),stdout);
+    }
     return 0; 
 }
 /*-----------------------------------------------------------------*/
@@ -1030,7 +1049,11 @@ static int commonSetUserBp(char *s, context *cctxt, char bpType)
 	/* get the lineno */
 	int line = atoi(s) -1;
     Dprintf(D_break, ("commonSetUserBp: b) line:%d \n",line));
-
+    if ( line < 0 )
+    {
+		fprintf(stdout,"linenumber <= 0\n");
+        goto ret;
+    }
 	/* if current context not present then we must get the module
 	   which has main & set the break point @ line number provided
 	   of that module : if current context known then set the bp 
@@ -1226,9 +1249,12 @@ int cmdListAsm (char *s, context *cctxt)
     if (  cctxt && cctxt->func) 
     {
         /* actual line */
-        if (printAsmLine(cctxt->func,cctxt->func->mod,
+        if ( cctxt->addr != INT_MAX )
+        {
+            if (printAsmLine(cctxt->func,cctxt->func->mod,
                          (long)cctxt->addr,(long)cctxt->addr))
             return 0; 
+        }
     }
     return 0;
 }
@@ -1276,10 +1302,10 @@ int cmdSetOption (char *s, context *cctxt)
         while (*s && *s != '=') s++;
         *s++ = '\0';
         while (isspace(*s)) *s++ = '\0';
-        if (*s)
+        if (*s && sym)
         {
-                printOrSetSymValue(sym,cctxt,0,0,0,rs,s,'\0');
-                return 0;
+            printOrSetSymValue(sym,cctxt,0,0,0,rs,s,'\0');
+            return 0;
         }
         else
             fprintf(stdout,"No new value for \"%s\".\n",s);
@@ -1420,7 +1446,7 @@ int cmdDelUserBp (char *s, context *cctxt)
 int cmdStepi (char *s, context *cctxt)
 {
 
-    if (STACK_EMPTY(callStack))
+    if (0 /*STACK_EMPTY(callStack)*/)
         fprintf(stdout,"The program is not being run.\n");
     else 
     {
@@ -1909,12 +1935,12 @@ static void infoSymbols(context *ctxt)
 /*-----------------------------------------------------------------*/
 static void infoRegisters( int all, context *ctxt)
 {
-    static unsigned int regaddrs[] = {0x81,0x82,0x83,0xd0,0xe0,0xf0,0};
+    static unsigned int regaddrs[] = {0x81,0x82,0x83,0xb8,0xd0,0xe0,0xf0,0};
     unsigned long val;
     int i,j,*r;
 
     i   = simGetValue (0xd0,'I',1);
-    fprintf(stdout,"PC  : 0x%04X  RegisterBank %d:\nR0-7:",ctxt->addr,(i>>3)&3);
+    fprintf(stdout,"IP  : 0x%04X  RegisterBank %d:\nR0-7:",ctxt->addr,(i>>3)&3);
     for ( j = 0; j < 8 ; j++ )
     {
         val = simGetValue (j ,'R',1);
@@ -2275,9 +2301,8 @@ int cmdListSrc (char *s, context *cctxt)
                 func ? func->sym->name : "?",
                 func ? lastaddr -func->sym->addr : 0);
         llines = pline +1;
-        while ( pline < list_mod->ncLines )
+        for ( ; pline < list_mod->ncLines; pline++ )
         {
-            pline++;
             if ( list_mod->cLines[pline]->addr > lastaddr )
             {
                 lastaddr = list_mod->cLines[pline]->addr -1;
@@ -2756,7 +2781,14 @@ static int printOrSetSymValue (symbol *sym, context *cctxt,
             }
             else
             {
-                simSetValue(addr,sym->addrspace,size,newval);	
+                if ( sym->addrspace == 'I' && addr == 0xb8 )
+                {
+                    /* Symbol with address of IP */
+                    if ( cctxt ) cctxt->addr = newval;
+                    simSetPC(cctxt->addr); 
+                }
+                else
+                    simSetValue(addr,sym->addrspace,size,newval);	
                 return 1;
             }
         }
@@ -3192,11 +3224,24 @@ void setMainContext()
 {
     function *func = NULL;
     currentFrame = 0; 
-    if (!applyToSet(functions,funcWithName,"main",&func) &&
-        !applyToSet(functions,funcWithName,"_main",&func))
-        return;
+    if (!applyToSet(functions,funcWithName,"_main",&func) &&
+        !applyToSet(functions,funcWithName,"main",&func))
+            return;
 
     discoverContext (func->sym->addr, func);
+}
+
+function *needExtraMainFunction()
+{
+    function *func = NULL;
+    if (!applyToSet(functions,funcWithName,"_main",&func))
+    {
+        if (applyToSet(functions,funcWithName,"main",&func))
+        {
+            return func;
+        }
+    }
+    return NULL;
 }
     
 static void printFrame()

@@ -23,10 +23,9 @@ CXXFLAGS        = @CXXFLAGS@ -Wall
 M_OR_MM         = @M_OR_MM@
 PICOPT		= @PICOPT@
 SHAREDLIB	= @SHAREDLIB@
+EXEEXT		= @EXEEXT@
 
-EXEEXT          = @EXEEXT@
-
-LIBS		= @LIBS@ -L$(PRJDIR) -lsim -lutil -lsim -lcmd -lguiucsim
+LIBS		= @LIBS@ -L$(PRJDIR) -Wl,--start-group -lsim -lutil -lcmd -lguiucsim -Wl,--end-group
 DL		= @DL@
 dl_ok		= @dl_ok@
 
@@ -65,13 +64,13 @@ all: checkconf otherlibs avr.src
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
-	$(INSTALL) -s savr$(EXEEXT) $(bindir)
+	$(INSTALL) -s savr$(EXEEXT) $(DESTDIR)$(bindir)
 
 
 # Deleting all the installed files
 # --------------------------------
 uninstall:
-	rm -f $(bindir)/savr$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/savr
 
 
 # Performing self-test
@@ -89,7 +88,7 @@ installcheck:
 # Creating installation directories
 # ---------------------------------
 installdirs:
-	test -d $(bindir) || $(INSTALL) -d $(bindir)
+	test -d $(DESTDIR)$(bindir) || $(INSTALL) -d $(DESTDIR)$(bindir)
 
 
 # Creating dependencies

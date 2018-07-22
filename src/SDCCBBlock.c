@@ -88,7 +88,9 @@ newEdge (eBBlock * from, eBBlock * to)
 /*-----------------------------------------------------------------*/
 FILE *createDumpFile (int id) {
   struct _dumpFiles *dumpFilesPtr=dumpFiles;
-
+  static int dumpIndex=0;
+  static char dumpIndexStr[32];
+  
   while (dumpFilesPtr->id) {
     if (dumpFilesPtr->id==id)
       break;
@@ -100,15 +102,26 @@ FILE *createDumpFile (int id) {
     exit (1);
   }
 
+  sprintf(dumpIndexStr, ".%d", dumpIndex);
+  dumpIndex++;
+
   if (!dumpFilesPtr->filePtr) {
     // not used before, create it
     strncpyz (scratchFileName, dstFileName, PATH_MAX);
+#if 0
+    strncatz (scratchFileName, dumpIndexStr, PATH_MAX);
+#endif
     strncatz (scratchFileName, dumpFilesPtr->ext, PATH_MAX);
     if (!(dumpFilesPtr->filePtr = fopen (scratchFileName, "w"))) {
       werror (E_FILE_OPEN_ERR, scratchFileName);
       exit (1);
     }
   } 
+
+#if 0
+  fprintf(dumpFilesPtr->filePtr, "Dump file index: %d\n", dumpIndex);
+#endif
+
   return dumpFilesPtr->filePtr;
 }
 
@@ -169,16 +182,19 @@ dumpLiveRanges (int id, hTab * liveRanges)
   fflush(file);
 }
 
+
 /*-----------------------------------------------------------------*/
 /* dumpEbbsToFileExt - writeall the basic blocks to a file         */
 /*-----------------------------------------------------------------*/
 void 
-dumpEbbsToFileExt (int id, eBBlock ** ebbs, int count)
+dumpEbbsToFileExt (int id, ebbIndex * ebbi)
 {
   FILE *of;
   int i;
   eBBlock *bb;
   set *cseSet;
+  eBBlock ** ebbs = ebbi->dfOrder ? ebbi->dfOrder : ebbi->bbOrder;
+  int count = ebbi->count;
 
   if (id) {
     of=createDumpFile(id);
@@ -215,7 +231,7 @@ dumpEbbsToFileExt (int id, eBBlock ** ebbs, int count)
 	fprintf (of, "\ndominators: ");
 	for (d=0; d<ebbs[i]->domVect->size; d++) {
 	  if (bitVectBitValue(ebbs[i]->domVect, d)) {
-	    fprintf (of, "%s ", ebbs[d]->entryLabel->name);
+	    fprintf (of, "%s ", ebbi->bbOrder[d]->entryLabel->name); //ebbs[d]->entryLabel->name);
 	  }
 	}
       }
@@ -340,8 +356,10 @@ iCode2eBBlock (iCode * ic)
 /* eBBWithEntryLabel - finds the basic block with the entry label  */
 /*-----------------------------------------------------------------*/
 eBBlock *
-eBBWithEntryLabel (eBBlock ** ebbs, symbol * eLabel, int count)
+eBBWithEntryLabel (ebbIndex * ebbi, symbol * eLabel)
 {
+  eBBlock ** ebbs = ebbi->bbOrder;
+  int count = ebbi->count;
   int i;
 
   for (i = 0; i < count; i++)
@@ -493,17 +511,21 @@ remiCodeFromeBBlock (eBBlock * ebb, iCode * ic)
 /*-----------------------------------------------------------------*/
 /* iCodeBreakDown : breakDown iCode chain to blocks                */
 /*-----------------------------------------------------------------*/
-eBBlock **
-iCodeBreakDown (iCode * ic, int *count)
+ebbIndex *
+iCodeBreakDown (iCode * ic)
 {
   eBBlock **ebbs = NULL;
   iCode *loop = ic;
-
-  *count = 0;
+  ebbIndex *ebbi;
+  
+  ebbi = Safe_alloc (sizeof (ebbIndex));
+  ebbi->count = 0;
+  ebbi->dfOrder = NULL; /* no depth first order information yet */
 
   /* allocate for the first entry */
 
-  ebbs = Safe_alloc (sizeof (eBBlock **));
+  ebbs = Safe_alloc (sizeof (eBBlock *));
+  ebbi->bbOrder = ebbs;
 
   while (loop)
     {
@@ -515,36 +537,37 @@ iCodeBreakDown (iCode * ic, int *count)
       ebb->ech->next = NULL;	/* mark the end of this chain */
       if (loop)
 	loop->prev = NULL;
-      ebb->bbnum = *count;	/* save this block number     */
+      ebb->bbnum = ebbi->count;	/* save this block number     */
       /* put it in the array */
-      ebbs[(*count)++] = ebb;
+      ebbs[(ebbi->count)++] = ebb;
 
       /* allocate for the next one. Remember to clear the new */
       /*  pointer at the end, that was created by realloc. */
 
-      ebbs = Safe_realloc (ebbs, (*count + 1) * sizeof (eBBlock **));
+      ebbs = Safe_realloc (ebbs, (ebbi->count + 1) * sizeof (eBBlock *));
+      ebbi->bbOrder = ebbs;
 
-      ebbs[*count] = 0;
+      ebbs[ebbi->count] = 0;
 
       /* if this one ends in a goto or a conditional */
       /* branch then check if the block it is going  */
       /* to already exists, if yes then this could   */
       /* be a loop, add a preheader to the block it  */
       /* goes to  if it does not already have one    */
-      if (ebbs[(*count) - 1]->ech &&
-	  (ebbs[(*count) - 1]->ech->op == GOTO ||
-	   ebbs[(*count) - 1]->ech->op == IFX))
+      if (ebbs[(ebbi->count) - 1]->ech &&
+	  (ebbs[(ebbi->count) - 1]->ech->op == GOTO ||
+	   ebbs[(ebbi->count) - 1]->ech->op == IFX))
 	{
 
 	  symbol *label;
 	  eBBlock *destBlock;
 
-	  if (ebbs[(*count) - 1]->ech->op == GOTO)
-	    label = IC_LABEL (ebbs[(*count) - 1]->ech);
-	  else if (!(label = IC_TRUE (ebbs[(*count) - 1]->ech)))
-	    label = IC_FALSE (ebbs[(*count) - 1]->ech);
+	  if (ebbs[(ebbi->count) - 1]->ech->op == GOTO)
+	    label = IC_LABEL (ebbs[(ebbi->count) - 1]->ech);
+	  else if (!(label = IC_TRUE (ebbs[(ebbi->count) - 1]->ech)))
+	    label = IC_FALSE (ebbs[(ebbi->count) - 1]->ech);
 
-	  if ((destBlock = eBBWithEntryLabel (ebbs, label, (*count))) &&
+	  if ((destBlock = eBBWithEntryLabel (ebbi, label)) &&
 	      destBlock->preHeader == NULL &&
 	      otherPathsPresent (ebbs, destBlock))
 	    {
@@ -555,24 +578,25 @@ iCodeBreakDown (iCode * ic, int *count)
 
 	      /* go thru all block replacing the entryLabel with new label */
 	      /* till we reach the block , then we insert a new ebblock    */
-	      for (i = 0; i < (*count); i++)
+	      for (i = 0; i < (ebbi->count); i++)
 		{
 		  if (ebbs[i] == destBlock)
 		    break;
 		  replaceLabel (ebbs[i], label, preHeaderLabel);
 		}
 
-	      (*count)++;
+	      (ebbi->count)++;
 
 	      /* if we have stopped at the block , allocate for an extra one */
 
-	      ebbs = Safe_realloc (ebbs, (*count + 1) * sizeof (eBBlock **));
+	      ebbs = Safe_realloc (ebbs, (ebbi->count + 1) * sizeof (eBBlock *));
+	      ebbi->bbOrder = ebbs;
 
-	      ebbs[*count] = 0;
+	      ebbs[ebbi->count] = 0;
 
 	      /* then move the block down one count */
 	      pBlock = ebbs[j = i];
-	      for (i += 1; i < (*count); i++)
+	      for (i += 1; i < (ebbi->count); i++)
 		{
 		  eBBlock *xBlock;
 
@@ -592,9 +616,9 @@ iCodeBreakDown (iCode * ic, int *count)
     }
 
   /* mark the end */
-  ebbs[*count] = NULL;
+  ebbs[ebbi->count] = NULL;
 
-  return ebbs;
+  return ebbi;
 }
 
 /*-----------------------------------------------------------------*/

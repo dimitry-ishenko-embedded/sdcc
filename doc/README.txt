@@ -1,6 +1,6 @@
 SDCC - a Freeware, retargettable, optimizing ANSI-C compiler
 ------------------------------------------------------------
-$Id: README.txt,v 1.5.2.1 2004/02/23 06:25:51 michaelh Exp $
+$Id: README.txt,v 1.6 2004/02/26 06:44:17 michaelh Exp $
 
 
 Welcome to SDCC, a freeware, retargettable, optimizing ANSI C compiler

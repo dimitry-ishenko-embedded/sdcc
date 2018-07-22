@@ -335,6 +335,7 @@ lnkarea()
 		} else {
 			/* Determine memory space */
             locIndex = 0;
+            #if 0
             if (ap->a_flag & A_CODE) {
                 locIndex = 1;
             }
@@ -344,11 +345,17 @@ lnkarea()
             if (ap->a_flag & A_BIT) {
                 locIndex = 3;
             }
+            #endif
 			/*
 			 * Relocatable sections
 			 */
 			if (ap->a_type == 0) {	/* JLH */
-				ap->a_addr = rloc[ locIndex ];
+			        if (ap->a_flag & A_NOLOAD) {
+			                locIndex = 2;
+					ap->a_addr = 0;
+				} else {
+					ap->a_addr = rloc[ locIndex ];
+				}
 				ap->a_type = 1;
 			}
 			lnksect(ap);
