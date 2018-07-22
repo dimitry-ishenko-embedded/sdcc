@@ -1,6 +1,6 @@
 # sdcc.nsi - NSIS installer script for SDCC
 #
-# Copyright (c) 2003-2008 Borut Razem
+# Copyright (c) 2003-2009 Borut Razem
 #
 # This file is part of sdcc.
 #
@@ -30,9 +30,10 @@
 #   A sub directory sdcc is created (referenced as PKGDIR in continuation).
 # - copy files sdcc/support/scripts/sdcc.ico and sdcc/support/scripts/sdcc.nsi
 #   (this file) from the sdcc Subversion snapshot to the PKGDIR directory
-# - copy file COPYING from the sdcc Subversion snapshot to the PKGDIR directory,
-#   rename it to COPYING.txt and convert it to DOS format:
+# - copy file COPYING and COPYING3 from the sdcc Subversion snapshot to the PKGDIR directory,
+#   rename it to COPYING.txt and COPYING3.txt and convert it to DOS format:
 #   unix2dos COPYING.txt
+#   unix2dos COPYING3.txt
 # - copy readline5.dll to PKGDIR/bin/readline5.dll
 # - run NSIS installer from PKGDIR directory:
 #   "c:\Program Files\NSIS\makensis.exe" -DVER_MAJOR=<SDCC_VER_MAJOR> -DVER_MINOR=<SDCC_VER_MINOR> -DVER_REVISION=<SDCC_VER_DEVEL> -DVER_BUILD=<SDCC_REVISION> sdcc.nsi
@@ -55,9 +56,10 @@
 # - unpack sdcc-doc-yyyymmdd-rrrr.zip to the PKGDIR/doc directory
 # - copy files sdcc/support/scripts/sdcc.ico and sdcc/support/scripts/sdcc.nsi
 #   (this file) from the sdcc Subversion snapshot to the PKGDIR directory
-# - copy file COPYING from the sdcc Subversion snapshot to the PKGDIR directory,
-#   rename it to COPYING.txt and convert it to DOS format:
+# - copy file COPYING and COPYING3 from the sdcc Subversion snapshot to the PKGDIR directory,
+#   rename it to COPYING.txt and COPYING3.txt and convert it to DOS format:
 #   unix2dos COPYING.txt
+#   unix2dos COPYING3.txt
 # - copy readline5.dll to PKGDIR/bin/readline5.dll
 # - run NSIS installer from PKGDIR directory:
 #   "c:\Program Files\NSIS\makensis.exe" -DFULL_DOC -DVER_MAJOR=<VER_MAJOR> -DVER_MINOR=<VER_MINOR> -DVER_REVISION=<VER_PATCH> -DVER_BUILD=<REVISION> sdcc.nsi
@@ -93,7 +95,7 @@
   StrCpy $SDCC.StrStack2 $SDCC.StrStack1
   StrCpy $SDCC.StrStack1 $SDCC.StrStack0
   StrCpy $SDCC.StrStack0 $SDCC.FunctionName
-  StrCpy $SDCC.FunctionName ${NAME}
+  StrCpy $SDCC.FunctionName "${NAME}"
 !macroend
 
 !define SDCC.PopStr "!insertmacro MACRO_SDCC_PopStr"
@@ -255,10 +257,15 @@ ${Function} SDCC.InstFilesLeave
   ${EndIf}
 ${FunctionEnd}
 
-; Finish page
+; Finish page - add to path
+!define MUI_FINISHPAGE_TEXT "Confirm the checkbox if you want to add SDCC binary directory to the PATH environment variable"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Add $INSTDIR\bin to the PATH"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION SDCC.AddBinToPath
 !define MUI_FINISHPAGE_SHOWREADME
+!define MUI_FINISHPAGE_BUTTON "Next"
+!insertmacro MUI_PAGE_FINISH
+
+; Finish page - reboot
 !insertmacro MUI_PAGE_FINISH
 
 ${Function} SDCC.AddBinToPath
@@ -271,6 +278,7 @@ ${FunctionEnd}
 ; Uninstaller pages
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_UNPAGE_FINISH
 
 ; Language files
 !insertmacro MUI_LANGUAGE "English"
@@ -346,6 +354,7 @@ ${Section} -Common SECCOMMON
   SetOutPath "$INSTDIR"
   File ".\sdcc.ico"
   File "${SDCC_ROOT}\COPYING.txt"
+  File "${SDCC_ROOT}\COPYING3.txt"
 ${SectionEnd}
 
 ${Section} "SDCC application files" SEC01
@@ -356,6 +365,7 @@ ${Section} "SDCC application files" SEC01
   File "${SDCC_ROOT}\bin\as-z80.exe"
   File "${SDCC_ROOT}\bin\asx8051.exe"
   File "${SDCC_ROOT}\bin\aslink.exe"
+  File "${SDCC_ROOT}\bin\asranlib.exe"
   File "${SDCC_ROOT}\bin\link-gbz80.exe"
   File "${SDCC_ROOT}\bin\link-hc08.exe"
   File "${SDCC_ROOT}\bin\link-z80.exe"
@@ -420,6 +430,7 @@ ${Section} "SDCC include files" SEC05
   File "${DEV_ROOT}\include\pic\*.inc"
   SetOutPath "$INSTDIR\include\pic16"
   File "${DEV_ROOT}\include\pic16\*.h"
+  File "${DEV_ROOT}\include\pic16\*.txt"
   SetOutPath "$INSTDIR\include\z80"
   File "${DEV_ROOT}\include\z80\*.h"
   SetOutPath "$INSTDIR\include"
@@ -429,64 +440,55 @@ ${SectionEnd}
 ${Section} "SDCC DS390 library" SEC06
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\ds390"
-  File "${DEV_ROOT}\lib\ds390\*.rel"
-  File "${DEV_ROOT}\lib\ds390\*.lib"
+  File "${DEV_ROOT}\lib\ds390\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC DS400 library" SEC07
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\ds400"
-  File "${DEV_ROOT}\lib\ds400\*.rel"
-  File "${DEV_ROOT}\lib\ds400\*.lib"
+  File "${DEV_ROOT}\lib\ds400\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC GBZ80 library" SEC08
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\gbz80"
-  File "${DEV_ROOT}\lib\gbz80\*.o"
-  File "${DEV_ROOT}\lib\gbz80\*.lib"
+  File "${DEV_ROOT}\lib\gbz80\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC Z80 library" SEC09
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\z80"
-  File "${DEV_ROOT}\lib\z80\*.o"
-  File "${DEV_ROOT}\lib\z80\*.lib"
+  File "${DEV_ROOT}\lib\z80\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC small model library" SEC10
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\small"
-  File "${DEV_ROOT}\lib\small\*.rel"
-  File "${DEV_ROOT}\lib\small\*.lib"
+  File "${DEV_ROOT}\lib\small\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC medium model library" SEC11
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\medium"
-  File "${DEV_ROOT}\lib\medium\*.rel"
-  File "${DEV_ROOT}\lib\medium\*.lib"
+  File "${DEV_ROOT}\lib\medium\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC large model library" SEC12
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\large"
-  File "${DEV_ROOT}\lib\large\*.rel"
-  File "${DEV_ROOT}\lib\large\*.lib"
+  File "${DEV_ROOT}\lib\large\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC small-stack-auto model library" SEC13
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\small-stack-auto"
-  File "${DEV_ROOT}\lib\small-stack-auto\*.rel"
-  File "${DEV_ROOT}\lib\small-stack-auto\*.lib"
+  File "${DEV_ROOT}\lib\small-stack-auto\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC HC08 library" SEC14
   SectionIn 1 2
   SetOutPath "$INSTDIR\lib\hc08"
-  File "${DEV_ROOT}\lib\hc08\*.rel"
-  File "${DEV_ROOT}\lib\hc08\*.lib"
+  File "${DEV_ROOT}\lib\hc08\*.*"
 ${SectionEnd}
 
 ${Section} "SDCC PIC16 library" SEC15
@@ -521,7 +523,6 @@ ${Section} "SDCC library sources" SEC17
 #  File "${DEV_ROOT}\lib\src\gbz80\Makefile"
 
   SetOutPath "$INSTDIR\lib\src\z80"
-  File "${DEV_ROOT}\lib\src\z80\*.c"
   File "${DEV_ROOT}\lib\src\z80\*.s"
 #  File "${DEV_ROOT}\lib\src\z80\Makefile"
 
@@ -779,6 +780,14 @@ ${SectionEnd}
 ${Section} Uninstall SECUNINSTALL
   !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_STARTMENUPAGE_VARIABLE
 
+  ${DebugMsg} "removing path $INSTDIR\bin"
+  Push "$INSTDIR\bin"
+  Call un.SDCC.RemoveFromPath
+
+; Clean the registry
+  DeleteRegKey ${UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
+  DeleteRegKey ${SDCC_ROOT_KEY} "Software\${PRODUCT_NAME}"
+
   Delete "$SMPROGRAMS\$MUI_STARTMENUPAGE_VARIABLE\GPL 2 License.lnk"
   Delete "$SMPROGRAMS\$MUI_STARTMENUPAGE_VARIABLE\Change Log.lnk"
 !ifdef FULL_DOC
@@ -805,7 +814,6 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\lib\src\hc08\hc08.lib"
   Delete "$INSTDIR\lib\src\hc08\Makefile"
 
-  Delete "$INSTDIR\lib\src\z80\*.c"
   Delete "$INSTDIR\lib\src\z80\*.s"
   Delete "$INSTDIR\lib\src\z80\z80.lib"
   Delete "$INSTDIR\lib\src\z80\README"
@@ -830,37 +838,28 @@ ${Section} Uninstall SECUNINSTALL
 
   Delete "$INSTDIR\lib\src\*.c"
 
-  Delete "$INSTDIR\lib\pic\*.o"
   Delete "$INSTDIR\lib\pic\*.lib"
 
   Delete "$INSTDIR\lib\pic16\*.o"
   Delete "$INSTDIR\lib\pic16\*.lib"
 
-  Delete "$INSTDIR\lib\hc08\*.rel"
   Delete "$INSTDIR\lib\hc08\*.lib"
 
   Delete "$INSTDIR\lib\z80\*.o"
   Delete "$INSTDIR\lib\z80\*.lib"
 
-  Delete "$INSTDIR\lib\small\*.rel"
   Delete "$INSTDIR\lib\small\*.lib"
 
-  Delete "$INSTDIR\lib\medium\*.rel"
   Delete "$INSTDIR\lib\medium\*.lib"
 
-  Delete "$INSTDIR\lib\large\*.rel"
   Delete "$INSTDIR\lib\large\*.lib"
 
-  Delete "$INSTDIR\lib\small-stack-auto\*.rel"
   Delete "$INSTDIR\lib\small-stack-auto\*.lib"
 
-  Delete "$INSTDIR\lib\gbz80\*.o"
   Delete "$INSTDIR\lib\gbz80\*.lib"
 
-  Delete "$INSTDIR\lib\ds390\*.rel"
   Delete "$INSTDIR\lib\ds390\*.lib"
 
-  Delete "$INSTDIR\lib\ds400\*.rel"
   Delete "$INSTDIR\lib\ds400\*.lib"
 
   Delete "$INSTDIR\include\asm\z80\*.h"
@@ -875,6 +874,7 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\include\pic\*.txt"
   Delete "$INSTDIR\include\pic\*.inc"
   Delete "$INSTDIR\include\pic16\*.h"
+  Delete "$INSTDIR\include\pic16\*.txt"
   Delete "$INSTDIR\include\mcs51\*.h"
   Delete "$INSTDIR\include\hc08\*.h"
   Delete "$INSTDIR\include\*.h"
@@ -889,6 +889,7 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\bin\as-z80.exe"
   Delete "$INSTDIR\bin\asx8051.exe"
   Delete "$INSTDIR\bin\aslink.exe"
+  Delete "$INSTDIR\bin\asranlib.exe"
   Delete "$INSTDIR\bin\link-gbz80.exe"
   Delete "$INSTDIR\bin\link-hc08.exe"
   Delete "$INSTDIR\bin\link-z80.exe"
@@ -910,6 +911,7 @@ ${Section} Uninstall SECUNINSTALL
   Delete "$INSTDIR\bin\sdcdbsrc.el"
 
   Delete "$INSTDIR\COPYING.txt"
+  Delete "$INSTDIR\COPYING3.txt"
   Delete "$INSTDIR\sdcc.ico"
   Delete "$INSTDIR\uninstall.exe"
 
@@ -964,14 +966,6 @@ ${Section} Uninstall SECUNINSTALL
   RMDir "$INSTDIR\bin"
 
   RMDir "$INSTDIR"
-
-  ${DebugMsg} "removing path $INSTDIR\bin"
-  Push "$INSTDIR\bin"
-  Call un.SDCC.RemoveFromPath
-
-; Clean the registry
-  DeleteRegKey ${UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
-  DeleteRegKey ${SDCC_ROOT_KEY} "Software\${PRODUCT_NAME}"
 ;;;;  SetAutoClose true
 ${SectionEnd}
 
@@ -1024,8 +1018,10 @@ ${Function} SDCC.AddToPath
               ${If} $2 = 26        ; DOS EOF
                 FileSeek $1 -1 END ; write over EOF
               ${Endif}
+              ${DebugMsg} "adding line $\r$\nSET PATH=%PATH%;$3$\r$\n"
               FileWrite $1 "$\r$\nSET PATH=%PATH%;$3$\r$\n"
               FileClose $1
+              ${DebugMsg} "SetRebootFlag true"
               SetRebootFlag true
             ${Else}
               ;System PATH variable is at:
@@ -1098,6 +1094,8 @@ ${Function} ${un}SDCC.RemoveFromPath
       ${Else}
         ; This is the line I'm looking for:
         ; don't copy it
+        ${DebugMsg} "removing line $0"
+        ${DebugMsg} "SetRebootFlag true"
         SetRebootFlag true
         Goto nextLine
       ${EndIf}
@@ -1295,11 +1293,17 @@ ${Function} SDCC.PageLeaveReinstall
   ;Run uninstaller
   HideWindow
 
-  ClearErrors
-  ExecWait '$R1'
-
   ${If} $R0 == "2"
+    ; Uninstall only: uninstaller should be removed
+    ClearErrors
+    ; ExecWait doesn't wait if _?=$INSTDIR is not defined!
+    ExecWait '$R1'
     Quit
+  ${Else}
+    ; Uninstal & Reinstall: uninstaller will be rewritten
+    ClearErrors
+    ; ExecWait doesn't wait if _?=$INSTDIR is not defined!
+    ExecWait '$R1 _?=$INSTDIR'
   ${EndIf}
 
   BringToFront

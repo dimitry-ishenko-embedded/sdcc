@@ -3,6 +3,7 @@
 #
 
 # Version
+PACKAGE         = @PACKAGE@
 VERSION         = @VERSION@
 VERSIONHI       = @VERSIONHI@
 VERSIONLO       = @VERSIONLO@
@@ -10,12 +11,12 @@ VERSIONP        = @VERSIONP@
 
 # Programs
 SHELL		= /bin/sh
-CC		= @CC@
-CPP		= @CPP@
+CC		= @CCACHE@ @CC@
+CPP		= @CCACHE@ @CPP@
 RANLIB		= @RANLIB@
 INSTALL		= @INSTALL@
 YACC            = @YACC@
-LEX             = @LEX@ 
+LEX             = @LEX@
 AWK             = @AWK@
 STRIP           = @STRIP@
 prefix          = @prefix@

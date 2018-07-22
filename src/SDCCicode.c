@@ -3191,7 +3191,7 @@ geniCodeConditional (ast * tree,int lvl)
   ast *astTrue  = tree->right->left;
   ast *astFalse = tree->right->right;
   operand *cond = ast2iCode (tree->left, lvl+1);
-  operand *result = newiTempOperand (tree->right->ftype, 0);
+  operand *result = newiTempOperand (tree->ftype, 0);
   operand *opTrue, *opFalse;
 
   ic = newiCodeCondition (geniCodeRValue (cond, FALSE), NULL, falseLabel);
@@ -3980,7 +3980,7 @@ geniCodeCritical (ast *tree, int lvl)
   operand *op = NULL;
   sym_link *type;
 
-  if (!options.stackAuto)
+  if (!options.stackAuto && !TARGET_IS_HC08)
     {
       type = newLink(SPECIFIER);
       SPEC_VOLATILE(type) = 1;

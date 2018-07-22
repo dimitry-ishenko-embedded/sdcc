@@ -30,60 +30,56 @@
 #ifndef  __DEVICE_H__
 #define  __DEVICE_H__
 
-#define CONFIGURATION_WORDS	20
-#define IDLOCATION_BYTES	20
+#define CONFIGURATION_WORDS     20
+#define IDLOCATION_BYTES        20
 
 typedef struct {
-	int sfrLoAddr;
-	int sfrHiAddr;
-} sfrRangeInfo_t;
-	
-
-typedef struct {
-	unsigned int mask;
-	int emit;
-	unsigned int value;
+  unsigned int mask;
+  int emit;
+  unsigned int value;
+  unsigned int andmask;
 } configRegInfo_t;
 
 typedef struct {
-	int confAddrStart;	/* starting address */
-	int confAddrEnd;	/* ending address */
-	configRegInfo_t crInfo[ CONFIGURATION_WORDS ];
+  int confAddrStart;      /* starting address */
+  int confAddrEnd;        /* ending address */
+  configRegInfo_t crInfo[ CONFIGURATION_WORDS ];
 } configWordsInfo_t;
 
 typedef struct {
-	unsigned char emit;
-	unsigned char value;
+  unsigned char emit;
+  unsigned char value;
 } idRegInfo_t;
 
 typedef struct {
-	int idAddrStart;	/* starting ID address */
-	int idAddrEnd;		/* ending ID address */
-	idRegInfo_t irInfo[ IDLOCATION_BYTES ];
+  int idAddrStart;        /* starting ID address */
+  int idAddrEnd;          /* ending ID address */
+  idRegInfo_t irInfo[ IDLOCATION_BYTES ];
 } idBytesInfo_t;
 
 
 #define PROCESSOR_NAMES    4
 /* Processor unique attributes */
 typedef struct PIC16_device {
-  char *name[PROCESSOR_NAMES];/* aliases for the processor name */
-
-  int maxRAMaddress;		/* maximum value for a data address */
-  int RAMsize;			/* size of Data RAM - VR 031120 */
-  int acsSplitOfs;		/* access bank split offset */
-  int extMIface;		/* device has external memory interface */
-  sfrRangeInfo_t sfrRange;	/* SFR range */
-  configWordsInfo_t cwInfo;	/* configuration words info */
-  idBytesInfo_t idInfo;		/* ID Locations info */
+  char *name[PROCESSOR_NAMES];  /* aliases for the processor name */
+  /* RAMsize *must* be the first item to copy for 'using' */
+  int RAMsize;                  /* size of Data RAM - VR 031120 */
+  int acsSplitOfs;              /* access bank split offset */
+  configWordsInfo_t cwInfo;     /* configuration words info */
+  idBytesInfo_t idInfo;         /* ID Locations info */
+  /* next *must* be the first field NOT being copied via 'using' */
+  struct PIC16_device *next;    /* linked list */
 } PIC16_device;
+
+extern PIC16_device *pic16;
 
 /* Given a pointer to a register, this macro returns the bank that it is in */
 #define REG_ADDR(r)        ((r)->isBitField ? (((r)->address)>>3) : (r)->address)
 
-#define OF_LR_SUPPORT		0x00000001
-#define OF_OPTIMIZE_GOTO	0x00000002
-#define OF_OPTIMIZE_CMP		0x00000004
-#define OF_OPTIMIZE_DF		0x00000008
+#define OF_LR_SUPPORT           0x00000001
+#define OF_NO_OPTIMIZE_GOTO     0x00000002
+#define OF_OPTIMIZE_CMP         0x00000004
+#define OF_OPTIMIZE_DF          0x00000008
 
 typedef struct {
   int no_banksel;
@@ -101,12 +97,13 @@ typedef struct {
   unsigned long opt_flags;
   int gstack;
   unsigned int debgen;
+  int xinst;
 } pic16_options_t;
 
-extern int xinst;
+extern pic16_options_t pic16_options;
 
-#define STACK_MODEL_SMALL	(pic16_options.stack_model == 0)
-#define STACK_MODEL_LARGE	(pic16_options.stack_model == 1)
+#define STACK_MODEL_SMALL       (pic16_options.stack_model == 0)
+#define STACK_MODEL_LARGE       (pic16_options.stack_model == 1)
 
 extern set *fix_idataSymSet;
 extern set *rel_idataSymSet;
@@ -127,21 +124,15 @@ typedef struct {
 
 extern stats_t statistics;
 
-extern pic16_options_t pic16_options;
-extern PIC16_device *pic16;
-
 /****************************************/
 void pic16_assignConfigWordValue(int address, unsigned int value);
 void pic16_assignIdByteValue(int address, char value);
 int pic16_isREGinBank(regs *reg, int bank);
 int pic16_REGallBanks(regs *reg);
-void pic16_setMaxRAM(int size);
-int PIC16_IS_CONFIG_ADDRESS(int address);
-int PIC16_IS_IDLOC_ADDRESS(int address);
-int PIC16_IS_HWREG_ADDRESS(int address);
 
 int checkAddReg(set **set, regs *reg);
 int checkAddSym(set **set, symbol *reg);
 int checkSym(set *set, symbol *reg);
 
 #endif  /* __DEVICE_H__ */
+

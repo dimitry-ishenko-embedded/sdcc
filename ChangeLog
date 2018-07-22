@@ -1,3 +1,1584 @@
+2009-03-15 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/repack_release.sh: added
+
+2009-03-13 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: "freeware" replaced with "free open source"
+
+2009-03-12 Borut Razem <borut.razem AT siol.net>
+
+	* src/z80/peep.c: #2652979: --debug crashes sdcc
+
+2009-03-12 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* src/SDCCglue.c,
+	  support/regression/tests/bug2655200.c:
+	  applied modified patch from Robert Larice <larice AT vidisys.de>
+	  fixing original report of bug #2655200: pointer to pdata memory
+	  not correctly initialized
+
+2009-03-11 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.c: retain the original file mode
+
+2009-03-10 Borut Razem <borut.razem AT siol.net>
+
+	* src/mcs51/gen.c, src/z80/gen.c, src/hc08/gen.c, src/ds390/gen.c,
+	  support/regression/tests/bug1875933.c:
+	  fixed bug #1875933: Evelyn jumps into the void
+	  thanks to Robert Larice
+
+2009-03-10 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/pcode.c (LinkFlow): fix invalid cast from pCodeLabel
+	  to pCodeInstruction to avoid a segmentation fault
+
+2009-03-03 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/printf_large.c: fixed bug #2656821: bug in printf
+
+2009-03-03 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic/libdev/Makefile.in: build device-specific
+	  libraries for the correct processor, fixes #2654585
+
+2009-03-01 Raphael Neider <rneider AT web.de>
+
+	* device/lib/Makefile.in: fixed parallel builds (i.e., make -jN, N>1)
+
+2009-03-01 Borut Razem <borut.razem AT siol.net>
+
+	* src/z80/peep.c: fixed bug #2648964: --i-code-in-asm crashes sdcc
+	* .version, sdcc.spec, doc/sdccman.lyx, doc/INSTALL.txt:
+	  changed sdcc version to 2.9.0
+
+2009-03-01 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/ralloc.c (spillThis, spilSomething): fixed bug 2435941
+	  (serialRegAssign): do not spil bit registers
+	  throughout cosmetic changes
+	* support/regression/tests/bug2435941.c: new, added
+
+2009-02-28 Raphael Neider <rneider AT web.de>
+
+	* src/regression/compare10.c,
+	  src/regression/compare7.c,
+	  src/regression/compare8.c,
+	  src/regression/compare9.c: reset watchdog timer in time
+	* src/regression/configword.c: apply patch from #2488150
+	* src/pic/glue.c (pic14createInterruptVect): pin RESET vector
+	  handler to 0x0000 as the linker no longer knows STARTUP sections
+	* src/pic/pcode.c (register_reassign, ReuseReg): applied modified
+	  patch #2512926 to (mostly) fix #1762626, cosmetic changes
+	* src/pic/pcodepeep.c: remove reference to nonexisting function
+
+2009-02-28 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/signal.h: avoid multiline inline
+	  assembler statements in macros, addresses #2644965
+
+2009-02-27 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f[24][3456]k20.h,
+	  device/include/pic16/pic18f[68][567]j50.h,
+	  device/include/pic16/pic18f[68]6j55.h,
+	  device/lib/pic16/libdev/pic18f[24][3456]k20.c,
+	  device/lib/pic16/libdev/pic18f[68][567]j50.c,
+	  device/lib/pic16/libdev/pic18f[68]6j55.c,
+	  device/include/pic16/pic18fregs.h,
+	  device/include/pic16/pic16devices.txt,
+	  device/lib/pic16/pics.all,
+	  device/lib/pic16/libdev/Makefile.am,
+	  device/lib/pic16/libio/Makefile.am: added/re-enabled many device
+	  families (87j50 family contributed by Robert Wuest)
+
+	* device/include/pic16/adc.h,
+	  device/lib/pic16/libio/adc/adcbusy.c,
+	  device/lib/pic16/libio/adc/adcclose.c,
+	  device/lib/pic16/libio/adc/adcconv.c,
+	  device/lib/pic16/libio/adc/adcopen.c,
+	  device/lib/pic16/libio/adc/adcsetch.c: added 65j50-style ADC
+
+	* doc/sdccman.lyx: updated list of supported devices, fixed typo
+	* device/lib/pic16/Makefile.common: do not suppress assembler warnings
+
+	* device/lib/pic16/Makefile.in,
+	  device/lib/pic16/libm/Makefile.in,
+	  device/lib/pic16/debug/Makefile.in,
+	  device/lib/pic16/libio/Makefile.in,
+	  device/lib/pic16/startup/Makefile.in,
+	  device/lib/pic16/libsdcc/Makefile.in,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libc/Makefile.in: regenerated
+
+2009-02-27 Borut Razem <borut.razem AT siol.net>
+
+	* as/z80/asexpr.c, as/z80/z80mch.c: re-fixed bugs
+	  #1829678 and #1704376 in the way proposed by Alan Baldwin
+
+2009-02-23 Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
+
+	* device/include/mcs51/at89c51ed2.h: Fixed address of SFR P5. Thanks
+	  to Steve Qu for the fix.
+
+2009-02-23 Borut Razem <borut.razem AT siol.net>
+
+	* as/z80/asexpr.c: fixed bug #1829678: Z-80 CP A,<xxx> assembly
+	  it is already fixed for mcs51 and hc08 targets
+	* as/z80/z80mch.c: fixed bug #1704376: missing as-z80 errors
+
+2009-02-22 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/Makefile.in: fixed parenthesis error
+	* doc/sdccman.lyx: fixed webdocs bug #2071421: error in the manual,
+	  fixed webdocs bug #1967920: --version
+
+2009-02-18 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/mcs51/at89c51ed2.h: fixed bug #2071949 bitmask RBCK wrong
+
+2009-02-17 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/link/mcs51/lkihx.c (hexRecord): bugfix do not insert extended address
+	  when addresses are unsorted
+
+2009-02-15 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* device/include/mcs51/p89v66x.h: added ENBOOT thanks
+	  Gudjon Gudjonsson <gudjon AT gudjon.org>
+	* device/include/mcs51/p89c66x.h: fixed some defines
+	* device/include/mcs51/p89v66x.h: fixed some sbit addresses
+	* doc/sdccman.lyx: added <NO FLOAT> to index, try to reanimate
+	  svn keywords
+
+2009-02-14 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: corrected cpp info
+
+2009-02-13 Borut Razem <borut.razem AT siol.net>
+
+	* as/Makefile.in: *.doc renamed to *.txt
+
+2009-02-11 Borut Razem <borut.razem AT siol.net>
+
+	* as/doc/aslnk.doc, as/doc/abstra.doc: renamed to *.txt
+	* as/doc/aslnk.txt, as/doc/asxhtml.html: changed licens to GPLv3
+
+2009-02-11 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: documented ar format libraries
+
+2009-02-10 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* support/regression/tests/float_single.c: added regression
+	  test. Some testpoints for probably rarely used functions
+	  (acosf, sinhf, tanf, expf) disabled for some targets
+
+2009-02-10 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (pic16_freeAsmop): avoid NULL pointer dereference,
+	  (genAssign): fixed for operands on the stack
+
+	* device/lib/pic16/libc/stdio/vfprintf.c,
+	  device/lib/pic16/configure.ac,
+	  device/lib/pic16/Makefile.common: add configurable support for
+	  printing floats via ./configure --enable-floats
+	* device/lib/pic16/configure,
+	  device/lib/pic16/Makefile.in,
+	  device/lib/pic16/libm/Makefile.in,
+	  device/lib/pic16/debug/Makefile.in,
+	  device/lib/pic16/libio/Makefile.in,
+	  device/lib/pic16/startup/Makefile.in,
+	  device/lib/pic16/libsdcc/Makefile.in,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libc/Makefile.in: regenerated
+	* doc/sdccman.lyx: documented float support and how to get it
+	* doc/Makefile.in: fixed race condition on parallel builds
+
+	* device/lib/pic16/libc/stdio/sprintf.c,
+	  device/lib/pic16/libc/stdio/vsprintf.c: do not mess up the user's
+	  pointer to the string buffer, enlarge buffer for x_ftoa()
+
+2009-02-10 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/printf_tiny.c: replaced non-C89 comments '//' with '/* */'
+
+2009-02-10 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f*.h: add bit aliases in INTCONbits_t
+
+2009-02-09 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/pcode.c (assignToSameBank): add force argument to ignore
+	  artificial bank size limits for compound data (structs, arrays),
+	  avoids assert if --obanksel=N, N > 1, is given
+
+2009-02-09 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.c, link/lkar.c: don't check the padding bytes since
+	  the openSUSE GNU ar (GNU Binutils; openSUSE 11.0) 2.18.50.20080409-11.1
+	  uses '`' character instead '\n' for padding
+	* as/asranlib/asranlib.c: made it more robust
+
+2009-02-08 Borut Razem <borut.razem AT siol.net>
+
+	* as/COPYING3: added
+	* support/scripts/sdcc.nsi: added COPYING3.txt to the package
+	* device/lib/Makefile.in: reenable floating point in model-xstack-auto
+	  libraries
+
+2009-02-07 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.c: fixed BSD header length calculation
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.9
+	  due sdcc asxxxx license change to GPLv3
+
+2009-02-05 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.c, link/lkar.h, link/lkar.c:
+	  added support for BSD (Mac OS X) ar format
+	* as/asxxsrc/aslex.c, as/as/asxxsrc/asnoice.c, as/as/asxxsrc/assym.c,
+	  as/as/hc08/asdata.c, as/hc08/asexpr.c, as/hc08/aslist.c,
+	  as/hc08/asm.h, as/hc08/asmain.c, as/hc08/asout.c, as/hc08/assubr.c,
+	  as/hc08/m08adr.c, as/hc08/m08ext.c, as/hc08/m08mch.c,
+	  as/hc08/m08pst.c, as/hc08/m6808.h, as/link/aslink.h,
+	  as/link/hc08/lkarea.c, as/link/hc08/lkelf.c, as/link/hc08/lkihx.c,
+	  as/link/hc08/lkmain.c, as/link/hc08/lkmem.c, as/link/hc08/lkrloc.c,
+	  as/link/hc08/lks19.c, as/link/lkaomf51.c, as/link/lkdata.c,
+	  as/link/lkeval.c, as/link/lkhead.c, as/link/lklex.c, as/link/lklib.c,
+	  as/link/lklibr.c, as/link/lklibr.h, as/link/lklist.c,
+	  as/link/lknoice.c, as/link/lkrel.c, as/link/lkrel.h,
+	  as/link/lksdcclib.c, as/link/lkstore.c, as/link/lksym.c,
+	  as/link/mcs51/lkarea.c, as/link/mcs51/lkihx.c,
+	  as/link/mcs51/lkmain.c, as/link/mcs51/lkmem.c,
+	  as/link/mcs51/lkrloc.c, as/link/mcs51/lks19.c, as/link/z80/lkarea.c,
+	  as/link/z80/lkgb.c, as/link/z80/lkgg.c, as/link/z80/lkihx.c,
+	  as/link/z80/lkmain.c, as/link/z80/lkrloc.c, as/link/z80/lks19.c,
+	  as/mcs51/asdata.c, as/mcs51/asexpr.c, as/mcs51/aslist.c,
+	  as/mcs51/asm.h, as/mcs51/asmain.c, as/mcs51/asout.c,
+	  as/mcs51/assubr.c, as/mcs51/i51adr.c, as/mcs51/i51ext.c,
+	  as/mcs51/i51mch.c, as/mcs51/i51pst.c, as/mcs51/i8051.h,
+	  as/xa51/xa_link.c, as/xa51/xa_main.c, as/xa51/xa_main.h,
+	  as/xa51/xa_rasm.l, as/xa51/xa_rasm.y, as/xa51/xa_version.h,
+	  as/z80/asdata.c, as/z80/asexpr.c, as/z80/aslist.c, as/z80/asm.h,
+	  as/z80/asmain.c, as/z80/asout.c, as/z80/assubr.c, as/z80/z80.h,
+	  as/z80/z80adr.c, as/z80/z80ext.c, as/z80/z80mch.c, as/z80/z80pst.c:
+	  changed license to GPL either version 3, or (at your option) any
+	  later version
+
+2009-02-05 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.c, link/lkar.h, link/lkar.c:
+	  added support for BSD (Mac OS X) ar format
+
+2009-02-02 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/gbz80/Makefile.in, device/lib/hc08/Makefile.in,
+	  device/lib/z80/Makefile.in:
+	  chose source files in the PORT directory if they are available
+
+2009-02-01 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/libdev/pic18f1220.c,
+	* device/lib/pic16/libdev/pic18f4450.c:
+	  define SSPBUF to allow use of printf
+
+2009-02-01 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/Makefile.in, device/lib/gbz80/Makefile.in,
+	  device/lib/hc08/Makefile.in, device/lib/incl.mk,
+	  device/lib/z80/Makefile.in:
+	  don't remake libraries
+	* support/regression/tests/snprintf.c:
+	  reenable floating point in small-xstack-auto library
+
+2009-01-26 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/ralloc.c (packForPush): disabled to fix #2496919
+
+2009-01-25 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/main.c (_pic16_linkEdit): prepend -L paths to linker
+	  search path instead of appending them
+
+2009-01-24 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/asranlib.h: changed type of offset to unsigned int to
+	  make it work on ppc Mac OS X (off_t is 64 bit and is not converted
+	  to 32 bit unsigned int when calling sputl() since it is a macro
+	* as/link/lkar.c: changed the initialization of This->loaded
+
+2009-01-23 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lkar.h: changed type of ar_size to size_t to make it work on
+	  ppc Mac OS X (off_t is 64 bit and is not converted to 32 bit
+	  unsigned int when calling new(), since asxxxx doesn't use function
+	  prototypes)
+
+2009-01-21 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lkar.h: sgetl and sputl are independent of endianness
+	* as/link/sdxxxx_config.h.in: removed endianness detection
+
+2009-01-20 Borut Razem <borut.razem AT siol.net>
+
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.8
+	  due creation of ar format libraries
+	* support/scripts/sdcc.nsi:
+	  don't add nonexistent object files to the package
+
+2009-01-19 Borut Razem <borut.razem AT siol.net>
+
+	* Makefile.in, configure.in, configure,
+	  device/lib/Makefile.in, device/lib/ds390/Makefile.in,
+	  device/lib/ds400/Makefile.in, device/lib/gbz80/Makefile.in,
+	  device/lib/hc08/Makefile.in, device/lib/large/Makefile.in,
+	  device/lib/mcs51/Makefile.in, device/lib/medium/Makefile.in,
+	  device/lib/small/Makefile.in,
+	  device/lib/z80/Makefile.in: create ar format libraries
+	* support/regression/ports/mcs51-xstack-auto/spec.mk:
+	  use device/lib/Makefile to create library
+	* support/regression/tests/snprintf.c:
+	  floating point is not enabled in small-xstack-auto library
+	* device/lib/libfloat.lib, device/lib/libint.lib,
+	  device/lib/liblong.lib, device/lib/libsdcc.lib: removed
+
+2009-01-18 Borut Razem <borut.razem AT siol.net>
+
+	* support/cpp/auto-host.h: fixed warning: "__STDC__" redefined,
+	  warning: extra tokens at end of #endif directive
+
+2009-01-11 Borut Razem <borut.razem AT siol.net>
+
+	* Makefile.in: added SDCC_ASRANLIB to PKGS
+
+2009-01-10 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: added asranlib.exe to the install package
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.7
+	  due added support for ar format libraries
+
+2009-01-09 Borut Razem <borut.razem AT siol.net>
+
+	* as/asranlib/Makefile.in, as/asranlib/asranlib.dsp,
+	  as/asranlib/asranlib.c: added asranlib
+	* as/link/lkar.c, as/link/lkar.h: added support for ar format libraries
+	* Makefile.in, as/link/hc08/Makefile.in,
+	  as/link/hc08/link_hc08.dsp, as/link/lklib.c, as/link/lklibr.c,
+	  as/link/lklibr.h, as/link/lkrel.c, as/link/lkrel.h,
+	  as/link/lksdcclib.c, as/link/mcs51/Makefile.in,
+	  as/link/mcs51/aslink.dsp, as/link/z80/Makefile.in,
+	  as/link/z80/linkgbz80.dsp, as/link/z80/linkz80.dsp, configure,
+	  configure.in, sdcc.dsw: modified to support ar format libraries
+
+2009-01-08 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (decorateType RETURN): use RESULT_TYPE_GPTR for generic
+	  pointer return
+
+2009-01-05 Philipp Klaus Krause <pkk AT spth.de>
+
+	* sim/ucsim/z80.src/inst_ed.cc:
+	  Fixed bug #2488074, which made regression tests fail.
+
+2009-01-05 Philipp Klaus Krause <pkk AT spth.de>
+
+	* device/lib/z80/mod.s,
+	  device/lib/z80/div.s,
+	  device/lib/z80/mulchar.s,
+	  device/lib/z80/mul.s,
+	  device/lib/z80/divsigned.s,
+	  device/lib/z80/Makefile.in:
+	  Implemented RFE #1702376.
+
+2009-01-05 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lksdcclib.c:
+	  fixed linker hanging in INDEXLIB is not defined (hc08)
+
+2009-01-04 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c:
+	  Implemented RFE #2485684, and some further improvements of HL caching
+	  including a bugfix.
+	* src/z80/peeph-z80.def:
+	  Fixed a bug exposed by implementing RFE #2485684.
+
+2009-01-04 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph-z80.def:
+	  Peephole improvements.
+	* src/z80/gen.c,
+	  src/z80/main.c,
+	  device/include/string.h,
+	  device/lib/z80/memmove.s:
+	  Minor code cleanup.
+	* device/lib/z80/Makefile.in,
+	  device/lib/Makefile.in,
+	  support/regression/tests/memory.c,
+	  device/lib/z80/strlen.s:
+	  Partially implemented RFE #2471534.
+
+2009-01-04 Borut Razem <borut.razem AT siol.net>
+
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.6
+	  due changes in sdcc asxxxx linkers - it sholud be done 2 days ago :(
+	* doc/README.txt: updated John Hartman's e-mail address
+	* as/link/lkrel.c, as/link/lksdcclib.c:
+	  fixed bug #2484677: Linker hangs
+	* src/z80/peep.c: fixed msvc warning C4047:
+	  'return' : 'int ' differs in levels of indirection from 'char *'
+	* config.dsp: as/lib corrected to as/link
+
+2009-01-04 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peep.c:
+	  Implemented RFE #2484693.
+	* src/z80/peeph-z80.def:
+	  Some peephole improvements.
+
+2009-01-03 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lklibr.c:
+	  fixed warning: 'ret' may be used uninitialized in this function
+
+2009-01-02 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lklib.c, as/link/lksdcclib.c, as/link/lklibr.h,
+	  as/link/getline.[ch], as/link/lkrel.[ch]: added,
+	  made support for differnet library formats more flexible,
+	  preparation for support of ar format
+	* as/link/lklibr.c, as/link/z80/Makefile.in,
+	  as/link/z80/linkgbz80.dsp, as/link/z80/linkz80.dsp,
+	  as/link/hc08/link_hc08.dsp, as/link/hc08/Makefile.in,
+	  as/link/mcs51/aslink.dsp, as/link/mcs51/Makefile.in,
+	  as/link/hc08/lkelf.c, as/link/aslink.h:
+	  made support for differnet library formats more flexible,
+	  preparation for support of ar format
+
+2009-01-01 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/asxxxx_config.h.in:
+	  fixed warning: extra tokens at end of #endif directive
+	* src/z80/peep.c:
+	  fixed warning: suggest parentheses around && within ||
+	* device/lib/Makefile.in: allow whitespaces at the end of lines in
+	  ports.build, in order to make it work on cygwin - it seems to be a
+	  bug in cygwin grep: CR is not treated as part of end-of-line
+
+2008-12-31 Borut Razem <borut.razem AT siol.net>
+
+	* configure, configure.in, config.dsp, config_vc.awk,
+	  as/link/asxxxx_config.h.in, as/link/hc08/lkelf.c, as/link/aslink.h,
+	  as/link/hc08/Makefile.in, as/link/mcs51/Makefile.in:
+	  introduced asxxxx_config.h.in
+
+2008-12-30 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c,
+	  src/z80/peeph-z80.def:
+	  Minor addition improvement.
+
+2008-12-30 Raphael Neider <rneider AT web.de>
+
+	* as/link/hc08/lkelf.c, as/link/lkaomf51.c, as/link/lklibr.c,
+	  as/link/z80/lkgb.c, debugger/mcs51/cmd.c, sim/ucsim/utils.cc,
+	  src/SDCCasm.c, support/Util/dbuf_string.c, support/cpp/c-ppoutput.c,
+	  support/cpp/libcpp/lex.c, support/cpp/libcpp/macro.c,
+	  support/librarian/sdcclib.c, support/makebin/makebin.c:
+	  partially revert changes from r5293..r5295
+
+2008-12-29 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph-z80.def:
+	  Minor peephole improvement.
+
+2008-12-29 Raphael Neider <rneider AT web.de>
+
+	* src/pic/pcode.c (insertBankSel, FixRegisterBanking): emit
+	  incorrectly discarded BANKSELs
+
+2008-12-29 Philipp Klaus Krause <pkk AT spth.de>
+
+	* support/regression/tests/memory.c:
+	  Added simple test for memset(), memcpy() and memmove()
+
+2008-12-29 Borut Razem <borut.razem AT siol.net>
+
+	* sdcc/support/scripts/sdcc.nsi: removed $INSTDIR\lib\src\z80\*.c
+
+2008-12-28 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/peeph.def (177.e): replaced notVolatile(%3) with
+	  operandsNotRelated(%1 %3), had to change (a)r%1 to (a)%1 for this to work
+	  (177.j): added new rule
+	* src/SDCCsymt.h: added RESULT_TYPE_GPTR
+	* src/SDCCast.c (processParms): use RESULT_TYPE_GPTR for generic ptr parms,
+	  (decorateType CAST): propagate storage class to generic pointer results
+
+2008-12-27 Philipp Klaus Krause <pkk AT spth.de>
+
+	* device/lib/z80/string.c,
+	  device/lib/z80/printf.c,
+	  device/lib/z80/mul.s:
+	  z80 library cleanup
+	* src/z80/gen.c:
+	  Fixed code generation bug exposed by builtin memcpy().
+
+2008-12-27 Philipp Klaus Krause <pkk AT spth.de>
+
+	* device/lib/_memcpy.c:
+	  fixed conflict with builtin memcpy()
+
+2008-12-26 Borut Razem <borut.razem AT siol.net>
+
+	* support/librarian/sdcclib.c:
+	  fixed bug 2466950: "sdcclib broken"
+	  by removing fgets return value check
+
+2008-12-26 Philipp Klaus Krause <pkk AT spth.de>
+	* src/z80/main.c,
+	  src/z80/gen.c,
+	  device/include/string.h: Implemented RFE #1914254
+
+2008-12-26 Philipp Klaus Krause <pkk AT spth.de>
+	* device/lib/z80/Makefile.in,
+	  device/lib/Makefile.in,
+	  device/lib/z80/memmove.s: Implemented RFE #1914256
+
+2008-12-26 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph-z80.def: fixed a bug in peephole 0zf
+	* src/z80/peep.c: improved checks for unused data
+	* src/z80/gen.c,
+	  src/z80/main.c: Implemented RFE #1899189
+
+2008-12-25 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/Makefile.in:
+	  add -I$(INC_DIR) to SDCCFLAGS only if INC_DIR is defined
+
+2008-12-25 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph-z80.def: minor peephole improvements
+
+2008-12-21 Borut Razem <borut.razem AT siol.net>
+
+	* support/librarian/sdcclib.c: fixed build failure on Mac OS X
+	  due to redefinition of symbol __assert
+	  sdcclib.c:53:1:warning: "__assert" redefined
+	  /Xcode2.5/SDKs/MacOSX10.4u.sdk/usr/include/assert.h:80:1:
+	  warning: this is the location of the previous definition
+
+2008-12-20 Raphael Neider <rneider AT web.de>
+
+	* debugger/mcs51/break.c, debugger/mcs51/cmd.c,
+	  debugger/mcs51/simi.c, debugger/mcs51/symtab.c,
+	  support/cpp/libcpp/macro.c: fix format string errors
+
+	* sim/ucsim/s51.src/timer2.cc: add clarifying parens
+
+	* src/pic/device.c: partial rewrite using strtok,
+	  quieten compiler warnings, adopt SDCC coding style
+
+	* as/link/hc08/lkelf.c, as/link/lkaomf51.c, as/link/lklibr.c,
+	  as/link/z80/lkgb.c, as/z80/asout.c, debugger/mcs51/cmd.c,
+	  sim/ucsim/utils.cc, src/SDCCasm.c, support/Util/dbuf_string.c,
+	  support/cpp/c-ppoutput.c, support/cpp/libcpp/lex.c,
+	  support/librarian/sdcclib.c, support/makebin/makebin.c:
+	  quieten most compiler warnings
+
+	* sim/ucsim/avr.src/arith_inst.cc: quieten compiler warnings,
+	  probably fix operator precedence bug
+
+	* doc/clean.mk: quieten rm if no .lyx is present
+
+2008-12-19 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx, doc/random-notes.txt, doc/avr/avr_design.txt,
+	  doc/TININative.txt, doc/macro-sys-design.txt, doc/libdoc.txt,
+	  doc/README.txt, doc/test_suite_spec.lyx:
+	  applied patch 2446381: Dcoumentation spelling correcitons
+	  thanks to Steven Borley
+
+2008-12-16 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic12f629.h,
+	  device/include/pic/pic12f675.h,
+	  device/lib/pic/libdev/pic12f629.c,
+	  device/lib/pic/libdev/pic12f675.c: consolidated, added TRISIO bits
+
+2008-12-14 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx, cdbfileformat.lyx, test_suite_spec.lyx:
+	  converted to LyX 1.5.7 (\lyxformat 276) format
+
+2008-12-07 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/tests/bitfields.c:
+	  added test case for bug #2366757
+
+2008-12-07 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/glue.c (pic16_printIvalBitFields): prevent
+	  NULL pointer dereference, closes #2366757
+
+2008-11-25 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic16devices.txt,
+	  sdcc/src/pic16/device.c,
+	  sdcc/src/pic16/device.h: implicitly disable XINST
+	  whenever CONFIG4L is set via an additional optional
+	  argument to the configword directive in pic16devices.txt
+
+2008-11-24 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/configure.ac,
+	  device/lib/pic16/Makefile.common: fixed quoting issues
+
+	* device/lib/pic16/configure,
+	  device/lib/pic16/debug/Makefile.in,
+	  device/lib/pic16/libc/Makefile.in,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libio/Makefile.in,
+	  device/lib/pic16/libm/Makefile.in,
+	  device/lib/pic16/libsdcc/Makefile.in,
+	  device/lib/pic16/Makefile.in,
+	  device/lib/pic16/startup/Makefile.in: regenerated
+
+	* src/pic16/main.c (_pic16_finaliseOptions): revert to
+	  variant of r5216
+
+2008-11-24 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/main.c (_pic16_finaliseOptions): do not quote the
+	  argument of --asm= or --link= to allow for
+	  --asm="sh script --options", the user can double quote the
+	  argument if needed: --asm="'c:/program files/gpasm' -q",
+	  also fix some potential buffer overflows
+
+2008-11-19 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx:
+	  fixed 2314467: sdccman.lyx: fix "--" in command line parameters
+	  thanks Mauro Giachero
+
+2008-11-16 Borut Razem <borut.razem AT siol.net>
+
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.5
+	* doc/sdccman.lyx: documented fixed unnamed bit-field initialization
+
+2008-11-15 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/glue.c, src/SDCC.y, src/SDCCast.c, src/SDCCglue.c,
+	  src/SDCCsymt.c, src/SDCCsymt.h:
+	  fixed RFE #2291335 : Unnamed bit-field initialization
+	* support/regression/tests/bitfields.c:
+	  added test case for RFE #2291335
+	* support/regression/tests/bug-1981238.c:
+	  don't initialize unnamed bit-fields
+
+2008-11-11 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f25j10.h,
+	  device/include/pic16/pic18f45j10.h: remove useless boilerplate
+
+	* device/include/pic16/adc.h,
+	  device/lib/pic16/libio/adc/adcbusy.c,
+	  device/lib/pic16/libio/adc/adcclose.c,
+	  device/lib/pic16/libio/adc/adcconv.c,
+	  device/lib/pic16/libio/adc/adcopen.c,
+	  device/lib/pic16/libio/adc/adcread.c,
+	  device/lib/pic16/libio/adc/adcsetch.c: generalized, documented,
+	  and fixed ADC routines to work for more target devices,
+	  incorporates patch #2036130 by Nick Materer
+
+2008-11-10 Steven Borley <steven.borley AT partnerelectronics.com>
+
+	* device/include/ctype.h,
+	* device/include/ds400rom.h,
+	* device/include/ds80c390.h,
+	* device/include/float.h,
+	* device/include/math.h,
+	* device/include/serial.h,
+	* device/include/stdbool.h,
+	* device/include/tinibios.h: replaced non-C89 '//' with '/* */',
+	  patch 2195343
+	* device/include/mcs51/C8051F336.h,
+	* device/include/mcs51/C8051T600.h,
+	* device/include/mcs51/C8051T610.h,
+	* device/include/mcs51/C8051T630.h: new, added, patch 2183334
+	  (svn commit by Maarten Brock <sourceforge.brock AT dse.nl>)
+
+2008-11-10 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* device/include/mcs51/P89LPC922.h: fixed #2255989, thanks kubi57
+
+2008-11-10 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/libdev/mkmk.sh: obey pics.all
+	* device/lib/pic16/libio/mkmk.sh: properly match whole lines in
+	  .ignore files, fixes IO libs for 18f242, 18f252, 18f442, and 18f452
+	  (patch by Nick Materer, #2253980)
+
+	* device/lib/pic16/libio/adc.ignore,
+	  device/lib/pic16/libio/i2c.ignore,
+	  device/lib/pic16/libio/usart.ignore,
+	  device/lib/pic16/pics.all: updated to build more device libs
+
+	* device/lib/pic16/libdev/Makefile.am,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libio/Makefile.am,
+	  device/lib/pic16/libio/Makefile.in: regenerated
+
+	* src/pic16/device.c (pic16_dump_usection): fixed output of multiple
+	  names per memory location, applied SDCC style to more functions
+
+2008-11-09 Gudjon I. Gudjonsson <gudjon AT gudjon.org>
+
+	* device/include/mcs51/p89lpc933_4.h: new NXP header file
+	* device/include/mcs51/p89lpc935_6.h: new NXP header file
+	* device/include/mcs51/p89v66x.h: minor changes
+	  (svn commit by Frieder Ferlemann <Frieder.Ferlemann AT web.de>)
+
+2008-11-09 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic14devices.txt: fixed memory description for
+	  12f629 and 12f675, closes #2236240
+
+2008-11-06 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCmain.c: fixed bug #2224960: sdcc -MM no working correctly
+	  pass system include paths with -isystem to sdcpp
+	* src/SDCCglue.c, src/pic/glue.c, src/pic16/glue.c: removed unneeded
+	  functions (closePipes), (closeTmpFiles) and (rmTmpFiles)
+
+2008-11-02 Raphael Neider <rneider AT web.de>
+
+	* doc/sdccman.lyx: updated the sections on the library build process
+	  and on how to add support for new devices, and documented known
+	  problems with the extended instruction set including a workaround
+
+2008-11-01 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/adc.h,
+	  device/include/pic16/pic16devices.txt,
+	  device/include/pic16/pic18f2410.h,
+	  device/include/pic16/pic18f2510.h,
+	  device/include/pic16/pic18f2515.h,
+	  device/include/pic16/pic18f2610.h,
+	  device/include/pic16/pic18f4410.h,
+	  device/include/pic16/pic18f4510.h,
+	  device/include/pic16/pic18f4515.h,
+	  device/include/pic16/pic18f4610.h,
+	  device/include/pic16/pic18fregs.h,
+	  device/lib/pic16/libdev/Makefile.am,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libdev/pic18f2410.c,
+	  device/lib/pic16/libdev/pic18f2510.c,
+	  device/lib/pic16/libdev/pic18f2515.c,
+	  device/lib/pic16/libdev/pic18f2610.c,
+	  device/lib/pic16/libdev/pic18f4410.c,
+	  device/lib/pic16/libdev/pic18f4510.c,
+	  device/lib/pic16/libdev/pic18f4515.c,
+	  device/lib/pic16/libdev/pic18f4610.c,
+	  device/lib/pic16/libio/Makefile.am,
+	  device/lib/pic16/libio/Makefile.in,
+	  device/lib/pic16/pics.all: added support for 18f[24][456]10
+	  and 18f[24]515 devices
+	* doc/sdccman.lyx: updated list of supported PIC16 devices
+
+	* src/pic/glue.c, src/pic/pcode.c, src/pic/pcodeflow.c,
+	  src/pic16/glue.c, src/pic16/pcode.c, src/pic16/pcodeflow.c,
+	  src/xa51/gen.c: avoid compiler warnings
+	* support/scripts/inc2h-pic16.pl: removed trailing whitespace
+
+2008-10-22 Gudjon I. Gudjonsson <gudjon AT gudjon.org>
+
+	* device/include/mcs51/p89v66x.h: NXP header file
+	* device/include/mcs51/p89c66x.h: fixed an SBIT definition
+	  (svn commit by Frieder Ferlemann <Frieder.Ferlemann AT web.de>)
+
+2008-10-14 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/libdev/Makefile.am,
+	  device/lib/pic16/libio/Makefile.am: enable building libraries for
+	  18f2321, 18f4321, 18f2523, 18f4620, 18f66j60, 18f66j65, 18f67j60,
+	  18f86j60, 18f86j65, 18f87j60, 18f96j60, 18f96j65, and 18f97j60
+	* device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libio/Makefile.in: regenerated
+
+2008-10-14 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f2450.h,
+	  device/include/pic16/pic18f4450.h,
+	  device/lib/pic16/libdev/pic18f2450.c,
+	  device/lib/pic16/libdev/pic18f4450.c,
+	  device/include/pic16/adc.h,
+	  device/include/pic16/pic16devices.txt,
+	  device/include/pic16/pic18fregs.h,
+	  device/lib/pic16/libdev/Makefile.am,
+	  device/lib/pic16/libdev/Makefile.in,
+	  device/lib/pic16/libio/Makefile.am,
+	  device/lib/pic16/libio/Makefile.in,
+	  device/lib/pic16/pics.all: added 18f2450 and 18f4450, closes #1844525
+
+	* device/lib/pic16/libsdcc/stack/stack.S: there is no need to pin the
+	  stack to a fixed location, relax it to automatically work with all
+	  but the smallest devices (256 byte RAM devices need #pragma stack)
+
+2008-10-09 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* debugger/mcs51/break.c: bugfix from patch 1989966, thanks Risto Huotari
+	* debugger/mcs51/simi.c: bugfix from patch 1989972, thanks Risto Huotari
+	* device/lib/_strcspn.c: fixed bug 2140931
+
+2008-10-06 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/stdio.h,
+	  device/lib/pic16/libc/stdio/putchar.c: putchar should not be
+	  declared __naked for convenience, named all arguments
+	* device/lib/pic16/libc/stdio/strmgpsim.c,
+	  device/lib/pic16/libc/stdio/strmmssp.c,
+	  device/lib/pic16/libc/stdio/strmusart.c: cosmetic changes
+
+	* src/pic16/pcode.c (createReachingDefinitions): avoid segfault on
+	  empty __naked functions,
+	* (pCodeLabelDestruct, pic16_unlinkpCode, pic16_pCodeUnlink): fix
+	  corner cases (unlink first/last pCode in list), reuse more code
+
+2008-10-05 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/ds390/main.c (_ds390_genInitStartup): added
+	* src/SDCCpeeph.c (getPatternVar): new, added,
+	  (labelInRange): fixed bug 2115959
+	* src/mcs51/peeph.def (rules 193.x to 198.x): check for labelInRange
+	* src/SDCCicode.h: added newiTempOperand
+	* src/SDCCcse.c (algebraicOpts): fixed bug for x*-1,
+	  added optimizations for 0/x and x/-1, see also patch 2142900
+	* support/regression/tests/onebyte.c (testMul): added test cases
+
+2008-09-20 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/glue.c:
+	  definition of absolute address symbols without initial value,
+	  fixed SDCC crash "do not know how to intialize symbol"
+
+2008-09-16 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/lib/z80/mul.s (__mulsuchar_rrx_s, __muluschar_rrx_s),
+	* device/lib/z80/div.s (__divsuchar_rrx_s, __modsuchar_rrx_s,
+	  __divuschar_rrx_s, __moduschar_rrx_s): added mixed signedness versions
+	* device/lib/z80/stubs.s: added stubs for above functions
+	* src/SDCCopt.c (convilong),
+	* src/SDCCsymt.c (initCSupport): fixed bug 1900961
+	* src/SDCCsymt.h (__muldiv): enlarged for mixed signedness
+	* src/z80/main.c (_hasNativeMulFor): fixed bug, I think
+	* support/regression/tests/onebyte.c: enabled all tests for z80
+
+2008-09-15 Borut Razem <borut.razem AT siol.net>
+
+	* device/include/pic16/stdio.h, device/lib/pic16/libc/stdio/streams.c,
+	  device/lib/pic16/libc/stdio/printf.c,
+	  device/lib/pic16/libc/stdio/strmusart.c,
+	  device/lib/pic16/libc/stdio/printf_tiny.c,
+	  device/lib/pic16/libc/stdio/sprintf.c,
+	  device/lib/pic16/libc/stdio/strmgpsim.c,
+	  device/lib/pic16/libc/stdio/putchar.c,
+	  device/lib/pic16/libc/stdio/fprintf.c,
+	  device/lib/pic16/libc/stdio/strmmssp.c,
+	  device/device/lib/pic16/libc/stdio/vprintf.c,
+	  device/lib/pic16/libc/stdio/printf_small.c,
+	  device/lib/pic16/libc/stdio/vsprintf.c,
+	  device/lib/pic16/libc/stdio/strmputchar.c,
+	  device/lib/pic16/libc/Makefile.am,
+	  device/lib/pic16/libc/Makefile.in:
+	  *printf now returns int, puchar.c moved from stdlib to stdio,
+	  *printf format parameter type changed from char * to const char *,
+	  added GNU link excetion text to library source files,
+	  applyed GNU coding style, removed useless svn ids,
+	  added BINARY_SPECIFIER macro re-enables the use of the removed 'b'
+	  binary specifier: "%b", "%hb" and "%lb"
+	* device/lib/pic16/libc/stdio/vfprintf.c:
+	  applied patch #2044424: PIC16: vfprintf
+	  thanks Mauro Giachero
+	* support/regression/tests/bug1057979.c:
+	  removed old pic16 sprintf specifics
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.4
+	* doc/sdccman.lyx: documented 'b' binary format specifier removal
+
+2008-09-15 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/device.c (pic16_dump_usection): force udata sections
+	  into the addressable range (0..0xFFF), workaround for a gpsim
+	  bug preventing simulation of regtest bug1750318
+	* src/pic16/ralloc.c (deassignLRs): cosmetic changes,
+	  (serialRegAssign): fixed regtest bug-971834,
+	  (pic16_packRegisters): avoid null-pointer dereference
+
+2008-09-14 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c, src/pic16/ralloc.c: use
+	  SYM_SPIL_LOC/SPIL_LOC macros, no functional changes
+	* src/pic16/ralloc.c (rematStr): reimplemented, fixes #1818857
+
+2008-09-12 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/fwk/testfwk.h:
+	  define pdata as data for pic16 target
+	  thanks Mauro Giachero
+
+2008-09-11 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/tests/bug-221100.c, support/regression/shifts.c,
+	  support/regression/absolute.c:
+	  applied patch #2105615: Some PIC16 testcase fixlets
+	  thanks Mauro Giachero
+
+2008-09-08 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/z80/gen.c (genCmpGt, genCmpLt): fixed bug 2094505
+	* support/regression/tests/bug2094505.c: new, added
+
+2008-09-07 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCglue.c, src/SDCCast.c:
+	  fixed throw of "excess elements" warning for char arrays
+	* support/regression/tests/nullstring.c:
+	  disable warning about excess elements in array of chars initializer
+
+2008-09-07 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/z80/aslist.c (lstsym): changed old K&R to ANSI
+	* src/SDCCicode.c (geniCodeCritical): fixed bug for hc08
+	* src/z80/gen.c (genCritical, genEndCritical): fixed bug 2077267
+	* support/regression/tests/bug2077267.c: new, added
+
+2008-09-05 Raphael Neider <rneider AT web.de>
+
+	* configure.in, Makefile.common.in: add support for ccache,
+	  remove spurious $VERSION output, detect doc-tools even without
+	  --enable-doc to facilitate later manual doc-builds, minor cleanup
+	* configure: regenerated
+
+	* doc/Makefile.in: quieten pdflatex, makeindex, and latex2html,
+	  avoid races in parallel VPATH builds
+	* doc/clean.mk: remove .lyx files in the builddir for VPATH builds
+	* doc/sdccman.lyx: mention --without-ccache configure option
+
+2008-09-01 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (pic16_derefPtr): handle CPOINTERs as well
+	* (genConstPointerGet): fix reading bitfields from __code space
+	* src/pic16/glue.c (pic16_printIvalBitFields): correctly mask
+	  bitfield initializers (fix regression test bug1856409.c)
+	* (pic16_printIvalCharPtr,pic16_printIvalPtr): generalized to support
+	  arbitrary sizes
+
+2008-08-31 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (genAssign): removed useless compiler output
+	* (genPointerGet,genPointerSet,genCast),
+	  src/pic16/glue.c (pic16_printGPointerType):
+	  also handle PPOINTERs just to avoid spurious asserts
+	* (pic16_printIvalType,pic16_printIvalBitFields):
+	  generalized to arbitrary type/bitfield sizes, allows compilation of
+	  regression test bug-1981238.c
+	* (pic16_printIvalChar): fix regression test structflexarray.c
+	* (pic16_printIvalArray): avoid SIGSEGV on uninitialized strings
+	  in initialized structs and fix #1843745
+	* (pic16_printIvalStruct): always output initializers for all fields,
+	  even those not explicitly given, fixes zeropad.c regression test
+	* (pic16_printIvalUnion): fix union initializers (bug1426356.c,
+	  #2073635, #1567098, and #1485812)
+	* src/pic16/main.c (_pic16_keywords): remove unsupported 'pdata'
+
+2008-08-31 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/tests/bug-895992.c,
+	  support/regression/tests/onebyte.c:
+	  enabled pic16 regression testing since the bugs
+	  1511794: pic16: regression test bug-895992.c fails
+	  1444425: onebyte.c regression tes fails on pic16
+	  are fixed, probably by fixing
+	  2048464: PIC16: fix genUminus - addresses not.c regression test
+	* src/SDCCsymt.c, src/SDCCglue.c,
+	  support/regression/tests/bug-1981238.c:
+	  applied patch 2076664: fix #1981238 + SIGSEGV in SDCCGlue.c
+	  thanks to RvS
+
+2008-08-30 Borut Razem <borut.razem AT siol.net>
+
+	* support/cpp/libcpp/files.c: SDCPP synchronized with GCC CPP
+	  release version 4.3.2
+
+2008-08-24 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/configure, device/lib/pic16/configure.ac:
+	  always use the sdcc from the current build tree (ignore $CC from
+	  the environment, fixes compile farm builds)
+	* device/lib/Makefile.in: rename .a into .lib for compatibility,
+	  remove more build products from install directory
+	* sdcc/src/pic16/main.c (_pic16_linkEdit,_pic16_finaliseOptions)
+	* sdcc/support/scripts/sdcc.nsi: revert to .lib extension for libs
+
+2008-08-24 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCC.y: applied patch
+	  2050245: Fix # 1963382
+	  for bug
+	  1963382: Listing File - C file comment is incorrect
+	  thanks to RvS
+
+2008-08-23 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/gen.c: applied patch
+	  2048464: PIC16: fix genUminus - addresses not.c regression test
+	  thanks Mauro Giachero
+
+2008-08-22 Borut Razem <borut.razem AT siol.net>
+
+	* device/lib/pic16/configure, device/lib/pic16/configure.ac,
+	  src/pic16/main.c: allow spaces in gpasm and gplink paths
+
+2008-08-15 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peep.c,
+	* src/z80/peeph-z80.def: minor peephole improvement
+
+2008-08-15 Raphael Neider <rneider AT web.de>
+
+	* src/z80/gen.c (_vemit2): suppress compiler warning
+
+	* src/pic/*.[ch]: make proper use of header files and avoid
+	  ad-hoc extern declarations, mark module-local helpers 'static',
+	  removed dead/replaced code, no functional changes
+	* src/pic16/pcode.c: disentangled from pic14 backend
+
+2008-08-14 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c: fixed #2051348
+	* support/regression/tests/bug-2051348.c: regression test for #2051348
+
+2008-08-10 Raphael Neider <rneider AT web.de>
+
+	* configure.in,
+	* Makefile.common.in: export PACKAGE for $docdir,
+	  fixes #1957036, avoid some "underquoted definition" warnings
+	* configure: regenerated
+
+2008-08-10 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/**: build pic16 library using autotools for
+	  improved dependency tracking
+
+	* device/lib/Makefile.in,
+	* src/pic16/main.c,
+	* support/scripts/sdcc.nsi: adapt to changes in filenames (s/.lib/.a/)
+
+2008-08-10 Raphael Neider <rneider AT web.de>
+
+	* src/pic/pcode.c (ReuseReg): do not overlay the registers used for
+	  local variables if --nooverlay is given, workaround for #2023121
+
+2008-08-08 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/genarith.c (genAddLit): fix structure access (#1888004)
+
+2008-08-08 Raphael Neider <rneider AT web.de>
+
+	* src/pic/pcoderegs.c,
+	* src/pic/pcode.c,
+	* src/pic16/pcode.c: replace own SAFE_snprintf with common SNPRINTF
+
+2008-08-07 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCval.c, src/SDCCmain.c, src/SDCC.lex,
+	  device/lib/pic/Makefile.rules, device/lib/ds390/Makefile.in,
+	  device/lib/ds400/Makefile.in, device/lib/hc08/Makefile.in,
+	  support/cpp/libcpp/lex.c,  doc/sdccman.lyx:
+	  applied modified patch 2038174: Add support for binary constants v2
+	  thanks Mauro Giachero
+	* .version, doc/sdccman.lyx: bumped sdcc version to 2.8.3
+
+2008-08-04 Raphael Neider <rneider AT web.de>
+
+	* doc/sdccman.lyx,
+	* src/pic16/device.h,
+	* src/pic16/glue.c,
+	* src/pic16/main.c: enable --optimize-goto by default
+
+	* device/lib/pic16/Makefile.common.in: suppress removed option
+
+	* src/pic16/gen.c,
+	* src/pic16/genutils.c: avoid too long relative branches (#2031890)
+
+2008-07-30 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/device.c, src/pic16/glue.c, src/pic16/pcode.c:
+	  applied patch 22032433: PIC16: fix constant strings,
+	  thanks Mauro Giachero
+
+2008-07-29 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/gen.c: applied patches:
+	  2030306: [1/3] PIC16: fix failing rotate.c tests on 16-bit variables,
+	  2030307: [2/3] PIC16: fix failing rotate.c tests for 32-bit var (1),
+	  2030310: [3/3] PIC16: fix failing rotate.c tests for 32-bit var (2),
+	  thanks Mauro Giachero
+
+2008-07-13 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/port.h: Fixed typo in comment
+
+2008-07-12 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/mappings.i: Implemented RFE #1919415
+	* src/z80/peeph-z80.def: Implemented RFE #1919415, #1861376,
+	  #1880202, #1914434, prepared for RFE #1703943
+
+2008-07-12 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph.def,
+	* src/z80/peeph-z80.def,
+	* src/z80/peeph-gbz80.def: separate Z80 from GBZ80 peepholes in
+	  preparation for Z80 peephole improvements
+
+2008-06-21 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f66j60.h,
+	* device/include/pic16/pic18f66j65.h,
+	* device/include/pic16/pic18f67j60.h,
+	* device/include/pic16/pic18f86j60.h,
+	* device/include/pic16/pic18f86j65.h,
+	* device/include/pic16/pic18f87j60.h,
+	* device/include/pic16/pic18f96j60.h,
+	* device/include/pic16/pic18f96j65.h,
+	* device/include/pic16/pic18f97j60.h,
+	* device/lib/pic16/libdev/pic18f66j60.c,
+	* device/lib/pic16/libdev/pic18f66j65.c,
+	* device/lib/pic16/libdev/pic18f67j60.c,
+	* device/lib/pic16/libdev/pic18f86j60.c,
+	* device/lib/pic16/libdev/pic18f86j65.c,
+	* device/lib/pic16/libdev/pic18f87j60.c,
+	* device/lib/pic16/libdev/pic18f96j60.c,
+	* device/lib/pic16/libdev/pic18f96j65.c,
+	* device/lib/pic16/libdev/pic18f97j60.c,
+	* device/include/pic16/pic16devices.txt,
+	* device/include/pic16/pic18fregs.h,
+	* device/lib/pic16/pics.all: added new devices
+
+	* device/include/pic16/adc.h,
+	* device/lib/pic16/libio/adc/adcbusy.c,
+	* device/lib/pic16/libio/adc/adcopen.c,
+	* device/lib/pic16/libio/adc/adcsetch.c,
+	* device/lib/pic16/libio/i2c/i2copen.c,
+	* device/lib/pic16/libio/usart/uopen.c: adapted to new devices,
+	  all changes from a patch by Anton Strobl
+
+2008-06-12 Borut Razem <borut.razem AT siol.net>
+
+	* sim/ucsim/cmd.src/info.cc, sim/ucsim/cmd.src/bp.cc,
+	  sim/ucsim/xa.src/xa.cc, sim/ucsim/xa.src/xacl.h,
+	  sim/ucsim/z80.src/z80cl.h, sim/ucsim/z80.src/z80.cc,
+	  sim/ucsim/sim.src/uc.cc, sim/ucsim/sim.src/uccl.h,
+	  sim/ucsim/hc08.src/hc08.cc, sim/ucsim/hc08.src/hc08cl.h,
+	  sim/ucsim/s51.src/uc51cl.h, sim/ucsim/s51.src/uc390.cc,
+	  sim/ucsim/s51.src/uc51.cc, sim/ucsim/s51.src/uc390cl.h,
+	  sim/ucsim/avr.src/avrcl.h, sim/ucsim/avr.src/avr.cc:
+	  fixed bug 1990586: s51 simulator, uc::disass() unimplemented
+	  by applying the modified patch from Risto Huotari
+
+2008-06-04 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* .version,
+	* doc/sdccman.lyx: bumped sdcc version to 2.8.2
+	* src/ds390/gen.c (aopPutUsesAcc, genAddrOf): fixed bug 1015185
+	* src/mcs51/gen.c (genNearPointerGet, genNearPointerSet): fixed bug 1938300
+	* support/regression/tests/bug1938300.c: new, added
+
+2008-06-03 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/asm/ds390/features.h,
+	* device/include/asm/mcs51/features.h,
+	* device/include/mcs51/regc515c.h: inserted LGPL notice
+
+2008-05-29 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/lib/gbz80/div.s,
+	* device/lib/z80/div.s: fixed bug 1904314 by applying a modified part of
+	  patch 1597883, Thanks Robert Ramey
+
+2008-05-29 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (createIvalType, createIvalStruct, createIvalArray,
+	  createIvalCharPtr, createIvalPtr, createIval),
+	* src/SDCCval.h
+	* src/SDCCval.c (convertIListToConstList, list2expr): handle incomplete
+	  initializers for local auto variables
+	* support/regression/tests/zeropad.c: added testcase for auto initializers
+
+2008-05-26 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic16/startup/crt0.c,
+	* device/lib/pic16/startup/crt0i.c,
+	* device/lib/pic16/startup/crt0iz.c: clean up, make use of access bank
+	  explicit, fixed curr_entry loop for >= 256 initializer records,
+	  removed debug code (write to 0xf7e)
+
+2008-05-25 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic16f627a.h,
+	* device/include/pic/pic16f628a.h,
+	* device/include/pic/pic16f648a.h: added missing ports
+
+2008-05-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/float.h: added __INFINITY
+	* device/lib/_fsadd.c: handle overflows
+	* device/lib/_fsmul.c,
+	* device/lib/_fsdiv.c: use __INFINITY
+	* device/lib/_fseq.c,
+	* device/lib/_fsneq.c: handle -0.0
+	* sim/ucsim/s51.src/uc89c51r.cc,
+	* sim/ucsim/s51.src/uc89c51rcl.h: fixed bug 1385430
+	* sim/ucsim/sim.src/hwcl.h: */* confuses VC
+	* src/mcs51/gen.c (genSend): fixed bug with --xstack
+	* support/regression/ports/mcs51-xstack-auto/spec.mk: print floats
+	* support/regression/tests/snprintf.c: test bug with --xstack
+
+2008-05-19  Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/SDCCpeeph.c (callFuncByName):
+	  Support nested parenthesis in peephole function arguments (#1967300)
+
+2008-05-19 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (pic16_emitpLabel,pic16_emitpLabelFORCE):
+	  fixed duplicate labels (#1911325)
+
+2008-05-19 Raphael Neider <rneider AT web.de>
+
+	* src/regression/empty.c: suppress warning
+	* src/regression/pointer1.c: enabled index_by_pointer()
+	* src/regression/inline.c: now works for pic16 as well
+
+	* src/pic16/device.c: include dbuf declarations
+	* src/pic16/device.h: removed obsolete prototypes
+
+	* src/pic16/gen.c, src/pic16/gen.h: moved generic pointer tags
+	* src/pic16/glue.c: made purely local functions static,
+	  (pic16_printGPointerType, pic16_printIvalCharPtr,
+	  pic16_printIvalFuncPtr, pic16_printIvalPtr): fixed initialized
+	  generic pointers' tags (#1961866)
+
+	* src/pic16/pcode.c (assignValnums): optimize literal assignments
+
+2008-05-19 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: remove uninstall.exe after uninstallation,
+	  fixed typo, uninstall include/pic16/pic16devices.txt
+
+2008-05-18 Borut Razem <borut.razem AT siol.net>
+
+	* support/Utils/dbuf_string.[ch]: added dbuf_chomp(),
+	  the buffer is null terminated
+	* src/device/pic16.c:
+	  applied modified patch 1965676: Patch for Win32 16 bit PIC
+	* sdcc_vc_in.h: defined YY_NO_UNISTD_H
+
+2008-05-16 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCC.lex (check_type),
+	* src/SDCC.y (type_specifier2 TYPE_NAME): fixed bug 1925942
+	* as/hc08/clean.mk,
+	* as/mcs51/clean.mk,
+	* as/z80/clean.mk: also clean *.dep
+	* device/lib/pic16/libsdcc/stack/Makefile,
+	* sim/ucsim/libtool: removed as they are rebuild by configure
+	* src/clean.mk: removed izt, so Makefile is not deleted for distclean
+
+2008-05-13 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (fixupInline, createFunction): save currBlockno in
+	  fixupInline instead of createFunction to fix bug 1864577
+	  (inlineFindMaxBlockno): removed, use global blockNo
+	* src/SDCCglobl.h: added blockNo
+	* src/z80/peep.c,
+	* src/z80/peep.h: modified properties
+	* support/regression/tests/bug1864577.c: new, added
+
+2008-05-07 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/mcs51/asdata.c,
+	* as/mcs51/asm.h: added org_cnt
+	* as/mcs51/asmain.c (main, asmbl): fixed bug 1957716, changed old K&R to ANSI
+	* as/mcs51/asout.c: changed old K&R to ANSI
+	* as/mcs51/Makefile.in: use common identifiers
+	* as/hc08/asdata.c,
+	* as/hc08/asexpr.c,
+	* as/hc08/asm.h,
+	* as/hc08/asmain.c,
+	* as/hc08/asout.c,
+	* as/hc08/Makefile.bcc,
+	* as/hc08/Makefile.in: synchronized with as/mcs51/*
+	* sdcc_vc_in.h: added define __func__
+	* src/SDCCast.c (expandInlineFuncs): applied patch 1957148 to fix bug 1717305,
+	  Thanks Ruud van Silfhout
+	* support/regression/tests/bug1717305.c: new, added
+
+2008-05-05 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/Makefile.in,
+	  support/regression/ports/ds390/spec.mk,
+	  support/regression/ports/hc08/spec.mk,
+	  support/regression/ports/mcs51-common/spec.mk,
+	  support/regression/ports/pic14/spec.mk,
+	  support/regression/ports/pic16/spec.mk,
+	  support/regression/ports/ucz80/spec.mk,
+	  support/regression/ports/z80/spec.mk:
+	  added INC_DIR and LIBDIR paths
+	* src/ds390/gen.c: removed duplicated selicolon
+
+2008-05-04 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/Makefile.in,
+	  support/regression/fwk/lib/testfwk.c,
+	  support/regression/ports/ds390/spec.mk,
+	  support/regression/ports/hc08/spec.mk,
+	  support/regression/ports/mcs51-common/spec.mk,
+	  support/regression/ports/mcs51-large/spec.mk,
+	  support/regression/ports/mcs51-medium/spec.mk,
+	  support/regression/ports/mcs51-small/spec.mk,
+	  support/regression/ports/mcs51-stack-auto/spec.mk,
+	  support/regression/ports/mcs51-xstack-auto/spec.mk,
+	  support/regression/ports/pic14/spec.mk,
+	  support/regression/ports/pic16/spec.mk,
+	  support/regression/ports/ucz80/spec.mk:
+	  added possibility to define the sdcc binary directory SDCC_BIN_PATH
+	  used to run regeression tests
+
+2008-05-01 Raphael Neider <rneider AT web.de>
+
+	* doc/sdccman.lyx, support/scripts/inc2h-pic16.pl: updated list of
+	  supported devices and instructions to add new ones
+
+2008-05-01 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/adc.h,
+	  device/lib/pic16/libio/adc/adcbusy.c,
+	  device/lib/pic16/libio/adc/adcopen.c,
+	  device/lib/pic16/libio/adc/adcsetch.c: support old 18f242 and new
+	  18f2455 style ADC devices, based on patch #1776197
+	* device/lib/pic16/libio/adc/adcclose.c,
+	  device/lib/pic16/libio/adc/adcconv.c,
+	  device/lib/pic16/libio/adc/adcread.c: cosmetic changes
+	* device/include/pic16/{pic18f2331.h,pic18f2431.h},
+	  device/lib/pic16/libdev/{pic18f2331.c,pic18f2431.c}: reuse 18f4331
+	* device/include/pic16/pic18f4431.h,
+	  device/lib/pic16/libdev/pic18f4431.c: remove outdated comments
+	* device/lib/pic16/libio/adc.ignore: forbid unhandled devices
+
+2008-05-01 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/device.h: removed unused field PIC16_device.sfrRange,
+	  moved xinst flag into pic16_options_t
+	* src/pic16/device.c (default_device, pic16_list_devices,
+	  pic16_find_device): removed references to sfrrange
+	* src/pic16/gen.c (genFunction),
+	  src/pic16/glue.c (pic16initialComments),
+	  src/pic16/main.c (pic16_optionsTable),
+	  src/pic16/ralloc.c (newReg, pic16_writeUsedRegs): updated references
+	  to xinst
+	* device/include/pic16/pic16devices.txt: removed sfrrange lines
+
+2008-04-29 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/devices.inc,
+	  device/include/pic16/pic16devices.txt: replaced compiled-in list
+	  of devices with a variant parsed at runtime
+	* src/pic16/device.c: added support for parsing pic16devices.txt,
+	  clean up
+	* src/pic16/device.h: removed (now) unused fields from PIC_device
+	* src/pic16/main.c: removed #pragma maxram,
+	  (_pic16_initPaths): removed bogus generation of search paths,
+	  setup the port proper only after the search paths (for
+	  pic16devices.txt) are set up,
+	  (_pic16_finaliseOptions): moved processor dependant code here
+	  from _pic16_initPaths(), clean up
+	* src/pic16/ralloc.c (pic16_init_stack),
+	* src/pic16/ralloc.h,
+	* src/pic16/pcode.c: clean up
+	* device/include/Makefile.in,
+	  support/scripts/sdcc.nsi: also install/package pic16devices.txt
+	* support/scripts/inc2h-pic16.pl: updated instructions
+
+2008-04-29 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/{pic18f2480.h, pic18f2580.h, pic18f4423.h,
+	  pic18f4480.h, pic18f4523.h, pic18f4580.h, pic18f6585.h, pic18f8585.h},
+	  device/lib/pic16/libdev/{pic18f2480.c, pic18f2580.c, pic18f4423.c,
+	  pic18f4480.c, pic18f4523.c, pic18f4580.c, pic18f6585.c, pic18f8585.c}:
+	  added missing family members and 18f2480/2580/4480/4580 family
+	* device/include/pic16/{pic18f2423.h, pic18f2523.h}: use 18f4523.h
+	* device/include/pic16/pic18f2525.h: use 18f4620.h
+	* device/include/pic16/pic18f6680.h: use 18f8680.h
+	* device/include/pic16/pic18fregs.h,
+	  device/lib/pic16/pics.all,
+	  src/pic16/devices.inc: add new devices
+	* device/lib/pic16/libdev/{pic18f2423.c, pic18f2523.c}: use 18f4523.c
+	* device/lib/pic16/libdev/pic18f2525.c: use 18f4620.c
+	* device/lib/pic16/libdev/pic18f6680.c: uso 18f8680.c
+	* device/lib/pic16/libio/{adc.ignore, i2c.ignore, usart.ignore}:
+	  prevent attempting to build the libio for some new devices
+
+2008-04-29 Raphael Neider <rneider AT web.de>
+
+	* debugger/mcs51/Makefile.in: fixed paths to sources
+
+2008-04-25 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/lklibr.c: moved from as/link/z80/lklibr.c
+	* as/link/hc08/lklibr.c, as/link/mcs51/lklibr.c: deleted
+	* as/link/hc08/Makefile.bcc, as/link/hc08/Makefile.in,
+	* as/link/hc08/link_hc08.dsp, as/link/mcs51/Makefile.bcc,
+	  as/link/mcs51/Makefile.in, as/link/mcs51/aslink.dsp,
+	  as/link/z80/Makefile.in, as/link/z80/linkgbz80.dsp,
+	  as/link/z80/linkz80.dsp: lklibr.c moved
+	* doc/INSTALL.txt: binary archives in bz2 format
+	* support/cpp/auto-host_vc_in.h: CPP2 replaced with CPP
+
+2008-04-23 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCglue.c (printIvalType, printIvalBitFields): fixed bug 1856409
+	* support/regression/tests/bug1856409.c: new, added
+
+2008-04-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/z80/peep.c,
+	* src/mcs51/peep.c: Use werror for error messages.
+	* src/SDCCicode.c (geniCodeConditional),
+	* src/SDCCsymt.c (structElemType): fixed bug 1839321
+	* src/z80/Makefile.bcc,
+	* src/z80/z80.dsp: added src/z80/peep.c/h
+	* support/regression/tests/bug1839321.c: new, added
+
+2008-04-20 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f2455.h: added bitfields for port C
+
+2008-04-20 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peep.c: Use werror for error messages.
+
+2008-04-19 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peep.h (declaration of notUsed()),
+	* src/z80/main.c (enabled notUsed() for z80 port, documented z80_port
+	  struct),
+	* src/z80/z80.h (added dependency on peep.h),
+	* src/z80/peep.c (definition of notUsed()): Implemented RFE #1880202
+	  for Z80.
+
+2008-04-19 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/SDCCpeeph.c (added support for notUsed()),
+	* src/mcs51/main.c (added dependency on peep.h, documented mcs51_port
+	  struct),
+	* src/port.h (removed dependency on mcs51/peep.h, added declaration
+	  for notUsed()): Implemented generic (that is not port-specific) part
+	  of RFE #1880202.
+
+2008-04-17 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/link/mcs51/lkmem.c (summary2): fixed bug 1796077
+	* device/lib/libsdcc.lib,
+	* device/lib/Makefile.in,
+	* support/regression/ports/mcs51-xstack-auto/spec.mk,
+	* device/lib/calloc.c: renamed to _calloc.c
+	* device/lib/free.c: renamed to _free.c
+	* device/lib/malloc.c: renamed to _malloc.c
+	* device/lib/realloc.c: renamed to _realloc.c
+	* src/ds390/gen.c (aopGet, aopPut, genPlusBits, genDataPointerSet,
+	  genNearPointerSet, genPagedPointerSet): synchronized with mcs51/gen.c
+	* src/ds390/gen.c (popForBranch, genIfxJump, genCmp, genCmpEq, ifxForOp,
+	  genAnd, genOr, genXor, genIfx, gen390Code): fixed bug 1509084
+	* src/mcs51/gen.c (popForBranch, genIfxJump, genCmp, genCmpEq,
+	  ifxForOp, genAnd, genOr, genXor, genNearPointerGet,
+	  genPagedPointerGet, genFarPointerGet, genCodePointerGet,
+	  genGenPointerGet, genIfx, gen51Code): fixed bug 1509084
+	* src/ds390/gen.c,
+	* src/mcs51/gen.c: throughout cosmetic changes for syncing both
+	* src/SDCCsymt.h: updated IS_OP_RUONLY, IS_OP_ACCUSE
+	* support/regression/tests/bug1509084.c: new, added
+
+2008-04-14 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/mcs51/cc2510fx.h: added _XPAGE
+	* device/include/mcs51/compiler.h: cosmetic changes
+
+2008-03-31 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* sdcc.dsw: adapted for moved cpp2, added dependency for as_z80 on
+	  config
+
+2008-03-31 Borut Razem <borut.razem AT siol.net>
+
+	* support/cpp2 renamed to support/cpp
+	* support/cpp2/libiberty/filenames.h, support/cpp2/libiberty/hex.c,
+	  support/cpp2/libiberty/splay-tree.c,
+	  support/cpp2/libiberty/splay-tree.h, support/cpp2/libcpp/macro.c,
+	  support/cpp2/libcpp/directives.c,
+	  support/cpp2/libcpp/include/cpplib.h,
+	  support/cpp2/libcpp/include/symtab.h,
+	  support/cpp2/libcpp/include/line-map.h,
+	  support/cpp2/libcpp/line-map.c, support/cpp2/libcpp/files.c,
+	  support/cpp2/libcpp/init.c, support/cpp2/libcpp/traditional.c,
+	  support/cpp2/libcpp/expr.c, support/cpp2/libcpp/internal.h,
+	  support/cpp2/libcpp/lex.c, support/cpp2/libcpp/system.h,
+	  support/cpp2/libcpp/charset.c: SDCPP synchronized with GCC CPP
+	  release version 4.3.0
+	* configure.in, configure, Makefile.in, Makefile.bcc:
+	  adapted for moved cpp2
+
+2008-03-31 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* device/include/hc08/mc68hc908jkjl.h: committed fix for bug #1929739,
+	  thanks Alejandro Pustowka <alejo_pustowka AT yahoo.com.mx>
+
+2008-03-30 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCloop.c (loopInvariants): applied fix for bug 1717943, thanks
+	  Robert Larice
+	* support/regression/tests/bug1717943.c: new, added
+
+2008-03-30 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c (assignResultValue): Reverted reversal of order of
+	  bytewise return value assignments introduced in last commit.
+
+2008-03-30 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c (emitDebug, assignResultValue, genPlus, genMinus,
+	  genMult, genJumpTab):
+	  Use 16-bit instructions for addition in some additional cases,
+	  implemented RFEs #1914251, #1914245, #1922090, #1921382, #1918323.
+
+2008-03-30 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/ralloc.c (serialRegAssign, allocReg, tryAllocatingRegPair):
+	  Implemented RFE #1921450, changed some debug messages.
+
+2008-03-30 Borut Razem <borut.razem AT siol.net>
+
+	* Small Device C Compiler 2.8.0 released
+	* .version, doc/sdccman.lyx: changed sdcc version to 2.8.1
+	* support/scripts/sdcc.nsi: added finish page; this version
+	  was used for 2.8.0 release
+	* doc/knownbugs.html: removed; magically generated by the build
+	  process using gen_known_bugs.pl from now on
+
 2008-03-23 Borut Razem <borut.razem AT siol.net>
 
 	* src/pic/gen.h: Q&D solution for the bug, found by Jim Paris
@@ -25,8 +1606,8 @@
 
 2008-03-21 Philipp Klaus Krause <pkk AT spth.de>
 
-	* src/z80/ralloc.c (callFuncByName):
-	  Used // instead of /**/ to fix compilation warning about nested comments.
+	* src/z80/ralloc.c (callFuncByName): Used // instead of /**/ to fix
+	  compilation warning about nested comments.
 
 2008-03-20 Maarten Brock <sourceforge.brock AT dse.nl>
 
@@ -606,8 +2187,8 @@
 
 2007-11-12 Borut Razem <borut.razem AT siol.net>
 
-	* as\z80\asmain.c, as\z80\asm.h, as\z80\assym.c, as\z80\asdata.c,
-	  as\z80\asout.c, as\z80\aslist.c:
+	* as/z80/asmain.c, as/z80/asm.h, as/z80/assym.c, as/z80/asdata.c,
+	  as/z80/asout.c, as/z80/aslist.c:
 	  fixed bug #1817005 - as-z80 chokes on long labels
 
 2007-11-11 Maarten Brock <sourceforge.brock AT dse.nl>
@@ -5076,8 +6657,8 @@
 
 2006-04-18 Borut Razem <borut.razem AT siol.net>
 
-	* support/scripts/sdcc.nsi: removed unexisting ${DEV_ROOT}\lib\pic\*.o,
-	  ${DEV_ROOT}\lib\src\pic\libdev\*.S, ${DEV_ROOT}\lib\src\pic\libdev\*.inc
+	* support/scripts/sdcc.nsi: removed unexisting ${DEV_ROOT}/lib/pic/*.o,
+	  ${DEV_ROOT}/lib/src/pic/libdev/*.S, ${DEV_ROOT}/lib/src/pic/libdev/*.inc
 
 2006-04-17 Borut Razem <borut.razem AT siol.net>
 
@@ -7416,63 +8997,63 @@
 
 2005-04-02 Vangelis Rokas <vrokas AT users.sourceforge.net>
 
-        * device/include/asm/pic16/features.h,
-        * pic18f*.h headers,
-        * device/include/pic16/adc.h,
-        * device/include/pic16/delay.h,
-        * device/include/pic16/i2c.h,
-        * device/include/pic16/malloc.h,
-        * device/include/pic16/stdio.h,
-        * device/include/pic16/stdlib.h,
-        * device/include/pic16/string.h,
-        * device/lib/pic16/libc/stdio/printf_tiny.c,
-        * device/lib/pic16/libc/stdio/printf_small.c,
-        * device/lib/pic16/libc/stdio/strmgpsim.c,
-        * device/lib/pic16/libc/stdio/strmmssp.c,
-        * device/lib/pic16/libc/stdio/strmusart.c,
-        * device/lib/pic16/libc/stdio/vfprintf.c,
-        * device/lib/pic16/libc/stdlib/ltoa.c,
-        * device/lib/pic16/libc/stdlib/putchar.c,
-        * device/lib/pic16/libc/stdlib/x_ftoa.c,
-        * device/lib/pic16/libc/stdlib/memchrpgm.c,
-        * device/lib/pic16/libc/stdlib/memchrram.c,
-        * device/lib/pic16/libc/stdlib/memcpypgm2ram.c,
-        * device/lib/pic16/libc/stdlib/memcpyram2ram.c,
-        * device/lib/pic16/libio/adc/adcbusy.c,
-        * device/lib/pic16/libio/adc/adcread.c,
-        * device/lib/pic16/libio/adc/adcsetch.c,
-        * device/lib/pic16/libio/usart/ubaud.c,
-        * device/lib/pic16/libio/usart/ubusy.c,
-        * device/lib/pic16/libio/usart/udrdy.c,
-        * device/lib/pic16/libio/usart/uopen.c,
-        * device/lib/pic16/libio/usart/uputc.c,
-        * device/lib/pic16/libsdcc/gptr/gptrget1.c,
-        * device/lib/pic16/libsdcc/gptr/gptrget2.c,
-        * device/lib/pic16/libsdcc/gptr/gptrget3.c,
-        * device/lib/pic16/libsdcc/gptr/gptrget4.c,
-        * device/lib/pic16/libsdcc/gptr/gptrput1.c,
-        * device/lib/pic16/libsdcc/gptr/gptrput2.c,
-        * device/lib/pic16/libsdcc/gptr/gptrput3.c,
-        * device/lib/pic16/libsdcc/gptr/gptrput4.c: modified all SDCC
-        specific keywords to double underlined form,
-        * device/lib/pic16/libc/Makefile.rules,
-        * device/lib/pic16/libsdcc/Makefile.rules,
-        * device/lib/pic16/libm/Makefile,
-        * device/lib/pic16/libio/Makefile.rules: added CSTD macro in CFLAGS
-        to compile with C standard set in Makefile.common
-        * device/lib/pic16/libc/stdlib/Makefile: added new C sources
-        rand.c and crc.c in compilation process,
-        * device/lib/pic16/libsdcc/int/divuint.c,
-        * device/lib/pic16/libsdcc/long/divulong.c: changed declaration of
-        `c' from signed to unsigned,
-        * device/lib/pic16/startup/crt0.c,
-        * device/lib/pic16/startup/crt0i.c,
-        * device/lib/pic16/startup/crt0iz.c: adopted to all SDCC specific
-        keywords to double underlined form, bug fixes in _do_cinit function
-        which prevented the correct initialization of the .idata segment,
-        * src/pic16/pcoderegs.c (insideLRBlock): fixed a bug that caused the
-        core to enter a infinite loop
-        * device/lib/pic16/libc/stdlib/rand.c, crc.c: new files
+	* device/include/asm/pic16/features.h,
+	* pic18f*.h headers,
+	* device/include/pic16/adc.h,
+	* device/include/pic16/delay.h,
+	* device/include/pic16/i2c.h,
+	* device/include/pic16/malloc.h,
+	* device/include/pic16/stdio.h,
+	* device/include/pic16/stdlib.h,
+	* device/include/pic16/string.h,
+	* device/lib/pic16/libc/stdio/printf_tiny.c,
+	* device/lib/pic16/libc/stdio/printf_small.c,
+	* device/lib/pic16/libc/stdio/strmgpsim.c,
+	* device/lib/pic16/libc/stdio/strmmssp.c,
+	* device/lib/pic16/libc/stdio/strmusart.c,
+	* device/lib/pic16/libc/stdio/vfprintf.c,
+	* device/lib/pic16/libc/stdlib/ltoa.c,
+	* device/lib/pic16/libc/stdlib/putchar.c,
+	* device/lib/pic16/libc/stdlib/x_ftoa.c,
+	* device/lib/pic16/libc/stdlib/memchrpgm.c,
+	* device/lib/pic16/libc/stdlib/memchrram.c,
+	* device/lib/pic16/libc/stdlib/memcpypgm2ram.c,
+	* device/lib/pic16/libc/stdlib/memcpyram2ram.c,
+	* device/lib/pic16/libio/adc/adcbusy.c,
+	* device/lib/pic16/libio/adc/adcread.c,
+	* device/lib/pic16/libio/adc/adcsetch.c,
+	* device/lib/pic16/libio/usart/ubaud.c,
+	* device/lib/pic16/libio/usart/ubusy.c,
+	* device/lib/pic16/libio/usart/udrdy.c,
+	* device/lib/pic16/libio/usart/uopen.c,
+	* device/lib/pic16/libio/usart/uputc.c,
+	* device/lib/pic16/libsdcc/gptr/gptrget1.c,
+	* device/lib/pic16/libsdcc/gptr/gptrget2.c,
+	* device/lib/pic16/libsdcc/gptr/gptrget3.c,
+	* device/lib/pic16/libsdcc/gptr/gptrget4.c,
+	* device/lib/pic16/libsdcc/gptr/gptrput1.c,
+	* device/lib/pic16/libsdcc/gptr/gptrput2.c,
+	* device/lib/pic16/libsdcc/gptr/gptrput3.c,
+	* device/lib/pic16/libsdcc/gptr/gptrput4.c: modified all SDCC
+	specific keywords to double underlined form,
+	* device/lib/pic16/libc/Makefile.rules,
+	* device/lib/pic16/libsdcc/Makefile.rules,
+	* device/lib/pic16/libm/Makefile,
+	* device/lib/pic16/libio/Makefile.rules: added CSTD macro in CFLAGS
+	to compile with C standard set in Makefile.common
+	* device/lib/pic16/libc/stdlib/Makefile: added new C sources
+	rand.c and crc.c in compilation process,
+	* device/lib/pic16/libsdcc/int/divuint.c,
+	* device/lib/pic16/libsdcc/long/divulong.c: changed declaration of
+	`c' from signed to unsigned,
+	* device/lib/pic16/startup/crt0.c,
+	* device/lib/pic16/startup/crt0i.c,
+	* device/lib/pic16/startup/crt0iz.c: adopted to all SDCC specific
+	keywords to double underlined form, bug fixes in _do_cinit function
+	which prevented the correct initialization of the .idata segment,
+	* src/pic16/pcoderegs.c (insideLRBlock): fixed a bug that caused the
+	core to enter a infinite loop
+	* device/lib/pic16/libc/stdlib/rand.c, crc.c: new files
 
 2005-04-02 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
 
@@ -7525,82 +9106,82 @@
 2005-03-31 Vangelis Rokas <vrokas AT users.sourceforge.net>
 
 	* src/pic16/device.c (Pics16[]): added devices 18F2550, 18F4331,
-        18F4455,
-        * (pic16_assignConfigWordValue): disable testing of configuration
-        register value with config mask,
-        * src/pic16/gen.c (pic16_testStackOverflow): prefix stack test
-        function with port->fun_prefix,
-        * (genFunction): when generating a naked interrupt function never
-        create an absolute segment placed in interrupt vector address, place
-        the actual interrupt function at IVA instead, when an interrupt
-        function is generated with unspecified interrupt then do not create
-        the absolute section,
-        * (genGenPointerGet, genGenPointerSet, genPackBits): replace all
-        code for generating a call to generic pointer get/put function with
-        a call to function pic16_callGenericPointer(),
-        * src/pic16/genutils.c (pic16_callGenericPointerRW): NEW, generates
-        the call to the generic pointer get/put functions with prefixing the
-        function name with port->fun_prefix,
-        * src/pic16/glue.c (pic16glue): ifdef-out test of OF_LR_SUPPORT,
-        * src/pic16/main.c (_process_pragma): prefix function with
-        port->fun_prefix,
-        * (_pic16_finaliseOptions): define macro __18Fxxxx macro when
-        calling assembler, old 18Fxxxx macro is deprecated,
-        * src/pic16/pcode.c (unlinkpCodeFromBranch): added PC_INLINE and
-        PC_ASMDIR in while condition,
-        * (findInstruction): add PC_ASMDIR in while condition,
-        * (buildCallTree): prefix main with port->fun_prefix,
-        * (pic16_pCode2str): fixed bug that didn't emit the memory access
-        identifier for variable with banked access in instructions BTFSS,
-        BTFSC, BCF, BSF, BTG
-        * (AnalyzeFlow): moved call to OptimizepCode to pic16_AnalyzeBanking,
-        * src/pic16/pcodepeep.c (pCodeOpCompare): increase size of b to 1024,
-        * src/pic16/pcoderegs.c (pic16_pCodeRegoptimizeRegUsage): don't
-        perform optimization when enviroment variable NO_REG_OPT is set,
-        * (insideLRBlock): NEW, return 1 if register is inside an
-        INF_LOCALREGS block,
-        * (RemoveRegFromLRBlock): remove a register that is completely
-        eliminated by register optimization, but it is still left in local
-        register store/restore in/from stack block,
-        * (Remove2pcodes): after removing register, check to see if it
-        should be removed from local register store/restore in/from stack
-        block,
-        * src/pic16/ralloc.c (pic16_decodeOp): added decode for
-        DUMMY_READ_VOLATILE,
+	18F4455,
+	* (pic16_assignConfigWordValue): disable testing of configuration
+	register value with config mask,
+	* src/pic16/gen.c (pic16_testStackOverflow): prefix stack test
+	function with port->fun_prefix,
+	* (genFunction): when generating a naked interrupt function never
+	create an absolute segment placed in interrupt vector address, place
+	the actual interrupt function at IVA instead, when an interrupt
+	function is generated with unspecified interrupt then do not create
+	the absolute section,
+	* (genGenPointerGet, genGenPointerSet, genPackBits): replace all
+	code for generating a call to generic pointer get/put function with
+	a call to function pic16_callGenericPointer(),
+	* src/pic16/genutils.c (pic16_callGenericPointerRW): NEW, generates
+	the call to the generic pointer get/put functions with prefixing the
+	function name with port->fun_prefix,
+	* src/pic16/glue.c (pic16glue): ifdef-out test of OF_LR_SUPPORT,
+	* src/pic16/main.c (_process_pragma): prefix function with
+	port->fun_prefix,
+	* (_pic16_finaliseOptions): define macro __18Fxxxx macro when
+	calling assembler, old 18Fxxxx macro is deprecated,
+	* src/pic16/pcode.c (unlinkpCodeFromBranch): added PC_INLINE and
+	PC_ASMDIR in while condition,
+	* (findInstruction): add PC_ASMDIR in while condition,
+	* (buildCallTree): prefix main with port->fun_prefix,
+	* (pic16_pCode2str): fixed bug that didn't emit the memory access
+	identifier for variable with banked access in instructions BTFSS,
+	BTFSC, BCF, BSF, BTG
+	* (AnalyzeFlow): moved call to OptimizepCode to pic16_AnalyzeBanking,
+	* src/pic16/pcodepeep.c (pCodeOpCompare): increase size of b to 1024,
+	* src/pic16/pcoderegs.c (pic16_pCodeRegoptimizeRegUsage): don't
+	perform optimization when enviroment variable NO_REG_OPT is set,
+	* (insideLRBlock): NEW, return 1 if register is inside an
+	INF_LOCALREGS block,
+	* (RemoveRegFromLRBlock): remove a register that is completely
+	eliminated by register optimization, but it is still left in local
+	register store/restore in/from stack block,
+	* (Remove2pcodes): after removing register, check to see if it
+	should be removed from local register store/restore in/from stack
+	block,
+	* src/pic16/ralloc.c (pic16_decodeOp): added decode for
+	DUMMY_READ_VOLATILE,
 
-        * device/include/pic16/adc.h: minor prototype modifications and
-        update,
-        * device/include/pic16/malloc.h: added GPL notice various
-        modifications,
-        * device/include/pic16/stdint.h: NEW, standard header for ints
-        * device/include/pic16/delay.h: NEW, header for delay functions,
-        delay10tcy, delay100tcy, delay1ktcy, delay10ktcy, delay100ktcy,
-        delay1mtcy,
-        * device/include/pic16/signal.h: NEW, header providing helper macros
-        for implementing signal handlers,
-        * device/include/pic16/stdio.h: added prototypes for functions,
-        printf, vprintf, sprintf, vsprintf, fprintf, vfprintf. Added
-        prototypes for stdin and stdout, added macro PUTCHAR to
-        automatically implement putchar function prototype,
-        * device/include/pic16/usart.h: modified and updated USART library,
-        * device/lib/pic16/libio/adc/,
-        * device/lib/pic16/libio/i2c: some modifications to improve library
-        performance,
-        * device/lib/pic16/libc/stdio/: modifications for the new printf*
-        family of functions,
-        * device/lib/pic16/libc/stdlib/: various modifications in the malloc
-        family of functions and other sources,
-        * device/lib/pic16/libio/usart/: NEW, c sources for the usart module
-        of the PIC18Fxx[28] devices,
-        * device/lib/pic16/libc/delay/: NEW, c sources for the delay functions,
-        * device/lib/pic16/libc/utils/: minor modifications in the .S sources,
-        * device/lib/pic16/startup/{crt0i.c, crt0iz.c}: redesign of the
-        _do_cinit function, because the previous failed when local variables
-        where not placed in the same memory bank,
-        * device/lib/pic16/libsdcc/char/: various modifications to improve
-        library performance,
-        * doc/sdccman.lyx: some reorganization of the PIC16 part, added many
-        information on the new functions of the c library and more...
+	* device/include/pic16/adc.h: minor prototype modifications and
+	update,
+	* device/include/pic16/malloc.h: added GPL notice various
+	modifications,
+	* device/include/pic16/stdint.h: NEW, standard header for ints
+	* device/include/pic16/delay.h: NEW, header for delay functions,
+	delay10tcy, delay100tcy, delay1ktcy, delay10ktcy, delay100ktcy,
+	delay1mtcy,
+	* device/include/pic16/signal.h: NEW, header providing helper macros
+	for implementing signal handlers,
+	* device/include/pic16/stdio.h: added prototypes for functions,
+	printf, vprintf, sprintf, vsprintf, fprintf, vfprintf. Added
+	prototypes for stdin and stdout, added macro PUTCHAR to
+	automatically implement putchar function prototype,
+	* device/include/pic16/usart.h: modified and updated USART library,
+	* device/lib/pic16/libio/adc/,
+	* device/lib/pic16/libio/i2c: some modifications to improve library
+	performance,
+	* device/lib/pic16/libc/stdio/: modifications for the new printf*
+	family of functions,
+	* device/lib/pic16/libc/stdlib/: various modifications in the malloc
+	family of functions and other sources,
+	* device/lib/pic16/libio/usart/: NEW, c sources for the usart module
+	of the PIC18Fxx[28] devices,
+	* device/lib/pic16/libc/delay/: NEW, c sources for the delay functions,
+	* device/lib/pic16/libc/utils/: minor modifications in the .S sources,
+	* device/lib/pic16/startup/{crt0i.c, crt0iz.c}: redesign of the
+	_do_cinit function, because the previous failed when local variables
+	where not placed in the same memory bank,
+	* device/lib/pic16/libsdcc/char/: various modifications to improve
+	library performance,
+	* doc/sdccman.lyx: some reorganization of the PIC16 part, added many
+	information on the new functions of the c library and more...
 
 2005-03-28 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
 
@@ -9788,17 +11369,17 @@
 
 2004-07-20 Maarten Brock <sourceforge.brock AT dse.nl>
 
-        * src/SDCCast.c (decorateType): removed buggy fix for bug #979599
+	* src/SDCCast.c (decorateType): removed buggy fix for bug #979599
 
 2004-07-11 Maarten Brock <sourceforge.brock AT dse.nl>
 
 	* src/SDCCglue.c (printIvalArray): fixed bug #984229, thanks to Phuah
-          Yee Keat for the patch
-        * src/SDCCast.c (decorateType): fixed bug #979599
-        * src/ds390/gen.h: removed local fReturnSizeDS390
-        * src/ds390/gen.c: made fReturnSizeDS390 signed short to remove a warning
-        * src/ds390/gen.c (genAnd, genOr, genXor),
-        * src/mcs51/gen.c (genAnd, genOr, genXor): generate better optimized code
+	  Yee Keat for the patch
+	* src/SDCCast.c (decorateType): fixed bug #979599
+	* src/ds390/gen.h: removed local fReturnSizeDS390
+	* src/ds390/gen.c: made fReturnSizeDS390 signed short to remove a warning
+	* src/ds390/gen.c (genAnd, genOr, genXor),
+	* src/mcs51/gen.c (genAnd, genOr, genXor): generate better optimized code
 
 2004-07-04 Vangelis Rokas <vrokas AT otenet.gr>
 
@@ -10005,8 +11586,8 @@
 	* src/pic16/pcoderegs.c: many modifications to re-enable peepholes,
 	they are disabled by default, but can be enabled explicit with
 	command argument --denable-peeps, for testing,
-        * device/lib/pic16/startup/Makefile: added --no-peep,--pomit-config-words,
-        --pomit-ivt in COMPILE_FLAGS
+	* device/lib/pic16/startup/Makefile: added --no-peep,--pomit-config-words,
+	--pomit-ivt in COMPILE_FLAGS
 
 2004-06-06 Maarten Brock <sourceforge.brock AT dse.nl>
 
@@ -10087,7 +11668,7 @@
 
 2004-06-02 Vangelis Rokas <vrokas AT otenet.gr>
 
-        * src/pic16/gen.c (genPcall): warning about gpsim and PCLATU
+	* src/pic16/gen.c (genPcall): warning about gpsim and PCLATU
 	is commented out
 
 2004-06-01 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
@@ -12455,11 +14036,11 @@
 
 2003-11-03 Martin Helmling <Martin.Helmling AT octo-soft.de>
 
-        * debugger/mcs51/cmd.c: allows filename starting with digit(+ some debug)
+	* debugger/mcs51/cmd.c: allows filename starting with digit(+ some debug)
 
 2003-11-02 Bernhard Held <bernhard AT bernhardheld.de>
 
-        * src/SDCCmain.c (linkEdit): "fixed" again bug #833605
+	* src/SDCCmain.c (linkEdit): "fixed" again bug #833605
 
 2003-11-01 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
 
@@ -12596,7 +14177,7 @@
 
 	Some hc08 related updates that I missed earlier
 	* sim/ucsim/stypes.h
-        * support/regression/ports/hc08/spec.mk
+	* support/regression/ports/hc08/spec.mk
 
 2003-10-15 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
 
@@ -12959,7 +14540,7 @@
 2003-08-31  Erik Petrich <epetrich AT ivorytower.norman.ok.us>
 
 	* src/SDCCpeeph.c (notVolatile, notVolatileVariable): handle IFX
-        and JUMPTABLE iCodes properly now (worked by accident before)
+	and JUMPTABLE iCodes properly now (worked by accident before)
 	* src/mcs51/gen.c (leftRightUseAcc),
 	* src/ds390/gen.c (leftRightUseAcc): handle IFX and JUMPTABLE
 	iCode properly now. Use getSize instead of nRegs since a & b
@@ -13399,13 +14980,13 @@
 
 2003-07-19  Frieder Ferlemann <Frieder.Ferlemann AT web.de>
 
-        * device/include/regc515c.h: fixed #758477
-        * device/lib/_gptrget.c: saving some cycles in generic pointer get
-        * device/lib/_gptrput.c: saved a few bytes
+	* device/include/regc515c.h: fixed #758477
+	* device/lib/_gptrget.c: saving some cycles in generic pointer get
+	* device/lib/_gptrput.c: saved a few bytes
 	* my tab spacing is 8, yours too?)
-        * device/lib/_ser.c: process RX bytes earlier than TX bytes
-        * device/lib/serial.c: process RX bytes earlier than TX bytes
-        * src/mcs51/gen.c(genGenPointerGet/Set): removed writing of type after postincrement
+	* device/lib/_ser.c: process RX bytes earlier than TX bytes
+	* device/lib/serial.c: process RX bytes earlier than TX bytes
+	* src/mcs51/gen.c(genGenPointerGet/Set): removed writing of type after postincrement
 
 2003-07-18  Erik Petrich <epetrich AT ivorytower.norman.ok.us>
 
@@ -13413,7 +14994,7 @@
 
 2003-07-17  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * link/z80/lklibr.c: fixed bug when there is a '.' in a library path.
+	* link/z80/lklibr.c: fixed bug when there is a '.' in a library path.
 
 2003-07-17  Bernhard Held <bernhard AT bernhardheld.de>
 
@@ -13446,25 +15027,25 @@
 
 2003-07-13  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * src/SDCCmain.c, src/SDCCglobl.h: added option --no-std-crt0
+	* src/SDCCmain.c, src/SDCCglobl.h: added option --no-std-crt0
 
 2003-07-12  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * sdcc.dsw, all.dsp, link/z80/linkgbz80.dsp, as/z80/as-gbz80.dsp:
-    added gbz80 build to MSVC project.
-    * src/SDCCmain.c, src/SDCCglue.c, src/z80/main.c, src/z80/z80.dsp,
-    link/z80/aslink.h, linkz80.dsp: cleaned up z80 and gbz80 asm files
-    from 8051 stuff and setup so it links using a .lnk file.
+	* sdcc.dsw, all.dsp, link/z80/linkgbz80.dsp, as/z80/as-gbz80.dsp:
+	added gbz80 build to MSVC project.
+	* src/SDCCmain.c, src/SDCCglue.c, src/z80/main.c, src/z80/z80.dsp,
+	link/z80/aslink.h, linkz80.dsp: cleaned up z80 and gbz80 asm files
+	from 8051 stuff and setup so it links using a .lnk file.
 
 2003-07-06  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * support/librarian/sdcclib.c: sdcc librarian.
-    * as/mcs51/aslink.h, as/mcs51/lklib.c: Support for libraries created
-    with sdcclib.
+	* support/librarian/sdcclib.c: sdcc librarian.
+	* as/mcs51/aslink.h, as/mcs51/lklib.c: Support for libraries created
+	with sdcclib.
 
 2003-07-03  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * as/mcs51/lkmain.c: properly handle extensions in function afile.
+	* as/mcs51/lkmain.c: properly handle extensions in function afile.
 
 2003-07-02  Borut Razem <borut.razem AT siol.net>
 
@@ -13477,7 +15058,7 @@
 
 2003-07-01 Kevin Vigor <kevin AT vigor.nu>
 
-        * DS800C400 fun, improved ROM interface and tinibios.
+	* DS800C400 fun, improved ROM interface and tinibios.
 
 2003-06-27 Kevin Vigor <kevin AT vigor.nu>
 
@@ -13580,7 +15161,7 @@
 2003-06-02  Frieder Ferlemann <Frieder.Ferlemann AT web.de>
 
 	* doc/sdccman.lyx: cvs revision keywords, passing pdf information in latex preamble,
-          additions to the "related tools/documentation" section
+	  additions to the "related tools/documentation" section
 
 2003-06-02  Bernhard Held <bernhard AT bernhardheld.de>
 
@@ -13634,10 +15215,10 @@
 2003-05-25  Frieder Ferlemann <Frieder.Ferlemann AT web.de>
 
 	* src/mcs51/peeph.def: added rules 244.x, 245.x. Although they pass
-          the regression tests I'm not brave enough to enable 245.b, 245.c
+	  the regression tests I'm not brave enough to enable 245.b, 245.c
 	* doc/sdccman.lyx: added latex preamble for hyperref package.
 	  Using pdflatex this will give you a hyperlinked pdf file with
-          bookmarks. (prepend '%' before /usepackage if this breaks something)
+	  bookmarks. (prepend '%' before /usepackage if this breaks something)
 
 2003-05-24  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
@@ -13713,8 +15294,8 @@
 	    generated
 	* src/pic16/glue.c: commented out some error producing lines
 	* src/pic16/main.c: __config directives are commented out to stop
-            gpasm complaining and test the linkage with gplink, _linkCmd and
-            _asmCmd changed to be more gplink and gpasm friendly
+	    gpasm complaining and test the linkage with gplink, _linkCmd and
+	    _asmCmd changed to be more gplink and gpasm friendly
 	* src/pic16/peeph.def: peep rule 3 is commented out, since it
 	    produced an error when parsed, peep rule 12 is added to utilize
 	    movff, but it is commented out since the pCode does not support
@@ -13727,11 +15308,11 @@
 2003-05-17  Karl Bongers(apply patches from Martin Helmling)
 
 	* debugger/mcs51/sdcdb.c,cmd.c,break.c and .h files.
-  Added feature to script commands from file.
+	Added feature to script commands from file.
 
 2003-05-14  Bernhard Held <bernhard AT bernhardheld.de>
 
-        * device/lib/_strtok.c: fixed bug #734355 by Lenny Story and Tim Woodall
+	* device/lib/_strtok.c: fixed bug #734355 by Lenny Story and Tim Woodall
 	* src/SDCCutil.c: include ctype.h for win32
 
 2003-05-13  Bernhard Held <bernhard AT bernhardheld.de>
@@ -13741,9 +15322,9 @@
 2003-05-12  Karl Bongers(apply development patches from Martin Helmling)
 
 	* debugger/mcs51/sdcdb.c,simi.c,cmd.c,break.c and .h files.
-  Fixed so you can set breakpoints prior to run, run does not stop
-  on entry now.  Add tbreak.  Other enhancements and fixes for use
-  with ddd.
+	Fixed so you can set breakpoints prior to run, run does not stop
+	on entry now.  Add tbreak.  Other enhancements and fixes for use
+	with ddd.
 
 2003-05-12  Borut Razem <borut.razem AT siol.net>
 
@@ -13775,8 +15356,8 @@
 2003-05-05  Karl Bongers(apply patches from Martin Helmling)
 
 	* debugger/mcs51/sdcdb.c,simi.c,cmd.c,symtab.c and .h files.
-  cache sfr, optimize next,step, fix off by one sourceline,
-  support ddd list function.
+	cache sfr, optimize next,step, fix off by one sourceline,
+	support ddd list function.
 	* sim/ucsim/cmd.src/newcmd.cc - small fix for sdcdb use.
 
 2003-05-04  Bernhard Held <bernhard AT bernhardheld.de>
@@ -13999,10 +15580,10 @@
 	* src/pic/* Applied the pointer-to-function patch from Steve Tell.
 	* src/pic/* Fixed several pointer bugs. (PIC port broke when the ruonly bit was
 	 set - this bit used to not be set...).
-        * src/pic/gen.c Fixed buf 609268 ==> x = (x+1) & 0xf; generated
-          bad code in PIC Port
-        * src/regression/and2.c added to test bug 609268
-        * src/regression/Makefile added and2.c to regression test
+	* src/pic/gen.c Fixed buf 609268 ==> x = (x+1) & 0xf; generated
+	  bad code in PIC Port
+	* src/regression/and2.c added to test bug 609268
+	* src/regression/Makefile added and2.c to regression test
 
 
 2003-04-08    <johan AT CP255758-A>
@@ -14131,10 +15712,10 @@
 2003-03-28  Borut Razem <borut.razem AT siol.net>
 
 	* src/SDCC.lex: Fix for bug #711240: dynamic buffer handling of C
-          literal strings in stringLiteral()
+	  literal strings in stringLiteral()
 	* support/Util/dbuf.c, support/Util/dbuf.h: added: dynamic buffer handling
 	* src/Makefile.bcc, src/Makefile.in, src/src.dsp: added support/Util/dbuf.c
-          to the project
+	  to the project
 
 2003-03-27  Paul Stoffregen <paul AT pjrc.com>
 
@@ -14266,7 +15847,7 @@
 
 2003-03-11  Bernhard Held <bernhard AT bernhardheld.de>
 
-        * src/SDCCloop.c (mergeRegions): an evil beast is dead
+	* src/SDCCloop.c (mergeRegions): an evil beast is dead
 	* src/SDCCmain.c (preProcess): minor cleanup: eliminate preOutName
 
 2003-03-10  Borut Razem <borut.razem AT siol.net>
@@ -14403,8 +15984,8 @@
 
 2003-02-18  Frieder Ferlemann <Frieder.Ferlemann AT web.de>
 
-        * src/SDCCpeeph.c: added peephole conditions testing for same arguments
-        * src/mcs51/peeph.def: added rules 238a-d which remove redundant moves
+	* src/SDCCpeeph.c: added peephole conditions testing for same arguments
+	* src/mcs51/peeph.def: added rules 238a-d which remove redundant moves
 
 2003-02-18    <johan AT balder>
 
@@ -14753,7 +16334,7 @@
 
 2003-01-06    <karl AT turbobit.com>
 	* sim/ucsim/cmd.src/command.cc: fixed so "break xram r 0x7654" works again in
-   regression tests.
+	regression tests.
 
 2003-01-06    <johan AT balder>
 
@@ -14768,7 +16349,7 @@
 	* src/SDCCval.c (getNelements): fixed the initialized array of structures
 
 2002-12-29  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
-        * as/mcs51/Makefile.bcc: fixed typo lkomf51.o -> lkaomf51.o
+	* as/mcs51/Makefile.bcc: fixed typo lkomf51.o -> lkaomf51.o
 
 2002-12-28  Bernhard Held <bernhard AT bernhardheld.de>
 	* src/mcs51/peeph.def: added rules 234 and 235 from Frieder Ferlemann <frieder.ferlemann AT web.de>
@@ -14778,21 +16359,21 @@
 	* src/mcs51/gen.c (aopGetUsesAcc): inserted missing "return FALSE"
 
 2002-12-27  Bernhard Held <bernhard AT bernhardheld.de>
-        * as/mcs51/Makefile.in: fixed typo lkomf51.o -> lkaomf51.o
+	* as/mcs51/Makefile.in: fixed typo lkomf51.o -> lkaomf51.o
 
 2002-12-26  Bernhard Held <bernhard AT bernhardheld.de>
 	* src/mcs51/main.c: removed {bindir}{sep} from aslink
 
 2002-12-10  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
-    * in /sdcc/as/mcs51/ changed these files in order to create an
-    aomf51 file: aslink.h, lkdta.c, lklex.c, lklibr.c, lklist.c,
-    lkmain.c.  Also added: lkmem.c and lkaomf51.c.  Changed the
-    following files to include the previous two files: aslink.dsp,
-    Makefile.aslink, Makefile.bcc, and Makefile.in.
+	* in /sdcc/as/mcs51/ changed these files in order to create an
+	aomf51 file: aslink.h, lkdta.c, lklex.c, lklibr.c, lklist.c,
+	lkmain.c.  Also added: lkmem.c and lkaomf51.c.  Changed the
+	following files to include the previous two files: aslink.dsp,
+	Makefile.aslink, Makefile.bcc, and Makefile.in.
 
-    * Changed /sdcc/src/SDCCmain.c so it creates files with extension
-    .adb instead of .cdb
+	* Changed /sdcc/src/SDCCmain.c so it creates files with extension
+	.adb instead of .cdb
 
 2002-11-09  Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
 
@@ -15558,11 +17139,11 @@
 
 	* sdcc/sim/ucsim/s51.src/uc390cl.h: Improvement for ds390 to run regression tests
 
-        * sdcc/sim/ucsim/s51.src/uc390.h: Improvement for ds390 to run regression tests
+	* sdcc/sim/ucsim/s51.src/uc390.h: Improvement for ds390 to run regression tests
 
-        * sdcc/sim/ucsim/s51.src/regs51.h: Improvement for ds390 to run regression tests
+	* sdcc/sim/ucsim/s51.src/regs51.h: Improvement for ds390 to run regression tests
 
-        * sdcc/sim/ucsim/s51.src/glob.cc: Improvement for ds390 to run regression tests
+	* sdcc/sim/ucsim/s51.src/glob.cc: Improvement for ds390 to run regression tests
 
 	* sdcc/support/regression/tests/bug-460010.c: Small change for ds390
 
@@ -16024,15 +17605,15 @@
 
 2001-08-30 Bernhard Held   <bernhard AT bernhardheld.de>
 
-  * sim/ucsim/configure:    little improvement of Cygwin-detection
-  * sim/ucsim/configure.in: little improvement of Cygwin-detection
-  * sim/ucsim/cmd.src/newcmdcl.h: include <sys/types.h> to define fd_set automated build
-  * support/regression/tests/bug-221100.c: small changes for mcs51
-  * support/regression/tests/bug-221168.c: small changes for mcs51
-  * support/regression/tests/bug-227710.c: small changes for mcs51
-  * support/regression/tests/staticinit.c: small changes for mcs51
-  * as/mcs51/aslink.h: accept everything as symbol name in rel-files, bug fix ID 452601
-  * as/mcs51/lklex.c:  accept everything as symbol name in rel-files, bug fix ID 452601
-  * as/mcs51/lksym.c:  accept everything as symbol name in rel-files, bug fix ID 452601
+	* sim/ucsim/configure:    little improvement of Cygwin-detection
+	* sim/ucsim/configure.in: little improvement of Cygwin-detection
+	* sim/ucsim/cmd.src/newcmdcl.h: include <sys/types.h> to define fd_set automated build
+	* support/regression/tests/bug-221100.c: small changes for mcs51
+	* support/regression/tests/bug-221168.c: small changes for mcs51
+	* support/regression/tests/bug-227710.c: small changes for mcs51
+	* support/regression/tests/staticinit.c: small changes for mcs51
+	* as/mcs51/aslink.h: accept everything as symbol name in rel-files, bug fix ID 452601
+	* as/mcs51/lklex.c:  accept everything as symbol name in rel-files, bug fix ID 452601
+	* as/mcs51/lksym.c:  accept everything as symbol name in rel-files, bug fix ID 452601
 
-$Revision: 5117 $
+$Revision: 5416 $

@@ -1,6 +1,6 @@
 SDCC - free open source, retargettable, optimizing ANSI-C compiler
 ------------------------------------------------------------------
-$Id: README.txt 5056 2008-02-27 19:18:19Z borutr $
+$Id: README.txt 5325 2009-01-04 08:18:33Z borutr $
 
 
 Welcome to SDCC, free open source, retargettable, optimizing ANSI C compiler
@@ -43,11 +43,11 @@ progress. Please check http://sdcc.sourceforge.net/snap.php for snapshots.
 
 Roadmap:
 COPYING         - GPL v2
-as/             - Assembler, derrived from asxxxx
+as/             - Assembler, derived from asxxxx
 debugger/
 device/         - Device libraries and examples
 doc/            - sdcc and target specific documentation
-link/           - Linker, also derrived from asxxxx
+link/           - Linker, also derived from asxxxx
 sim/            - Simulator (mcs51 only)
 src/            - Source to the C compiler and targets
 support/        - Libraries and apps that may not be provided by your system.
@@ -79,12 +79,12 @@ Authors and interested persons:
 SDCC includes code from:
 * Alan Baldwin      <baldwin AT shop-pdp.kent.edu>
    Initial version of ASXXXX and  ASLINK. 
-* John Hartman      <jhartman AT compuserve.com>
+* John Hartman      <noice AT noicedebugger.com>
    Porting ASXXXX and ASLINK for 8051.
 * Dmitry S. Obukhov <dso AT usa.net>
    malloc and serial I/O routines.
 * Pascal Felber
    Some of the Z80 related files are borrowed from the Gameboy
    Development Kit (GBDK).
-* The GCC developement team http://gcc.gnu.org/
+* The GCC development team http://gcc.gnu.org/
    The basis of sdcpp preprocessor

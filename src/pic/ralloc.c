@@ -24,11 +24,17 @@
   what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 
-#include "common.h"
-#include "ralloc.h"
 #include "device.h"
-#include "pcode.h"
 #include "gen.h"
+#include "ralloc.h"
+
+
+set *dynAllocRegs=NULL;
+set *dynStackRegs=NULL;
+set *dynProcessorRegs=NULL;
+set *dynDirectRegs=NULL;
+set *dynDirectBitRegs=NULL;
+set *dynInternalRegs=NULL;
 
 
 #define FENTRY2                 1 ? (void)0 : printf
@@ -45,9 +51,6 @@
 /* since the pack the registers depending strictly on the MCU      */
 /*-----------------------------------------------------------------*/
 
-extern void genpic14Code (iCode *);
-extern void pic14_assignConfigWordValue(int address, int value);
-
 /* Global data */
 static struct
 {
@@ -62,38 +65,23 @@ static struct
 }
 _G;
 
-/* Shared with gen.c */
-int pic14_ptrRegReq;            /* one byte pointer register required */
-
-
-set *dynAllocRegs=NULL;
-set *dynStackRegs=NULL;
-set *dynProcessorRegs=NULL;
-set *dynDirectRegs=NULL;
-set *dynDirectBitRegs=NULL;
-set *dynInternalRegs=NULL;
+static int pic14_ptrRegReq;            /* one byte pointer register required */
 
 static hTab  *dynDirectRegNames= NULL;
 // static hTab  *regHash = NULL;    /* a hash table containing ALL registers */
 
 static int dynrIdx = 0x1000;
 
-int pic14_nRegs = 128;   // = sizeof (regspic14) / sizeof (regs);
-
 int Gstack_base_addr=0; /* The starting address of registers that
                          * are used to pass and return parameters */
-int Gstack_size = 0;
+static int Gstack_size = 0;
 
-
-
-
-static void spillThis (symbol *);
 static int debug = 0;   // should be 0 when committed, creates .d files
 static FILE *debugF = NULL;
+
 /*-----------------------------------------------------------------*/
 /* debugLog - open a file for debugging information                */
 /*-----------------------------------------------------------------*/
-//static void debugLog(char *inst,char *fmt, ...)
 static void
 debugLog (char *fmt,...)
 {
@@ -148,7 +136,6 @@ pic14_debugLogClose (void)
                  debugF = NULL;
         }
 }
-#define AOP(op) op->aop
 
 static char *
 debugAopGet (char *str, operand * op)
@@ -316,7 +303,26 @@ static int regname2key(char const *name)
 
 }
 
-static regs *regWithIdx (set *dRegs, int idx, int fixed);
+/*-----------------------------------------------------------------*/
+/* regWithIdx - Search through a set of registers that matches idx */
+/*-----------------------------------------------------------------*/
+static regs *
+regWithIdx (set *dRegs, int idx, int fixed)
+{
+        regs *dReg;
+
+        for (dReg = setFirstItem(dRegs) ; dReg ;
+        dReg = setNextItem(dRegs)) {
+
+                if(idx == dReg->rIdx && (fixed == (int)dReg->isFixed)) {
+                        while (dReg->reg_alias) dReg = dReg->reg_alias;
+                        return dReg;
+                }
+        }
+
+        return NULL;
+}
+
 /*-----------------------------------------------------------------*/
 /* newReg - allocate and init memory for a new register            */
 /*-----------------------------------------------------------------*/
@@ -368,26 +374,6 @@ static regs* newReg(short type, PIC_OPTYPE pc_type, int rIdx, char *name, int si
         debugLog( "%s: Created register %s.\n", __FUNCTION__, dReg->name);
 
         return dReg;
-}
-
-/*-----------------------------------------------------------------*/
-/* regWithIdx - Search through a set of registers that matches idx */
-/*-----------------------------------------------------------------*/
-static regs *
-regWithIdx (set *dRegs, int idx, int fixed)
-{
-        regs *dReg;
-
-        for (dReg = setFirstItem(dRegs) ; dReg ;
-        dReg = setNextItem(dRegs)) {
-
-                if(idx == dReg->rIdx && (fixed == (int)dReg->isFixed)) {
-                        while (dReg->reg_alias) dReg = dReg->reg_alias;
-                        return dReg;
-                }
-        }
-
-        return NULL;
 }
 
 /*-----------------------------------------------------------------*/
@@ -574,12 +560,6 @@ dirregWithName (char *name)
         }
 
         return NULL; // name wasn't found in the hash table
-}
-
-int IS_CONFIG_ADDRESS(int address)
-{
-
-        return ((address == 0x2007) || (address == 0x2008));
 }
 
 /*-----------------------------------------------------------------*/
@@ -1042,22 +1022,7 @@ nfreeRegsType (int type)
         return nFreeRegs (type);
 }
 
-void writeSetUsedRegs(FILE *of, set *dRegs)
-{
-
-        regs *dReg;
-
-        for (dReg = setFirstItem(dRegs) ; dReg ;
-        dReg = setNextItem(dRegs)) {
-
-                if(dReg->wasUsed)
-                        fprintf (of, "\t%s\n",dReg->name);
-        }
-
-}
-extern void dump_map(void);
-
-void packBits(set *bregs)
+static void packBits(set *bregs)
 {
         set *regset;
         regs *breg;
@@ -1124,7 +1089,7 @@ void packBits(set *bregs)
 
 
 
-void bitEQUs(FILE *of, set *bregs)
+static void bitEQUs(FILE *of, set *bregs)
 {
         regs *breg,*bytereg;
         int bit_no=0;
@@ -1155,35 +1120,10 @@ void bitEQUs(FILE *of, set *bregs)
 
 }
 
-void aliasEQUs(FILE *of, set *fregs, int use_rIdx)
-{
-        regs *reg;
-
-
-        for (reg = setFirstItem(fregs) ; reg ;
-        reg = setNextItem(fregs)) {
-
-                //if(!reg->isEmitted && reg->wasUsed) {
-                if(reg->wasUsed) {
-                        if(use_rIdx)
-                                fprintf (of, "%s\tEQU\t0x%03x\n",
-                                reg->name,
-                                reg->rIdx);
-                        else
-                                fprintf (of, "%s\tEQU\t0x%03x\n",
-                                reg->name,
-                                reg->address);
-                }
-        }
-
-}
-
 void writeUsedRegs(FILE *of)
 {
 
         packBits(dynDirectBitRegs);
-
-        //dump_map();
 
         bitEQUs(of,dynDirectBitRegs);
 }
@@ -2498,100 +2438,6 @@ createRegMask (eBBlock ** ebbs, int count)
                 }
         }
 }
-#if 0
-/* This was the active version */
-/*-----------------------------------------------------------------*/
-/* rematStr - returns the rematerialized string for a remat var    */
-/*-----------------------------------------------------------------*/
-static symbol *
-rematStr (symbol * sym)
-{
-        char *s = buffer;
-        iCode *ic = sym->rematiCode;
-        symbol *psym = NULL;
-
-        debugLog ("%s\n", __FUNCTION__);
-
-        //printf ("%s\n", s);
-
-        /* if plus or minus print the right hand side */
-
-        if (ic->op == '+' || ic->op == '-') {
-
-                iCode *ric = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
-
-                sprintf (s, "(%s %c 0x%04x)",
-                        OP_SYMBOL (IC_LEFT (ric))->rname,
-                        ic->op,
-                        (int) operandLitValue (IC_RIGHT (ic)));
-
-
-                //fprintf(stderr, "ralloc.c:%d OOPS %s\n",__LINE__,s);
-
-                psym = newSymbol (OP_SYMBOL (IC_LEFT (ric))->rname, 1);
-                psym->offset = (int) operandLitValue (IC_RIGHT (ic));
-
-                return psym;
-        }
-
-        sprintf (s, "%s", OP_SYMBOL (IC_LEFT (ic))->rname);
-        psym = newSymbol (OP_SYMBOL (IC_LEFT (ic))->rname, 1);
-
-        //printf ("ralloc.c:%d %s\n", __LINE__,buffer);
-        return psym;
-}
-#endif
-
-#if 0
-/* deprecated version */
-/*-----------------------------------------------------------------*/
-/* rematStr - returns the rematerialized string for a remat var    */
-/*-----------------------------------------------------------------*/
-static char *
-rematStr (symbol * sym)
-{
-        char *s = buffer;
-        iCode *ic = sym->rematiCode;
-
-        debugLog ("%s\n", __FUNCTION__);
-        while (1)
-        {
-
-                printf ("%s\n", s);
-                /* if plus or minus print the right hand side */
-                /*
-                if (ic->op == '+' || ic->op == '-') {
-                sprintf(s,"0x%04x %c ",(int) operandLitValue(IC_RIGHT(ic)),
-                ic->op );
-                s += strlen(s);
-                ic = OP_SYMBOL(IC_LEFT(ic))->rematiCode;
-                continue ;
-                }
-                */
-                if (ic->op == '+' || ic->op == '-')
-                {
-                        iCode *ric = OP_SYMBOL (IC_LEFT (ic))->rematiCode;
-                        sprintf (s, "(%s %c 0x%04x)",
-                                OP_SYMBOL (IC_LEFT (ric))->rname,
-                                ic->op,
-                                (int) operandLitValue (IC_RIGHT (ic)));
-
-                        //s += strlen(s);
-                        //ic = OP_SYMBOL(IC_LEFT(ic))->rematiCode;
-                        //continue ;
-                        //fprintf(stderr, "ralloc.c:%d OOPS %s\n",__LINE__,s);
-                        return buffer;
-                }
-
-                /* we reached the end */
-                sprintf (s, "%s", OP_SYMBOL (IC_LEFT (ic))->rname);
-                break;
-        }
-
-        printf ("%s\n", buffer);
-        return buffer;
-}
-#endif
 
 /*-----------------------------------------------------------------*/
 /* regTypeNum - computes the type & number of registers required   */
@@ -2716,61 +2562,6 @@ regTypeNum ()
         }
 
 }
-DEFSETFUNC (markRegFree)
-{
-        ((regs *)item)->isFree = 1;
-
-        return 0;
-}
-
-DEFSETFUNC (deallocReg)
-{
-        fprintf(stderr,"deallocting register %s\n",((regs *)item)->name);
-        ((regs *)item)->isFree = 1;
-        ((regs *)item)->wasUsed = 0;
-
-        return 0;
-}
-/*-----------------------------------------------------------------*/
-/* freeAllRegs - mark all registers as free                        */
-/*-----------------------------------------------------------------*/
-void
-pic14_freeAllRegs ()
-{
-        //  int i;
-
-        debugLog ("%s\n", __FUNCTION__);
-
-        applyToSet(dynAllocRegs,markRegFree);
-        applyToSet(dynStackRegs,markRegFree);
-
-        /*
-        for (i = 0; i < pic14_nRegs; i++)
-        regspic14[i].isFree = 1;
-        */
-}
-
-/*-----------------------------------------------------------------*/
-/*-----------------------------------------------------------------*/
-void
-pic14_deallocateAllRegs ()
-{
-        //  int i;
-
-        debugLog ("%s\n", __FUNCTION__);
-
-        applyToSet(dynAllocRegs,deallocReg);
-
-        /*
-        for (i = 0; i < pic14_nRegs; i++) {
-                if(regspic14[i].pc_type == PO_GPR_TEMP) {
-                regspic14[i].isFree = 1;
-                regspic14[i].wasUsed = 0;
-                }
-        }
-        */
-}
-
 
 /*-----------------------------------------------------------------*/
 /* deallocStackSpil - this will set the stack pointer back         */
@@ -3609,7 +3400,7 @@ packForPush (iCode * ic, eBBlock * ebp)
         hTabDeleteItem (&iCodehTab, dic->key, dic, DELETE_ITEM, NULL);
 }
 
-void printSymType(char * str, sym_link *sl)
+static void printSymType(char * str, sym_link *sl)
 {
         if (debug) {
                 debugLog ("    %s Symbol type: ",str);
@@ -3623,7 +3414,7 @@ void printSymType(char * str, sym_link *sl)
 * the function checkSClass in src/SDCCsymt.c dinks with
 * the S_TYPE in ways the PIC port doesn't fully like...*/
 /*-----------------------------------------------------------------*/
-void isData(sym_link *sl)
+static void isData(sym_link *sl)
 {
         FILE *of = stderr;
 
@@ -4138,8 +3929,6 @@ pic14_assignRegisters (ebbIndex * ebbi)
         _G.slocNum = 0;
         setToNull ((void *) &_G.stackSpil);
         setToNull ((void *) &_G.spiltSet);
-        /* mark all registers as free */
-        //pic14_freeAllRegs ();
 
         debugLog ("leaving\n<><><><><><><><><><><><><><><><><>\n");
         pic14_debugLogClose ();

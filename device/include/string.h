@@ -58,5 +58,8 @@ extern void *memmove (void *, void *, size_t )  ;
 extern void __xdata * memcpyx(void __xdata *, void __xdata *, int) __naked;
 #endif
 
+#ifdef SDCC_z80
+#define memcpy(dst, src, n) __builtin_memcpy(dst, src, n)
+#endif
 
 #endif

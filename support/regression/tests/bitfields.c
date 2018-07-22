@@ -22,7 +22,6 @@ struct {
   long l17_15 : 15;
 } l_bf;
 
-
 struct {
   unsigned int b0 : 1;
   unsigned int b1 : 1;
@@ -387,3 +386,45 @@ testSignedBitfields(void)
   ASSERT(s_bf.s8_9 > 0);
 #endif  /* !SDCC_pic16 */
 }
+
+/* test case for enhancement request #2291335 : Unnamed bit-field initialization */
+
+struct s2291335_1 {
+  int a : 2;
+  char  : 2;
+  int b : 2;
+};
+
+struct s2291335_2 {
+  int a : 2;
+  char  : 0;
+  int b : 2;
+};
+
+struct s2291335_1 gs2291335_1 = {1, 2};
+struct s2291335_2 gs2291335_2 = {1, 2};
+
+void
+__test2291335(void)
+{
+  struct s2291335_1 ls2291335_1 = {1, 2};
+  struct s2291335_2 ls2291335_2 = {1, 2};
+
+  ASSERT(gs2291335_1.a == 1);
+  ASSERT(gs2291335_1.b == 2);
+  ASSERT(gs2291335_2.a == 1);
+  ASSERT(gs2291335_2.b == 2);
+
+  ASSERT(ls2291335_1.a == 1);
+  ASSERT(ls2291335_1.b == 2);
+  ASSERT(ls2291335_2.a == 1);
+  ASSERT(ls2291335_2.b == 2);
+}
+
+/* test case for bug #2366757: segfault when initializing structure with bitfield */
+
+struct
+{
+  char a : 1;
+  char b : 1;
+} s2366757 = {0};

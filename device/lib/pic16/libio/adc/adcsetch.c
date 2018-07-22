@@ -4,10 +4,6 @@
  *
  * written by Vangelis Rokas, 2004 <vrokas AT otenet.gr>
  *
- * Devices implemented:
- *	PIC18F[24][45][28]
- *
- *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public License
  * as published by the Free Software Foundation; either version 2
@@ -23,36 +19,23 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-/*
-** $Id: adcsetch.c 3714 2005-04-02 13:13:53Z vrokas $
-*/
-
 #include <pic18fregs.h>
-
 #include <adc.h>
 
 
-void adc_setchannel(unsigned char channel) __naked
+void adc_setchannel(unsigned char channel)
 {
-#if 0
-  ADCON0 &= ~(0x7 << 3);
-  ADCON0 |= channel << 3;
-#else
-  channel;
-  __asm
-    movlw       0xc7
-    andwf       _ADCON0, f
-    
-    movlw       0x01
-    movf        _PLUSW1, w
-    
-    rlcf        _WREG, w
-    rlcf        _WREG, w
-    rlcf        _WREG, w
-
-    iorwf       _ADCON0, f
-
-    return
-  __endasm;
-#endif    
+#if defined(__SDCC_ADC_STYLE242)
+  ADCON0 = (ADCON0 & ~(0x07 << 3)) | ((channel & 0x07) << 3);
+#elif defined(__SDCC_ADC_STYLE1220)
+  ADCON0 = (ADCON0 & ~(0x07 << 2)) | ((channel & 0x07) << 2);
+#elif defined(__SDCC_ADC_STYLE2220)
+  ADCON0 = (ADCON0 & ~(0x0f << 2)) | ((channel & 0x0f) << 2);
+#elif defined(__SDCC_ADC_STYLE65J50)
+  WDTCONbits.ADSHR = 0; /* access ADCON0/1 */
+  ADCON0 = (ADCON0 & ~(0x0f << 2)) | ((channel & 0x0f) << 2);
+#else /* unsupported ADC style */
+#error Unsupported ADC style.
+#endif
 }
+
