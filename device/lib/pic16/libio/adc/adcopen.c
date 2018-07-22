@@ -24,7 +24,7 @@
  */
 
 /*
-** $Id: adcopen.c,v 1.2 2005/03/31 16:25:02 vrokas Exp $
+** $Id: adcopen.c 4218 2006-06-11 21:40:26Z vrokas $
 */
 
 #include <pic18fregs.h>
@@ -54,7 +54,7 @@ void adc_open(unsigned char channel, unsigned char fosc, unsigned char pcfg, uns
   /* setup reference and pins */
   ADCON1 |= pcfg & 0x0f;
   
-  ADCON0 |= (config & ADC_FRM_RJUST);
+  ADCON1 |= (config & ADC_FRM_RJUST);
   
   if(config & ADC_INT_ON) {
     PIR1bits.ADIF = 0;

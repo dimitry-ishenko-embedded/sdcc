@@ -87,15 +87,15 @@ bool uselessDecl = TRUE;
 %token <yyint> MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token <yyint> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token <yyint> XOR_ASSIGN OR_ASSIGN
-%token TYPEDEF EXTERN STATIC AUTO REGISTER CODE EEPROM INTERRUPT SFR AT SBIT
-%token REENTRANT USING  XDATA DATA IDATA PDATA VAR_ARGS CRITICAL NONBANKED BANKED
-%token SHADOWREGS WPARAM
-%token CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID BIT
+%token TYPEDEF EXTERN STATIC AUTO REGISTER CODE EEPROM INTERRUPT SFR SFR16 SFR32
+%token AT SBIT REENTRANT USING  XDATA DATA IDATA PDATA VAR_ARGS CRITICAL
+%token NONBANKED BANKED SHADOWREGS WPARAM
+%token CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE FIXED16X16 CONST VOLATILE VOID BIT
 %token STRUCT UNION ENUM ELIPSIS RANGE FAR
 %token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 %token NAKED JAVANATIVE OVERLAY
 %token <yyinline> INLINEASM
-%token IFX ADDRESS_OF GET_VALUE_AT_ADDRESS SPIL UNSPIL GETHBIT
+%token IFX ADDRESS_OF GET_VALUE_AT_ADDRESS SPIL UNSPIL GETHBIT GETABIT GETBYTE GETWORD
 %token BITWISEAND UNARYMINUS IPUSH IPOP PCALL  ENDFUNCTION JUMPTABLE
 %token RRC RLC 
 %token CAST CALL PARAM NULLOP BLOCK LABEL RECEIVE SEND ARRAYINIT
@@ -160,7 +160,7 @@ external_definition
 				   	SPEC_EXTR($1->etype) = 1;
 				   }
 			       }
-                               addSymChain ($1);
+                               addSymChain (&$1);
                                allocVariables ($1) ;
 			       cleanUpLevel (SymbolTab,1);
                              }
@@ -186,9 +186,9 @@ function_attribute
    ;
 
 function_attributes
-   :  USING CONSTANT {
+   :  USING constant_expr {
                         $$ = newLink(SPECIFIER) ;
-			FUNC_REGBANK($$) = (int) floatFromVal($2);
+			FUNC_REGBANK($$) = (int) floatFromVal(constExprValue($2,TRUE));
                      }
    |  REENTRANT      {  $$ = newLink (SPECIFIER);
 			FUNC_ISREENT($$)=1;
@@ -334,40 +334,16 @@ shift_expr
 
 relational_expr
    : shift_expr
-   | relational_expr '<' shift_expr    { 
-	$$ = (port->lt_nge ? 
-	      newNode('!',newNode(GE_OP,$1,$3),NULL) :
-	      newNode('<', $1,$3));
-   }
-   | relational_expr '>' shift_expr    { 
-	   $$ = (port->gt_nle ? 
-		 newNode('!',newNode(LE_OP,$1,$3),NULL) :
-		 newNode('>',$1,$3));
-   }
-   | relational_expr LE_OP shift_expr  { 
-	   $$ = (port->le_ngt ? 
-		 newNode('!', newNode('>', $1 , $3 ), NULL) :
-		 newNode(LE_OP,$1,$3));
-   }
-   | relational_expr GE_OP shift_expr  { 
-	   $$ = (port->ge_nlt ? 
-		 newNode('!', newNode('<', $1 , $3 ), NULL) :
-		 newNode(GE_OP,$1,$3));
-   }
+   | relational_expr '<' shift_expr   { $$ = newNode('<',  $1,$3);}
+   | relational_expr '>' shift_expr   { $$ = newNode('>',  $1,$3);}
+   | relational_expr LE_OP shift_expr { $$ = newNode(LE_OP,$1,$3);}
+   | relational_expr GE_OP shift_expr { $$ = newNode(GE_OP,$1,$3);}
    ;
 
 equality_expr
    : relational_expr
-   | equality_expr EQ_OP relational_expr  { 
-    $$ = (port->eq_nne ? 
-	  newNode('!',newNode(NE_OP,$1,$3),NULL) : 
-	  newNode(EQ_OP,$1,$3));
-   }
-   | equality_expr NE_OP relational_expr { 
-       $$ = (port->ne_neq ? 
-	     newNode('!', newNode(EQ_OP,$1,$3), NULL) : 
-	     newNode(NE_OP,$1,$3));
-   }       
+   | equality_expr EQ_OP relational_expr { $$ = newNode(EQ_OP,$1,$3);}
+   | equality_expr NE_OP relational_expr { $$ = newNode(NE_OP,$1,$3);}
    ;
 
 and_expr
@@ -416,45 +392,37 @@ assignment_expr
 				     $$ = newNode($2,$1,$3);
 				     break;
 			     case MUL_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('*',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '*', $3);
 				     break;
 			     case DIV_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('/',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '/', $3);
 				     break;
 			     case MOD_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('%',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '%', $3);
 				     break;
 			     case ADD_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('+',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '+', $3);
 				     break;
 			     case SUB_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('-',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '-', $3);
 				     break;
 			     case LEFT_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode(LEFT_OP,removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, LEFT_OP, $3);
 				     break;
 			     case RIGHT_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode(RIGHT_OP,removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, RIGHT_OP, $3);
 				     break;
 			     case AND_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('&',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '&', $3);
 				     break;
 			     case XOR_ASSIGN:
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('^',removePreIncDecOps(copyAst($1)),$3));
+				     $$ = createRMW($1, '^', $3);
 				     break;
 			     case OR_ASSIGN:
-				     /* $$ = newNode('=',$1,newNode('|',removeIncDecOps(copyAst($1)),$3)); */
-				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('|',removePreIncDecOps(copyAst($1)),$3));
+/*				     $$ = newNode('=',$1,newNode('|',removeIncDecOps(copyAst($1)),$3)); */
+/*				     $$ = newNode('=',removePostIncDecOps(copyAst($1)),
+                                                      newNode('|',removePreIncDecOps(copyAst($1)),$3)); */
+				     $$ = createRMW($1, '|', $3);
 				     break;
 			     default :
 				     $$ = NULL;
@@ -578,8 +546,8 @@ storage_class_specifier
 
 Interrupt_storage
    : INTERRUPT { $$ = INTNO_UNSPEC ; }
-   | INTERRUPT CONSTANT
-        { int intno = (int) floatFromVal($2);
+   | INTERRUPT constant_expr
+        { int intno = (int) floatFromVal(constExprValue($2,TRUE));
           if ((intno >= 0) && (intno <= INTNO_MAX))
             $$ = intno;
           else
@@ -597,59 +565,64 @@ type_specifier
 	   /* add this to the storage class specifier  */
            SPEC_ABSA($1) = 1;   /* set the absolute addr flag */
            /* now get the abs addr from value */
-           SPEC_ADDR($1) = (int) floatFromVal(constExprValue($3,TRUE)) ;
+           SPEC_ADDR($1) = (unsigned) floatFromVal(constExprValue($3,TRUE)) ;
         }
    ;
 
 type_specifier2
-   : CHAR   {
-               $$=newLink(SPECIFIER);
-               SPEC_NOUN($$) = V_CHAR  ;
-	       ignoreTypedefType = 1;
-            }
-   | SHORT  {
-               $$=newLink(SPECIFIER);
-	       $$->select.s._short = 1 ;
-	       ignoreTypedefType = 1;
-            }
-   | INT    {
-               $$=newLink(SPECIFIER);
-               SPEC_NOUN($$) = V_INT   ;
-	       ignoreTypedefType = 1;
-            }
-   | LONG   {
-               $$=newLink(SPECIFIER);
-	       SPEC_LONG($$) = 1       ;
-	       ignoreTypedefType = 1;
-            }
-   | SIGNED {
-               $$=newLink(SPECIFIER);
-               $$->select.s._signed = 1;
-	       ignoreTypedefType = 1;
-            }
+   : CHAR      {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_CHAR  ;
+                  ignoreTypedefType = 1;
+               }
+   | SHORT     {
+                  $$=newLink(SPECIFIER);
+                  SPEC_SHORT($$) = 1 ;
+                  ignoreTypedefType = 1;
+               }
+   | INT       {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_INT   ;
+                  ignoreTypedefType = 1;
+               }
+   | LONG      {
+                  $$=newLink(SPECIFIER);
+                  SPEC_LONG($$) = 1       ;
+                  ignoreTypedefType = 1;
+               }
+   | SIGNED    {
+                  $$=newLink(SPECIFIER);
+                  $$->select.s.b_signed = 1;
+                  ignoreTypedefType = 1;
+               }
    | UNSIGNED  {
-               $$=newLink(SPECIFIER);
-               SPEC_USIGN($$) = 1      ;
-	       ignoreTypedefType = 1;
-            }
-   | VOID   {
-               $$=newLink(SPECIFIER);
-               SPEC_NOUN($$) = V_VOID  ;
-	       ignoreTypedefType = 1;
-            }
-   | CONST  {
-               $$=newLink(SPECIFIER);
-	       SPEC_CONST($$) = 1;
-            }
+                  $$=newLink(SPECIFIER);
+                  SPEC_USIGN($$) = 1      ;
+                  ignoreTypedefType = 1;
+               }
+   | VOID      {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_VOID  ;
+                  ignoreTypedefType = 1;
+               }
+   | CONST     {
+                  $$=newLink(SPECIFIER);
+                  SPEC_CONST($$) = 1;
+               }
    | VOLATILE  {
-               $$=newLink(SPECIFIER);
-	       SPEC_VOLATILE($$) = 1 ;
-            }
-   | FLOAT  {
-               $$=newLink(SPECIFIER);
-	       SPEC_NOUN($$) = V_FLOAT;
-	       ignoreTypedefType = 1;
-            }
+                  $$=newLink(SPECIFIER);
+                  SPEC_VOLATILE($$) = 1 ;
+               }
+   | FLOAT     {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_FLOAT;
+                  ignoreTypedefType = 1;
+               }
+   | FIXED16X16 {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_FIXED16X16;
+                  ignoreTypedefType = 1;
+               }
    | XDATA     {
                   $$ = newLink (SPECIFIER);
                   SPEC_SCLS($$) = S_XDATA  ;
@@ -658,7 +631,7 @@ type_specifier2
                   $$ = newLink (SPECIFIER) ;
                   SPEC_SCLS($$) = S_CODE ;                 
                }
-   | EEPROM      {
+   | EEPROM    {
                   $$ = newLink (SPECIFIER) ;
                   SPEC_SCLS($$) = S_EEPROM ;
                }
@@ -674,19 +647,19 @@ type_specifier2
                   $$ = newLink (SPECIFIER);
                   SPEC_SCLS($$) = S_PDATA  ;
                }
-   | BIT    {
-               $$=newLink(SPECIFIER);
-               SPEC_NOUN($$) = V_BIT   ;
-	       SPEC_SCLS($$) = S_BIT   ;
-	       SPEC_BLEN($$) = 1;
-	       SPEC_BSTR($$) = 0;
-	       ignoreTypedefType = 1;
-            }
+   | BIT       {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_BIT   ;
+                  SPEC_SCLS($$) = S_BIT   ;
+                  SPEC_BLEN($$) = 1;
+                  SPEC_BSTR($$) = 0;
+                  ignoreTypedefType = 1;
+               }
 
    | struct_or_union_specifier  {
                                    uselessDecl = FALSE;
                                    $$ = $1 ;
-	                           ignoreTypedefType = 1;
+                                   ignoreTypedefType = 1;
                                 }
    | enum_specifier     {                           
                            cenum = NULL ;
@@ -700,7 +673,7 @@ type_specifier2
             sym_link   *p  ;
             sym = findSym(TypedefTab,NULL,$1) ;
             $$ = p = copyLinkChain(sym->type);
-	    SPEC_TYPEDEF(getSpec(p)) = 0;
+            SPEC_TYPEDEF(getSpec(p)) = 0;
             ignoreTypedefType = 1;
          }
    | sfr_reg_bit
@@ -711,9 +684,9 @@ sfr_reg_bit
                $$ = newLink(SPECIFIER) ;
                SPEC_NOUN($$) = V_SBIT;
                SPEC_SCLS($$) = S_SBIT;
-	       SPEC_BLEN($$) = 1;
-	       SPEC_BSTR($$) = 0;
-	       ignoreTypedefType = 1;
+               SPEC_BLEN($$) = 1;
+               SPEC_BSTR($$) = 0;
+               ignoreTypedefType = 1;
             }
    |  sfr_attributes
    ;
@@ -725,7 +698,7 @@ sfr_attributes
                SPEC_NOUN($$)    = V_CHAR;
                SPEC_SCLS($$)    = S_SFR ;
                SPEC_USIGN($$)   = 1 ;
-	       ignoreTypedefType = 1;
+               ignoreTypedefType = 1;
             }
    | SFR BANKED {
                $$ = newLink(SPECIFIER) ;
@@ -733,7 +706,30 @@ sfr_attributes
                SPEC_NOUN($$)    = V_CHAR;
                SPEC_SCLS($$)    = S_SFR ;
                SPEC_USIGN($$)   = 1 ;
-	       ignoreTypedefType = 1;
+               ignoreTypedefType = 1;
+            }
+   ;
+
+sfr_attributes
+   : SFR16  {
+               $$ = newLink(SPECIFIER) ;
+               FUNC_REGBANK($$) = 0;
+               SPEC_NOUN($$)    = V_INT;
+               SPEC_SCLS($$)    = S_SFR;
+               SPEC_USIGN($$)   = 1 ;
+               ignoreTypedefType = 1;
+            }
+   ;
+
+sfr_attributes
+   : SFR32  {
+               $$ = newLink(SPECIFIER) ;
+               FUNC_REGBANK($$) = 0;
+               SPEC_NOUN($$)    = V_INT;
+               SPEC_SCLS($$)    = S_SFR;
+               SPEC_LONG($$)    = 1;
+               SPEC_USIGN($$)   = 1;
+               ignoreTypedefType = 1;
             }
    ;
 
@@ -881,9 +877,9 @@ struct_declarator_list
 struct_declarator
    : declarator 
    | ':' constant_expr  {
-                           int bitsize;
+                           unsigned int bitsize;
                            $$ = newSymbol (genSymName(NestLevel),NestLevel) ; 
-                           bitsize= (int) floatFromVal(constExprValue($2,TRUE));
+                           bitsize= (unsigned int) floatFromVal(constExprValue($2,TRUE));
                            if (bitsize > (port->s.int_size * 8)) {
                              bitsize = port->s.int_size * 8;
                              werror(E_BITFLD_SIZE, bitsize);
@@ -894,8 +890,8 @@ struct_declarator
                         }                        
    | declarator ':' constant_expr 
                         {
-                          int bitsize;
-                          bitsize= (int) floatFromVal(constExprValue($3,TRUE));
+                          unsigned int bitsize;
+                          bitsize= (unsigned int) floatFromVal(constExprValue($3,TRUE));
                           if (bitsize > (port->s.int_size * 8)) {
                             bitsize = port->s.int_size * 8;
                             werror(E_BITFLD_SIZE, bitsize);
@@ -983,7 +979,7 @@ enumerator
        SPEC_ENUM($1->etype) = 1;
        $$ = $1 ;
        // do this now, so we can use it for the next enums in the list
-       addSymChain($1);
+       addSymChain(&$1);
      }
    ;
 
@@ -1259,7 +1255,7 @@ parameter_declaration
 		  pointerTypes($2->type,$1);
                   addDecl ($2,0,$1);		  
 		  for (loop=$2;loop;loop->_isparm=1,loop=loop->next);
-		  addSymChain ($2);
+		  addSymChain (&$2);
 		  $$ = symbolVal($2);
 		  ignoreTypedefType = 0;
                }
@@ -1345,12 +1341,17 @@ abstract_declarator2
 	   
        FUNC_HASVARARGS(p) = IS_VARG($4);
        FUNC_ARGS(p) = reverseVal($4);
-	     
+
        /* nest level was incremented to take care of the parms  */
        NestLevel-- ;
        currBlockno--;
-       p->next = $1;
-       $$ = p;
+       if (!$1) {
+         /* ((void (code *) (void)) 0) () */
+         $1=newLink(DECLARATOR);
+         DCL_TYPE($1)=CPOINTER;
+         $$ = $1;
+       }
+       $1->next=p;
 
        // remove the symbol args (if any)
        cleanUpLevel(SymbolTab,NestLevel+1);
@@ -1439,10 +1440,10 @@ compound_statement
    : start_block end_block                    { $$ = createBlock(NULL,NULL); }
    | start_block statement_list end_block     { $$ = createBlock(NULL,$2) ;  }
    | start_block 
-          declaration_list                    { addSymChain($2); }
+          declaration_list                    { addSymChain(&$2); }
      end_block                                { $$ = createBlock($2,NULL) ;  }
    | start_block 
-          declaration_list                    {  addSymChain ($2); }
+          declaration_list                    {  addSymChain (&$2); }
           statement_list   
      end_block                                {$$ = createBlock($2,$4)   ;  }
    | error ';'			              { $$ = NULL ; }

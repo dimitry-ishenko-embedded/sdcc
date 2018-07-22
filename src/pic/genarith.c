@@ -200,6 +200,7 @@ bool genPlusIncr (iCode *ic)
 {
 	unsigned int icount ;
 	unsigned int size = pic14_getDataSize(IC_RESULT(ic));
+	FENTRY;
 	
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	DEBUGpic14_emitcode ("; ","result %s, left %s, right %s",
@@ -292,6 +293,7 @@ void pic14_outBitAcc(operand *result)
 {
 	symbol *tlbl = newiTempLabel(NULL);
 	/* if the result is a bit */
+	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	
 	if (AOP_TYPE(result) == AOP_CRY){
@@ -310,6 +312,7 @@ void pic14_outBitAcc(operand *result)
 /*-----------------------------------------------------------------*/
 void genPlusBits (iCode *ic)
 {
+	FENTRY;
 	
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	
@@ -325,7 +328,7 @@ void genPlusBits (iCode *ic)
 	*/
 	
 	/* If the result is stored in the accumulator (w) */
-	//if(strcmp(aopGet(AOP(IC_RESULT(ic)),0,FALSE,FALSE),"a") == 0 ) {
+	//if(strcmp(aopGet(AOP(IC_RESULT(ic)),0,FALSE,FALSE),"a") == 0 ) {}
 	switch(AOP_TYPE(IC_RESULT(ic))) {
 	case AOP_ACC:
 		emitpcode(POC_CLRW, NULL);
@@ -470,6 +473,7 @@ static void adjustArithmeticResult(iCode *ic)
 /*-----------------------------------------------------------------*/
 static void genAddLit2byte (operand *result, int offr, int lit)
 {
+	FENTRY;
 	
 	switch(lit & 0xff) {
 	case 0:
@@ -489,6 +493,7 @@ static void genAddLit2byte (operand *result, int offr, int lit)
 
 static void emitMOVWF(operand *reg, int offset)
 {
+	FENTRY;
 	if(!reg)
 		return;
 	
@@ -510,6 +515,7 @@ static void genAddLit (iCode *ic, int lit)
 	operand *result;
 	operand *left;
 	
+	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	
 	
@@ -517,6 +523,8 @@ static void genAddLit (iCode *ic, int lit)
 	result = IC_RESULT(ic);
 	same = pic14_sameRegs(AOP(left), AOP(result));
 	size = pic14_getDataSize(result);
+	if (size > pic14_getDataSize(left))
+		size = pic14_getDataSize(left);
 	
 	if(same) {
 		
@@ -825,6 +833,11 @@ static void genAddLit (iCode *ic, int lit)
 			}
 		}
 	}
+
+	size = pic14_getDataSize(result);
+	if (size > pic14_getDataSize(left))
+		size = pic14_getDataSize(left);
+	addSign(result, size, 0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -836,6 +849,7 @@ void genPlus (iCode *ic)
 	
 	/* special cases :- */
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
+	FENTRY;
 	
 	aopOp (IC_LEFT(ic),ic,FALSE);
 	aopOp (IC_RIGHT(ic),ic,FALSE);
@@ -1017,11 +1031,9 @@ void genPlus (iCode *ic)
 				else {
 					PIC_OPCODE poc = POC_ADDFW;
 					
-					if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-						(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-						(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE)))
+					if (op_isLitLike (IC_LEFT (ic)))
 						poc = POC_ADDLW;
-					emitpcode(poc, popGet(AOP(IC_LEFT(ic)),0));
+					emitpcode(poc, popGetAddr(AOP(IC_LEFT(ic)),0,0));
 					if ( AOP_TYPE(IC_RESULT(ic)) != AOP_ACC)
 						emitpcode(POC_MOVWF,popGet(AOP(IC_RESULT(ic)),0));
 				}
@@ -1034,14 +1046,13 @@ void genPlus (iCode *ic)
 		
 		if(size){
 			if (pic14_sameRegs(AOP(IC_RIGHT(ic)), AOP(IC_RESULT(ic)))) {
-				if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE))) {
+				if (op_isLitLike (IC_LEFT(ic)))
+				{
 					while(size--){
 						emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
 						emitSKPNC;
 						emitpcode(POC_INCFSZW, popGet(AOP(IC_RIGHT(ic)),offset));
-						emitpcode(POC_ADDLW,   popGet(AOP(IC_LEFT(ic)),offset));
+						emitpcode(POC_ADDLW,   popGetAddr(AOP(IC_LEFT(ic)),offset,0));
 						emitpcode(POC_MOVWF,   popGet(AOP(IC_RESULT(ic)),offset));
 						offset++;
 					}
@@ -1056,13 +1067,11 @@ void genPlus (iCode *ic)
 				}
 			} else {
 				PIC_OPCODE poc = POC_MOVFW;
-				if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE)))
+				if (op_isLitLike (IC_LEFT(ic)))
 					poc = POC_MOVLW;
 				while(size--){
 					if (!pic14_sameRegs(AOP(IC_LEFT(ic)), AOP(IC_RESULT(ic))) ) {
-						emitpcode(poc, popGet(AOP(IC_LEFT(ic)),offset));
+						emitpcode(poc, popGetAddr(AOP(IC_LEFT(ic)),offset,0));
 						emitpcode(POC_MOVWF, popGet(AOP(IC_RESULT(ic)),offset));
 					}
 					emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
@@ -1087,15 +1096,15 @@ void genPlus (iCode *ic)
 		if (AOP_SIZE(IC_LEFT(ic)) > AOP_SIZE(IC_RIGHT(ic))) { 
 			int leftsize = AOP_SIZE(IC_LEFT(ic)) - AOP_SIZE(IC_RIGHT(ic));
 			PIC_OPCODE poc = POC_MOVFW;
-			if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-				(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-				(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE)))
+			if (op_isLitLike (IC_LEFT(ic)))
 				poc = POC_MOVLW;
 			while(leftsize-- > 0) {
-				emitpcode(poc, popGet(AOP(IC_LEFT(ic)),offset));
-				emitpcode(POC_MOVWF, popGet(AOP(IC_RESULT(ic)),offset));
+				emitpcode(poc, popGetAddr(AOP(IC_LEFT(ic)),offset,0));
 				emitSKPNC;
-				emitpcode(POC_INCF, popGet(AOP(IC_RESULT(ic)),offset));
+				emitpcode(POC_ADDLW, popGetLit(0x01));
+				emitpcode(POC_MOVWF, popGet(AOP(IC_RESULT(ic)),offset));
+				//emitSKPNC;
+				//emitpcode(POC_INCF, popGet(AOP(IC_RESULT(ic)),offset)); /* INCF does not update Carry! */
 				offset++;
 				if (size)
 					size--;
@@ -1108,7 +1117,7 @@ void genPlus (iCode *ic)
 		}
 		
 		
-		if(sign) {
+		if(sign && offset > 0 && offset < AOP_SIZE(IC_RESULT(ic))) {
 		/* Now this is really horrid. Gotta check the sign of the addends and propogate
 			* to the result */
 			
@@ -1153,6 +1162,7 @@ bool genMinusDec (iCode *ic)
 {
 	unsigned int icount ;
 	unsigned int size = pic14_getDataSize(IC_RESULT(ic));
+	FENTRY;
 	
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	/* will try to generate an increment */
@@ -1258,6 +1268,7 @@ void addSign(operand *result, int offset, int sign)
 {
 	int size = (pic14_getDataSize(result) - offset);
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
+	FENTRY;
 	
 	if(size > 0){
 		if(sign && offset) {
@@ -1272,8 +1283,7 @@ void addSign(operand *result, int offset, int sign)
 				emitpcode(POC_BTFSC, newpCodeOpBit(aopGet(AOP(result),offset-1,FALSE,FALSE),7,0));
 				emitpcode(POC_MOVLW, popGetLit(0xff));
 				while(size--)
-					emitpcode(POC_MOVWF, popGet(AOP(result),size));
-				
+					emitpcode(POC_MOVWF, popGet(AOP(result),offset+size));
 			}
 		} else
 			while(size--)
@@ -1287,6 +1297,7 @@ void addSign(operand *result, int offset, int sign)
 void genMinusBits (iCode *ic)
 {
 	symbol *lbl = newiTempLabel(NULL);
+	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	if (AOP_TYPE(IC_RESULT(ic)) == AOP_CRY){
 		pic14_emitcode("mov","c,%s",AOP(IC_LEFT(ic))->aopu.aop_dir);
@@ -1314,6 +1325,7 @@ void genMinus (iCode *ic)
 	int size, offset = 0, same=0;
 	unsigned long lit = 0L;
 	
+	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	aopOp (IC_LEFT(ic),ic,FALSE);
 	aopOp (IC_RIGHT(ic),ic,FALSE);
@@ -1605,28 +1617,23 @@ void genMinus (iCode *ic)
 		if(size){
 			if (pic14_sameRegs(AOP(IC_RIGHT(ic)), AOP(IC_RESULT(ic)))) {
 				int lit = 0;
-				if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE))) {
+				if (op_isLitLike (IC_LEFT(ic)))
 					lit = 1;
-				}
 				while(size--){
 					emitpcode(POC_MOVFW,   popGet(AOP(IC_RIGHT(ic)),offset));
 					emitSKPC;
 					emitpcode(POC_INCFW, popGet(AOP(IC_RIGHT(ic)),offset));
-					emitpcode(lit?POC_SUBLW:POC_SUBFW,   popGet(AOP(IC_LEFT(ic)),offset));
+					emitpcode(lit?POC_SUBLW:POC_SUBFW,   popGetAddr(AOP(IC_LEFT(ic)),offset,0));
 					emitpcode(POC_MOVWF,   popGet(AOP(IC_RESULT(ic)),offset));
 					offset++;
 				}
 			} else {
 				PIC_OPCODE poc = POC_MOVFW;
-				if ((AOP_TYPE(IC_LEFT(ic)) == AOP_PCODE) && (
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_LITERAL) || 
-					(AOP(IC_LEFT(ic))->aopu.pcop->type == PO_IMMEDIATE)))
+				if (op_isLitLike (IC_LEFT(ic)))
 					poc = POC_MOVLW;
 				while(size--){
 					if (!pic14_sameRegs(AOP(IC_LEFT(ic)), AOP(IC_RESULT(ic))) ) {
-						emitpcode(POC_MOVFW,  popGet(AOP(IC_LEFT(ic)),offset));
+						emitpcode(poc,  popGetAddr(AOP(IC_LEFT(ic)),offset,0));
 						emitpcode(POC_MOVWF,  popGet(AOP(IC_RESULT(ic)),offset));
 					}
 					emitpcode(POC_MOVFW,  popGet(AOP(IC_RIGHT(ic)),offset));
@@ -1663,6 +1670,7 @@ void genUMult8XLit_16 (operand *left,
 	int same;
 	pCodeOp *temp;
 	
+	FENTRY;
 	if (AOP_TYPE(right) != AOP_LIT){
 		fprintf(stderr,"%s %d - right operand is not a literal\n",__FILE__,__LINE__);
 		exit(1);
@@ -1892,6 +1900,7 @@ void genUMult8X8_16 (operand *left,
 	int i;
 	int looped = 1;
 	
+	FENTRY;
 	if(!result_hi) {
 		result_hi = PCOR(popGet(AOP(result),1));
 	}
@@ -1985,6 +1994,7 @@ void genSMult8X8_16 (operand *left,
 					 pCodeOpReg *result_hi)
 {
 	
+	FENTRY;
 	if(!result_hi) {
 		result_hi = PCOR(popGet(AOP(result),1));
 	}
@@ -2011,6 +2021,7 @@ void genMult8X8_8 (operand *left,
 				   operand *result)
 {
 	pCodeOp *result_hi;
+	FENTRY;
 	if (result && result->aop && result->aop->type==2 && result->aop->size>=1) {
 		result->aop->aopu.aop_reg[0]->isFree = 0; /* Sometimes (ie part of last instruction in a blk) the result reg is pre marked as free, which mean on the next line popGetTempReg() will return this reg instead of allocating a new one. */
 	}

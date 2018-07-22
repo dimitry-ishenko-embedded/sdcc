@@ -2,11 +2,13 @@
  */
 #include <testfwk.h>
 
-#if defined __mcs51 || defined __ds390 || defined __xa51
-#define XDATA xdata
+#ifdef SDCC
+#ifdef SDCC_pic16
+#define ADDRESS 0x0070
 #else
-#define XDATA
-#endif
+#define ADDRESS 0xa000
+#endif  /* SDCC_pic16 */
+#endif  /* SDCC */
 
 void 
 func( unsigned char a )
@@ -19,7 +21,7 @@ testBadPromotion(void)
 {
 
 #ifdef SDCC
-  unsigned char c=*((unsigned XDATA char*)(0xa000));
+  unsigned char c=*((unsigned xdata char*)(ADDRESS));
 #else
   unsigned char loc_c;
   unsigned char c=*(unsigned char*)&loc_c;

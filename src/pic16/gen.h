@@ -156,7 +156,8 @@ extern unsigned pic16_fReturnSizePic;
 #define emitTOGC    pic16_emitpcode(POC_BTG,  pic16_popCopyGPR2Bit(PCOP(&pic16_pc_status),PIC_C_BIT))
 
 int pic16_getDataSize(operand *op);
-void pic16_emitpcode(PIC_OPCODE poc, pCodeOp *pcop);
+void pic16_emitpcode_real(PIC_OPCODE poc, pCodeOp *pcop);
+#define pic16_emitpcode(poc,pcop)	do { if (pic16_pcode_verbose) pic16_emitpcomment ("%s:%u(%s):", __FILE__, __LINE__, __FUNCTION__); pic16_emitpcode_real(poc,pcop); } while(0)
 void pic16_emitpLabel(int key);
 void pic16_emitcode (char *inst,char *fmt, ...);
 void DEBUGpic16_emitcode (char *inst,char *fmt, ...);
@@ -180,7 +181,7 @@ void pic16_genLeftShiftLiteral (operand *left, operand *right, operand *result, 
 pCodeOp *pic16_popGet2p(pCodeOp *src, pCodeOp *dst);
 void pic16_emitpcomment (char *fmt, ...);
 
-pCodeOp *pic16_popGetLabel(unsigned int key);
+pCodeOp *pic16_popGetLabel(int key);
 pCodeOp *pic16_popCopyReg(pCodeOpReg *pc);
 pCodeOp *pic16_popCopyGPR2Bit(pCodeOp *pc, int bitval);
 pCodeOp *pic16_popGetLit(int lit);
@@ -203,6 +204,7 @@ const char *pic16_pCodeOpType(  pCodeOp *pcop);
 int pic16_my_powof2 (unsigned long num);
 
 void pic16_mov2w (asmop *aop, int offset);
+void pic16_mov2f(asmop *dst, asmop *src, int offset);
 
 void dumpiCode(iCode *lic);
 

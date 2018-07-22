@@ -23,7 +23,7 @@
    what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 /*
-** $Id: lrst.c,v 1.1 2004/10/20 14:02:12 vrokas Exp $
+** $Id: lrst.c 3835 2005-08-07 20:09:11Z tecodev $
 */
 
 /* FSR0 points to first register to store, WREG holds the register count
@@ -33,14 +33,14 @@ extern POSTDEC1;
 extern POSTINC0;
 extern WREG;
 
-void _lr_store(void) _naked
+void _lr_store(void) __naked
 {
-  _asm
+  __asm
 loop:
     movff	_POSTINC0, _POSTDEC1
     decfsz	_WREG, f
     bra		loop
     
     return
-  _endasm;
+  __endasm;
 }

@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  *
- * $Id: ubusy.c,v 1.2 2005/04/02 13:13:52 vrokas Exp $
+ * $Id: ubusy.c 3714 2005-04-02 13:13:53Z vrokas $
  */
 
 

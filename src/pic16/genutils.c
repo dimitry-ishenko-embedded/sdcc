@@ -155,6 +155,8 @@ void pic16_genCpl (iCode *ic)
     } 
 
     size = AOP_SIZE(IC_RESULT(ic));
+    if (size >= AOP_SIZE(IC_LEFT(ic))) size = AOP_SIZE(IC_LEFT(ic));
+    
     while (size--) {
       if (pic16_sameRegs(AOP(IC_LEFT(ic)), AOP(IC_RESULT(ic))) ) {
         pic16_emitpcode(POC_COMF,  pic16_popGet(AOP(IC_LEFT(ic)), offset));
@@ -164,6 +166,34 @@ void pic16_genCpl (iCode *ic)
       }
       offset++;
     }
+
+    /* handle implicit upcast */
+    size = AOP_SIZE(IC_RESULT(ic));
+    if (offset < size)
+    {
+      if (SPEC_USIGN(operandType(IC_LEFT(ic)))) {
+	while (offset < size) {
+	  pic16_emitpcode(POC_SETF, pic16_popGet(AOP(IC_RESULT(ic)), offset));
+	  offset++;
+	} // while
+      } else {
+	if ((offset + 1) == size) {
+	  /* just one byte to fix */
+	  pic16_emitpcode(POC_SETF, pic16_popGet(AOP(IC_RESULT(ic)), offset));
+	  pic16_emitpcode(POC_BTFSC, pic16_newpCodeOpBit(pic16_aopGet(AOP(IC_RESULT(ic)),offset-1,FALSE,FALSE),7,0, PO_GPR_REGISTER));
+	  pic16_emitpcode(POC_CLRF, pic16_popGet(AOP(IC_RESULT(ic)), offset));
+	} else {
+	  /* two or more byte to adjust */
+	  pic16_emitpcode(POC_SETF, pic16_popCopyReg( &pic16_pc_wreg ));
+	  pic16_emitpcode(POC_BTFSC, pic16_newpCodeOpBit(pic16_aopGet(AOP(IC_RESULT(ic)),offset-1,FALSE,FALSE),7,0, PO_GPR_REGISTER));
+	  pic16_emitpcode(POC_CLRF, pic16_popCopyReg( &pic16_pc_wreg ));
+	  while (offset < size) {
+	    pic16_emitpcode(POC_MOVWF, pic16_popGet(AOP(IC_RESULT(ic)), offset));
+	    offset++;
+	  } // while
+	} // if
+      }
+    } // if
 
 release:
     /* release the aops */
@@ -417,6 +447,25 @@ void pic16_DumpOp(char *prefix, operand *op)
 	}
 
 }
+
+void pic16_DumpOpX(FILE *fp, char *prefix, operand *op)
+{
+  if(!op)return;
+    
+  fprintf(fp, "%s [", prefix);
+  fprintf(fp, "%s", IS_SYMOP(op)?"S":" ");
+  fprintf(fp, "%s", IS_VALOP(op)?"V":" ");
+  fprintf(fp, "%s", IS_TYPOP(op)?"T":" ");
+  fprintf(fp, "] ");
+
+  fprintf(fp, "isaddr:%d,", op->isaddr);
+  fprintf(fp, "isvolatile:%d,", op->isvolatile);
+  fprintf(fp, "isGlobal:%d,", op->isGlobal);
+  fprintf(fp, "isPtr:%d,", op->isPtr);
+  fprintf(fp, "isParm:%d,", op->isParm);
+  fprintf(fp, "isLit:%d\n", op->isLiteral);
+}  
+    
 
 void _debugf(char *f, int l, char *frm, ...)
 {

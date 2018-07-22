@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  *
- * $Id: usartd.c,v 1.1 2005/03/31 16:25:03 vrokas Exp $
+ * $Id: usartd.c 3711 2005-03-31 16:25:17Z vrokas $
  */
 
 #include <pic18fregs.h>

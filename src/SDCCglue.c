@@ -91,7 +91,7 @@ DEFSETFUNC (rmTmpFiles)
   int ret;
 
   if (name) {
-      ret = unlink (name);
+      ret = remove (name);
       assert(ret == 0);
       Safe_free (name);
   }
@@ -360,22 +360,23 @@ emitRegularMap (memmap * map, bool addPublics, bool arFlag)
                    sym->rname, equ,
                    SPEC_ADDR (sym->etype));
         }
-      else {
-        int size = getAllocSize (sym->type);
-        if (size==0) {
-          werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE, sym->name);
+      else
+        {
+          int size = getSize (sym->type) + sym->flexArrayLength;
+          if (size==0) {
+            werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE, sym->name);
+          }
+          /* allocate space */
+          if (options.debug) {
+            fprintf (map->oFile, "==.\n");
+          }
+          if (IS_STATIC (sym->etype) || sym->level)
+            tfprintf (map->oFile, "!slabeldef\n", sym->rname);
+          else
+            tfprintf (map->oFile, "!labeldef\n", sym->rname);           
+          tfprintf (map->oFile, "\t!ds\n", 
+                    (unsigned int)  size & 0xffff);
         }
-        /* allocate space */
-        if (options.debug) {
-          fprintf (map->oFile, "==.\n");
-        }
-        if (IS_STATIC (sym->etype))
-          tfprintf (map->oFile, "!slabeldef\n", sym->rname);
-        else
-          tfprintf (map->oFile, "!labeldef\n", sym->rname);           
-        tfprintf (map->oFile, "\t!ds\n", 
-                  (unsigned int)  size & 0xffff);
-      }
     }
 }
 
@@ -430,7 +431,7 @@ initPointer (initList * ilist, sym_link *toType)
   if (IS_AST_OP (expr) && expr->opval.op == '&') {
     /* address of symbol */
     if (IS_AST_SYM_VALUE (expr->left)) {
-      val = copyValue (AST_VALUE (expr->left));
+      val = AST_VALUE (expr->left);
       val->type = newLink (DECLARATOR);
       if (SPEC_SCLS (expr->left->etype) == S_CODE) {
         DCL_TYPE (val->type) = CPOINTER;
@@ -773,11 +774,16 @@ printIvalStruct (symbol * sym, sym_link * type,
     iloop = ilist->init.deep;
   }
 
-  for (; sflds; sflds = sflds->next, iloop = (iloop ? iloop->next : NULL)) {
-    if (IS_BITFIELD(sflds->type)) {
-      printIvalBitFields(&sflds,&iloop,oFile);
-    } else {
-      printIval (sym, sflds->type, iloop, oFile);
+  if (SPEC_STRUCT (type)->type == UNION) {
+    printIval (sym, sflds->type, iloop, oFile);
+    iloop = iloop->next;
+  } else {
+    for (; sflds; sflds = sflds->next, iloop = (iloop ? iloop->next : NULL)) {
+      if (IS_BITFIELD(sflds->type)) {
+        printIvalBitFields(&sflds,&iloop,oFile);
+      } else {
+        printIval (sym, sflds->type, iloop, oFile);
+      }
     }
   }
   if (iloop) {
@@ -790,21 +796,29 @@ printIvalStruct (symbol * sym, sym_link * type,
 /* printIvalChar - generates initital value for character array    */
 /*-----------------------------------------------------------------*/
 int 
-printIvalChar (sym_link * type, initList * ilist, FILE * oFile, char *s)
+printIvalChar (symbol * sym, sym_link * type, initList * ilist, FILE * oFile, char *s)
 {
   value *val;
+  unsigned int size = DCL_ELEM (type);
 
   if (!s)
     {
-
       val = list2val (ilist);
       /* if the value is a character string  */
       if (IS_ARRAY (val->type) && IS_CHAR (val->etype))
         {
-          if (!DCL_ELEM (type))
-            DCL_ELEM (type) = strlen (SPEC_CVAL (val->etype).v_char) + 1;
+          if (!size)
+            {
+              /* we have not been given a size, but now we know it */
+              size = strlen (SPEC_CVAL (val->etype).v_char) + 1;
+              /* but first check, if it's a flexible array */
+              if (sym && IS_STRUCT (sym->type))
+                sym->flexArrayLength = size;
+              else
+                DCL_ELEM (type) = size;
+            }
 
-          printChar (oFile, SPEC_CVAL (val->etype).v_char, DCL_ELEM (type));
+          printChar (oFile, SPEC_CVAL (val->etype).v_char, size);
 
           return 1;
         }
@@ -823,6 +837,7 @@ void
 printIvalArray (symbol * sym, sym_link * type, initList * ilist,
                 FILE * oFile)
 {
+  value *val;
   initList *iloop;
   unsigned int size = 0;
 
@@ -831,11 +846,16 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist,
     /* array of characters can be init  */
     /* by a string                      */
     if (IS_CHAR (type->next)) {
-      if (!IS_LITERAL(list2val(ilist)->etype)) {
+      val = list2val(ilist);
+      if (!val) {
+        werrorfl (ilist->filename, ilist->lineno, E_INIT_STRUCT, sym->name);
+        return;
+      }
+      if (!IS_LITERAL(val->etype)) {
         werrorfl (ilist->filename, ilist->lineno, E_CONST_EXPECTED);
         return;
       }
-      if (printIvalChar (type,
+      if (printIvalChar (sym, type,
                          (ilist->type == INIT_DEEP ? ilist->init.deep : ilist),
                          oFile, SPEC_CVAL (sym->etype).v_char))
         return;
@@ -864,8 +884,12 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist,
       }
     }
   } else {
-    // we have not been given a size, but we now know it
-    DCL_ELEM (type) = size;
+    /* we have not been given a size, but now we know it */
+    /* but first check, if it's a flexible array */
+    if (IS_STRUCT (sym->type))
+      sym->flexArrayLength = size * getSize (type->next);
+    else
+      DCL_ELEM (type) = size;
   }
 
   return;
@@ -1229,8 +1253,7 @@ emitStaticSeg (memmap * map, FILE * out)
       if (IS_EXTERN (sym->etype))
         continue;
 
-      /* if it is not static add it to the public
-         table */
+      /* if it is not static add it to the public table */
       if (!IS_STATIC (sym->etype))
         {
           addSetHead (&publics, sym);
@@ -1330,6 +1353,9 @@ emitMaps (void)
   emitRegularMap (home, TRUE, FALSE);
   emitRegularMap (code, TRUE, FALSE);
 
+  if (options.const_seg) {
+    tfprintf (code->oFile, "\t!area\n", options.const_seg);
+  }
   emitStaticSeg (statsg, code->oFile);
   if (port->genXINIT) {
     tfprintf (code->oFile, "\t!area\n", xinit->sname);
@@ -1375,7 +1401,7 @@ createInterruptVect (FILE * vFile)
       return;
     }
 
-  tfprintf (vFile, "\t!areacode\n", CODE_NAME);
+  tfprintf (vFile, "\t!areacode\n", HOME_NAME);
   fprintf (vFile, "__interrupt_vect:\n");
 
 
@@ -1559,7 +1585,7 @@ spacesToUnderscores (char *dest, const char *src, size_t len)
 
   --len;
   for (p = dest, i = 0; *src != '\0' && i < len; ++src, ++i) {
-    *p++ = isspace(*src) ? '_' : *src;
+    *p++ = isspace((unsigned char)*src) ? '_' : *src;
   }
   *p = '\0';
 
@@ -1691,7 +1717,7 @@ glue (void)
     {
       /* copy the sbit segment */
       fprintf (asmFile, "%s", iComments2);
-      fprintf (asmFile, "; special function bits \n");
+      fprintf (asmFile, "; special function bits\n");
       fprintf (asmFile, "%s", iComments2);
       copyFile (asmFile, sfrbit->oFile);
   
@@ -1699,16 +1725,32 @@ glue (void)
       if(RegBankUsed[0]||RegBankUsed[1]||RegBankUsed[2]||RegBankUsed[3])
       {
          fprintf (asmFile, "%s", iComments2);
-         fprintf (asmFile, "; overlayable register banks \n");
+         fprintf (asmFile, "; overlayable register banks\n");
          fprintf (asmFile, "%s", iComments2);
          if(RegBankUsed[0])
-            fprintf (asmFile, "\t.area REG_BANK_0\t(REL,OVR,DATA)\n\t.ds 8\n");
+           fprintf (asmFile, "\t.area REG_BANK_0\t(REL,OVR,DATA)\n\t.ds 8\n");
          if(RegBankUsed[1]||options.parms_in_bank1)
-            fprintf (asmFile, "\t.area REG_BANK_1\t(REL,OVR,DATA)\n\t.ds 8\n");
+           fprintf (asmFile, "\t.area REG_BANK_1\t(REL,OVR,DATA)\n\t.ds 8\n");
          if(RegBankUsed[2])
-            fprintf (asmFile, "\t.area REG_BANK_2\t(REL,OVR,DATA)\n\t.ds 8\n");
+           fprintf (asmFile, "\t.area REG_BANK_2\t(REL,OVR,DATA)\n\t.ds 8\n");
          if(RegBankUsed[3])
-            fprintf (asmFile, "\t.area REG_BANK_3\t(REL,OVR,DATA)\n\t.ds 8\n");
+           fprintf (asmFile, "\t.area REG_BANK_3\t(REL,OVR,DATA)\n\t.ds 8\n");
+      }
+      if(BitBankUsed)
+      {
+         fprintf (asmFile, "%s", iComments2);
+         fprintf (asmFile, "; overlayable bit register bank\n");
+         fprintf (asmFile, "%s", iComments2);
+         fprintf (asmFile, "\t.area BIT_BANK\t(REL,OVR,DATA)\n");
+         fprintf (asmFile, "bits:\n\t.ds 1\n");
+         fprintf (asmFile, "\tb0 = bits[0]\n");
+         fprintf (asmFile, "\tb1 = bits[1]\n");
+         fprintf (asmFile, "\tb2 = bits[2]\n");
+         fprintf (asmFile, "\tb3 = bits[3]\n");
+         fprintf (asmFile, "\tb4 = bits[4]\n");
+         fprintf (asmFile, "\tb5 = bits[5]\n");
+         fprintf (asmFile, "\tb6 = bits[6]\n");
+         fprintf (asmFile, "\tb7 = bits[7]\n");
       }
     }
 
@@ -1813,7 +1855,7 @@ glue (void)
    * the post_static_name area will immediately follow the static_name
    * area.
    */
-  tfprintf (asmFile, "\t!area\n", port->mem.code_name);
+  tfprintf (asmFile, "\t!area\n", port->mem.home_name);
   tfprintf (asmFile, "\t!area\n", port->mem.static_name);       /* MOF */
   tfprintf (asmFile, "\t!area\n", port->mem.post_static_name);
   tfprintf (asmFile, "\t!area\n", port->mem.static_name);
@@ -1881,15 +1923,9 @@ glue (void)
   tfprintf (asmFile, "\t!areahome\n", HOME_NAME);
   copyFile (asmFile, home->oFile);
 
-  /* copy over code */
-  fprintf (asmFile, "%s", iComments2);
-  fprintf (asmFile, "; code\n");
-  fprintf (asmFile, "%s", iComments2);
-  tfprintf (asmFile, "\t!areacode\n", CODE_NAME);
   if (mainf && IFFUNC_HASBODY(mainf->type))
     {
-
-      /* entry point @ start of CSEG */
+      /* entry point @ start of HOME */
       fprintf (asmFile, "__sdcc_program_startup:\n");
 
       /* put in jump or call to main */
@@ -1905,6 +1941,11 @@ glue (void)
           fprintf (asmFile, "\tsjmp .\n");
         }
     }
+  /* copy over code */
+  fprintf (asmFile, "%s", iComments2);
+  fprintf (asmFile, "; code\n");
+  fprintf (asmFile, "%s", iComments2);
+  tfprintf (asmFile, "\t!areacode\n", options.code_seg);
   copyFile (asmFile, code->oFile);
 
   if (port->genAssemblerEnd) {

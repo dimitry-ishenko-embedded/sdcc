@@ -1,24 +1,28 @@
-lNOTES file for SDCC pic16 port
-$Id: NOTES,v 1.9 2005/03/31 16:25:04 vrokas Exp $
+NOTES file for SDCC pic16 port
+$Id: NOTES 4121 2006-04-24 20:29:10Z bernhardheld $
 
 Current pic16 port status is: Development
 
 Some things may change without notification between port updates. The latest
-CVS snapshot is guarenteed to compile without problems, but does not
+SVN snapshot is guarenteed to compile without problems, but does not
 guarantee backwards compatibility.
 
 For any questions please ask the current port
 developers.
 
 Current developer:
-Vangelis Rokas	<vrokas AT users.sourceforge.net>
 Raphael Neider	<rneider AT web.de>
 
 Other people to contact:
+Vangelis Rokas	<vrokas AT users.sourceforge.net>
 Scott Dattalo	<scott AT dattalo.com>
 
 ======================================================================
 ======================================================================
+2006-Mar-14 Vangelis Rokas
+1. Added enviroment variable 'PIC16_PACKED_BITFIELDS' which agressively
+packs bitfields in structures
+
 2005-Mar-23 Vangelis Rokas
 1. I have added some optimizations that are controlled via enviroment
 variables to allow checking. Later these will be either enabled globally

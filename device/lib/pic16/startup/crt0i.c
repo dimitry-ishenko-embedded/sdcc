@@ -25,7 +25,7 @@
  * You are forbidden to forbid anyone else to use, share and improve
  * what you give them.   Help stamp out software-hoarding!  
  *
- * $Id: crt0i.c,v 1.8 2005/04/02 13:13:52 vrokas Exp $
+ * $Id: crt0i.c 3714 2005-04-02 13:13:53Z vrokas $
  */
 
 extern stack;

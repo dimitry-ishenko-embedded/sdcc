@@ -25,7 +25,7 @@
    what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 /*
-** $Id: gptrget1.c,v 1.5 2005/04/02 13:13:52 vrokas Exp $
+** $Id: gptrget1.c 3714 2005-04-02 13:13:53Z vrokas $
 */
 
 /* the return value is expected to be in WREG, therefore we choose return

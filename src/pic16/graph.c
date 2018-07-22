@@ -2,7 +2,7 @@
 
   graph.c - implementation of general graphs
   
-   Written By -  Raphael Neider rneider@web.de (2005)
+   Written By -  Raphael Neider <rneider AT web.de> (2005)
 
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -19,7 +19,7 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-/* $Id: graph.c,v 1.1 2005/01/19 16:47:19 tecodev Exp $ */
+/* $Id: graph.c 4148 2006-05-01 20:47:12Z tecodev $ */
 
 #include "graph.h"
 

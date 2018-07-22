@@ -1,5 +1,4 @@
-#define __16F873
-#include "p16f873.h"
+#include "gpsim_assert.h"
 //
 // compare5.c
 // regression testing program for comparing longs
@@ -7,11 +6,8 @@
 
 #define  COMPARE_OUT_OF_RANGE 1
 
-unsigned char success = 0;
 unsigned char failures = 0;
-unsigned char dummy = 0;
 
-bit bit0 = 0;
 int int0 = 0;
 int int1 = 0;
 char char0 = 0;
@@ -22,11 +18,10 @@ unsigned long ulong0 = 0;
 unsigned long ulong1 = 0;
 
 void
-done ()
+done()
 {
-
-  dummy++;
-
+  ASSERT(MANGLE(failures) == 0);
+  PASSED();
 }
 
 // compare to 0
@@ -430,6 +425,5 @@ main (void)
   long1=-1000;
   c_long2neglit();
 
-  success = failures;
   done ();
 }

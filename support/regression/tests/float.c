@@ -21,12 +21,15 @@
   #define REVDIV 1
 #endif
 
-#ifdef __mcs51
-#define STORAGE xdata
-#define XDATA xdata
+#ifdef SDCC_mcs51
+#  define STORAGE xdata
+#  define XDATA xdata
+#elif SDCC_pic16
+#  define STORAGE code
+#  define XDATA
 #else
-#define STORAGE
-#define XDATA
+#  define STORAGE
+#  define XDATA
 #endif
 
 XDATA volatile float left, right, result;

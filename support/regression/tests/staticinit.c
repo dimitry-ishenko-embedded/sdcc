@@ -3,6 +3,7 @@
 
     type: char, int, long
 */
+
 #include <testfwk.h>
 
 static {type} smallDense[] = {
@@ -20,7 +21,7 @@ testSmallDense(void)
     ASSERT(smallDense[5] == 6);
 }
 
-#ifdef __mcs51
+#ifdef SDCC_mcs51
 idata at 0xa0	/* leave space for the stack */
 #endif
 static {type} smallSparse[] = {
@@ -41,7 +42,7 @@ testSmallSparse(void)
     ASSERT(smallSparse[8] == 1);
 }
 
-#ifdef __mcs51
+#ifdef SDCC_mcs51
 idata at 0xd0
 #endif
 static {type} smallSparseZero[] = {
@@ -69,8 +70,10 @@ testSmallSparseZero(void)
     ASSERT(smallSparseZeroTail[0] == 1);
 }
 
-#ifdef __mcs51
+#ifdef SDCC_mcs51
 xdata
+#elif SDCC_pic16
+code
 #endif
 static {type} largeMixed[] = {
     1, 2, 3, 4, 5, 6, 7,	/* 0-6 */

@@ -35,13 +35,6 @@
 #include <string.h>
 
 
-#ifdef WORDS_BIGENDIAN
-  #define _ENDIAN(x)  (3-x)
-#else
-  #define _ENDIAN(x)  (x)
-#endif
-
-#define BYTE_IN_LONG(x,b) ((x>>(8*_ENDIAN(b)))&0xff)
 
 extern symbol *interrupts[256];
 void pic16_printIval (symbol * sym, sym_link * type, initList * ilist, char ptype, void *p);
@@ -62,6 +55,7 @@ extern int initsfpnt;
 extern unsigned long pFile_isize;
 
 extern unsigned long pic16_countInstructions();
+set *pic16_localFunctions = NULL;
 set *rel_idataSymSet=NULL;
 set *fix_idataSymSet=NULL;
 
@@ -86,7 +80,7 @@ extern void pic16_pCodeConstString(char *name, char *value);
 /*-----------------------------------------------------------------*/
 /* aopLiteral - string from a literal value                        */
 /*-----------------------------------------------------------------*/
-int pic16aopLiteral (value *val, int offset)
+unsigned int pic16aopLiteral (value *val, int offset)
 {
   union {
     float f;
@@ -95,9 +89,15 @@ int pic16aopLiteral (value *val, int offset)
 
   /* if it is a float then it gets tricky */
   /* otherwise it is fairly simple */
-  if (!IS_FLOAT(val->type)) {
+  if (!(IS_FLOAT(val->type) || IS_FIXED(val->type))) {
     unsigned long v = (unsigned long) floatFromVal(val);
 
+    return ( (v >> (offset * 8)) & 0xff);
+  }
+
+  if(IS_FIXED16X16(val->type)) {
+    unsigned long v = (unsigned long)fixed16x16FromDouble( floatFromVal( val ) );
+    
     return ( (v >> (offset * 8)) & 0xff);
   }
 
@@ -428,7 +428,7 @@ value *pic16_initPointer (initList * ilist, sym_link *toType)
   if (IS_AST_OP (expr) && expr->opval.op == '&') {
     /* address of symbol */
     if (IS_AST_SYM_VALUE (expr->left)) {
-      val = copyValue (AST_VALUE (expr->left));
+      val = AST_VALUE (expr->left);
       val->type = newLink (DECLARATOR);
       if(SPEC_SCLS (expr->left->etype) == S_CODE) {
         DCL_TYPE (val->type) = CPOINTER;
@@ -538,7 +538,7 @@ void _pic16_printPointerType (const char *name, char ptype, void *p)
 void pic16_printPointerType (const char *name, char ptype, void *p)
 {
   _pic16_printPointerType (name, ptype, p);
-  pic16_flushDB(ptype, p);
+  //pic16_flushDB(ptype, p); /* breaks char* const arr[] = {&c, &c, &c}; */
 }
 
 /*-----------------------------------------------------------------*/
@@ -554,6 +554,7 @@ void pic16_printGPointerType (const char *iname, const unsigned int itype,
     switch( itype ) {
       case FPOINTER:
       case CPOINTER:
+      case GPOINTER:
       case FUNCTION:
         {
           sprintf(buf, "UPPER(%s)", iname);
@@ -569,7 +570,7 @@ void pic16_printGPointerType (const char *iname, const unsigned int itype,
         assert( 0 );
     }
 
-    pic16_flushDB(ptype, p);
+    //pic16_flushDB(ptype, p); /* might break char* const arr[] = {...}; */
 }
 
 
@@ -637,7 +638,7 @@ static int
 pic16_printIvalChar (symbol *sym, sym_link * type, initList * ilist, char *s, char ptype, void *p)
 {
   value *val;
-  int remain, len;
+  int remain, len, ilen;
 
   if(!p)
     return 0;
@@ -648,10 +649,14 @@ pic16_printIvalChar (symbol *sym, sym_link * type, initList * ilist, char *s, ch
 
   if(!s) {
     val = list2val (ilist);
+
     /* if the value is a character string  */
     if(IS_ARRAY (val->type) && IS_CHAR (val->etype)) {
+      /* length of initializer string (might contain \0, so do not use strlen) */
+      ilen = DCL_ELEM(val->type);
+
       if(!DCL_ELEM (type))
-        DCL_ELEM (type) = strlen (SPEC_CVAL (val->etype).v_char) + 1;
+        DCL_ELEM (type) = ilen;
 
       /* len is 0 if declartion equals initializer,
        * >0 if declaration greater than initializer
@@ -660,23 +665,20 @@ pic16_printIvalChar (symbol *sym, sym_link * type, initList * ilist, char *s, ch
        * if <0 then emit only the length of declaration elements
        * and warn user
        */
-      len = DCL_ELEM (type) - (strlen (SPEC_CVAL (val->etype).v_char)+1);
+      len = DCL_ELEM (type) - ilen;
 
-//      fprintf(stderr, "%s:%d len = %i DCL_ELEM(type) = %i SPEC_CVAL-len = %i\n", __FILE__, __LINE__,
-//        len, DCL_ELEM(type), strlen(SPEC_CVAL(val->etype).v_char));
+//      fprintf(stderr, "%s:%d ilen = %i len = %i DCL_ELEM(type) = %i SPEC_CVAL-len = %i\n", __FILE__, __LINE__,
+//        ilen, len, DCL_ELEM(type), strlen(SPEC_CVAL(val->etype).v_char));
 
-      remain=0;
       if(len >= 0) {
-        for(remain=0; remain<strlen(SPEC_CVAL(val->etype).v_char)+1; remain++)
+        /* emit initializer */
+        for(remain=0; remain<ilen; remain++)
           pic16_emitDB(SPEC_CVAL(val->etype).v_char[ remain ], ptype, p);
 
-        if(len>0) {
-          len -= remain;
+	  /* fill array with 0x00 */
           while(len--) {
             pic16_emitDB(0x00, ptype, p);
           }
-        }
-
       } else {
         werror (W_EXCESS_INITIALIZERS, "array of chars", sym->name, sym->lineDef);
 
@@ -801,6 +803,7 @@ void pic16_printIvalBitFields(symbol **sym, initList **ilist, char ptype, void *
     i <<= SPEC_BSTR (lsym->etype);
     ival |= i;
     if (! ( lsym->next &&
+          (lilist && lilist->next) &&
           (IS_BITFIELD(lsym->next->type)) &&
           (SPEC_BSTR(lsym->next->etype)))) break;
     lsym = lsym->next;
@@ -809,19 +812,19 @@ void pic16_printIvalBitFields(symbol **sym, initList **ilist, char ptype, void *
   switch (size) {
   case 1:
 	pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
-        break;
+	break;
 
   case 2:
 	pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
 	pic16_emitDB(BYTE_IN_LONG(ival, 1), ptype, p);
-        break;
+    break;
 
   case 4: /* EEP: why is this db and not dw? */
 	pic16_emitDB(BYTE_IN_LONG(ival, 0), ptype, p);
 	pic16_emitDB(BYTE_IN_LONG(ival, 1), ptype, p);
 	pic16_emitDB(BYTE_IN_LONG(ival, 2), ptype, p);
 	pic16_emitDB(BYTE_IN_LONG(ival, 3), ptype, p);
-        break;
+    break;
   default:
 	/* VR - only 1,2,4 size long can be handled???? Why? */
   	fprintf(stderr, "%s:%d: unhandled case. Contact author.\n", __FILE__, __LINE__);
@@ -857,7 +860,7 @@ void pic16_printIvalStruct (symbol * sym, sym_link * type,
     iloop = ilist->init.deep;
   }
 
-  for (; sflds; sflds = sflds->next, iloop = (iloop ? iloop->next : NULL)) {
+  for (; (sflds && iloop); sflds = sflds->next, iloop = (iloop ? iloop->next : NULL)) {
 //    fprintf(stderr, "%s:%d sflds: %p\tiloop = %p\n", __FILE__, __LINE__, sflds, iloop);
     if (IS_BITFIELD(sflds->type)) {
       pic16_printIvalBitFields(&sflds, &iloop, ptype, p);
@@ -869,6 +872,55 @@ void pic16_printIvalStruct (symbol * sym, sym_link * type,
     werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "struct", sym->name);
   }
   return;
+}
+
+/*-----------------------------------------------------------------*/
+/* printIvalUnion - generates initial value for unions             */
+/*-----------------------------------------------------------------*/
+void pic16_printIvalUnion (symbol * sym, sym_link * type,
+                 initList * ilist, char ptype, void *p)
+{
+  //symbol *sflds;
+  initList *iloop = NULL;
+  int i, size;
+
+
+#if DEBUG_PRINTIVAL
+  fprintf(stderr, "%s\n",__FUNCTION__);
+#endif
+
+  iloop = ilist;
+  i = 0;
+  while (iloop)
+  {
+    i++;
+    iloop = iloop->next;
+  } // while
+
+  size = -1;
+  if (type) size = SPEC_STRUCT(type)->size;
+
+  if (i == 1 && size >= 0 && size <= sizeof(long))
+  {
+    unsigned long val = (unsigned long)floatFromVal(list2val(ilist));
+    while (size--)
+    {
+      pic16_emitDB(val, ptype, p);
+      val >>= 8;
+    } // while
+    return;
+  } // if
+
+  fprintf( stderr, "INCOMPLETE SUPPORT FOR INITIALIZED union---FALLING BACK TO struct\n" );
+  fprintf( stderr, "This is a bug. Please file a bug-report with your source attached.\n" );
+  pic16_printIvalStruct( sym, type, ilist, ptype, p );
+}
+
+static int
+pic16_isUnion( symbol *sym, sym_link *type )
+{
+  if (type && SPEC_STRUCT(type)->type == UNION) return 1;
+  return 0;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1119,8 +1171,14 @@ void pic16_printIval (symbol * sym, sym_link * type, initList * ilist, char ptyp
   /* if structure then */
   if (IS_STRUCT (type))
     {
-//      fprintf(stderr,"%s struct\n",__FUNCTION__);
-      pic16_printIvalStruct (sym, type, ilist, ptype, p);
+      if (pic16_isUnion(sym, type))
+        {
+          //fprintf(stderr,"%s union\n",__FUNCTION__);
+          pic16_printIvalUnion (sym, type, ilist, ptype, p);
+	} else {
+          //fprintf(stderr,"%s struct\n",__FUNCTION__);
+          pic16_printIvalStruct (sym, type, ilist, ptype, p);
+        }
       return;
     }
 
@@ -1243,7 +1301,7 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
         }
 
 	/* if it is "extern" then do nothing */
-	if (IS_EXTERN (sym->etype) && !SPEC_ABSA(sym->etype)) {
+	if (IS_EXTERN (sym->etype)/* && !SPEC_ABSA(sym->etype)*/) {
 		checkAddSym(&externs, sym);
 	  continue;
 	}
@@ -1292,7 +1350,7 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
 	      
 	      pic16_addpCode2pBlock(pb,pcf);
 	      pic16_addpCode2pBlock(pb,pic16_newpCodeLabel(sym->rname,-1));
-//	      fprintf(stderr, "%s:%d [1] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
+	      //fprintf(stderr, "%s:%d [1] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
 	      pic16_printIval(sym, sym->type, sym->ival, 'p', (void *)pb);
               pic16_flushDB('p', (void *)pb);
 
@@ -1315,6 +1373,7 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
 
 		pic16_pCodeConstString(sym->rname , SPEC_CVAL (sym->etype).v_char);
 	      } else {
+	        fprintf (stderr, "%s:%u(%s): do not know how to intialize symbol %s\n", __FILE__, __LINE__, __FUNCTION__, sym->rname);
 	      	assert(0);
 	      }
 	    }
@@ -1342,10 +1401,9 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__,
 	      	
 	      	didcode++;
 	      }
-                            
-//	      fprintf(stderr, "%s:%d [2] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
 
 	      pic16_addpCode2pBlock(pb,pic16_newpCodeLabel(sym->rname,-1));
+	      //fprintf(stderr, "%s:%d [2] generating init for label: %s\n", __FILE__, __LINE__, sym->rname);
 	      pic16_printIval(sym, sym->type, sym->ival, 'p', (void *)pb);
               pic16_flushDB('p', (void *)pb);
 	      noAlloc--;
@@ -1379,7 +1437,7 @@ void pic16_emitConfigRegs(FILE *of)
 {
   int i;
 
-	for(i=0;i<pic16->cwInfo.confAddrEnd-pic16->cwInfo.confAddrStart;i++)
+	for(i=0;i<=(pic16->cwInfo.confAddrEnd-pic16->cwInfo.confAddrStart);i++)
 		if(pic16->cwInfo.crInfo[i].emit)	//mask != -1)
 			fprintf (of, "\t__config 0x%x, 0x%hhx\n",
 				pic16->cwInfo.confAddrStart+i,
@@ -1390,7 +1448,7 @@ void pic16_emitIDRegs(FILE *of)
 {
   int i;
 
-	for(i=0;i<pic16->idInfo.idAddrEnd-pic16->idInfo.idAddrStart;i++)
+	for(i=0;i<=(pic16->idInfo.idAddrEnd-pic16->idInfo.idAddrStart);i++)
 		if(pic16->idInfo.irInfo[i].emit)
 			fprintf (of, "\t__idlocs 0x%06x, 0x%hhx\n",
 				pic16->idInfo.idAddrStart+i,
@@ -1452,14 +1510,52 @@ pic16initialComments (FILE * afile)
 {
 	initialComments (afile);
 	fprintf (afile, "; PIC16 port for the Microchip 16-bit core micros\n");
+	if(xinst)
+	  fprintf (afile, "; * Extended Instruction Set\n");
+	  
 	if(pic16_mplab_comp)
-		fprintf(afile, "; MPLAB/MPASM/MPASMWIN/MPLINK compatibility mode enabled\n");
+		fprintf(afile, "; * MPLAB/MPASM/MPASMWIN/MPLINK compatibility mode enabled\n");
 	fprintf (afile, iComments2);
 
 	if(options.debug) {
-		fprintf (afile, "\n\t.ident \"SDCC version %s #%s [pic16 port]\"\n",
-				SDCC_VERSION_STR, getBuildNumber() );
+		fprintf (afile, "\n\t.ident \"SDCC version %s #%s [pic16 port]%s\"\n",
+				SDCC_VERSION_STR, getBuildNumber(), (!xinst?"":" {extended}") );
 	}
+}
+
+int
+pic16_stringInSet(const char *str, set **world, int autoAdd)
+{
+  char *s;
+
+  if (!str) return 1;
+  assert(world);
+
+  for (s = setFirstItem(*world); s; s = setNextItem(*world))
+  {
+    /* found in set */
+    if (0 == strcmp(s, str)) return 1;
+  }
+
+  /* not found */
+  if (autoAdd) addSet(world, Safe_strdup(str));
+  return 0;
+}
+
+static int
+pic16_emitSymbolIfNew(FILE *file, const char *fmt, const char *sym, int checkLocals)
+{
+  static set *emitted = NULL;
+
+  if (!pic16_stringInSet(sym, &emitted, 1)) {
+    /* sym was not in emittedSymbols */
+    if (!checkLocals || !pic16_stringInSet(sym, &pic16_localFunctions, 0)) {
+      /* sym is not a locally defined function---avoid bug #1443651 */
+      fprintf( file, fmt, sym );
+      return 0;
+    }
+  }
+  return 1;
 }
 
 /*-----------------------------------------------------------------*/
@@ -1477,7 +1573,7 @@ pic16printPublics (FILE *afile)
 	for(sym = setFirstItem (publics); sym; sym = setNextItem (publics))
 	  /* sanity check */
 	  if(!IS_STATIC(sym->etype))
-		fprintf(afile, "\tglobal %s\n", sym->rname);
+	  	pic16_emitSymbolIfNew(afile, "\tglobal %s\n", sym->rname, 0);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1497,10 +1593,10 @@ pic16_printExterns(FILE *afile)
 	fprintf(afile, "%s", iComments2);
 	
 	for(sym = setFirstItem(externs); sym; sym = setNextItem(externs))
-		fprintf(afile, "\textern %s\n", sym->rname);
+		pic16_emitSymbolIfNew(afile, "\textern %s\n", sym->rname, 1);
 
 	for(sym = setFirstItem(pic16_builtin_functions); sym; sym = setNextItem(pic16_builtin_functions))
-		fprintf(afile, "\textern _%s\n", sym->name);
+		pic16_emitSymbolIfNew(afile, "\textern _%s\n", sym->name, 1);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1591,17 +1687,20 @@ pic16emitOverlay (FILE * afile)
 
 void emitStatistics(FILE *asmFile)
 {
-  unsigned long isize, udsize;
+  unsigned long isize, udsize, ramsize;
   statistics.isize = pic16_countInstructions();
   isize = (statistics.isize >= 0) ? statistics.isize : 0;
   udsize = (statistics.udsize >= 0) ? statistics.udsize : 0;
+  ramsize = pic16 ? pic16->RAMsize : 0x200;
+  ramsize -= 256; /* ignore access bank and SFRs */
+  if (ramsize == 0) ramsize = 64; /* prevent division by zero (below) */
 	
   fprintf (asmFile, "\n\n; Statistics:\n");
-  fprintf (asmFile, "; code size:\t%5ld (0x%04lx) bytes (%3.2f%%)\n;           \t%5ld (0x%04lx) words\n",
-    isize, isize, (isize*100.0)/(128 << 10),
+  fprintf (asmFile, "; code size:\t%5ld (0x%04lx) bytes (%5.2f%%)\n;           \t%5ld (0x%04lx) words\n",
+    isize, isize, (isize*100.0)/(128UL << 10),
     isize>>1, isize>>1);
-  fprintf (asmFile, "; udata size:\t%5ld (0x%04lx) bytes (%3.2f%%)\n",
-    udsize, udsize, (udsize*100.0) / ((pic16 ? pic16->RAMsize : 0x200) -256));
+  fprintf (asmFile, "; udata size:\t%5ld (0x%04lx) bytes (%5.2f%%)\n",
+    udsize, udsize, (udsize*100.0) / (1.0 * ramsize));
   fprintf (asmFile, "; access size:\t%5ld (0x%04lx) bytes\n",
     statistics.intsize, statistics.intsize);
 
@@ -1746,12 +1845,12 @@ pic16glue ()
       pic16_OptimizeJumps();
     }
 
-    /* print the extern variables to this module */
-    pic16_printExterns(asmFile);
-	
     /* print the global variables in this module */
     pic16printPublics (asmFile);
 
+    /* print the extern variables to this module */
+    pic16_printExterns(asmFile);
+	
     pic16_writeUsedRegs(asmFile);
 
 #if 0

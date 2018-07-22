@@ -74,7 +74,7 @@ typedef struct
 
 int numlinenum=0;
 _linenum * linenum=NULL;
-
+#if 0
 typedef struct
 {
 	char * name;
@@ -102,7 +102,7 @@ _UsageType UsageType[]=
 	{"BSEG",		4},
 	{"",			5} /*A typeless number?*/
 };
-
+#endif
 char * UsageTypeName[]={"CODE", "XDATA", "DATA", "IDATA", "BIT", "NUMBER"};
 int AddNumber;
 unsigned char * ihxBuff=NULL;
@@ -869,12 +869,12 @@ void CollectInfoFromCDB(void)
 	fclose(CDBin);
 }
 
-int hex2dec (char hex_digit)
+int hex2dec (unsigned char hex_digit)
 {
-   int j;
-   j=toupper(hex_digit)-'0';
-   if (j>9) j -= 7;
-   return j;
+   if (isdigit(hex_digit))
+      return hex_digit-'0';
+   else
+      return toupper(hex_digit)-'A'+10;
 }
 
 unsigned char GetByte(char * buffer)

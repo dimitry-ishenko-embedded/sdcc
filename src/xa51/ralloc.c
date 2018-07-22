@@ -127,7 +127,7 @@ regs *xa51_regWithMask (unsigned long mask) {
 /* checkRegsMask - check the consistancy of the regMask redundancy */
 /*-----------------------------------------------------------------*/
 
-void checkRegMask(char *f) { // for debugging purposes only
+void checkRegMask(const char *f) { // for debugging purposes only
   int i;
   unsigned long regMask=0;
   
@@ -199,8 +199,8 @@ static void freeReg (regs * reg, bool silent) {
 /* allocReg - allocates register of given size (byte, word, dword) */
 /*            and type (ptr, gpr, cnd)                             */
 /*-----------------------------------------------------------------*/
-static bool allocReg (short size, short type, symbol *sym, 
-		      short offset, bool silent) {
+static bool allocReg (unsigned int size, int type, symbol *sym, 
+		      int offset, bool silent) {
   int i;
   
   checkRegMask(__FUNCTION__);

@@ -276,7 +276,7 @@ static int cvt_extract_destination(parsedPattern *pp)
 
     // just check first letter for now
 
-    if(toupper(*pp->pct[0].tok.s) == 'F')
+    if(toupper((unsigned char)*pp->pct[0].tok.s) == 'F')
       return 1;
 
   } else if (pp->pct[0].tt == PCT_NUMBER) {
@@ -307,14 +307,14 @@ static pCodeOp *cvt_extract_status(char *reg, char *bit)
 
   if(len == 1) {
     // check C,Z
-    if(toupper(*bit) == 'C')
+    if(toupper((unsigned char)*bit) == 'C')
       return PCOP(pic16_popCopyGPR2Bit(&pic16_pc_status,PIC_C_BIT));
-    if(toupper(*bit) == 'Z')
+    if(toupper((unsigned char)*bit) == 'Z')
       return PCOP(pic16_popCopyGPR2Bit(&pic16_pc_status,PIC_Z_BIT));
   }
 
   // Check DC
-  if(len ==2 && toupper(bit[0]) == 'D' && toupper(bit[1]) == 'C')
+  if(len ==2 && toupper((unsigned char)bit[0]) == 'D' && toupper((unsigned char)bit[1]) == 'C')
     return PCOP(pic16_popCopyGPR2Bit(&pic16_pc_status,PIC_DC_BIT));
 
   return NULL;
@@ -962,15 +962,15 @@ static void tokenizeLineNode(char *ln)
 //	fprintf(stderr, "%s:%d: processing %s\n", __FILE__, __LINE__, ln); 
 
   while(*ln) {
-    if(isspace(*ln)) {
+    if(isspace((unsigned char)*ln)) {
       // add a SPACE token and eat the extra spaces.
       tokArr[tokIdx++].tt = PCT_SPACE;
-      while (isspace (*ln))
+      while (isspace ((unsigned char)*ln))
 	ln++;
       continue;
     }
 
-    if(isdigit(*ln)) {
+    if(isdigit((unsigned char)*ln)) {
 
       tokArr[tokIdx].tt = PCT_NUMBER;
       tokArr[tokIdx++].tok.n = strtol(ln, &ln, 0);
@@ -1003,11 +1003,11 @@ static void tokenizeLineNode(char *ln)
 
 
     default:				// hack to allow : goto $
-      if(isalpha(*ln) || (*ln == '_')  || (!parsing_peeps && (*ln == '$'))) {
+      if(isalpha((unsigned char)*ln) || (*ln == '_')  || (!parsing_peeps && (*ln == '$'))) {
 	char buffer[50];
 	int i=0;
 
-	while( (isalpha(*ln)  ||  isdigit(*ln) || (*ln == '_') || (*ln == '$')) && i<49)
+	while( (isalpha((unsigned char)*ln) || isdigit((unsigned char)*ln) || (*ln == '_') || (*ln == '$')) && i<49)
 	  buffer[i++] = *ln++;
 
 	ln--;
@@ -1965,7 +1965,7 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 
 	  /* now check whether the second operand matches */
 	  /* assert that optimizations do not touch operations that work on SFRs or INDF registers */
-	  if(PCOW2(PCI(pcd)->pcop) && (PCOR2(PCI(pcd)->pcop)->pcop2->type == PO_WILD) && (!(PCOR2(PCI(pcs)->pcop)->pcop2) || ((PCOR2(PCI(pcs)->pcop)->pcop2->type != PO_SFR_REGISTER) && (PCOR2(PCI(pcs)->pcop)->pcop2) && (PCOR2(PCI(pcs)->pcop)->pcop2->type != PO_INDF0)))) {
+	  if(PCOW2(PCI(pcd)->pcop) && (PCOP2(PCI(pcd)->pcop)->pcopR->type == PO_WILD) && (!(PCOP2(PCI(pcs)->pcop)->pcopR) || ((PCOP2(PCI(pcs)->pcop)->pcopR->type != PO_SFR_REGISTER) && (PCOP2(PCI(pcs)->pcop)->pcopR) && (PCOP2(PCI(pcs)->pcop)->pcopR->type != PO_INDF0)))) {
 	
 //		fprintf(stderr, "%s:%d %s second operand is wild\n", __FILE__, __LINE__, __FUNCTION__);
 	
@@ -1978,9 +1978,9 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 		}
 #endif
 
-		PCOW2(PCI(pcd)->pcop)->matched = PCOR2(PCI(pcs)->pcop)->pcop2;
+		PCOW2(PCI(pcd)->pcop)->matched = PCOP2(PCI(pcs)->pcop)->pcopR;
 		if(!peepBlock->target.wildpCodeOps[index]) {
-			peepBlock->target.wildpCodeOps[index] = PCOR2(PCI(pcs)->pcop)->pcop2;
+			peepBlock->target.wildpCodeOps[index] = PCOP2(PCI(pcs)->pcop)->pcopR;
 
 		//if(PCI(pcs)->pcop->type == PO_GPR_TEMP) 
 
@@ -1994,21 +1994,21 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 				);
 			*/
 
-		  return ((havematch==1) && pCodeOpCompare(PCOR2(PCI(pcs)->pcop)->pcop2,
+		  return ((havematch==1) && pCodeOpCompare(PCOP2(PCI(pcs)->pcop)->pcopR,
 				peepBlock->target.wildpCodeOps[index]));
 		}
 
-		if(PCOR2(PCI(pcs)->pcop)->pcop2) {
+		if(PCOP2(PCI(pcs)->pcop)->pcopR) {
 		  char *n;
 
-			switch(PCOR2(PCI(pcs)->pcop)->pcop2->type) {
+			switch(PCOP2(PCI(pcs)->pcop)->pcopR->type) {
 			case PO_GPR_TEMP:
 			case PO_FSR0:
 		      //case PO_INDF0:
-				n = PCOR(PCOR2(PCI(pcs)->pcop)->pcop2)->r->name;
+				n = PCOR(PCOP2(PCI(pcs)->pcop)->pcopR)->r->name;
 				break;
 			default:
-				n = PCOR2(PCI(pcs)->pcop)->pcop2->name;
+				n = PCOP2(PCI(pcs)->pcop)->pcopR->name;
 			}
 
 			if(peepBlock->target.vars[index])
@@ -2020,7 +2020,7 @@ static int pCodePeepMatchLine(pCodePeep *peepBlock, pCode *pcs, pCode *pcd)
 			}
 		}
 	  
-	  } else if (PCOW2(PCI(pcd)->pcop) && (PCOR2(PCI(pcd)->pcop)->pcop2->type == PO_WILD) && PCOR2(PCI(pcs)->pcop)->pcop2)
+	  } else if (PCOW2(PCI(pcd)->pcop) && (PCOP2(PCI(pcd)->pcop)->pcopR->type == PO_WILD) && PCOP2(PCI(pcs)->pcop)->pcopR)
 	    {
 	      return 0;
 	    } else {
@@ -2181,13 +2181,58 @@ pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop)
     return NULL;
 
   switch(pcop->type) { 
+  case PO_NONE:
+  case PO_STR:
+  case PO_REL_ADDR:
+  	pcopnew = Safe_calloc(1, sizeof (pCodeOp));
+	memcpy(pcopnew, pcop, sizeof (pCodeOp));
+	break;
+
+  case PO_W:
+  case PO_WREG:
+  case PO_STATUS:
+  case PO_BSR:
+  case PO_FSR0:
+  case PO_INDF0:
+  case PO_INTCON:
+  case PO_GPR_REGISTER:
+  case PO_GPR_TEMP:
+  case PO_SFR_REGISTER:
+  case PO_PCL:
+  case PO_PCLATH:
+  case PO_PCLATU:
+  case PO_PRODL:
+  case PO_PRODH:
+  case PO_DIR:
+    //DFPRINTF((stderr,"pCodeOpCopy GPR register\n"));
+    /* XXX: might also be pCodeOpReg2 -- that's why the two structs are identical */
+    pcopnew = Safe_calloc(1,sizeof(pCodeOpReg) );
+    memcpy (pcopnew, pcop, sizeof(pCodeOpReg));
+    break;
+    
+  case PO_LITERAL:
+    //DFPRINTF((stderr,"pCodeOpCopy lit\n"));
+    /* XXX: might also be pCodeOpLit2, that's why the two structs are identical... */
+    pcopnew = Safe_calloc(1,sizeof(pCodeOpLit) );
+    memcpy (pcopnew, pcop, sizeof(pCodeOpLit));
+    break;
+
+  case PO_IMMEDIATE:
+    pcopnew = Safe_calloc(1,sizeof(pCodeOpImmd) );
+    memcpy (pcopnew, pcop, sizeof(pCodeOpImmd));
+    break;
+    
+  case PO_GPR_BIT:
   case PO_CRY:
   case PO_BIT:
-    //DFPRINTF((stderr,"pCodeOpCopy bit\n"));
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpRegBit) );
-    PCORB(pcopnew)->bit = PCORB(pcop)->bit;
-    PCORB(pcopnew)->inBitSpace = PCORB(pcop)->inBitSpace;
+    pcopnew = Safe_calloc(1, sizeof (pCodeOpRegBit));
+    memcpy (pcopnew, pcop, sizeof (pCodeOpRegBit));
+    break;
 
+  case PO_LABEL:
+    //DFPRINTF((stderr,"pCodeOpCopy label\n"));
+    pcopnew = Safe_calloc(1,sizeof(pCodeOpLabel) );
+    memcpy (pcopnew, pcop, sizeof (pCodeOpLabel));
     break;
 
   case PO_WILD:
@@ -2202,87 +2247,19 @@ pCodeOp *pic16_pCodeOpCopy(pCodeOp *pcop)
       pcopnew->name = Safe_strdup(PCOW(pcop)->pcwb->vars[PCOW(pcop)->id]);
       //DFPRINTF((stderr,"copied a wild op named %s\n",pcopnew->name));
     }
-
     return pcopnew;
     break;
 
-  case PO_LABEL:
-    //DFPRINTF((stderr,"pCodeOpCopy label\n"));
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpLabel) );
-    PCOLAB(pcopnew)->key =  PCOLAB(pcop)->key;
-    break;
-
-  case PO_IMMEDIATE:
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpImmd) );
-    PCOI(pcopnew)->index = PCOI(pcop)->index;
-    PCOI(pcopnew)->offset = PCOI(pcop)->offset;
-    PCOI(pcopnew)->_const = PCOI(pcop)->_const;
-    break;
-
-  case PO_LITERAL:
-    //DFPRINTF((stderr,"pCodeOpCopy lit\n"));
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpLit) );
-    PCOL(pcopnew)->lit = PCOL(pcop)->lit;
-    break;
-
-#if 0 // mdubuc - To add
-  case PO_REL_ADDR:
-    break;
-#endif
-
-  case PO_GPR_BIT:
-
-    pcopnew = pic16_newpCodeOpBit(pcop->name, PCORB(pcop)->bit,PCORB(pcop)->inBitSpace, PO_GPR_REGISTER);
-    PCOR(pcopnew)->r = PCOR(pcop)->r;
-    PCOR(pcopnew)->rIdx = PCOR(pcop)->rIdx;
-    DFPRINTF((stderr," pCodeOpCopy Bit -register index\n"));
+  case PO_TWO_OPS:
+    pcopnew = pic16_newpCodeOp2( pic16_pCodeOpCopy( PCOP2(pcop)->pcopL ),
+    pic16_pCodeOpCopy( PCOP2(pcop)->pcopR ) );
     return pcopnew;
-    break;
 
-  case PO_GPR_REGISTER:
-  case PO_GPR_TEMP:
-  case PO_FSR0:
-  case PO_INDF0:
-  case PO_WREG: // moved from below
-  case PO_PRODL: // moved from below
-  case PO_PRODH: // moved from below
-    //DFPRINTF((stderr,"pCodeOpCopy GPR register\n"));
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpReg) );
-    PCOR(pcopnew)->r = PCOR(pcop)->r;
-    PCOR(pcopnew)->rIdx = PCOR(pcop)->rIdx;
-    PCOR(pcopnew)->instance = PCOR(pcop)->instance;
-    DFPRINTF((stderr," register index %d\n", PCOR(pcop)->r->rIdx));
-    break;
+  default:
+    assert ( !"unhandled pCodeOp type copied" );
+  } // switch
 
-  case PO_DIR:
-    //fprintf(stderr,"pCodeOpCopy PO_DIR\n");
-    pcopnew = Safe_calloc(1,sizeof(pCodeOpReg) );
-    PCOR(pcopnew)->r = PCOR(pcop)->r;
-    PCOR(pcopnew)->rIdx = PCOR(pcop)->rIdx;
-    PCOR(pcopnew)->instance = PCOR(pcop)->instance;
-    break;
-  case PO_STATUS:
-    DFPRINTF((stderr,"pCodeOpCopy PO_STATUS\n"));
-  case PO_BSR:
-    DFPRINTF((stderr,"pCodeOpCopy PO_BSR\n"));
-  case PO_SFR_REGISTER:
-  case PO_STR:
-  case PO_NONE:
-  case PO_W:
-  //case PO_WREG: // moved up
-  case PO_INTCON:
-  case PO_PCL:
-  case PO_PCLATH:
-  case PO_PCLATU:
-  //case PO_PRODL: // moved up
-  //case PO_PRODH: // moved up
-  case PO_REL_ADDR:
-    //DFPRINTF((stderr,"pCodeOpCopy register type %d\n", pcop->type));
-    pcopnew = Safe_calloc(1,sizeof(pCodeOp) );
-
-  }
-
-  pcopnew->type = pcop->type;
+  /* strdup pcop->name (prevent access to shared but released memory) */
   if(pcop->name)
     pcopnew->name = Safe_strdup(pcop->name);
   else
@@ -2501,11 +2478,11 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 	      pcop = pic16_pCodeOpCopy(PCI(pcr)->pcop);
 	  }
 
-	  if(PCI(pcr)->is2MemOp && PCOR2(PCI(pcr)->pcop)->pcop2) {
+	  if(PCI(pcr)->is2MemOp && PCOP2(PCI(pcr)->pcop)->pcopR) {
 	    /* The replacing instruction has also a second operand.
 	     * Is it wild? */
 //		fprintf(stderr, "%s:%d pcop2= %p\n", __FILE__, __LINE__, PCOR2(PCI(pcr)->pcop)->pcop2);
-	    if(PCOR2(PCI(pcr)->pcop)->pcop2->type == PO_WILD) {
+	    if(PCOP2(PCI(pcr)->pcop)->pcopR->type == PO_WILD) {
 	      int index = PCOW2(PCI(pcr)->pcop)->id;
 //		fprintf(stderr, "%s:%d replacing index= %d\n", __FUNCTION__, __LINE__, index);
 	      //DFPRINTF((stderr,"copying wildopcode\n"));
@@ -2516,7 +2493,7 @@ int pic16_pCodePeepMatchRule(pCode *pc)
 		DFPRINTF((stderr,"error, wildopcode in replace but not source?\n"));
 	    } else
 	      pcop = pic16_popCombine2(pic16_pCodeOpCopy(pcop),
-	      	pic16_pCodeOpCopy(PCOR2(PCI(pcr)->pcop)->pcop2), 0);
+	      	pic16_pCodeOpCopy(PCOP2(PCI(pcr)->pcop)->pcopR), 0);
 	      
 	  }
 	  

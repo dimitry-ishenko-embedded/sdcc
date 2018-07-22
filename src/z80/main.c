@@ -119,7 +119,7 @@ _reset_regparm (void)
 }
 
 static int
-_reg_parm (sym_link * l)
+_reg_parm (sym_link * l, bool reentrant)
 {
   if (options.noRegParams) 
     {
@@ -151,7 +151,7 @@ _process_pragma (const char *sz)
     strncpy (buffer, sz + 5, sizeof (buffer));
     buffer[sizeof (buffer) - 1 ] = '\0';
     chomp (buffer);
-    if (isdigit (buffer[0]))
+    if (isdigit ((unsigned char)buffer[0]))
     {
 
     }
@@ -159,7 +159,7 @@ _process_pragma (const char *sz)
     {
       strcpy (buffer, "HOME");
     }
-    if (isdigit (buffer[0]))
+    if (isdigit ((unsigned char)buffer[0]))
     {
 	  /* Arg was a bank number.  Handle in an ASM independent
 	     way. */
@@ -598,6 +598,8 @@ PORT z80_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 2, 2, 2, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
   {
     "XSEG",
     "STACK",
@@ -614,6 +616,7 @@ PORT z80_port =
     "HOME",
     NULL, /* xidata */
     NULL, /* xinit */
+    NULL, /* const_name */
     NULL,
     NULL,
     1
@@ -714,6 +717,8 @@ PORT gbz80_port =
     /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 2, 2, 2, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
   {
     "XSEG",
     "STACK",
@@ -730,6 +735,7 @@ PORT gbz80_port =
     "HOME",
     NULL, /* xidata */
     NULL, /* xinit */
+    NULL, /* const_name */
     NULL,
     NULL,
     1

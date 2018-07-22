@@ -26,16 +26,16 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: divschar.c,v 1.4 2005/03/31 16:25:03 vrokas Exp $
+** $Id: divschar.c 4237 2006-06-18 16:42:39Z tecodev $
 */
 
 #include <sdcc-lib.h>
 
 unsigned char _divuchar (unsigned char a, unsigned char b);
 
-char _divschar (char a, char b) _IL_REENTRANT
+int _divschar (char a, char b) _IL_REENTRANT
 {
-  register char r;
+  register unsigned char r;
   char ta, tb;
 
     if(a<0)ta = -a; else ta = a;

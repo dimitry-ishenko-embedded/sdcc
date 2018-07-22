@@ -122,6 +122,8 @@ _?"_asm"         {
 "eeprom"       { count(); TKEYWORDSDCC(EEPROM); }
 "__eeprom"     { count(); TKEYWORD(EEPROM); }
 "float"        { count(); return(FLOAT); }
+"fixed16x16"   { count(); TKEYWORDSDCC(FIXED16X16); }
+"__fixed16x16"   { count(); TKEYWORD(FIXED16X16); }
 "flash"        { count(); TKEYWORDSDCC(CODE); }
 "__flash"      { count(); TKEYWORD(CODE); }
 "for"          { count(); return(FOR); }
@@ -151,6 +153,10 @@ _?"_asm"         {
 "return"       { count(); return(RETURN); }
 "sfr"          { count(); TKEYWORDSDCC(SFR); }
 "__sfr"        { count(); TKEYWORD(SFR); }
+"sfr16"        { count(); TKEYWORDSDCC(SFR16); }
+"__sfr16"      { count(); TKEYWORD(SFR16); }
+"sfr32"        { count(); TKEYWORDSDCC(SFR32); }
+"__sfr32"      { count(); TKEYWORD(SFR32); }
 "sbit"         { count(); TKEYWORDSDCC(SBIT); }
 "__sbit"       { count(); TKEYWORD(SBIT); }
 "short"        { count(); return(SHORT); }
@@ -278,7 +284,7 @@ static int checkCurrFile (char *s)
 
     /* get the line number */
     lNum = strtol(s, &tptr, 10);
-    if (tptr == s || !isspace(*tptr))
+    if (tptr == s || !isspace((unsigned char)*tptr))
       return 0;
     s = tptr;
 
@@ -465,7 +471,9 @@ enum pragma_id {
      P_STD_C89,
      P_STD_C99,
      P_STD_SDCC89,
-     P_STD_SDCC99
+     P_STD_SDCC99,
+     P_CODESEG,
+     P_CONSTSEG
 };
 
 
@@ -681,6 +689,28 @@ static void doPragma(int op, char *cp)
     options.std_c99 = 1;
     options.std_sdcc = 1;
     break;
+
+  case P_CODESEG:
+    {
+      char str[9];
+      char *segname = Safe_malloc(15);
+      sscanf(cp, " %8s", str);
+      str[8] = '\0';
+      sprintf(segname, "%-8.8s(CODE)", str);
+      options.code_seg = segname;
+    }
+    break;
+
+  case P_CONSTSEG:
+    {
+      char str[9];
+      char *segname = Safe_malloc(15);
+      sscanf(cp, " %8s", str);
+      str[8] = '\0';
+      sprintf(segname, "%-8.8s(CODE)", str);
+      options.const_seg = segname;
+    }
+    break;
   }
 }
 
@@ -715,10 +745,12 @@ static int process_pragma(char *s)
     { "opt_code_speed", P_OPTCODESPEED, 0 },
     { "opt_code_size",  P_OPTCODESIZE,  0 },
     { "opt_code_balanced",  P_OPTCODEBALANCED,  0 },
-    { "std_c89",	P_STD_C89, 0 },
-    { "std_c99",	P_STD_C99, 0 },
-    { "std_sdcc89",	P_STD_SDCC89, 0 },
-    { "std_sdcc99",	P_STD_SDCC99, 0 },
+    { "std_c89",        P_STD_C89,      0 },
+    { "std_c99",        P_STD_C99,      0 },
+    { "std_sdcc89",     P_STD_SDCC89,   0 },
+    { "std_sdcc99",     P_STD_SDCC99,   0 },
+    { "codeseg",        P_CODESEG,      0 },
+    { "constseg",       P_CONSTSEG,     0 },
 
     /*
      * The following lines are deprecated pragmas,
@@ -751,16 +783,16 @@ static int process_pragma(char *s)
   s += PRAGMA_LEN;
 
   /* look for the directive */
-  while(isspace(*s))
+  while(isspace((unsigned char)*s))
     s++;
 
   cp = s;
   /* look for the end of the directive */
-  while ((!isspace(*s)) && (*s != '\n'))
+  while ((!isspace((unsigned char)*s)) && (*s != '\n'))
     s++ ;
 
   /* skip separating whitespace */
-  while (isspace(*s) && (*s != '\n'))
+  while (isspace((unsigned char)*s) && (*s != '\n'))
     s++;
 
   /* First give the port a chance */

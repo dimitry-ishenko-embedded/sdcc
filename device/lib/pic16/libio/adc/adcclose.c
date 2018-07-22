@@ -24,7 +24,7 @@
  */
 
 /*
-** $Id: adcclose.c,v 1.2 2005/03/31 16:25:02 vrokas Exp $
+** $Id: adcclose.c 3711 2005-03-31 16:25:17Z vrokas $
 */
 
 #include <pic18fregs.h>

@@ -1,13 +1,16 @@
-#define __16F873
-#include "p16f873.h"
+#include "gpsim_assert.h"
 
-unsigned char success=0;
+/* bit types are not ANSI - so provide a way of disabling bit types
+ * if this file is used to test other compilers besides SDCC */
+#define SUPPORT_BIT_TYPES 0
+
 unsigned char failures=0;
-unsigned char dummy=0;
 
+#if SUPPORT_BIT_TYPES
 bit bit0 = 0;
 bit bit1 = 0;
 bit bit2 = 0;
+#endif
 
 unsigned int uint0 = 0;
 unsigned int uint1 = 0;
@@ -16,11 +19,11 @@ unsigned char uchar1 = 0;
 unsigned long ulong0 = 0;
 unsigned long ulong1 = 0;
 
-void done()
+void
+done()
 {
-
-  dummy++;
-
+  ASSERT(MANGLE(failures) == 0);
+  PASSED();
 }
 
 // uchar0 = 0;
@@ -141,6 +144,7 @@ void or_uint2uint(void)
 
 }
 
+#if SUPPORT_BIT_TYPES
 void or_bits1(void)
 {
 
@@ -154,6 +158,7 @@ void or_bits2(void)
   bit0 = bit1 | bit2;
 
 }
+#endif
 
 void main(void)
 {
@@ -170,6 +175,7 @@ void main(void)
   uint1=1;
   or_uint2uint();
 
+#if SUPPORT_BIT_TYPES
   or_bits1();
   if(bit0)
     failures++;
@@ -186,8 +192,7 @@ void main(void)
   or_bits2();
   if(!bit0)
     failures++;
+#endif
 
-
-  success = failures;
   done();
 }

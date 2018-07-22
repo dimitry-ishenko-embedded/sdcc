@@ -23,7 +23,7 @@
    what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 /*
-** $Id: gstack.h,v 1.2 2005/01/22 18:02:13 vrokas Exp $
+** $Id: gstack.h 3648 2005-01-22 18:02:16Z vrokas $
 */
 
 #ifndef __PIC16_GSTACK_H__

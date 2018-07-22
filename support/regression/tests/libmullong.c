@@ -7,19 +7,19 @@
 #define type_{type}
 
 #if defined(PORT_HOST)
-#  include "../../../../../sdccconf.h"
+#  include "sdccconf.h"
 #  define mullong(a,b) mullong_wrapper(a,b)
 #  if defined(type_c) && !defined(WORDS_BIGENDIAN)
 #    define _SDCC_NO_ASM_LIB_FUNCS 1
 #    define near
 #    define long int
-#    include "../../../../../device/lib/_mullong.c"
+#    include "device/lib/_mullong.c"
 #  endif
 #else
 #  if defined(type_c)
 #    define _SDCC_NO_ASM_LIB_FUNCS 1
 #  endif
-#  include "../../../../../device/lib/_mullong.c"
+#  include "device/lib/_mullong.c"
 #  define mullong _mullong
 #endif
 
@@ -27,6 +27,13 @@
  * packing structs
  */
 #if defined(PORT_HOST)
+
+#define TYPE_TARGET_CHAR  TYPE_BYTE
+#define TYPE_TARGET_INT   TYPE_WORD
+#define TYPE_TARGET_LONG  TYPE_DWORD
+#define TYPE_TARGET_UCHAR TYPE_UBYTE
+#define TYPE_TARGET_UINT  TYPE_UWORD
+#define TYPE_TARGET_ULONG TYPE_UDWORD
 
 #if defined(type_c) && !defined(WORDS_BIGENDIAN)
 struct
@@ -36,8 +43,8 @@ struct
   char c2;
 } pack_test;
 
-TYPE_DWORD
-mullong_wrapper (TYPE_DWORD a, TYPE_DWORD b)
+TYPE_TARGET_LONG
+mullong_wrapper (TYPE_TARGET_LONG a, TYPE_TARGET_LONG b)
 {
   if (sizeof(pack_test) == 4)
     /* length of struct ok: use SDCC library */
@@ -51,8 +58,8 @@ mullong_wrapper (TYPE_DWORD a, TYPE_DWORD b)
 
 #else
 
-TYPE_DWORD
-mullong_wrapper (TYPE_DWORD a, TYPE_DWORD b)
+TYPE_TARGET_LONG
+mullong_wrapper (TYPE_TARGET_LONG a, TYPE_TARGET_LONG b)
 {
     return a * b;
 }

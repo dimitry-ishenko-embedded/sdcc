@@ -20,7 +20,7 @@
 ; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ;
 ;
-; $Id: cnvint.S,v 1.2 2005/03/31 16:25:00 vrokas Exp $
+; $Id: cnvint.S 3711 2005-03-31 16:25:17Z vrokas $
 ;
 
 	radix dec

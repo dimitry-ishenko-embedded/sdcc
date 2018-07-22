@@ -249,7 +249,7 @@ emitcode (char *inst, char *fmt, ...)
 	else
 		vsprintf (lb, fmt, ap);
 
-	while (isspace (*lbp))
+	while (isspace ((unsigned char)*lbp))
 		lbp++;
 
 	if (lbp && *lbp)
@@ -758,6 +758,8 @@ aopOp (operand * op, iCode * ic, bool result)
 	   b) has a spill location */
 	if (sym->isspilt || sym->nRegs == 0) {
 
+		asmop *oldAsmOp = NULL;
+
 		/* rematerialize it NOW */
 		if (sym->remat) {
 			sym->aop = op->aop = aop = aopForRemat (sym);
@@ -781,10 +783,15 @@ aopOp (operand * op, iCode * ic, bool result)
 		/* else spill location  */
 		if (sym->usl.spillLoc && getSize(sym->type) != getSize(sym->usl.spillLoc->type)) {
 		    /* force a new aop if sizes differ */
+		    oldAsmOp = sym->usl.spillLoc->aop;
 		    sym->usl.spillLoc->aop = NULL;
 		}
 		sym->aop = op->aop = aop =
 			aopForSym (ic, sym->usl.spillLoc, result);
+		if (getSize(sym->type) != getSize(sym->usl.spillLoc->type)) {
+			/* Don't reuse the new aop, go with the last one */
+			sym->usl.spillLoc->aop = oldAsmOp;
+		}
 		aop->size = getSize (sym->type);
 		return;
 	}
@@ -1041,7 +1048,7 @@ aopPut (asmop * aop, char *s, int offset)
 		break;
 
 	case AOP_REG:
-		if (toupper (*s) != 'R') {
+		if (toupper ((unsigned char)*s) != 'R') {
 			if (s == zero) {
 				emitcode ("clr", "%s",
 					  aop->aopu.aop_reg[offset]->name);
@@ -1109,7 +1116,7 @@ aopPut (asmop * aop, char *s, int offset)
 
 	case AOP_CRY:
 		/* if used only for a condition code check */
-		assert (toupper (*s) == 'R');
+		assert (toupper ((unsigned char)*s) == 'R');
 		if (offset == 0) {
 			emitcode ("xrl", "r0,r0");
 			emitcode ("cpi", "%s,0", s);
@@ -2679,7 +2686,7 @@ genBitWise (iCode * ic, iCode * ifx, int bitop)
 				(int) floatFromVal (AOP (right)->aopu.
 						    aop_lit);
 			int p2 = powof2 (lit);
-			if (bitop == AVR_AND && p2) {	/* right side is a power of 2 */
+			if (bitop == AVR_AND && (p2 >= 0)) {	/* right side is a power of 2 */
 				l = aopGet (AOP (left), p2 / 8);
 				if (IC_TRUE (ifx)) {
 					emitcode ("sbrc", "%s,%d", l,
@@ -4971,7 +4978,7 @@ genCast (iCode * ic)
 			    exit(1);
 			}
 			
-			sprintf(gpValStr, "#0x%d", gpVal);
+			sprintf(gpValStr, "#0x%x", gpVal);
 			aopPut (AOP (result), gpValStr, GPTRSIZE - 1);
 		    }		    
 		    goto release;

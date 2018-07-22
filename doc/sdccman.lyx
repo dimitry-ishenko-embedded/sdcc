@@ -2,12 +2,13 @@
 \lyxformat 221
 \textclass book
 \begin_preamble
+\pdfoptionpdfminorversion=3
 \usepackage[
   pdftitle={SDCC Compiler User Guide},
   pdfauthor={SDCC development team},
   pdfsubject={installation, user manual},
-  pdfkeywords={8032 8051 ansi c compiler CPU DS390
-               embedded GPL HC08 manual mcs51 microcontroller PIC Z80},
+  pdfkeywords={68hc08 8032 8051 ansi c compiler CPU DS390                 embedded free Freescale GPL HC08 Intel manual Maxim mcs51 Microchip microcontroller open source PIC Z80 Zilog},
+  pdfpagemode=UseOutlines,
   colorlinks=true,
   linkcolor=blue] {hyperref}
 %
@@ -81,16 +82,16 @@ SDCC Compiler User Guide
 
 
 \size normal 
-SDCC 2.5.0
+SDCC 2.6.0
 \size footnotesize 
 
 \newline 
-$Date: 2005/04/27 17:19:48 $ 
+$Date: 2006-07-10 14:34:39 -0700 (Mon, 10 Jul 2006) $ 
 \newline 
-$Revision: 1.116 $
+$Revision: 4289 $
 \layout Comment
 
-The above strings enclosed in $ are automatically updated by cvs
+The above strings enclosed in $ are automatically updated by Subversion
 \layout Standard
 
 
@@ -201,21 +202,355 @@ The peep hole optimizer uses a rule based substitution mechanism which is
 
 \newline 
 Supported data-types are:
-\layout Itemize
-
-char (8 bits, 1 byte), 
-\layout Itemize
-
-short and int (16 bits, 2 bytes), 
-\layout Itemize
-
-long (32 bit, 4 bytes)
-\layout Itemize
-
-float (4 byte IEEE).
- 
 \layout Standard
 
+
+\begin_inset  Tabular
+<lyxtabular version="3" rows="8" columns="5">
+<features>
+<column alignment="center" valignment="top" leftline="true" width="0">
+<column alignment="center" valignment="top" leftline="true" width="0">
+<column alignment="center" valignment="top" leftline="true" width="0">
+<column alignment="center" valignment="top" leftline="true" width="0">
+<column alignment="center" valignment="top" leftline="true" rightline="true" width="0">
+<row topline="true" bottomline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+type
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+width
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+default
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed range
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+unsigned range
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+bool
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+1 bit
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+unsigned
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+-
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0, 1
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+char
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+8 bits, 1 byte
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+-128, +127
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0, +255
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+short
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+16 bits, 2 bytes
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+-32.768, +32.767
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0, +65.535
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+int
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+16 bits, 2 bytes
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+-32.768, +32.767
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0, +65.535
+\end_inset 
+</cell>
+</row>
+<row topline="true" bottomline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+long
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+32 bits, 4 bytes
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+-2.147.483.648, +2.147.483.647
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0, +4.294.967.296
+\end_inset 
+</cell>
+</row>
+<row topline="true" bottomline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+float
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+4 bytes IEEE 754
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+signed
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+</row>
+<row topline="true" bottomline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+pointer
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+1, 2, 3 or 4 bytes
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+generic
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset 
+
+
+\newline 
 The compiler also allows 
 \emph on 
 inline assembler code
@@ -244,6 +579,7 @@ status Collapsed
 \newline 
 SDCC also comes with a companion source level debugger SDCDB, the debugger
  currently uses ucSim a freeware simulator for 8051 and other micro-controllers.
+ SDCDB and ucSim are currently not available on Win32 platforms.
  
 \newline 
 
@@ -347,7 +683,12 @@ typewriter font.
 italic.
 \layout Section
 
-Compatibility with previous versions
+Compatibility
+\begin_inset LatexCommand \label{sec:Compatibility-with-previous}
+
+\end_inset 
+
+ with previous versions
 \begin_inset LatexCommand \index{Compatibility with previous versions}
 
 \end_inset 
@@ -485,6 +826,18 @@ bit b;
 \SpecialChar ~
 \SpecialChar ~
 b = ~b; /* equivalent to b=1 instead of toggling b */
+\begin_inset Marginal
+collapsed false
+
+\layout Standard
+
+
+\series bold 
+\SpecialChar ~
+!
+\end_inset 
+
+
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -535,7 +888,8 @@ The SDCC home page at
  Some of the other tools (simulator and assembler) included with SDCC contain
  their own documentation and can be found in the source distribution.
  If you want the latest unreleased software, the complete source package
- is available directly by anonymous CVS on cvs.sdcc.sourceforge.net.
+ is available directly from Subversion on https://svn.sourceforge.net/svnroot/sdcc
+/trunk/sdcc.
 \layout Section
 
 Wishes for the future
@@ -556,8 +910,8 @@ char KernelFunction3(char p) at 0x340;
 
 
 \family typewriter 
-code banking
-\begin_inset LatexCommand \index{code banking (not supported)}
+better code banking
+\begin_inset LatexCommand \index{code banking (limited support)}
 
 \end_inset 
 
@@ -837,7 +1191,7 @@ status Collapsed
 /
 \end_inset 
 
--disable-device-lib-build Disables automatically building device libraries
+-disable-device-lib Disables automatically building device libraries
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -852,6 +1206,20 @@ status Collapsed
 \end_inset 
 
 -disable-packihx Disables building packihx
+\layout List
+\labelwidthstring 00.00.0000
+
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-enable-doc Build pdf, html and txt files from the lyx sources
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -1568,7 +1936,7 @@ status Collapsed
 /
 \end_inset 
 
--disable-device-lib-build
+-disable-device-lib
 \backslash 
 
 \newline 
@@ -1795,10 +2163,10 @@ Install paths
 \begin_inset  Tabular
 <lyxtabular version="3" rows="5" columns="4">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -2922,7 +3290,7 @@ Building SDCC on Linux
 \series medium 
 Download the source package
 \series default 
- either from the SDCC CVS repository or from the nightly snapshots
+ either from the SDCC Subversion repository or from the nightly snapshots
 \series medium 
 , it will be named something like sdcc
 \series default 
@@ -3126,7 +3494,7 @@ less ; not really needed for building SDCC, but you'll miss it sooner or
  later
 \layout Itemize
 
-cvs ; only if you use CVS access
+svn ; only if you use Subversion access
 \layout Standard
 
 If you want to develop something you'll need:
@@ -3234,7 +3602,7 @@ Building SDCC Using Microsoft Visual C++ 6.0/NET (MSVC)
 \series medium 
 Download the source package
 \series default 
- either from the SDCC CVS repository or from the 
+ either from the SDCC Subversion repository or from the 
 \begin_inset LatexCommand \url[nightly snapshots]{http://sdcc.sourceforge.net/snap.php}
 
 \end_inset 
@@ -3267,8 +3635,10 @@ bin before running SDCC.
 \newline 
 WARNING: Visual studio is very picky with line terminations; it expects
  the 0x0d, 0x0a DOS style line endings, not the 0x0a Unix style line endings.
- If you are getting a message such as "This makefile was not generated by
- Developer Studio etc.
+ When using the Subversion repository it's easiest to configure the svn
+ client to convert automatically for you.
+ If however you are getting a message such as "This makefile was not generated
+ by Developer Studio etc.
  etc.
 \begin_inset Quotes srd
 \end_inset 
@@ -3540,7 +3910,7 @@ sdcc-x.y.z-setup.exe
 
  or a setup program for one of the snapshots 
 \emph on 
-sdcc_yyyymmdd_setup.exe
+sdcc-yyyymmdd-xxxx-setup.exe
 \emph default 
  from 
 \begin_inset LatexCommand \url{http://sdcc.sf.net/snap.php}
@@ -3549,13 +3919,137 @@ sdcc_yyyymmdd_setup.exe
 
  and execute it.
  A windows typical installer will guide you through the installation process.
+\layout Subsection
+
+VPATH
+\begin_inset LatexCommand \index{VPATH}
+
+\end_inset 
+
+ feature
+\layout Standard
+
+SDCC supports the VPATH feature provided by configure and make.
+ It allows to separate the source and build trees.
+ Here's an example:
+\layout Standard
+
+
+\family typewriter 
+cd ~\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+# cd $HOME
+\layout Standard
+
+
+\family typewriter 
+tar -xzf sdcc.src.tar.gz\SpecialChar ~
+# extract source to directory sdcc
+\layout Standard
+
+
+\family typewriter 
+mkdir sdcc.build\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+# put output in sdcc.build
+\layout Standard
+
+
+\family typewriter 
+cd sdcc.build
+\layout Standard
+
+
+\family typewriter 
+../sdcc/configure\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+# configure is doing all the magic!
+\layout Standard
+
+
+\family typewriter 
+make
+\layout Standard
+\noindent 
+That's it! 
+\series bold 
+configure
+\series default 
+ will create the directory tree will all the necessary Makefiles in ~/sdcc.build.
+ It automagically computes the variables srcdir, top_srcdir and top_buildir
+ for each directory.
+ After running 
+\series bold 
+make
+\series default 
+ the generated files will be in ~/sdcc.build, while the source files stay
+ in ~/sdcc.
+\newline 
+This is not only usefull for building different binaries, e.g.
+ when cross compiling.
+ It also gives you a much better overview in the source tree when all the
+ generated files are not scattered between the source files.
+ And the best thing is: if you want to change a file you can leave the original
+ file untouched in the source directory.
+ Simply copy it to the build directory, edit it, enter `make clean`, `rm
+ Makefile.dep` and `make`.
+ 
+\series bold 
+make
+\series default 
+ will do the rest for you!
 \layout Section
 
 Building the Documentation
 \layout Standard
 
-If the necessary tools (LyX, LaTeX, LaTeX2HTML) are installed it is as easy
- as changing into the doc directory and typing 
+Add -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-enable-doc to the configure arguments to build the documentation together
+ with all the other stuff.
+ You will need several tools (LyX, LaTeX, LaTeX2HTML, pdflatex, dvipdf,
+ dvips and makeindex) to get the job done.
+ Another possibility is to change to the doc directory and to type 
 \family sans 
 \series bold 
 
@@ -3577,7 +4071,7 @@ x).
 
 \end_inset 
 
- as editor this is straightforward.
+ as editor is straightforward.
  Prebuilt documentation in html and pdf format is available from 
 \begin_inset LatexCommand \url{http://sdcc.sf.net/snap.php}
 
@@ -3673,11 +4167,30 @@ ate
 a
 \emph default 
 rray
-\begin_inset LatexCommand \index{fpga (field programmable gate array)}
+\begin_inset LatexCommand \index{FPGA (field programmable gate array)}
 
 \end_inset 
 
 
+\begin_inset Quotes srd
+\end_inset 
+
+ or 
+\begin_inset LatexCommand \url{http://sf.net/projects/fpgac}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{FpgaC ((subset of) C to FPGA compiler)}
+
+\end_inset 
+
+ 
+\begin_inset Quotes sld
+\end_inset 
+
+have you ever heard of an open source compiler that compiles a subset of
+ C for an FPGA?
 \begin_inset Quotes srd
 \end_inset 
 
@@ -3727,8 +4240,16 @@ status Collapsed
 
 \family default 
 \series default 
- at the prompt, and the program should run and tell you the version.
- If it doesn't run, or gives a message about not finding sdcc program, then
+ at the prompt, and the program should run and output its version like:
+ 
+\newline 
+
+\family typewriter 
+SDCC : mcs51/z80/avr/ds390/pic16/pic14/ds400/hc08 2.5.6 #4169 (May 8 2006)
+ (UNIX)
+\layout Standard
+
+If it doesn't run, or gives a message about not finding sdcc program, then
  you need to check over your installation.
  Make sure that the sdcc bin directory is in your executable search path
  defined by the PATH environment setting (
@@ -4117,9 +4638,11 @@ link-gbz80 - The Z80 and GameBoy Z80 linkers.
 \layout Itemize
 
 s51 - The ucSim 8051 simulator.
+ Not available on Win32 platforms.
 \layout Itemize
 
 sdcdb - The source debugger.
+ Not available on Win32 platforms.
 \layout Itemize
 
 packihx - A tool to pack (compress) Intel hex files.
@@ -4203,6 +4726,7 @@ S51
 .
  It currently supports the core mcs51, the Dallas DS80C390 and the Phillips
  XA51 family.
+ S51 is currently not available on Win32 platfors.
 \layout Subsection
 
 sdcdb - Source Level Debugger
@@ -4226,7 +4750,7 @@ Sdcdb
 \end_inset 
 
 , but can be easily changed to use other simulators.
- 
+ Sdcdb is currently not available on Win32 platfors.
 \layout Chapter
 
 Using SDCC
@@ -4457,7 +4981,12 @@ sourcefile.
 
 \end_inset 
 
- file containing debug information (generated with option -
+ 
+\begin_inset LatexCommand \label{OMF file}
+
+\end_inset 
+
+file containing debug information (generated with option -
 \begin_inset ERT
 status Collapsed
 
@@ -5745,6 +6274,61 @@ status Collapsed
 /
 \end_inset 
 
+-xstack-loc
+\series default 
+
+\begin_inset LatexCommand \index{-\/-xstack-loc <Value>}
+
+\end_inset 
+
+\SpecialChar ~
+<Value> By default the external stack
+\begin_inset LatexCommand \index{xstack}
+
+\end_inset 
+
+ is placed after the pdata segment.
+ Using this option the xstack can be placed anywhere in the external memory
+ space of the 8051.
+ The value entered can be in Hexadecimal or Decimal format, e.g.
+ -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-xstack-loc 0x8000 or -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-stack-loc 32768.
+ The provided value should not overlap any other memory areas such as the
+ pdata or xdata segment and with enough space for the current application.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
 -data-loc
 \series default 
 
@@ -6053,6 +6637,33 @@ status Collapsed
 /
 \end_inset 
 
+-model-medium
+\begin_inset LatexCommand \index{-\/-model-medium}
+
+\end_inset 
+
+
+\series default 
+ Generate code for Medium model programs, see section Memory Models for
+ more details.
+ If this option is used all source files in the project have to be compiled
+ with this option.
+ It must also be used when invoking the linker.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
 -model-large
 \begin_inset LatexCommand \index{-\/-model-large}
 
@@ -6064,6 +6675,7 @@ status Collapsed
  details.
  If this option is used all source files in the project have to be compiled
  with this option.
+ It must also be used when invoking the linker.
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -6862,7 +7474,7 @@ status Collapsed
 
 
 \series default 
- Disable peep-hole optimization.
+ Disable peep-hole optimization with built-in rules.
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -7575,13 +8187,6 @@ status Collapsed
 \end_inset 
 
  (jwk burps: please be more specific here, please!).
- If you want rather more than less warnings you should consider using a
- separate tool dedicated to syntax checking like splint 
-\begin_inset LatexCommand \url{http://www.splint.org}
-
-\end_inset 
-
-.
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -7701,7 +8306,7 @@ asmOption[,asmOption]
 \end_inset 
 
 .
- See file sdcc/as/doc/asxhtm.html for assembler options.
+ See file sdcc/as/doc/asxhtm.html for assembler options.cd
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -7798,6 +8403,171 @@ status Collapsed
 \series default 
  Follow the C99 standard and disable SDCC features that conflict with the
  standard (incomplete support).
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-codeseg
+\series default 
+
+\begin_inset LatexCommand \index{-\/-codeseg <Value>}
+
+\end_inset 
+
+\SpecialChar ~
+<Name> The name to be used for the code
+\begin_inset LatexCommand \index{code}
+
+\end_inset 
+
+ segment, default CSEG.
+ This is useful if you need to tell the compiler to put the code in a special
+ segment so you can later on tell the linker to put this segment in a special
+ place in memory.
+ Can be used for instance when using bank switching to put the code in a
+ bank.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-constseg
+\series default 
+
+\begin_inset LatexCommand \index{-\/-constseg <Value>}
+
+\end_inset 
+
+\SpecialChar ~
+<Name> The name to be used for the const
+\begin_inset LatexCommand \index{code}
+
+\end_inset 
+
+ segment, default CONST.
+ This is useful if you need to tell the compiler to put the const data in
+ a special segment so you can later on tell the linker to put this segment
+ in a special place in memory.
+ Can be used for instance when using bank switching to put the const data
+ in a bank.
+\layout List
+\labelwidthstring 00.00.0000
+
+
+\series bold 
+more-pedantic
+\series default 
+ Actually this is 
+\series bold 
+\emph on 
+not
+\series default 
+\emph default 
+ a SDCC compiler option but if you want 
+\emph on 
+more
+\emph default 
+ warnings you can use a separate tool dedicated to syntax checking like
+ splint
+\begin_inset LatexCommand \label{lyx:more-pedantic-SPLINT}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{lint (syntax checking tool)}
+
+\end_inset 
+
+ 
+\begin_inset LatexCommand \url{http://www.splint.org}
+
+\end_inset 
+
+.
+ To make your source files parseable by splint you will have to include
+ 
+\family sans 
+lint.h
+\family default 
+
+\begin_inset LatexCommand \index{splint (syntax checking tool)}
+
+\end_inset 
+
+ in your source file and add brackets around extended keywords (like 
+\family sans 
+
+\begin_inset Quotes sld
+\end_inset 
+
+__at\SpecialChar ~
+
+\series bold 
+(
+\series default 
+0xab
+\series bold 
+)
+\series default 
+
+\begin_inset Quotes srd
+\end_inset 
+
+
+\family default 
+ and 
+\family sans 
+
+\begin_inset Quotes sld
+\end_inset 
+
+__interrupt\SpecialChar ~
+(2)
+\begin_inset Quotes srd
+\end_inset 
+
+
+\family default 
+).
+ 
+\newline 
+Splint has an excellent on line manual at 
+\begin_inset LatexCommand \url{http://www.splint.org/manual/}
+
+\end_inset 
+
+ and it's capabilities go beyond pure syntax checking.
+ You'll need to tell splint the location of SDCC's include files so a typical
+ command line could look like this: 
+\newline 
+
+\family sans 
+splint\SpecialChar ~
+-I\SpecialChar ~
+/usr/local/share/sdcc/include/mcs51/\SpecialChar ~
+\SpecialChar ~
+myprogram.c
 \layout Subsection
 
 Intermediate Dump Options
@@ -8418,6 +9188,14 @@ data
 \emph on 
 near
 \emph default 
+ or the more ANSI-C compliant forms 
+\emph on 
+__data
+\emph default 
+ and 
+\emph on 
+__near
+\emph default 
  can be used synonymously).
  Variables declared with this storage class will be allocated in the directly
  addressable portion of the internal RAM of a 8051, e.g.:
@@ -8425,7 +9203,7 @@ near
 
 
 \family typewriter 
-data unsigned char test_data;
+__data unsigned char test_data;
 \layout Standard
 
 Writing 0x01 to this variable generates the assembly code:
@@ -8438,7 +9216,7 @@ Writing 0x01 to this variable generates the assembly code:
 \SpecialChar ~
 mov\SpecialChar ~
 \SpecialChar ~
-_test_data,#0x01 
+_test_data,#0x01
 \layout Subsubsection
 
 xdata
@@ -8475,7 +9253,7 @@ default
 
 
 \family typewriter 
-xdata unsigned char test_xdata;
+__xdata unsigned char test_xdata;
 \layout Standard
 
 Writing 0x01 to this variable generates the assembly code:
@@ -8533,7 +9311,7 @@ Variables declared with this storage class will be allocated into the indirectly
 
 
 \family typewriter 
-idata unsigned char test_idata;
+__idata unsigned char test_idata;
 \layout Standard
 
 Writing 0x01 to this variable generates the assembly code:
@@ -8594,7 +9372,7 @@ Paged xdata access is just as straightforward as using the other addressing
  modes of a 8051.
  It is typically located at the start of xdata and has a maximum size of
  256 bytes.
- The following example writes 0x01 to the address pointed to.
+ The following example writes 0x01 to the pdata variable.
  Please note, pdata access physically accesses xdata memory.
  The high byte of the address is determined by port P2 
 \begin_inset LatexCommand \index{P2 (mcs51 sfr)}
@@ -8608,52 +9386,30 @@ Paged xdata access is just as straightforward as using the other addressing
 \end_inset 
 
 ).
+ This is the 
+\series bold 
+default
+\series default 
+ storage class for the Medium Memory model, e.g.:
 \layout Verse
 
 
 \family typewriter 
-pdata unsigned char *test_pdata_ptr;
-\newline 
-
-\newline 
-void main() 
-\newline 
-{ 
-\newline 
-\SpecialChar ~
-\SpecialChar ~
-\SpecialChar ~
-\SpecialChar ~
-test_pdata_ptr = (pdata *)0xfe; 
-\newline 
-\SpecialChar ~
-\SpecialChar ~
-\SpecialChar ~
-\SpecialChar ~
-*test_pdata_ptr = 1; 
-\newline 
-} 
+__pdata unsigned char test_pdata;
 \layout Standard
 
-Generates the assembly code:
+Writing 0x01 to this variable generates the assembly code:
 \layout Verse
 
 
 \family typewriter 
-75*01 FE\SpecialChar ~
-\SpecialChar ~
-\SpecialChar ~
-mov\SpecialChar ~
- _test_pdata_ptr,#0xFE
-\newline 
-78 FE\SpecialChar ~
+78r00\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-mov\SpecialChar ~
- r0,#0xFE 
+mov r0,#_test_pdata
 \newline 
 74 01\SpecialChar ~
 \SpecialChar ~
@@ -8661,8 +9417,7 @@ mov\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-mov\SpecialChar ~
- a,#0x01
+mov a,#0x01 
 \newline 
 F2\SpecialChar ~
 \SpecialChar ~
@@ -8673,7 +9428,7 @@ F2\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-movx @r0,a 
+movx @r0,a
 \layout Standard
 
 If the -
@@ -8714,7 +9469,7 @@ code
 
 
 \family typewriter 
-code unsigned char test_code;
+__code unsigned char test_code;
 \layout Standard
 
 Read access to this variable generates the assembly code:
@@ -8759,7 +9514,7 @@ char
 
 
 \family typewriter 
-code char test_array[] = {'c','h','e','a','p'}; 
+__code char test_array[] = {'c','h','e','a','p'}; 
 \layout Standard
 
 Read access to this array using an 8-bit unsigned index generates the assembly
@@ -8819,7 +9574,7 @@ This is a data-type and a storage class specifier.
 
 
 \family typewriter 
-bit test_bit;
+__bit test_bit;
 \layout Standard
 
 Writing 1 to this variable generates the assembly code:
@@ -8873,6 +9628,26 @@ sfr
 
 \end_inset 
 
+ / sfr16
+\begin_inset LatexCommand \index{sfr16}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{\_\_sfr16}
+
+\end_inset 
+
+ / sfr32
+\begin_inset LatexCommand \index{sfr32}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{\_\_sfr32}
+
+\end_inset 
+
  / sbit
 \begin_inset LatexCommand \index{\_\_sbit}
 
@@ -8883,10 +9658,10 @@ sfr
 
 Like the bit keyword, 
 \emph on 
-sfr / sbit 
+sfr / sfr16 / sfr32 / sbit 
 \emph default 
-signifies both a data-type and storage class, they are used to describe
- the 
+signify both a data-type and storage class, they are used to describe the
+ 
 \emph on 
 s
 \emph default 
@@ -8911,7 +9686,7 @@ bit
 
 
 \family typewriter 
-sfr at
+__sfr __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
@@ -8921,10 +9696,27 @@ sfr at
 
 \end_inset 
 
- 0x80 P0;\SpecialChar ~
+ (0x80) P0;\SpecialChar ~
  /* special function register P0 at location 0x80 */
 \newline 
-sbit at 0xd7 CY; /* CY (Carry Flag
+/* 16 bit special function register combination for timer 0 */
+\newline 
+/* with the high byte at location 0x8C and the low byte at location 0x8A
+ */
+\newline 
+__sfr16 __at
+\begin_inset LatexCommand \index{at}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{\_\_at}
+
+\end_inset 
+
+ (0x8C8A) TMR0;
+\newline 
+__sbit __at (0xd7) CY; /* CY (Carry Flag
 \begin_inset LatexCommand \index{Flags}
 
 \end_inset 
@@ -8943,6 +9735,19 @@ Special function registers which are located on an address dividable by
  sbit
 \emph default 
  addresses a specific bit within these sfr.
+\newline 
+16 Bit and 32 bit special function register combinations which require a
+ certain access order are better not declared using 
+\emph on 
+sfr16
+\emph default 
+ or 
+\emph on 
+sfr32.
+
+\emph default 
+ Allthough SDCC usually accesses them Least Significant Byte (LSB) first,
+ this is not guaranteed.
 \layout Subsubsection
 
 Pointers
@@ -8973,33 +9778,40 @@ Pointer declaration examples:
 /* pointer physically in internal ram pointing to object in external ram
  */ 
 \newline 
-xdata unsigned char * data p;
+__xdata unsigned char * __data p;
 \newline 
 
 \newline 
 /* pointer physically in external ram pointing to object in internal ram
  */ 
 \newline 
-data unsigned char * xdata p;
+__data unsigned char * __xdata p;
 \newline 
 
 \newline 
 /* pointer physically in code rom pointing to data in xdata space */ 
 \newline 
-xdata unsigned char * code p;
+__xdata unsigned char * __code p;
 \newline 
 
 \newline 
 /* pointer physically in code space pointing to data in code space */ 
 \newline 
-code unsigned char * code p;
+__code unsigned char * __code p;
 \newline 
 
 \newline 
 /* the following is a generic pointer physically located in xdata space
  */
 \newline 
-char * xdata p;
+char * __xdata p;
+\newline 
+
+\newline 
+/* the following is a function pointer physically located in data space
+ */
+\newline 
+char (* __data fp)(void);
 \layout Standard
 
 Well you get the idea.
@@ -9234,6 +10046,8 @@ idata
 \emph default 
 ).
  
+\newline 
+
 \layout Standard
 
 By default the 8051 linker will place the stack after the last byte of (i)data
@@ -9632,7 +10446,15 @@ xdata
 
 \end_inset 
 
- 0x7ffe unsigned int chksum;
+ (0x7ffe) unsigned int chksum;
+\layout Standard
+
+or
+\layout Verse
+
+
+\family typewriter 
+__xdata __at (0x7ffe) unsigned int chksum;
 \layout Standard
 
 In the above example the variable chksum will be located at 0x7ffe and 0x7fff
@@ -9641,8 +10463,19 @@ In the above example the variable chksum will be located at 0x7ffe and 0x7fff
 \emph on 
 not
 \emph default 
- reserve any space for variables declared in this way (they are implemented
- with an equate in the assembler).
+ reserve any space for variables declared in this way
+\begin_inset Marginal
+collapsed true
+
+\layout Standard
+
+
+\series bold 
+\SpecialChar ~
+!
+\end_inset 
+
+ (they are implemented with an equate in the assembler).
  Thus it is left to the programmer to make sure there are no overlaps with
  other variables that are declared without the absolute address.
  The assembler listing file (.lst
@@ -9664,6 +10497,18 @@ not
  Variables with an absolute address are 
 \emph on 
 not
+\begin_inset Marginal
+collapsed true
+
+\layout Standard
+
+
+\series bold 
+\SpecialChar ~
+!
+\end_inset 
+
+
 \emph default 
  initialized
 \begin_inset LatexCommand \index{Variable initialization}
@@ -9687,17 +10532,17 @@ volatile
 
 \end_inset 
 
- xdata
+ __xdata
 \begin_inset LatexCommand \index{xdata (mcs51, ds390 storage class)}
 
 \end_inset 
 
- at
+ __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
 
- 0x8000 unsigned char PORTA_8255;
+ (0x8000) unsigned char PORTA_8255;
 \layout Standard
 
 For some architectures (mcs51) array accesses are more efficient if an (xdata/fa
@@ -9730,17 +10575,17 @@ Absolute addresses can be specified for variables in all storage classes,
 
 
 \family typewriter 
-bit
+__bit
 \begin_inset LatexCommand \index{bit}
 
 \end_inset 
 
- at
+ __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
 
- 0x02 bvar;
+ (0x02) bvar;
 \layout Standard
 
 The above example will allocate the variable at offset 0x02 in the bit-addressab
@@ -9760,19 +10605,19 @@ extern volatile
 
 \end_inset 
 
- bit MOSI;\SpecialChar ~
+ __bit MOSI;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* master out, slave in */
 \newline 
-extern volatile bit MISO;\SpecialChar ~
+extern volatile __bit MISO;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* master in, slave out */
 \newline 
-extern volatile bit MCLK;\SpecialChar ~
+extern volatile __bit MCLK;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
@@ -9908,7 +10753,7 @@ Then, someplace in the code for the first hardware you would use
 
 
 \family typewriter 
-bit at
+__bit __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
@@ -9918,19 +10763,19 @@ bit at
 
 \end_inset 
 
- 0x80 MOSI;\SpecialChar ~
+ (0x80) MOSI;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* I/O port 0, bit 0 */
 \newline 
-bit at 0x81 MISO;\SpecialChar ~
+__bit __at (0x81) MISO;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* I/O port 0, bit 1 */
 \newline 
-bit at 0x82 MCLK;\SpecialChar ~
+__bit __at (0x82) MCLK;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
@@ -9942,24 +10787,24 @@ Similarly, for the second hardware you would use
 
 
 \family typewriter 
-bit at 0x83 MOSI;\SpecialChar ~
+__bit __at (0x83) MOSI;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* I/O port 0, bit 3 */
 \newline 
-bit at 0x91 MISO;\SpecialChar ~
+__bit __at (0x91) MISO;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 /* I/O port 1, bit 1 */
 \newline 
-bit
+__bit
 \begin_inset LatexCommand \index{bit}
 
 \end_inset 
 
- at 0x92 MCLK;\SpecialChar ~
+ __at (0x92) MCLK;\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
@@ -10066,7 +10911,7 @@ reentrant
 
 
 \family typewriter 
-unsigned char foo(char i) reentrant 
+unsigned char foo(char i) __reentrant 
 \newline 
 { 
 \newline 
@@ -10136,24 +10981,24 @@ unsigned char foo()
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-xdata unsigned char i;
+__xdata unsigned char i;
 \newline 
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-bit bvar;
+__bit bvar;
 \newline 
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-data at
+__data __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
 
- 0x31 unsigned char j;
+ (0x31) unsigned char j;
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -10211,6 +11056,13 @@ Parameters
 
 , (storage classes for parameters will be ignored), their allocation is
  governed by the memory model in use, and the reentrancy options.
+\layout Standard
+
+It is however allowed to use bit parameters in reentrant functions and also
+ non-static local bit variables are supported.
+ Efficient use is limited to 8 semi-bitregisters in bit space.
+ They are pushed and popped to stack as a single byte just like the normal
+ registers.
 \layout Section
 
 Overlaying
@@ -10260,8 +11112,18 @@ no other function calls and the function is non-reentrant and the memory
 
 Note that the compiler (not the linkage editor) makes the decision for overlayin
 g the data items.
- Functions that are called from an interrupt service routine should be preceded
- by a #pragma\SpecialChar ~
+ Functions that are called from an interrupt service routine
+\begin_inset Marginal
+collapsed true
+
+\layout Standard
+
+
+\series bold 
+!
+\end_inset 
+
+ should be preceded by a #pragma\SpecialChar ~
 nooverlay
 \begin_inset LatexCommand \index{\#pragma nooverlay}
 
@@ -10320,12 +11182,12 @@ P3 = errcd;
 \newline 
 
 \newline 
-void some_isr () interrupt
+void some_isr () __interrupt
 \begin_inset LatexCommand \index{interrupt}
 
 \end_inset 
 
- 2
+ (2)
 \newline 
 {
 \newline 
@@ -10396,7 +11258,7 @@ outines to be coded in C, with some extended keywords.
 
 
 \family typewriter 
-void timer_isr (void) interrupt 1 using 1 
+void timer_isr (void) __interrupt (1) __using (1) 
 \newline 
 { 
 \newline 
@@ -10639,6 +11501,14 @@ status Collapsed
 \end_inset 
 
  compiler option.
+ Note, the type promotion
+\begin_inset LatexCommand \index{type promotion}
+
+\end_inset 
+
+ required by ANSI C can cause 16 bit routines to be used without the programmer
+ being aware of it.
+ 
 \layout Standard
 
 Calling other functions from an interrupt service routine is not recommended,
@@ -10653,7 +11523,13 @@ nooverlay
  if it is not reentrant.
  Furthermore nonreentrant functions should not be called from the main program
  while the interrupt service routine might be active.
- 
+ They also must not be called from low priority interrupt service routines
+ while a high priority interrupt service routine might be active.
+ You could use semaphores or make the function
+\emph on 
+ critical
+\emph default 
+ if all parameters are passed in registers.
 \newline 
 
 \newline 
@@ -10685,11 +11561,11 @@ Interrupt numbers and the corresponding address & descriptions for the Standard
 \align center 
 
 \begin_inset  Tabular
-<lyxtabular version="3" rows="7" columns="3">
+<lyxtabular version="3" rows="9" columns="3">
 <features>
 <column alignment="center" valignment="top" leftline="true" width="0in">
-<column alignment="center" valignment="top" leftline="true" width="0in">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0in">
+<column alignment="left" valignment="top" leftline="true" width="0in">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0in">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -10764,7 +11640,7 @@ Timer 0
 
 \layout Standard
 
-0x000B
+0x000b
 \end_inset 
 </cell>
 </row>
@@ -10816,7 +11692,7 @@ Timer 1
 
 \layout Standard
 
-0x001B
+0x001b
 \end_inset 
 </cell>
 </row>
@@ -10846,8 +11722,8 @@ Serial
 \end_inset 
 </cell>
 </row>
-<row topline="true" bottomline="true">
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+<row topline="true">
+<cell multicolumn="1" alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
 
 \layout Standard
@@ -10868,7 +11744,57 @@ Timer 2 (8052)
 
 \layout Standard
 
-0x002B
+0x002b
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+...
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+...
+\end_inset 
+</cell>
+</row>
+<row topline="true" bottomline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+n
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+0x0003 + 8*n
 \end_inset 
 </cell>
 </row>
@@ -10944,10 +11870,10 @@ The Z80 uses several different methods for determining the correct interrupt
  to generate an interrupt vector table.
 \layout Standard
 
-By default, SDCC generates code for a maskable interrupt, which uses an
- RETI instruction to return from the interrupt.
+By default, SDCC generates code for a maskable interrupt, which uses a RETI
+ instruction to return from the interrupt.
  To write an interrupt handler for the non-maskable interrupt, which needs
- an RETN instruction instead, add the 
+ a RETN instruction instead, add the 
 \emph on 
 critical
 \emph default 
@@ -10968,6 +11894,16 @@ void nmi_isr (void) critical interrupt
  
 \newline 
 }
+\layout Standard
+
+However if you need to create a non-interruptable interrupt service routine
+ you would also require the 
+\emph on 
+critical
+\emph default 
+ keyword.
+ To distinguish between this and an nmi_isr you must provide an interrupt
+ number.
 \layout Section
 
 Enabling and Disabling Interrupts
@@ -10999,7 +11935,7 @@ critical
 
 
 \family typewriter 
-int foo () critical
+int foo () __critical
 \begin_inset LatexCommand \index{critical}
 
 \end_inset 
@@ -11045,7 +11981,7 @@ critical
 
 
 \family typewriter 
-critical{ i++; }
+__critical{ i++; }
 \layout Standard
 
 More than one statement could have been included in the block.
@@ -11705,7 +12641,7 @@ Starting from a small snippet of c-code this example shows for the MCS51
 
 \family typewriter 
 \size footnotesize 
-unsigned char far
+unsigned char __far
 \begin_inset LatexCommand \index{far (storage class)}
 
 \end_inset 
@@ -11715,7 +12651,7 @@ unsigned char far
 
 \end_inset 
 
- at
+ __at
 \begin_inset LatexCommand \index{at}
 
 \end_inset 
@@ -11725,14 +12661,14 @@ unsigned char far
 
 \end_inset 
 
- 0x7f00 buf[0x100];
+(0x7f00) buf[0x100];
 \begin_inset LatexCommand \index{Aligned array}
 
 \end_inset 
 
 
 \newline 
-unsigned char head,tail;
+unsigned char head, tail;
 \newline 
 
 \newline 
@@ -11744,7 +12680,34 @@ void to_buffer( unsigned char c )
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-if( head != tail-1 ) 
+if( head != (unsigned char)(tail-1) )\SpecialChar ~
+/* cast 
+\series bold 
+needed
+\series default 
+ to avoid promotion
+\begin_inset LatexCommand \index{promotion to signed int}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{type promotion}
+
+\end_inset 
+
+ to integer */
+\begin_inset Marginal
+collapsed false
+
+\layout Standard
+
+
+\series bold 
+\SpecialChar ~
+!
+\end_inset 
+
+
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -11755,6 +12718,18 @@ if( head != tail-1 )
 \SpecialChar ~
 \SpecialChar ~
 buf[ head++ ] = c;\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
@@ -11828,7 +12803,7 @@ mov\SpecialChar ~
 \SpecialChar ~
 r2,dpl 
 \newline 
-;buffer.c if( head != tail-1 ) 
+;buffer.c if( head != (unsigned char)(tail-1) ) 
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -11965,9 +12940,9 @@ The new file buffer.c should compile with only one warning about the unreference
 
 \family typewriter 
 \size footnotesize 
-unsigned char far at 0x7f00 buf[0x100];
+unsigned char __far __at(0x7f00) buf[0x100];
 \newline 
-unsigned char head,tail;
+unsigned char head, tail;
 \newline 
 #define USE_ASSEMBLY (1)
 \newline 
@@ -11985,7 +12960,7 @@ void to_buffer( unsigned char c )
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-if( head != tail-1 )
+if( head != (unsigned char)(tail-1) )
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -12053,7 +13028,7 @@ _asm
 ; If we were still using r2,r3 we would have to push them here.
  
 \newline 
-; if( head != tail-1 )
+; if( head != (unsigned char)(tail-1) )
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -12396,7 +13371,7 @@ volatile
 \newline 
 
 \newline 
-void simpleInterrupt(void) interrupt
+void simpleInterrupt(void) __interrupt
 \begin_inset LatexCommand \index{interrupt}
 
 \end_inset 
@@ -12406,7 +13381,7 @@ void simpleInterrupt(void) interrupt
 
 \end_inset 
 
- 1
+ (1)
 \newline 
 {
 \newline 
@@ -12420,7 +13395,7 @@ counter++;
 \newline 
 
 \newline 
-void nakedInterrupt(void) interrupt 2 _naked
+void nakedInterrupt(void) __interrupt (2) __naked
 \newline 
 {
 \newline 
@@ -12489,6 +13464,16 @@ For an 8051 target, the generated simpleInterrupt looks like:
 
 
 \family typewriter 
+Note, this is an 
+\series bold 
+outdated
+\series default 
+ example, recent versions of SDCC generate
+\newline 
+the same code for simpleInterrupt() and nakedInterrupt()!
+\newline 
+
+\newline 
 _simpleInterrupt:
 \newline 
 \SpecialChar ~
@@ -13363,8 +14348,8 @@ For signed & unsigned int (16 bit) and long (32 bit) variables, division,
 \begin_inset  Tabular
 <lyxtabular version="3" rows="11" columns="2">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -13657,8 +14642,8 @@ SDCC supports IEEE (single precision 4 bytes) floating point numbers.The
 \begin_inset  Tabular
 <lyxtabular version="3" rows="17" columns="2">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -14287,7 +15272,12 @@ collapsed false
 
 \layout Standard
 
-The floating point routines for the mcs51 are implemented in assembler
+These floating point routines (
+\emph on 
+not
+\emph default 
+ sinf(), cosf(), ...) for the mcs51 are implemented in assembler.
+ 
 \end_inset 
 
 .
@@ -14350,6 +15340,19 @@ putchar()
  routines.
  SDCC does not know whether the system connects to a serial line with or
  without handshake, LCD, keyboard or other device.
+ And whether a 
+\family typewriter 
+lf
+\family default 
+ to 
+\family typewriter 
+crlf
+\family default 
+ conversion within 
+\family typewriter 
+putchar()
+\family default 
+ is intended.
  You'll find examples for serial routines f.e.
  in sdcc/device/lib.
 \layout Standard
@@ -14390,7 +15393,7 @@ DUSE_FLOATS=1
  on the command line.
  Use
 \emph on 
--
+ -
 \begin_inset ERT
 status Collapsed
 
@@ -14437,7 +15440,7 @@ printf_tiny()
 
 
 \family default 
- and 
+ (subset of printf using less than 270 bytes) and 
 \family typewriter 
 printf_fast()
 \begin_inset LatexCommand \index{printf\_fast() (mcs51)}
@@ -14455,15 +15458,22 @@ and
 
 
 \family default 
- which should fit the requirements of many embedded systems (printf_fast()
- can be customized by unsetting #defines to 
+ (floating-point aware version of printf_fast) which should fit the requirements
+ of many embedded systems (printf_fast() can be customized by unsetting
+ #defines to 
 \emph on 
 not
 \emph default 
  support long variables and field widths).
 \layout Subsection
 
-Math functions (sin, pow, sqrt etc.)
+Math functions (sinf, powf, sqrtf etc.)
+\layout Subsubsection
+
+<math.h>
+\layout Standard
+
+See definitions in file <math.h>.
 \layout Subsection
 
 Other libraries
@@ -14533,12 +15543,12 @@ MCS51 Memory Models
 
 \layout Subsubsection
 
-Small and Large
+Small, Medium and Large
 \layout Standard
 
-SDCC allows two memory models for MCS51 code, 
+SDCC allows three memory models for MCS51 code, 
 \shape slanted 
-small
+small, medium
 \shape default 
  and 
 \shape slanted 
@@ -14550,16 +15560,15 @@ large
 never
 \emph default 
  be combined together or the results would be unpredictable.
- The library routines supplied with the compiler are compiled as both small
- and large.
- The compiled library modules are contained in separate directories as small
- and large so that you can link to either set.
- 
+ The library routines supplied with the compiler are compiled as small,
+ medium and large.
+ The compiled library modules are contained in separate directories as small,
+ medium and large so that you can link to the appropriate set.
 \layout Standard
 
-When the large model is used all variables declared without a storage class
- will be allocated into the external ram, this includes all parameters and
- local variables (for non-reentrant
+When the medium or large model is used all variables declared without a
+ storage class will be allocated into the external ram, this includes all
+ parameters and local variables (for non-reentrant
 \begin_inset LatexCommand \index{reentrant}
 
 \end_inset 
@@ -15097,6 +16106,46 @@ std_c99
 
 - Follow the C99 standard and disable SDCC features that conflict with the
  standard (incomplete support).
+\layout Itemize
+
+codeseg <name>
+\begin_inset LatexCommand \index{\#pragma codeseg}
+
+\end_inset 
+
+- Use this name (max.
+ 8 characters) for the code segment.
+ See option -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-codeseg.
+\layout Itemize
+
+constseg <name>
+\begin_inset LatexCommand \index{\#pragma constseg}
+
+\end_inset 
+
+- Use this name (max.
+ 8 characters) for the const segment.
+ See option -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-constseg.
 \layout Standard
 
 SDCPP supports the following #pragma directives:
@@ -15209,10 +16258,10 @@ The compiler creates the following #defines
 
 
 \begin_inset  Tabular
-<lyxtabular version="3" rows="10" columns="2">
+<lyxtabular version="3" rows="11" columns="2">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" width="0">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -15254,7 +16303,9 @@ SDCC
 
 \layout Standard
 
-this Symbol is always defined
+Always defined.
+ Since version 2.5.6 the version number as an int (ex.
+ 256)
 \end_inset 
 </cell>
 </row>
@@ -15399,6 +16450,43 @@ status Collapsed
 \end_inset 
 
 -model-small
+\emph default 
+ is used
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+SDCC_MODEL_MEDIUM
+\begin_inset LatexCommand \index{SDCC\_MODEL\_MEDIUM}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+when 
+\emph on 
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-model-medium
 \emph default 
  is used
 \end_inset 
@@ -15887,7 +16975,7 @@ $(PRJ).hex: $(OBJS)
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-gplink -m -s $(PRJ).lkr -o $(PRJ).hex $(OBJS)
+gplink -m -s $(PRJ).lkr -o $(PRJ).hex $(OBJS) libsdcc.lib
 \layout Standard
 
 Here is a 
@@ -15933,7 +17021,7 @@ $(PRJ).hex: $(OBJS)
 \SpecialChar ~
 \SpecialChar ~
 \SpecialChar ~
-mplink /v $(PRJ).lkr /m $(PRJ).map /o $(PRJ).hex $(OBJS)
+mplink /v $(PRJ).lkr /m $(PRJ).map /o $(PRJ).hex $(OBJS) libsdcc.lib
 \layout Standard
 
 Please note that indentations within a
@@ -15941,6 +17029,131 @@ Please note that indentations within a
  Makefile
 \family default 
  have to be done with a tabulator character.
+\layout Subsection
+
+Command-line options
+\layout Standard
+
+Besides the switches common to all SDCC backends, the PIC14 port accepts
+ the following options (for an updated list see sdcc -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-help):
+\layout List
+\labelwidthstring 00.00.0000
+
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-debug-extra emit debug info in assembly output
+\layout List
+\labelwidthstring 00.00.0000
+
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-no-pcode-opt disable (slightly faulty) optimization on pCode
+\layout Subsection
+
+The library
+\layout Subsubsection
+
+error: missing definition for symbol 
+\begin_inset Quotes sld
+\end_inset 
+
+__gptrget1
+\begin_inset Quotes srd
+\end_inset 
+
+
+\layout Standard
+
+The PIC14 port uses library routines to provide more complex operations
+ like multiplication, division/modulus and (generic) pointer dereferencing.
+ In order to add these routines to your project, you must link with PIC14's
+ 
+\family typewriter 
+libsdcc.lib
+\family default 
+.
+ For single source file projects this is done automatically, more complex
+ projects must add 
+\family typewriter 
+libsdcc.lib
+\family default 
+ to the linker's arguments.
+ Make sure you also add an include path for the library (using the -I switch
+ to the linker)!
+\layout Subsubsection
+
+Processor mismatch in file 
+\begin_inset Quotes sld
+\end_inset 
+
+XXX
+\begin_inset Quotes srd
+\end_inset 
+
+.
+\layout Standard
+
+This warning can usually be ignored due to the very good compatibility amongst
+ 14 bit PIC devices.
+\layout Standard
+
+You might also consider recompiling the library for your specific device
+ by changing the ARCH=p16f877 (default target) entry in 
+\family typewriter 
+device/lib/pic/Makefile.in
+\family default 
+ and 
+\family typewriter 
+device/lib/pic/Makefile
+\family default 
+ to reflect your device.
+ This might even improve performance for smaller devices as unneccesary
+ BANKSELs migth be removed.
+\layout Subsection
+
+Known bugs
+\layout Subsubsection
+
+initialized data
+\layout Standard
+
+Currently, data can only be initialized if it resides in the source file
+ together with 
+\emph on 
+main()
+\emph default 
+.
+ Data in other source files will silently 
+\series bold 
+not
+\series default 
+ be initialized.
 \layout Section
 
 The PIC16
@@ -16403,6 +17616,20 @@ status Collapsed
 \end_inset 
 
 -optimize-cmp Try to optimize some compares.
+\layout List
+\labelwidthstring 00.00.0000
+
+-
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-optimize-df Analyze the dataflow of the generated code and improve it.
 \layout List
 \labelwidthstring 00.00.0000
 
@@ -19600,6 +20827,262 @@ status Collapsed
  Other ways to reduce stack usage may exist.
 \layout Chapter
 
+Debugging
+\layout Standard
+
+There are several approaches to debugging your code.
+ This chapter is meant to show your options and to give detail on some of
+ them:
+\newline 
+
+\newline 
+When writing your code:
+\layout Itemize
+
+write your code with debugging in mind (avoid duplicating code, put conceptually
+ similar variables into structs, use structured code, have strategic points
+ within your code where all variables are consistent, ...)
+\layout Itemize
+
+run a syntax-checking tool like splint
+\begin_inset LatexCommand \index{splint (syntax checking tool)}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \index{lint (syntax checking tool)}
+
+\end_inset 
+
+ (see -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-more-pedantic 
+\begin_inset LatexCommand \ref{lyx:more-pedantic-SPLINT}
+
+\end_inset 
+
+) over the code.
+\layout Itemize
+
+for the high level code use a C-compiler (like f.e.
+ GCC) to compile run and debug the code on your host.
+ See (see -
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+-more-pedantic 
+\begin_inset LatexCommand \ref{lyx:more-pedantic-SPLINT}
+
+\end_inset 
+
+ ) on howto handle syntax extensions like __xdata, __at(), ...
+ 
+\layout Itemize
+
+use another C-compiler to compile code for your target.
+ Always an option but not recommended:) And not very likely to help you.
+ If you seriously consider walking this path you should at least occasionally
+ check portability of your code.
+ Most commercial compiler vendors will offer an evaluation version so you
+ can test compile your code or snippets of your code.
+\layout Standard
+
+Debugging on a simulator:
+\layout Itemize
+
+there is a separate section about SDCDB (section 
+\begin_inset LatexCommand \ref{cha:Debugging-with-SDCDB}
+
+\end_inset 
+
+) below.
+\layout Itemize
+
+or (8051 specific) use a freeware/commercial simulator which interfaces
+ to the AOMF
+\begin_inset LatexCommand \index{AOMF, AOMF51}
+
+\end_inset 
+
+ file (see 
+\begin_inset LatexCommand \ref{OMF file}
+
+\end_inset 
+
+) optionally generated by SDCC.
+\layout Standard
+
+Debugging On-target: 
+\layout Itemize
+
+use a MCU port pin to serially output debug data to the RS232 port of your
+ host.
+ You'll probably want some level shifting device typically involving a MAX232
+ or similar IC.
+ If the hardware serial port of the MCU is not available search for 'Software
+ UART' in your favourite search machine.
+\layout Itemize
+
+use an on-target monitor.
+ In this context a monitor is a small program which usually accepts commands
+ via a serial line and allows to set program counter, to single step through
+ a program and read/write memory locations.
+ For the 8051 good examples of monitors are paulmon and cmon51 (see section
+ 
+\begin_inset LatexCommand \ref{sec:Related-open-source-tools}
+
+\end_inset 
+
+).
+\layout Itemize
+
+toggle MCU port pins at strategic points within your code and use an oscilloscop
+e.
+ A 
+\emph on 
+digital oscilloscope
+\emph default 
+
+\begin_inset LatexCommand \index{oscilloscope}
+
+\end_inset 
+
+ with deep trace memory is really helpful especially if you have to debug
+ a realtime application.
+ If you need to monitor more pins than your oscilloscope provides you can
+ sometimes get away with a small R-2R network.
+ On a single channel oscilloscope you could f.e.
+ monitor 2 push-pull driven pins by connecting one via a 10\SpecialChar ~
+k
+\begin_inset Formula $\Omega$
+\end_inset 
+
+ resistor and the other one by a 5\SpecialChar ~
+k
+\begin_inset Formula $\Omega$
+\end_inset 
+
+ resistor to the oscilloscope probe (check output drive capability of the
+ pins you want to monitor).
+ If you need to monitor many more pins a 
+\emph on 
+logic analyzer
+\emph default 
+ will be handy.
+\layout Itemize
+
+use an ICE (
+\emph on 
+i
+\emph default 
+n 
+\emph on 
+c
+\emph default 
+ircuit 
+\emph on 
+e
+\emph default 
+mulator
+\begin_inset LatexCommand \index{ICE (in circuit emulator)}
+
+\end_inset 
+
+).
+ Usually very expensive.
+ And very nice to have too.
+ And usually locks you (for years...) to the devices the ICE can emulate.
+ 
+\layout Itemize
+
+use a remote debugger.
+ In most 8-bit systems the symbol information is not available on the target,
+ and a complete debugger is too bulky for the target system.
+ Therefore usually a debugger on the host system connects to an on-target
+ debugging stub which accepts only primitive commands.
+ 
+\newline 
+Terms to enter into your favourite search engine could be 'remote debugging',
+ 'gdb stub' or 'inferior debugger'.
+ (is there one?)
+\layout Itemize
+
+use an on target hardware debugger.
+ Some of the more modern MCUs include hardware support for setting break
+ points and monitoring/changing variables by using dedicated hardware pins.
+ This facility doesn't require additional code to run on the target and
+ 
+\emph on 
+usually
+\emph default 
+ doesn't affect runtime behaviour until a breakpoint is hit.
+ For the mcs51 most hardware debuggers use the AOMF
+\begin_inset LatexCommand \index{AOMF, AOMF51}
+
+\end_inset 
+
+ file (see 
+\begin_inset LatexCommand \ref{OMF file}
+
+\end_inset 
+
+) as input file.
+ 
+\layout Standard
+
+Last not least:
+\layout Itemize
+
+if you are not familiar with any of the following terms you're likely to
+ run into problems rather sooner than later: 
+\emph on 
+volatile
+\emph default 
+, 
+\emph on 
+atomic
+\emph default 
+, 
+\emph on 
+memory map
+\emph default 
+, 
+\emph on 
+overlay
+\emph default 
+.
+ As an embedded programmer you 
+\emph on 
+have
+\emph default 
+ to know them so why not look them up 
+\emph on 
+before
+\emph default 
+ you have problems?)
+\layout Itemize
+
+tell someone else about your problem (actually this is a surprisingly effective
+ means to hunt down the bug even if the listener is not familiar with your
+ environment).
+ As 'failure to communicate' is probably one of the job-induced deformations
+ of an embedded programmer this is highly encouraged.
+\layout Section
+
 Debugging with SDCDB
 \begin_inset LatexCommand \label{cha:Debugging-with-SDCDB}
 
@@ -19631,8 +21114,8 @@ on, which also builds and installs the debugger in the target directory
  specified during configuration.
  The debugger allows you debug BOTH at the C source and at the ASM source
  level.
- Sdcdb is available on Unix platforms only.
-\layout Section
+ Sdcdb is currently not available on Win32 platforms.
+\layout Subsection
 
 Compiling for Debugging
 \layout Standard
@@ -19654,7 +21137,7 @@ status Collapsed
 
  option must be specified for all files for which debug information is to
  be generated.
- The complier generates a .adb file for each of these files.
+ The compiler generates a .adb file for each of these files.
  The linker creates the .cdb
 \begin_inset LatexCommand \index{<file>.cdb}
 
@@ -19667,7 +21150,7 @@ status Collapsed
 
  files and the address information.
  This .cdb is used by the debugger.
-\layout Section
+\layout Subsection
 
 How the Debugger Works
 \layout Standard
@@ -19685,7 +21168,7 @@ status Collapsed
 -debug option is specified the compiler generates extra symbol information
  some of which are put into the assembler source and some are put into the
  .adb file.
-  Then the linker creates the .cdb file from the individual .adb files with
+ Then the linker creates the .cdb file from the individual .adb files with
  the address information for the symbols.
  The debugger reads the symbolic information generated by the compiler &
  the address information generated by the linker.
@@ -19693,9 +21176,19 @@ status Collapsed
  execution is controlled by the debugger.
  When a command is issued for the debugger, it translates it into appropriate
  commands for the simulator.
-\layout Section
+ (Currently sdcdb only connects to the simulator but 
+\emph on 
+newcdb
+\emph default 
+ at 
+\begin_inset LatexCommand \url{http://ec2drv.sf.net/}
 
-Starting the Debugger
+\end_inset 
+
+ is an effort to connect directly to the hardware.) 
+\layout Subsection
+
+Starting the Debugger SDCDB
 \layout Standard
 
 The debugger can be started using the following command line.
@@ -19728,9 +21221,9 @@ foo.ihx - the Intel hex format
 \end_inset 
 
  object file.
-\layout Section
+\layout Subsection
 
-Command Line Options.
+SDCDB Command Line Options
 \layout Itemize
 
 -
@@ -19795,17 +21288,17 @@ status Collapsed
 \layout Itemize
 
 -k <port number> passed to simulator see the simulator docs for details.
-\layout Section
+\layout Subsection
 
-Debugger Commands.
+SDCDB Debugger Commands
 \layout Standard
 
 As mentioned earlier the command interface for the debugger has been deliberatel
 y kept as close the GNU debugger gdb, as possible.
  This will help the integration with existing graphical user interfaces
  (like ddd, xxgdb or xemacs) existing for the GNU debugger.
- If you use a graphical user interface for the debugger you can skip the
- next sections.
+ If you use a graphical user interface for the debugger you can skip this
+ section.
 \layout Subsubsection*
 
 break [line | file:line | function | file:function]
@@ -19946,9 +21439,94 @@ quit
 "Watch me now.
  Iam going Down.
  My name is Bobby Brown"
-\layout Section
+\layout Subsection
 
-Interfacing with XEmacs
+Interfacing SDCDB with DDD
+\layout Comment
+
+The screenshot was converted from png to eps with: 
+\begin_inset Quotes sld
+\end_inset 
+
+bmeps -c -e8f -p3 ddd_example.png >ddd_example.eps
+\begin_inset Quotes srd
+\end_inset 
+
+ which produces a pretty compact eps file which is free from compression
+ artifacts.
+\layout Comment
+
+The screenshot was included in sdccman.lyx cvs version 1.120 but later removed
+ as this broke the build system on Sourceforge (pdf-file was broken).
+\layout Standard
+
+The .eps File 
+\size footnotesize 
+
+\begin_inset LatexCommand \url{http://svn.sourceforge.net/viewcvs.cgi/*checkout*/sdcc/trunk/sdcc/doc/figures/ddd_example.eps}
+
+\end_inset 
+
+
+\size default 
+ shows a screenshot of a debugging session with DDD
+\begin_inset LatexCommand \index{DDD (debugger)}
+
+\end_inset 
+
+ (Unix only) on a simulated 8032.
+ The debugging session might not run as smoothly as the screenshot suggests.
+ The debugger allows setting of breakpoints, displaying and changing variables,
+ single stepping through C and assembler code.
+ 
+\newline 
+The source was compiled with 
+\family sans 
+\series bold 
+
+\newline 
+
+\newline 
+sdcc -
+\family default 
+\series default 
+
+\begin_inset ERT
+status Collapsed
+
+\layout Standard
+
+\backslash 
+/
+\end_inset 
+
+
+\family sans 
+\series bold 
+-debug ddd_example.c
+\family default 
+\series default 
+ 
+\family sans 
+\series bold 
+
+\newline 
+
+\family default 
+\series default 
+
+\newline 
+and DDD was invoked with 
+\family sans 
+\series bold 
+
+\newline 
+
+\newline 
+ddd -debugger 'sdcdb -cpu 8032 ddd_example'
+\layout Subsection
+
+Interfacing SDCDB with XEmacs
 \begin_inset LatexCommand \index{XEmacs}
 
 \end_inset 
@@ -19958,7 +21536,7 @@ Interfacing with XEmacs
 
 \end_inset 
 
-.
+
 \layout Standard
 
 Two files (in emacs lisp) are provided for the interfacing with XEmacs,
@@ -20806,9 +22384,19 @@ Use the smallest data type to represent your data-value.
  If it is known in advance that the value is going to be less than 256 then
  use an 'unsigned char' instead of a 'short' or 'int'.
  Please note, that ANSI C requires both signed and unsigned chars to be
- promoted to 'signed int' before doing any operation.
+ promoted to 'signed int'
+\begin_inset LatexCommand \index{promotion to signed int}
+
+\end_inset 
+
+ before doing any operation.
  This promotion
 \begin_inset LatexCommand \index{type promotion}
+
+\end_inset 
+
+
+\begin_inset LatexCommand \label{type promotion}
 
 \end_inset 
 
@@ -20990,6 +22578,98 @@ feeling
  for the code generation.
 \layout Section
 
+Porting code from or to other compilers
+\layout Itemize
+
+check whether endianness of the compilers differs and adapt where needed.
+\layout Itemize
+
+check the device specific header files for compiler specific syntax.
+ Eventually include the file <compiler.h
+\begin_inset LatexCommand \index{compiler.h (include file)}
+
+\end_inset 
+
+> to allow using common header files.
+\layout Itemize
+
+check whether the startup code contains the correct initialization (watchdog,
+ peripherals).
+\layout Itemize
+
+check whether the sizes of short, int, long match.
+\layout Itemize
+
+check if some 16 or 32 bit hardware registers require a specific addressing
+ order (least significant or most significant byte first) and adapt if needed
+ (
+\emph on 
+first
+\emph default 
+ and 
+\emph on 
+last
+\emph default 
+ relate to time and not to lower/upper memory location here, so this is
+ 
+\emph on 
+not
+\emph default 
+ the same as endianness).
+\layout Itemize
+
+check whether the keyword 
+\emph on 
+volatile
+\emph default 
+ is used where needed.
+ The compilers might differ in their optimization characteristics (as different
+ versions of the same compiler might also use more clever optimizations
+ this is good idea anyway).
+\layout Itemize
+
+check that the compilers are not told to supress warnings.
+\layout Itemize
+
+check and convert compiler specific extensions (interrupts, memory areas,
+ pragmas etc.).
+\layout Itemize
+
+check for differences in type promotion (especially check for math operations
+ on char variables and for the use of the ~\SpecialChar ~
+operator on bit variables.
+ See 
+\begin_inset LatexCommand \ref{type promotion}
+
+\end_inset 
+
+ and 
+\begin_inset LatexCommand \ref{sec:Compatibility-with-previous}
+
+\end_inset 
+
+).
+\layout Itemize
+
+check the assembly code generated for interrupt routines (f.e.
+ for calls to possibly non-reentrant library functions).
+\layout Itemize
+
+check whether timing loops result in proper timing (or preferably consider
+ a rewrite of the code with timer based delays instead).
+\layout Itemize
+
+check for differences in printf parameters (some compilers push (va_arg
+\begin_inset LatexCommand \index{va\_arg}
+
+\end_inset 
+
+) char variables as integers others as char).
+\layout Itemize
+
+check the resulting memory layout.
+\layout Section
+
 Tools
 \begin_inset LatexCommand \index{Tools}
 
@@ -21002,9 +22682,9 @@ Tools
 \begin_inset  Tabular
 <lyxtabular version="3" rows="12" columns="3">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0pt">
-<column alignment="center" valignment="top" leftline="true" width="0pt">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0pt">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -21673,6 +23353,11 @@ f
 \layout Section
 
 Related open source tools
+\begin_inset LatexCommand \label{sec:Related-open-source-tools}
+
+\end_inset 
+
+
 \begin_inset LatexCommand \index{Related tools}
 
 \end_inset 
@@ -21682,11 +23367,11 @@ Related open source tools
 \align center 
 
 \begin_inset  Tabular
-<lyxtabular version="3" rows="11" columns="3">
+<lyxtabular version="3" rows="14" columns="3">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" width="0pt">
 <column alignment="block" valignment="top" leftline="true" width="30line%">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0pt">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -21822,6 +23507,38 @@ PIC programmer
 
 \layout Standard
 
+ec2drv/newcdb
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+Tools for Silicon Laboratories JTAG debug adapter, partly based on sdcdb
+ (Unix only)
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\begin_inset LatexCommand \url{http://sourceforge.net/projects/ec2drv}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
 indent
 \begin_inset LatexCommand \index{indent (source formatting tool)}
 
@@ -21925,6 +23642,37 @@ Part of binutils (should be there anyway)
 
 \layout Standard
 
+cmon51
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+8051 monitor (hex up-/download, single step, disassemble)
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\begin_inset LatexCommand \url{http://sourceforge.net/projects/cmon51}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
 doxygen
 \begin_inset LatexCommand \index{doxygen (source documentation tool)}
 
@@ -21992,6 +23740,37 @@ IDE (has anyone tried integrating SDCC & sdcdb? Unix only)
 
 \layout Standard
 
+paulmon
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+8051 monitor (hex up-/download, single step, disassemble)
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\begin_inset LatexCommand \url{http://www.pjrc.com/tech/8051/paulmon2.html}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
 splint
 \begin_inset LatexCommand \index{splint (syntax checking tool)}
 
@@ -22005,7 +23784,12 @@ splint
 
 \layout Standard
 
-Statically checks c sources (has anyone adapted splint for SDCC?)
+Statically checks c sources (see 
+\begin_inset LatexCommand \ref{lyx:more-pedantic-SPLINT}
+
+\end_inset 
+
+)
 \end_inset 
 </cell>
 <cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
@@ -22077,11 +23861,11 @@ Related documentation / recommended reading
 \align center 
 
 \begin_inset  Tabular
-<lyxtabular version="3" rows="6" columns="3">
+<lyxtabular version="3" rows="8" columns="3">
 <features>
-<column alignment="center" valignment="top" leftline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" width="0pt">
 <column alignment="block" valignment="top" leftline="true" width="30line%">
-<column alignment="center" valignment="top" leftline="true" rightline="true" width="0pt">
+<column alignment="left" valignment="top" leftline="true" rightline="true" width="0pt">
 <row topline="true" bottomline="true">
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
@@ -22177,6 +23961,88 @@ C-FAQ-list
 
 
 \begin_inset LatexCommand \url{http://www.eskimo.com/~scs/C-faq/top.html}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+ISO/IEC 9899:TC2
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\begin_inset Quotes sld
+\end_inset 
+
+C-Standard
+\begin_inset Quotes srd
+\end_inset 
+
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\size footnotesize 
+
+\begin_inset LatexCommand \url{http://www.open-std.org/jtc1/sc22/wg14/www/standards.html#9899}
+
+\end_inset 
+
+
+\end_inset 
+</cell>
+</row>
+<row topline="true">
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+ISO/IEC DTR 18037
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\begin_inset Quotes sld
+\end_inset 
+
+Extensions for Embedded C
+\begin_inset Quotes srd
+\end_inset 
+
+
+\end_inset 
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\layout Standard
+
+
+\size footnotesize 
+
+\begin_inset LatexCommand \url{http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1021.pdf}
 
 \end_inset 
 
@@ -22375,8 +24241,8 @@ The SDCC project is hosted on the SDCC sourceforge site at
 
 \end_inset 
 
- area and cvs code repository
-\begin_inset LatexCommand \index{cvs code repository}
+ area and Subversion code repository
+\begin_inset LatexCommand \index{Subversion code repository}
 
 \end_inset 
 
@@ -22593,7 +24459,7 @@ Traffic on sdcc-devel and sdcc-user is about 100 mails/month each not counting
 ChangeLog
 \layout Standard
 
-You can follow the status of the cvs version
+You can follow the status of the Subversion version
 \begin_inset LatexCommand \index{version}
 
 \end_inset 
@@ -22603,16 +24469,44 @@ You can follow the status of the cvs version
 
 \end_inset 
 
- in the cvs-repository
-\newline 
-
+ in the Subversion repository
 \size footnotesize 
-
-\begin_inset LatexCommand \htmlurl{http://cvs.sf.net/cgi-bin/viewcvs.cgi/*checkout*/sdcc/sdcc/ChangeLog?rev=HEAD&content-type=text/plain}
+ 
+\begin_inset LatexCommand \htmlurl{http://svn.sourceforge.net/viewcvs.cgi/*checkout*/sdcc/trunk/sdcc/ChangeLog}
 
 \end_inset 
 
 .
+\layout Section
+
+Subversion Source Code Repository
+\layout Standard
+
+The output of 
+\family sans 
+\series bold 
+sdcc --version
+\family default 
+\series default 
+ or the filenames of the snapshot versions of SDCC include date and its
+ Subversion
+\begin_inset LatexCommand \index{Subversion}
+
+\end_inset 
+
+ number.
+ Subversion allows to download the source of recent or previous versions
+ 
+\begin_inset LatexCommand \url{http://sourceforge.net/svn/?group_id=599}
+
+\end_inset 
+
+ (by number or by date).
+ An on-line source code browser and detailled instructions are also available
+ there.
+ SDCC versions starting from 1999 up to now are available (currently the
+ versions prior to the conversion from cvs to Subversion (April 2006) are
+ either by accessible by Subversion or by cvs).
 \layout Section
 
 Release policy
@@ -22762,6 +24656,132 @@ The pic port uses a different set of regression tests, you'll find them
 sdcc/src/regression
 \shape default 
 .
+\layout Section
+
+Use of SDCC in Education
+\layout Standard
+
+In short: 
+\emph on 
+highly
+\emph default 
+ encouraged
+\begin_inset Foot
+collapsed false
+
+\layout Standard
+
+the phrase "use in education" might evoke the association "
+\emph on 
+only
+\emph default 
+ fit for use in education".
+ This connotation is not intended but nevertheless risked as the licensing
+ of SDCC makes it difficult to offer educational discounts
+\end_inset 
+
+.
+ If your rationales are to:
+\layout Enumerate
+
+give students a chance to understand the 
+\emph on 
+complete
+\emph default 
+ steps of code generation
+\layout Enumerate
+
+have a curriculum that can be extended for years.
+ Then you could use an fpga board as target and your curriculum will seamlessly
+ extend from logic synthesis (
+\begin_inset LatexCommand \url[http://www.opencores.org]{opencores.org}
+
+\end_inset 
+
+, 
+\begin_inset LatexCommand \url[Oregano]{http://www.oregano.at/ip/ip01.htm}
+
+\end_inset 
+
+), over assembly programming, to C to FPGA compilers (
+\begin_inset LatexCommand \url[FPGAC]{http://sf.net/projects/fpgac}
+
+\end_inset 
+
+) and to C.
+\layout Enumerate
+
+be able to insert excursions about skills like using a revision control
+ system, submitting/applying patches, using a type-setting (as opposed to
+ word-processing) engine LyX/LaTeX, using 
+\begin_inset LatexCommand \url[SourceForge]{http://www.sf.net}
+
+\end_inset 
+
+, following some 
+\begin_inset LatexCommand \url[netiquette]{http://en.wikipedia.org/wiki/Netiquette}
+
+\end_inset 
+
+, understanding BSD/LGPL/GPL/Proprietary licensing, growth models of Open
+ Source Software, CPU simulation, compiler regression tests
+\begin_inset LatexCommand \index{Regression test}
+
+\end_inset 
+
+.
+ 
+\newline 
+And if there should be a shortage of ideas then you can always point students
+ to the ever-growing feature request list 
+\begin_inset LatexCommand \htmlurl{http://sourceforge.net/tracker/?group_id=599&atid=350599}
+
+\end_inset 
+
+.
+\layout Enumerate
+
+not tie students to a specific host platform and instead allow them to use
+ a host platform of 
+\emph on 
+their
+\emph default 
+ choice (among them Alpha, i386, i386_64, MacOs, Mips, Sparc, Windows and
+ eventually 
+\begin_inset LatexCommand \url[OLPC]{http://wiki.laptop.org/wiki/One_Laptop_per_Child}
+
+\end_inset 
+
+)
+\layout Enumerate
+
+not encourage students to use illegal copies of educational software
+\layout Enumerate
+
+be immune to licensing/availability/price changes of the chosen tool chain
+\layout Enumerate
+
+be able to change to a new target platform without having to adopt a new
+ tool chain
+\layout Enumerate
+
+have complete control over and insight into the tool chain
+\layout Enumerate
+
+make your students aware about the pros and cons of open source software
+ development
+\layout Enumerate
+
+give back to the public as you are probably at least partially publically
+ funded
+\layout Enumerate
+
+give students a chance to publically prove their skills and to possibly
+ see a world wide impact
+\layout Standard
+
+then SDCC is probably among the first choices.
+ Well, probably SDCC might be the only choice.
 \layout Chapter
 \pagebreak_top 
 SDCC Technical Data
@@ -24159,12 +26179,18 @@ Highest Order Bit
 
 \end_inset 
 
+ / Any Order Bit
+\begin_inset LatexCommand \index{Any Order Bit}
+
+\end_inset 
+
 
 \layout Standard
 
 It is frequently required to obtain the highest order bit of an integral
  type (long, int, short or char types).
- SDCC recognizes the following expression to yield the highest order bit
+ Also obtaining any other order bit is not uncommon.
+ SDCC recognizes the following expressions to yield the highest order bit
  and generates optimized code for it, e.g.:
 \layout Verse
 
@@ -24178,7 +26204,11 @@ foo () {
 \newline 
 \SpecialChar ~
 \SpecialChar ~
-unsigned char hob; 
+unsigned char hob1, aob1; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+bit hob2, hob3, aob2, aob3; 
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -24187,7 +26217,27 @@ unsigned char hob;
 \newline 
 \SpecialChar ~
 \SpecialChar ~
-hob = (gint >> 15) & 1; 
+hob1 = (gint >> 15) & 1; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+hob2 = (gint >> 15) & 1; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+hob3 = gint & 0x8000; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+aob1 = (gint >> 9) & 1; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+aob2 = (gint >> 8) & 1; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+aob3 = gint & 0x0800; 
 \newline 
 \SpecialChar ~
 \SpecialChar ~
@@ -24340,15 +26390,600 @@ will generate the following code:
 \SpecialChar ~
  mov\SpecialChar ~
 \SpecialChar ~
- _foo_hob_1_1,a
+ _foo_hob1_1_1,a 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 66 ;\SpecialChar ~
+ hob.c 8 
+\newline 
+0011 E5*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 67\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ a,(_gint + 1) 
+\newline 
+0013 33\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 68\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ rlc\SpecialChar ~
+\SpecialChar ~
+ a 
+\newline 
+0014 92*00\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 69\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_hob2_1_1,c 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 66 ;\SpecialChar ~
+ hob.c 9 
+\newline 
+0016 E5*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 67\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ a,(_gint + 1) 
+\newline 
+0018 33\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 68\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ rlc\SpecialChar ~
+\SpecialChar ~
+ a 
+\newline 
+0019 92*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 69\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_hob3_1_1,c 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 70 ;\SpecialChar ~
+ hob.c 10 
+\newline 
+001B E5*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 71\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ a,(_gint + 1) 
+\newline 
+001D 03\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 72\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ rr\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ a 
+\newline 
+001E 54 01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 73\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ anl\SpecialChar ~
+\SpecialChar ~
+ a,#0x01 
+\newline 
+0020 F5*03\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 74\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_aob1_1_1,a 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 75 ;\SpecialChar ~
+ hob.c 11 
+\newline 
+0022 E5*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 76\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ a,(_gint + 1) 
+\newline 
+0024 13\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 77\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ rrc\SpecialChar ~
+\SpecialChar ~
+ a 
+\newline 
+0025 92*02\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 78\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_aob2_1_1,c 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 79 ;\SpecialChar ~
+ hob.c 12 
+\newline 
+0027 E5*01\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 80\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ a,(_gint + 1) 
+\newline 
+0029 A2 E3\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 81\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ c,acc[3] 
+\newline 
+002B 92*03\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 82\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_aob3_1_1,c 
 \layout Standard
 
-Variations of this case however will 
+Other variations of these cases however will 
 \emph on 
 not
 \emph default 
  be recognized.
- It is a standard C expression, so I heartily recommend this be the only
+ They are standard C expressions, so I heartily recommend these be the only
  way to get the highest order bit, (it is portable).
  Of course it will be recognized even if it is embedded in other expressions,
  e.g.:
@@ -24357,6 +26992,325 @@ not
 
 \family typewriter 
 xyz = gint + ((gint >> 15) & 1);
+\layout Standard
+
+will still be recognized.
+\layout Subsection
+
+Higher Order Byte
+\begin_inset LatexCommand \index{Higher Order Byte}
+
+\end_inset 
+
+ / Higher Order Word
+\begin_inset LatexCommand \index{Higher Order Word}
+
+\end_inset 
+
+
+\layout Standard
+
+It is also frequently required to obtain a higher order byte or word of
+ a larger integral type (long, int or short types).
+ SDCC recognizes the following expressions to yield the higher order byte
+ or word and generates optimized code for it, e.g.:
+\layout Verse
+
+
+\family typewriter 
+unsigned int gint; 
+\newline 
+unsigned long int glong; 
+\newline 
+
+\newline 
+foo () { 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+unsigned char hob1, hob2; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+unsigned int how1, how2; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+...
+ 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+hob1 = (gint >> 8) & 0xFF; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+hob2 = glong >> 24; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+how1 = (glong >> 16) & 0xFFFF; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+how2 = glong >> 8; 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+..
+ 
+\newline 
+}
+\layout Standard
+
+will generate the following code:
+\layout Verse
+
+
+\family typewriter 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 91 ;\SpecialChar ~
+ hob.c 15 
+\newline 
+0037 85*01*06\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 92\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_hob1_1_1,(_gint + 1) 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 93 ;\SpecialChar ~
+ hob.c 16 
+\newline 
+003A 85*05*07\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 94\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_hob2_1_1,(_glong + 3) 
+\newline 
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 95 ;\SpecialChar ~
+ hob.c 17 
+\newline 
+003D 85*04*08\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 96\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_how1_1_1,(_glong + 2) 
+\newline 
+0040 85*05*09\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 97\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ (_foo_how1_1_1 + 1),(_glong + 3) 
+\newline 
+0043 85*03*0A\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 98\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ _foo_how2_1_1,(_glong + 1) 
+\newline 
+0046 85*04*0B\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ 99\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+\SpecialChar ~
+ mov\SpecialChar ~
+\SpecialChar ~
+ (_foo_how2_1_1 + 1),(_glong + 2) 
+\layout Standard
+
+Again, variations of these cases may 
+\emph on 
+not
+\emph default 
+ be recognized.
+ They are standard C expressions, so I heartily recommend these be the only
+ way to get the higher order byte/word, (it is portable).
+ Of course it will be recognized even if it is embedded in other expressions,
+ e.g.:
+\layout Verse
+
+
+\family typewriter 
+xyz = gint + ((gint >> 8) & 0xFF);
 \layout Standard
 
 will still be recognized.
@@ -24776,6 +27730,20 @@ ANSI-Compliance
 
 \layout Standard
 
+The latest publically available version of the standard 
+\emph on 
+ISO/IEC 9899 - Programming languages - C
+\emph default 
+ should be available at: 
+\begin_inset LatexCommand \url{http://www.open-std.org/jtc1/sc22/wg14/www/standards.html#9899}
+
+\end_inset 
+
+.
+\newline 
+
+\layout Standard
+
 Deviations from the compliance:
 \layout Itemize
 
@@ -24873,6 +27841,18 @@ return rets;/* is invalid in SDCC although allowed in ANSI */
 \end_deeper 
 \layout Itemize
 
+initialization of structure arrays must be fully braced.
+\begin_deeper 
+\layout Verse
+
+
+\family typewriter 
+struct s { char x } a[] = {1, 2}; /* invalid in SDCC */
+\newline 
+struct s { char x } a[] = {{1}, {2}}; /* OK */
+\end_deeper 
+\layout Itemize
+
 'long long
 \begin_inset LatexCommand \index{long long (not supported)}
 
@@ -24897,19 +27877,6 @@ return rets;/* is invalid in SDCC although allowed in ANSI */
 \end_inset 
 
 not supported.
-\layout Itemize
-
-No support for setjmp
-\begin_inset LatexCommand \index{setjmp (not supported)}
-
-\end_inset 
-
- and longjmp
-\begin_inset LatexCommand \index{longjmp (not supported)}
-
-\end_inset 
-
- (for now).
 \layout Itemize
 
 Old K&R style
@@ -24937,6 +27904,26 @@ int i,j; /* are valid in ANSI but not valid in SDCC */
  
 \newline 
 }
+\end_deeper 
+\layout Itemize
+
+Most enhancements in C99 are not supported, f.e.:
+\begin_deeper 
+\layout Verse
+
+
+\family typewriter 
+\series bold 
+inline
+\series default 
+ int increment (int a) { return a+1; } /* is invalid in SDCC although allowed
+ in C99 */
+\newline 
+for (
+\series bold 
+int
+\series default 
+ i=0; i<10; i++) /* is invalid in SDCC although allowed in C99 */
 \end_deeper 
 \layout Itemize
 

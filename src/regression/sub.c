@@ -1,19 +1,15 @@
-#define __16F873
-#include "p16f873.h"
-//#include "p16c84.h"
+#include "gpsim_assert.h"
 // Addition tests
 
 /* bit types are not ANSI - so provide a way of disabling bit types
  * if this file is used to test other compilers besides SDCC */
-#define SUPPORT_BIT_TYPES 1
+#define SUPPORT_BIT_TYPES 0
 
 /* Some compilers that support bit types do not support bit arithmetic 
  * (like bitx = bity + bitz;) */
 #define SUPPORT_BIT_ARITHMETIC 1
 
-unsigned char success=0;
 unsigned char failures=0;
-unsigned char dummy=0;
 
 #if SUPPORT_BIT_TYPES
 
@@ -40,11 +36,11 @@ unsigned char achar2 = 0;
 unsigned char achar3 = 0;
 unsigned char *acharP = 0;
 
-void done()
+void
+done()
 {
-
-  dummy++;
-
+  ASSERT(MANGLE(failures) == 0);
+  PASSED();
 }
 
 void sub_lit_from_uchar(void)
@@ -153,7 +149,6 @@ void sub_bits(void)
     failures++;
 #endif
 }
-#endif
 
 /* sub_bit2uchar(void) - assumes bit0 = 1, achar0 = 7  */
 
@@ -181,6 +176,7 @@ void sub_bit2uint(void)
     failures++;
 
 }
+#endif
 
 void sub_ucharFromLit(void)
 {
@@ -252,6 +248,5 @@ void main(void)
   achar0 = 0;
   sub_ucharFromLit();
 
-  success = failures;
   done();
 }

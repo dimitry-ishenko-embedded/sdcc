@@ -19,6 +19,7 @@ static char _defaultRules[] =
 static char *_mcs51_keywords[] =
 {
   "at",
+  "banked",
   "bit",
   "code",
   "critical",
@@ -30,6 +31,8 @@ static char *_mcs51_keywords[] =
   "pdata",
   "reentrant",
   "sfr",
+  "sfr16",
+  "sfr32",
   "sbit",
   "using",
   "xdata",
@@ -49,7 +52,8 @@ static char *_mcs51_keywords[] =
 
 void mcs51_assignRegisters (ebbIndex *);
 
-static int regParmFlg = 0;      /* determine if we can register a parameter */
+static int regParmFlg = 0;      /* determine if we can register a parameter     */
+static int regBitParmFlg = 0;   /* determine if we can register a bit parameter */
 
 static void
 _mcs51_init (void)
@@ -61,13 +65,20 @@ static void
 _mcs51_reset_regparm (void)
 {
   regParmFlg = 0;
+  regBitParmFlg = 0;
 }
 
 static int
-_mcs51_regparm (sym_link * l)
+_mcs51_regparm (sym_link * l, bool reentrant)
 {
-    if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
+    if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT)) {
+        /* bit parameters go to b0 thru b7 */
+        if (reentrant && (regBitParmFlg < 8)) {
+            regBitParmFlg++;
+            return 12 + regBitParmFlg;
+        }
         return 0;
+    }
     if (options.parms_in_bank1 == 0) {
         /* simple can pass only the first parameter in a register */
         if (regParmFlg)
@@ -111,14 +122,27 @@ _mcs51_finaliseOptions (void)
     port->genXINIT=0;
   }
 
-  if (options.model == MODEL_LARGE) {
-      port->mem.default_local_map = xdata;
-      port->mem.default_globl_map = xdata;
-    }
-  else
+  switch (options.model)
     {
+    case MODEL_SMALL:
       port->mem.default_local_map = data;
       port->mem.default_globl_map = data;
+      port->s.gptr_size = 3;
+      break;
+    case MODEL_MEDIUM:
+      port->mem.default_local_map = pdata;
+      port->mem.default_globl_map = pdata;
+      port->s.gptr_size = 3;
+      break;
+    case MODEL_LARGE:
+      port->mem.default_local_map = xdata;
+      port->mem.default_globl_map = xdata;
+      port->s.gptr_size = 3;
+      break;
+    default:
+      port->mem.default_local_map = data;
+      port->mem.default_globl_map = data;
+      break;
     }
 
   if (options.parms_in_bank1) {
@@ -179,13 +203,16 @@ _mcs51_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 static void
 _mcs51_genExtraAreas(FILE *of, bool hasMain)
 {
-  tfprintf (of, "\t!area\n", port->mem.code_name);
+  tfprintf (of, "\t!area\n", HOME_NAME);
   tfprintf (of, "\t!area\n", "GSINIT0 (CODE)");
   tfprintf (of, "\t!area\n", "GSINIT1 (CODE)");
   tfprintf (of, "\t!area\n", "GSINIT2 (CODE)");
   tfprintf (of, "\t!area\n", "GSINIT3 (CODE)");
   tfprintf (of, "\t!area\n", "GSINIT4 (CODE)");
   tfprintf (of, "\t!area\n", "GSINIT5 (CODE)");
+  tfprintf (of, "\t!area\n", STATIC_NAME);
+  tfprintf (of, "\t!area\n", port->mem.post_static_name);
+  tfprintf (of, "\t!area\n", CODE_NAME);
 }
 
 static void
@@ -250,6 +277,9 @@ hasExtBitOp (int op, int size)
   if (op == RRC
       || op == RLC
       || op == GETHBIT
+      || op == GETABIT
+      || op == GETBYTE
+      || op == GETWORD
       || (op == SWAP && size <= 2)
      )
     return TRUE;
@@ -676,7 +706,7 @@ PORT mcs51_port =
   {
     glue,
     TRUE,                       /* Emit glue around main */
-    MODEL_SMALL | MODEL_LARGE,
+    MODEL_SMALL | MODEL_MEDIUM | MODEL_LARGE,
     MODEL_SMALL
   },
   {
@@ -705,34 +735,37 @@ PORT mcs51_port =
     /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 1, 2, 3, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
   {
-    "XSTK    (PAG,XDATA)",
-    "STACK   (DATA)",
-    "CSEG    (CODE)",
-    "DSEG    (DATA)",
-    "ISEG    (DATA)",
-    "PSEG    (PAG,XDATA)",
-    "XSEG    (XDATA)",
-    "BSEG    (BIT)",
-    "RSEG    (DATA)",
-    "GSINIT  (CODE)",
-    "OSEG    (OVR,DATA)",
-    "GSFINAL (CODE)",
-    "HOME    (CODE)",
-    "XISEG   (XDATA)", // initialized xdata
-    "XINIT   (CODE)", // a code copy of xiseg
+    "XSTK    (PAG,XDATA)",      // xstack_name
+    "STACK   (DATA)",           // istack_name
+    "CSEG    (CODE)",           // code_name
+    "DSEG    (DATA)",           // data_name
+    "ISEG    (DATA)",           // idata_name
+    "PSEG    (PAG,XDATA)",      // pdata_name
+    "XSEG    (XDATA)",          // xdata_name
+    "BSEG    (BIT)",            // bit_name
+    "RSEG    (DATA)",           // reg_name
+    "GSINIT  (CODE)",           // static_name
+    "OSEG    (OVR,DATA)",       // overlay_name
+    "GSFINAL (CODE)",           // post_static_name
+    "HOME    (CODE)",           // home_name
+    "XISEG   (XDATA)",          // xidata_name - initialized xdata   initialized xdata
+    "XINIT   (CODE)",           // xinit_name - a code copy of xiseg
+    "CONST   (CODE)",           // const_name - const data (code or not)
     NULL,
     NULL,
     1
   },
   { _mcs51_genExtraAreas, NULL },
   {
-    +1,		/* direction (+1 = stack grows up) */
-    0,		/* bank_overhead (switch between register banks) */
-    4,		/* isr_overhead */
-    1,		/* call_overhead (2 for return address - 1 for pre-incrementing push */
-    1,		/* reent_overhead */
-    0		/* banked_overhead (switch between code banks) */
+    +1,         /* direction (+1 = stack grows up) */
+    0,          /* bank_overhead (switch between register banks) */
+    4,          /* isr_overhead */
+    1,          /* call_overhead (2 for return address - 1 for pre-incrementing push */
+    1,          /* reent_overhead */
+    0           /* banked_overhead (switch between code banks) */
   },
   {
     /* mcs51 has an 8 bit mul */

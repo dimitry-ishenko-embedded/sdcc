@@ -70,7 +70,7 @@ _xa51_reset_regparm (void)
 }
 
 static int
-_xa51_regparm (sym_link * l)
+_xa51_regparm (sym_link * l, bool reentrant)
 {
   return 0; // for now
   /* for this processor it is simple
@@ -269,6 +269,8 @@ PORT xa51_port =
 	/* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
     1, 2, 2, 4, 2, 2, 3, 1, 4, 4
   },
+  /* tags for generic pointers */
+  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
   {
     "XSEG    (XDATA)",
     "STACK   (XDATA)",
@@ -285,6 +287,7 @@ PORT xa51_port =
     "HOME    (CODE)",
     "XISEG   (XDATA)", // initialized xdata
     "XINIT   (CODE)", // a code copy of xiseg
+    "CONST   (CODE)",		// const_name - const data (code or not)
     NULL, // default local map
     NULL, // default global map
     1

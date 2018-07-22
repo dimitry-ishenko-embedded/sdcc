@@ -21,7 +21,7 @@
  * You are forbidden to forbid anyone else to use, share and improve
  * what you give them.   Help stamp out software-hoarding!  
  *
- * $Id: malloc.c,v 1.3 2005/03/31 16:24:45 vrokas Exp $
+ * $Id: malloc.c 3835 2005-08-07 20:09:11Z tecodev $
  */
 
 #include <malloc.h>
@@ -88,7 +88,7 @@ unsigned char _MALLOC_SPEC *malloc(unsigned char len)
           /* otherwise proceed with next block */
           goto do_continue;
 
-        pHeap = temp;
+        //pHeap = temp; /* temp == pHeap */
         bLen = pHeap->bits.count;
       }
 
@@ -109,7 +109,6 @@ unsigned char _MALLOC_SPEC *malloc(unsigned char len)
 
 do_continue:
       pHeap = (_malloc_rec _MALLOC_SPEC *)((unsigned int)pHeap + bLen);
-	//pHeap->bits.count);
     }
 
 do_end:

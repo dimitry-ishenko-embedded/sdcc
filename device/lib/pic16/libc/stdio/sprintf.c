@@ -23,7 +23,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: sprintf.c,v 1.1 2005/03/31 16:24:44 vrokas Exp $
+** $Id: sprintf.c 4249 2006-06-25 12:22:18Z borutr $
 */
 
 #include <stdarg.h>
@@ -42,5 +42,5 @@ unsigned int sprintf(char *ebuf, char *fmt, ...)
     i = vfprintf((FILE *) &ebuf, cfmt, ap);
     *ebuf='\0';
     
-  return (i+1);
+  return (i);
 }

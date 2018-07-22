@@ -26,6 +26,21 @@
 #ifndef SDCCGENPIC14_H
 #define SDCCGENPIC14_H
 
+extern int debug_verbose;
+
+#define FENTRY do { 									\
+	/*fprintf (stderr, "%s:%u:%s: *{*\n", __FILE__, __LINE__, __FUNCTION__);*/	\
+	if (options.debug || debug_verbose) {						\
+		emitpComment ("; %s:%u:%s *{*", __FILE__, __LINE__, __FUNCTION__);	\
+	}										\
+} while (0)
+#define FEXIT do { 									\
+	/*fprintf (stderr, "%s:%u:%s: *}*\n", __FILE__, __LINE__, __FUNCTION__);*/	\
+	if (options.debug || debug.verbose) {						\
+		emitpComment ("; %s:%u:%s *}*", __FILE__, __LINE__, __FUNCTION__);	\
+	}										\
+} while (0)
+
 struct pCodeOp;
 
 enum
@@ -130,12 +145,16 @@ extern unsigned fReturnSizePic;
 #define emitCLRZ    emitpcode(POC_BCF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_Z_BIT))
 #define emitCLRC    emitpcode(POC_BCF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_C_BIT))
 #define emitCLRDC   emitpcode(POC_BCF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_DC_BIT))
+#define emitCLRIRP  emitpcode(POC_BCF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_IRP_BIT))
 #define emitSETZ    emitpcode(POC_BSF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_Z_BIT))
 #define emitSETC    emitpcode(POC_BSF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_C_BIT))
 #define emitSETDC   emitpcode(POC_BSF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_DC_BIT))
+#define emitSETIRP  emitpcode(POC_BSF,  popCopyGPR2Bit(PCOP(&pc_status),PIC_IRP_BIT))
 
 int pic14_getDataSize(operand *op);
-void emitpcode(PIC_OPCODE poc, pCodeOp *pcop);
+void emitpcode_real(PIC_OPCODE poc, pCodeOp *pcop);
+#define emitpcode(poc,pcop)	do { if (options.debug || debug_verbose) { emitpComment (" >>> %s:%d:%s", __FILE__, __LINE__, __FUNCTION__); } emitpcode_real(poc,pcop); } while(0)
+void emitpComment (const char *fmt, ...);
 void emitpLabel(int key);
 void pic14_emitcode (char *inst,char *fmt, ...);
 void DEBUGpic14_emitcode (char *inst,char *fmt, ...);
@@ -162,6 +181,7 @@ pCodeOp *popGetLit(unsigned int lit);
 pCodeOp *popGetWithString(char *str, int isExtern);
 pCodeOp *popRegFromString(char *str, int size, int offset);
 pCodeOp *popGet (asmop *aop, int offset);//, bool bit16, bool dname);
+pCodeOp *popGetAddr (asmop *aop, int offset, int index);
 pCodeOp *popGetTempReg(void);
 void popReleaseTempReg(pCodeOp *pcop);
 
@@ -175,6 +195,7 @@ void freeAsmop (operand *op, asmop *aaop, iCode *ic, bool pop);
 void mov2w (asmop *aop, int offset);
 const char *pCodeOpType(  pCodeOp *pcop);
 
-
+int aop_isLitLike (asmop *aop);
+int op_isLitLike (operand *op);
 
 #endif

@@ -292,6 +292,8 @@ public:
   virtual void set_bit1(t_addr addr, t_mem bits);
   virtual void set_bit0(t_addr addr, t_mem bits);
 
+  virtual class cl_address_decoder *get_decoder(t_addr addr);
+
   virtual class cl_memory_cell *get_cell(t_addr addr);
   virtual int get_cell_flag(t_addr addr);
   virtual bool get_cell_flag(t_addr addr, enum cell_flag flag);
@@ -420,7 +422,7 @@ public:
 
 #include "errorcl.h"
 
-ERROR_CLASS_DECL(mem): public cl_error
+class cl_error_mem: public cl_error
 {
 protected:
   class cl_memory *mem;
@@ -429,7 +431,7 @@ public:
   cl_error_mem(class cl_memory *amem, t_addr aaddr);
 };
 
-ERROR_CLASS_DECL(mem_invalid_address): public cl_error_mem
+class cl_error_mem_invalid_address: public cl_error_mem
 {
 public:
   cl_error_mem_invalid_address(class cl_memory *amem, t_addr aaddr);
@@ -437,7 +439,7 @@ public:
   virtual void print(class cl_commander *c);
 };
 
-ERROR_CLASS_DECL(mem_non_decoded): public cl_error_mem
+class cl_error_mem_non_decoded: public cl_error_mem
 {
 public:
   cl_error_mem_non_decoded(class cl_memory *amem, t_addr aaddr);
@@ -445,7 +447,13 @@ public:
   virtual void print(class cl_commander *c);
 };
 
+class cl_mem_error_registry: public cl_error_registry
+{
+public:
+  cl_mem_error_registry(void);
+};
 
 #endif
+
 
 /* End of memcl.h */

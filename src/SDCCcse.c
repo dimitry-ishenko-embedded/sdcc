@@ -144,11 +144,13 @@ pcseDef (void *item, va_list ap)
 
 void ReplaceOpWithCheaperOp(operand **op, operand *cop) {
 #ifdef RANGEHUNT
-  printf ("ReplaceOpWithCheaperOp %s with %s: ",
-          IS_SYMOP((*op)) ? OP_SYMBOL((*op))->name : "!SYM",
-          IS_SYMOP(cop) ? OP_SYMBOL(cop)->name : "!SYM");
+  printf ("ReplaceOpWithCheaperOp\n\t");
+  printOperand (*op, stdout);
+  printf ("\nwith\t");
+  printOperand (cop, stdout);
+
   // if op is a register equivalent
-  if (IS_ITEMP(cop) && OP_SYMBOL((*op))->isreqv) {
+  if (IS_ITEMP(cop) && IS_SYMOP((*op)) && OP_SYMBOL((*op))->isreqv) {
     operand **rop = &OP_SYMBOL((*op))->usl.spillLoc->reqv;
     if (isOperandEqual(*rop, *op)) {
       printf ("true");
@@ -173,6 +175,13 @@ replaceAllSymBySym (iCode * ic, operand * from, operand * to, bitVect ** ndpset)
 {
   iCode *lic;
 
+#ifdef RANGEHUNT
+  printf ("replaceAllSymBySym\n\t");
+  printOperand (from, stdout);
+  printf ("\nwith\t");
+  printOperand (to, stdout);
+  printf ("\n");
+#endif
   for (lic = ic; lic; lic = lic->next)
     {
       int siaddr;
@@ -415,6 +424,15 @@ DEFSETFUNC (findCheaperOp)
           (*opp)->isaddr = cop->isaddr;
         }
 
+      /* copy signedness to literal operands */
+      if (IS_SPEC(operandType (cop)) && IS_SPEC(operandType (*opp))
+          && isOperandLiteral(*opp)
+          && SPEC_NOUN(operandType(*opp)) == SPEC_NOUN(operandType(cop))
+          && SPEC_USIGN(operandType(*opp)) != SPEC_USIGN(operandType(cop)))
+      {
+          SPEC_USIGN(operandType(*opp)) = SPEC_USIGN(operandType(cop));
+      }
+
       if (IS_SPEC(operandType (cop)) && IS_SPEC(operandType (*opp)) &&
           SPEC_NOUN(operandType(cop)) != SPEC_NOUN(operandType(*opp)))
         {
@@ -460,6 +478,16 @@ DEFSETFUNC (findPointerSet)
       getSize (operandType (IC_RIGHT (cdp->diCode))) ==
       getSize (operandType (rop)))
     {
+      if (IS_SPEC (operandType (IC_RIGHT (cdp->diCode))) &&
+          SPEC_USIGN (operandType (IC_RIGHT (cdp->diCode))) !=
+          SPEC_USIGN (operandType (rop)))
+        {
+          /* bug #1493710
+            Reminder for Bernhard: check of signedness
+            could be unnecessary together with 'checkSign', if
+            signedness of operation is stored in ic */
+          return 0;
+        }
       *opp = IC_RIGHT (cdp->diCode);
       return 1;
     }
@@ -492,7 +520,7 @@ DEFSETFUNC (findPrevIc)
   /* if iCodes are not the same */
   /* see the operands maybe interchanged */
   if (ic->op == cdp->diCode->op &&
-      (ic->op == '+' || ic->op == '*') &&
+      IS_ASSOCIATIVE(ic) &&
       isOperandEqual (IC_LEFT (ic), IC_RIGHT (cdp->diCode)) &&
       isOperandEqual (IC_RIGHT (ic), IC_LEFT (cdp->diCode)))
     {
@@ -818,7 +846,8 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
     case '+':
       /* if adding the same thing change to left shift by 1 */
       if (IC_LEFT (ic)->key == IC_RIGHT (ic)->key &&
-          !IS_FLOAT (operandType (IC_RESULT (ic))))
+          !(IS_FLOAT (operandType (IC_RESULT (ic)))
+            || IS_FIXED(operandType (IC_RESULT (ic)))))
         {
           ic->op = LEFT_OP;
           IC_RIGHT (ic) = operandFromLit (1);
@@ -829,8 +858,10 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       if (IS_OP_LITERAL (IC_LEFT (ic)) &&
           operandLitValue (IC_LEFT (ic)) == 0.0)
         {
-          if (compareType (operandType (IC_RESULT (ic)),
-                           operandType (IC_RIGHT (ic)))<0)
+          int typematch;
+          typematch = compareType (operandType (IC_RESULT (ic)),
+                                   operandType (IC_RIGHT (ic)));
+          if (typematch<0)
             {
               ic->op = CAST;
               IC_LEFT (ic) = operandFromLink (operandType (IC_RESULT (ic)));
@@ -839,6 +870,12 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
             {
               ic->op = '=';
               IC_LEFT (ic) = NULL;
+              if (typematch==0)
+                {
+                  /* for completely different types, preserve the source type */
+                  IC_RIGHT (ic) = operandFromOperand (IC_RIGHT (ic));
+                  setOperandType (IC_RIGHT (ic), operandType (IC_RESULT (ic)));
+                }
             }
           SET_ISADDR (IC_RESULT (ic), 0);
           SET_ISADDR (IC_RIGHT (ic), 0);
@@ -847,8 +884,10 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
       if (IS_OP_LITERAL (IC_RIGHT (ic)) &&
           operandLitValue (IC_RIGHT (ic)) == 0.0)
         {
-          if (compareType (operandType (IC_RESULT (ic)),
-                           operandType (IC_LEFT (ic)))<0)
+          int typematch;
+          typematch = compareType (operandType (IC_RESULT (ic)),
+                                   operandType (IC_LEFT (ic)));
+          if (typematch<0)
             {
               ic->op = CAST;
               IC_RIGHT (ic) = IC_LEFT (ic);
@@ -859,6 +898,12 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
               ic->op = '=';
               IC_RIGHT (ic) = IC_LEFT (ic);
               IC_LEFT (ic) = NULL;
+              if (typematch==0)
+                {
+                  /* for completely different types, preserve the source type */
+                  IC_RIGHT (ic) = operandFromOperand (IC_RIGHT (ic));
+                  setOperandType (IC_RIGHT (ic), operandType (IC_RESULT (ic)));
+                }
             }
           SET_ISADDR (IC_RIGHT (ic), 0);
           SET_ISADDR (IC_RESULT (ic), 0);
@@ -1735,6 +1780,9 @@ static int isSignedOp (iCode *ic)
     case RRC:
     case RLC:
     case GETHBIT:
+    case GETABIT:
+    case GETBYTE:
+    case GETWORD:
     case RIGHT_OP:
     case CAST:
     case ARRAYINIT:

@@ -1,12 +1,7 @@
-#define __16F873
-#include "p16f873.h"
-//#include "p16c84.h"
+#include "gpsim_assert.h"
 
-unsigned char success=0;
 unsigned char failures=0;
-unsigned char dummy=0;
 
-bit bit0 = 0;
 unsigned int uint0 = 0;
 unsigned int uint1 = 0;
 
@@ -22,11 +17,11 @@ void (*pfunc)();
 void (*p1func)();
 unsigned char (*pcfunc)();
 
-void done()
+void
+done()
 {
-
-  dummy++;
-
+  ASSERT(MANGLE(failures) == 0);
+  PASSED();
 }
 
 void call0(void)
@@ -107,6 +102,5 @@ void main(void)
 /* 	uchar2 += (pcfunc)(); */ /* FRONT-END BUG? - type-mismatch error */
 /*	uchar2 += pcfunc(); */ /* FRONT-END BUG? - type-mismatch error */
 
-	success = failures;
 	done();
 }

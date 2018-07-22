@@ -25,7 +25,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: printf_tiny.c,v 1.3 2005/04/02 13:13:50 vrokas Exp $
+** $Id: printf_tiny.c 3714 2005-04-02 13:13:53Z vrokas $
 */
 
 /* This function uses function putchar() to dump a character
