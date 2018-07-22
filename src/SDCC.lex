@@ -128,6 +128,7 @@ static void checkCurrFile (const char *s);
 "__interrupt"           { count (); TKEYWORD (INTERRUPT); }
 "__nonbanked"           { count (); TKEYWORD (NONBANKED); }
 "__banked"              { count (); TKEYWORD (BANKED); }
+"__trap"                { count (); TKEYWORD (TRAP); }
 "long"                  { count (); return SD_LONG; }
 "__near"                { count (); TKEYWORD (DATA); }
 "__pdata"               { count (); TKEYWORD (PDATA); }
@@ -166,6 +167,8 @@ static void checkCurrFile (const char *s);
 "_Noreturn"             { count (); return NORETURN;}
 "restrict"              { count (); TKEYWORD99 (RESTRICT); }
 "__smallc"              { count (); return SMALLC; }
+"__z88dk_fastcall"      { count (); TKEYWORD (Z88DK_FASTCALL); }
+"__z88dk_callee"        { count (); TKEYWORD (Z88DK_CALLEE); }
 "__addressmod"          { count (); return ADDRESSMOD; }
 "_Static_assert"        { count (); return STATIC_ASSERT; }
 "_Alignas"              { count (); return ALIGNAS; }
@@ -189,7 +192,7 @@ static void checkCurrFile (const char *s);
 0[xX]{H}+{IS}?          { count (); yylval.val = constVal (yytext); return CONSTANT; }
 0[0-7]*{IS}?            { count (); yylval.val = constVal (yytext); return CONSTANT; }
 [1-9]{D}*{IS}?          { count (); yylval.val = constVal (yytext); return CONSTANT; }
-'(\\.|[^\\'])+'         { count (); yylval.val = charVal (yytext); return CONSTANT; /* ' make syntax highliter happy */ }
+'(\\.|[^\\'])+'         { count (); yylval.val = charVal (yytext); return CONSTANT; /* ' make syntax highlighter happy */ }
 {D}+{E}{FS}?            { count (); yylval.val = constFloatVal (yytext); return CONSTANT; }
 {D}*"."{D}+({E})?{FS}?  { count (); yylval.val = constFloatVal (yytext); return CONSTANT; }
 {D}+"."{D}*({E})?{FS}?  { count (); yylval.val = constFloatVal (yytext); return CONSTANT; }

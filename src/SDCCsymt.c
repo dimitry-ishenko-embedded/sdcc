@@ -333,6 +333,8 @@ newSymbol (const char *name, int scope)
   sym->fileDef = lexFilename;
   sym->for_newralloc = 0;
   sym->isinscope = 1;
+  sym->usl.spillLoc = 0;
+
   return sym;
 }
 
@@ -685,6 +687,28 @@ mergeSpec (sym_link * dest, sym_link * src, const char *name)
 #endif
     }
 
+  if (!options.std_c11 && !options.std_c99)
+    {
+      if (SPEC_SIGN (dest) && SPEC_SIGN (src))
+        werror (W_REPEAT_QUALIFIER, "signed");
+      if (SPEC_USIGN (dest) && SPEC_USIGN (src))
+        werror (W_REPEAT_QUALIFIER, "unsigned");
+      if (SPEC_CONST (dest) && SPEC_CONST (src))
+        werror (W_REPEAT_QUALIFIER, "const");
+      if (SPEC_VOLATILE (dest) && SPEC_VOLATILE (src))
+        werror (W_REPEAT_QUALIFIER, "volatile");
+      if (SPEC_STAT (dest) && SPEC_STAT (src))
+        werror (W_REPEAT_QUALIFIER, "static");
+      if (SPEC_EXTR (dest) && SPEC_EXTR (src))
+        werror (W_REPEAT_QUALIFIER, "extern");
+      if (SPEC_TYPEDEF (dest) && SPEC_TYPEDEF (src))
+        werror (W_REPEAT_QUALIFIER, "typedef");
+      if (SPEC_SCLS (dest) == S_REGISTER && SPEC_SCLS (src) == S_REGISTER)
+        werror (W_REPEAT_QUALIFIER, "register");
+      if (SPEC_SCLS (dest) == S_AUTO && SPEC_SCLS (src) == S_AUTO)
+        werror (W_REPEAT_QUALIFIER, "auto");
+    }
+
   if (SPEC_NOUN (src))
     {
       if (!SPEC_NOUN (dest))
@@ -773,6 +797,9 @@ mergeSpec (sym_link * dest, sym_link * src, const char *name)
   if (SPEC_ARGREG (src) && !SPEC_ARGREG (dest))
     SPEC_ARGREG (dest) = SPEC_ARGREG (src);
 
+  if (SPEC_STAT (dest) && SPEC_EXTR (dest))
+    werror (E_TWO_OR_MORE_STORAGE_CLASSES, name);
+
   if (IS_STRUCT (dest) && SPEC_STRUCT (dest) == NULL)
     SPEC_STRUCT (dest) = SPEC_STRUCT (src);
 
@@ -791,6 +818,8 @@ mergeSpec (sym_link * dest, sym_link * src, const char *name)
   FUNC_REGBANK (dest) |= FUNC_REGBANK (src);
   FUNC_ISINLINE (dest) |= FUNC_ISINLINE (src);
   FUNC_ISNORETURN (dest) |= FUNC_ISNORETURN (src);
+  FUNC_ISSMALLC (dest) |= FUNC_ISSMALLC (src);
+  FUNC_ISZ88DK_CALLEE (dest) |= FUNC_ISZ88DK_CALLEE (src);
 
   if (SPEC_ADDRSPACE (src) && SPEC_ADDRSPACE (dest))
     werror (E_TWO_OR_MORE_STORAGE_CLASSES, name);
@@ -848,9 +877,6 @@ mergeDeclSpec (sym_link * dest, sym_link * src, const char *name)
     werror (E_SYNTAX_ERROR, yytext);
   if (SPEC_ADDRSPACE (spec))
     DCL_PTR_ADDRSPACE (decl) = SPEC_ADDRSPACE (spec);
-
-  SPEC_CONST (spec) = SPEC_VOLATILE (spec) = SPEC_RESTRICT (spec) = 0;
-  SPEC_ADDRSPACE (spec) = 0;
 
   lnk = decl;
   while (lnk && !IS_SPEC (lnk->next))
@@ -1625,10 +1651,10 @@ compStructSize (int su, structdef * sdef)
                   sdef->b_flexArrayMember = TRUE;
                   /* is another struct-member following? */
                   if (loop->next)
-                    werror (E_FLEXARRAY_NOTATEND);
+                    werror (E_FLEXARRAY_NOTATEND, loop->name);
                   /* is it the first struct-member? */
                   else if (loop == sdef->fields)
-                    werror (E_FLEXARRAY_INEMPTYSTRCT);
+                    werror (E_FLEXARRAY_INEMPTYSTRCT, loop->name);
                 }
               else if (ret == INCOMPLETE)
                 {
@@ -2394,6 +2420,10 @@ compareFuncType (sym_link * dest, sym_link * src)
       return 0;
     }
 
+  if (IFFUNC_ISZ88DK_FASTCALL (dest) != IFFUNC_ISZ88DK_FASTCALL (src) ||
+    IFFUNC_ISZ88DK_CALLEE (dest) != IFFUNC_ISZ88DK_CALLEE (src))
+    return 0;
+
   /* compare register bank */
   if (FUNC_REGBANK (dest) != FUNC_REGBANK (src))
     { /* except for ISR's whose prototype need not match
@@ -2749,7 +2779,7 @@ compareTypeExact (sym_link * dest, sym_link * src, int level)
           if (srcScls == S_FIXED)
             srcScls = (options.useXstack ? S_XSTACK : S_STACK);
         }
-      else if (TARGET_IS_DS390 || TARGET_IS_DS400 || options.useXstack)
+      else if (TARGET_IS_DS390 || TARGET_IS_DS400 || options.useXstack || TARGET_IS_HC08 || TARGET_IS_S08)
         {
           if (destScls == S_FIXED)
             destScls = S_XDATA;
@@ -3105,8 +3135,16 @@ checkFunction (symbol * sym, symbol * csym)
   addSym (SymbolTab, sym, sym->name, sym->level, sym->block, 1);
   if (IS_EXTERN (csym->etype) && !IS_EXTERN (sym->etype))
     {
+      SPEC_EXTR (sym->etype) = 1;
       addSet (&publics, sym);
     }
+
+  SPEC_STAT (sym->etype) |= SPEC_STAT (csym->etype);
+  if (SPEC_STAT (sym->etype) && SPEC_EXTR (sym->etype))
+    {
+      werror (E_TWO_OR_MORE_STORAGE_CLASSES, sym->name);
+    }
+
   return 1;
 }
 
@@ -3187,7 +3225,7 @@ processFuncArgs (symbol * func)
     }
 
   /* reset regparm for the port */
-  (*port->reset_regparms) ();
+  (*port->reset_regparms) (funcType);
 
   /* if any of the arguments is an aggregate */
   /* change it to pointer to the same type */

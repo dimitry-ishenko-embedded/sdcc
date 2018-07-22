@@ -5,6 +5,7 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     { "areadata", ".area _%s" },
     { "areahome", ".area _%s" },
     { "functionlabeldef", "%s:" },
+    { "globalfunctionlabeldef", "%s::" },
     { "*hl", "(hl)" },
     { "di", "di" },
     { "ei", "ei" },
@@ -14,6 +15,7 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     { "ldaspsp", "add sp, #%d" },
     { "*pair", "(%s)" },
     { "enter", "" },
+    { "enters", "" },
     { "enterx", 
       "add sp, #-%d" },
     { "pusha", 
@@ -67,6 +69,8 @@ static const ASM_MAPPING _asxxxx_z80_mapping[] = {
 		"push\tix\n"
 		"ld\tix,#0\n"
 		"add\tix,sp" },
+    { "enters", 
+		"call\t___sdcc_enter_ix\n" },
     { "pusha", 
       		"push af\n"
       		"push\tbc\n"
@@ -119,6 +123,8 @@ static const ASM_MAPPING _asxxxx_r2k_mapping[] = {
 		"push\tix\n"
 		"ld\tix,#0\n"
 		"add\tix,sp" },
+    { "enters", 
+		"call\t___sdcc_enter_ix\n" },
     { "pusha", 
       		"push af\n"
       		"push\tbc\n"
@@ -178,6 +184,7 @@ static const ASM_MAPPING _rgbds_mapping[] = {
       "; ---------------------------------"
     },
     { "functionlabeldef", "%s:" },
+    { "globalfunctionlabeldef", "%s::" },
     { "zero", "$00" },
     { "one", "$01" },
     { "area", "SECTION \"%s\",CODE" },
@@ -220,6 +227,7 @@ static const ASM_MAPPING _rgbds_gb_mapping[] = {
     { "ei", "ei" },
     { "adjustsp", "add sp,-%d" },
     { "enter", "" },
+    { "enters", "" },
     { "ldahli", "ld a,[hl+]" },
     { "*hl", "[hl]" },
     { "ldahlsp", "ld hl,[sp+%d]" },
@@ -263,6 +271,7 @@ static const ASM_MAPPING _isas_mapping[] = {
       "; ---------------------------------"
     },
     { "functionlabeldef", "%s:" },
+    { "globalfunctionlabeldef", "%s::" },
     { "zero", "$00" },
     { "one", "$01" },
     { "area", "%s\tGROUP" },
@@ -305,6 +314,7 @@ static const ASM_MAPPING _isas_gb_mapping[] = {
     { "ei", "ei" },
     { "adjustsp", "add sp,-%d" },
     { "enter", "" },
+    { "enters", "" },
     { "ldahli", "ld a,(hli)" },
     { "*hl", "(hl)" },
     { "ldahlsp", "ldhl sp,%d" },
@@ -343,6 +353,7 @@ static const ASM_MAPPING _z80asm_mapping[] = {
       "; ---------------------------------"
     },
     { "functionlabeldef", ".%s" },
+    { "globalfunctionlabeldef", ".%s" },
     { "zero", "$00" },
     { "one", "$01" },
     { "ascii", "DEFM \"%s\"" },
@@ -390,6 +401,8 @@ static const ASM_MAPPING _z80asm_z80_mapping[] = {
 		"push\tix\n"
 		"ld\tix,0\n"
 		"add\tix,sp" },
+    { "enters", 
+		"call\t___sdcc_enter_ix\n" },
     { "pusha", 
       		"push af\n"
       		"push\tbc\n"

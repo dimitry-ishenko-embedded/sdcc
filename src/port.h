@@ -161,6 +161,7 @@ typedef struct
     bool (*notUsed) (const char *reg, lineNode * currPl, lineNode * head);
     bool (*canAssign) (const char *op1, const char *op2, const char *op3);
     bool (*notUsedFrom) (const char *reg, const char *label, lineNode *head);
+    bool (*symmParmStack) (void);
   }
   peep;
 
@@ -344,7 +345,7 @@ typedef struct
   void (*genInitStartup) (FILE * of);
 
   /* parameter passing in register related functions */
-  void (*reset_regparms) (void);        /* reset the register count */
+  void (*reset_regparms) (struct sym_link *);        /* reset the register count */
   int (*reg_parm) (struct sym_link *, bool reentrant);  /* will return 1 if can be passed in register */
 
   /** Process the pragma string 'sz'.  Returns 0 if recognised and
@@ -395,7 +396,8 @@ typedef struct
   int reset_labelKey;           /* reset Label no 1 at the start of a function */
   int globals_allowed;          /* global & static locals not allowed ?  0 ONLY TININative */
 
-  int num_regs;                /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
+  int num_regs;                 /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
+
 #define PORT_MAGIC 0xAC32
   /** Used at runtime to detect if this structure has been completly filled in. */
   int magic;

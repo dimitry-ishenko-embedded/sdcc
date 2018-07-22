@@ -926,8 +926,6 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
 
       if (IS_ITEMP (IC_LEFT (ic)) &&
           IS_ITEMP (IC_RESULT (ic)) &&
-/*      !OP_SYMBOL(IC_RESULT(ic))->isreqv && */
-/*      !OP_SYMBOL(IC_LEFT(ic))->isreqv && */
           !IC_LEFT (ic)->isaddr)
         {
           ic->op = '=';
@@ -1261,7 +1259,7 @@ algebraicOpts (iCode * ic, eBBlock * ebp)
                   litval = gpVal;
                 }
               ic->op = '=';
-              IC_RIGHT (ic) = operandFromValue (valCastLiteral (operandType (IC_LEFT (ic)), litval));
+              IC_RIGHT (ic) = operandFromValue (valCastLiteral (operandType (IC_LEFT (ic)), litval, litval));
               IC_LEFT (ic) = NULL;
               SET_ISADDR (IC_RESULT (ic), 0);
             }
@@ -1661,6 +1659,17 @@ ifxOptimize (iCode * ic, set * cseSet,
           ReplaceOpWithCheaperOp(&IC_COND (ic), pdop);
           (*change)++;
         }
+      else if(ic->prev &&  /* Remove unnecessary casts */
+        (ic->prev->op == '=' || ic->prev->op == CAST) && IS_ITEMP (IC_RESULT (ic->prev)) &&
+        IC_RESULT (ic->prev)->key == IC_COND (ic)->key && bitVectnBitsOn (OP_USES (IC_RESULT (ic->prev))) <= 1)
+        {
+          sym_link *type = operandType (IC_RESULT (ic->prev));
+          if (ic->prev->op != CAST || IS_BOOL (type) || bitsForType (operandType (IC_RIGHT (ic->prev))) < bitsForType (type))
+          {
+            ReplaceOpWithCheaperOp(&IC_COND (ic), IC_RIGHT (ic->prev));
+            (*change)++;
+          }
+        }
     }
 
   /* if the conditional is a literal then */
@@ -1838,20 +1847,26 @@ boolCast (iCode * ic, set * cseSet)
     return 0;
 
   /* Check that this is a logic op. */
-  if (dic->op != '!' &&
-      dic->op != '<' &&
-      dic->op != '>' &&
-//      dic->op != LE_OP && why not these 3 ???
-//      dic->op != GE_OP &&
-      dic->op != EQ_OP &&
-//      dic->op != NE_OP &&
-      dic->op != AND_OP &&
-      dic->op != OR_OP &&
-      dic->op != GETHBIT &&
-      dic->op != GETABIT &&
-      !(dic->op == BITWISEAND && (IS_BOOL ( operandType (IC_LEFT (dic))) || IS_BOOL ( operandType (IC_RIGHT (dic)))))
-     )
+  switch (dic->op)
     {
+    case '!':
+    case '<':
+    case '>':
+    case LE_OP:
+    case GE_OP:
+    case EQ_OP:
+    case NE_OP:
+    case AND_OP:
+    case OR_OP:
+    case GETHBIT:
+    case GETABIT:
+      break;
+    case BITWISEAND:
+      if (IS_BOOL (operandType (IC_LEFT (dic))) || IS_BOOL (operandType (IC_RIGHT (dic))))
+        break;
+      if (IS_OP_LITERAL (IC_RIGHT (dic)) && operandLitValue (IC_RIGHT (dic)) == 1)
+        break;
+    default:
       return 0;
     }
 

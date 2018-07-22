@@ -59,7 +59,6 @@ enum
 
 static char *_z80_return[] = { "l", "h", "e", "d" };
 static char *_gbz80_return[] = { "e", "d", "l", "h" };
-static char *_fReceive[] = { "c", "b", "e", "d" };
 
 static char **_fReturn;
 static char **_fTmp;
@@ -239,6 +238,9 @@ static struct
     allocTrace aops;
   } trace;
 } _G;
+
+bool z80_regs_used_as_parms_in_calls_from_current_function[IYH_IDX + 1];
+bool z80_symmParm_in_calls_from_current_function;
 
 static const char *aopGet (asmop * aop, int offset, bool bit16);
 
@@ -638,7 +640,7 @@ ld_cost (asmop * op1, asmop * op2)
           if (op2->aopu.aop_pairId == PAIR_BC || op2->aopu.aop_pairId == PAIR_DE)
             return ((op1type == AOP_ACC || op1type == AOP_DUMMY) ? 1 : 2);
         default:
-          printf ("ld_cost op1: AOP_REG, op2: %d", (int) (op2type));
+          printf ("ld_cost op1: AOP_REG, op2: %d\n", (int) (op2type));
           wassert (0);
         }
     case AOP_SFR:              /* 2 from out (...), a */
@@ -663,7 +665,7 @@ ld_cost (asmop * op1, asmop * op2)
         case AOP_EXSTK:        /* 4 from ld iy, #... */
           return (9);
         default:
-          printf ("ld_cost op1: AOP_SFR, op2: %d", (int) (op2type));
+          printf ("ld_cost op1: AOP_SFR, op2: %d\n", (int) (op2type));
           wassert (0);
         }
     case AOP_IY:               /* 4 from ld iy, #... */
@@ -683,7 +685,7 @@ ld_cost (asmop * op1, asmop * op2)
         case AOP_EXSTK:
           return (16);
         default:
-          printf ("ld_cost op1: AOP_IY, op2: %d", (int) (op2type));
+          printf ("ld_cost op1: AOP_IY, op2: %d\n", (int) (op2type));
           wassert (0);
         }
     case AOP_STK:
@@ -708,7 +710,7 @@ ld_cost (asmop * op1, asmop * op2)
           if (op2->aopu.aop_pairId == PAIR_IY || op2->aopu.aop_pairId == PAIR_IX)
             return (6);
         default:
-          printf ("ld_cost op1: AOP_STK, op2: %d", (int) (op2type));
+          printf ("ld_cost op1: AOP_STK, op2: %d\n", (int) (op2type));
           wassert (0);
         }
     case AOP_HL:               /* 3 from ld hl, #... */
@@ -740,7 +742,7 @@ ld_cost (asmop * op1, asmop * op2)
       wassertl (0, "Trying to assign a value to a literal");
       break;
     default:
-      printf ("ld_cost op1: %d", (int) (op1type));
+      printf ("ld_cost op1: %d\n", (int) (op1type));
       wassert (0);
     }
   return (8);                   // Fallback
@@ -773,7 +775,7 @@ op8_cost (asmop * op2)
       if (op2->aopu.aop_pairId == PAIR_IY || op2->aopu.aop_pairId == PAIR_IX)
         return (3);
     default:
-      printf ("op8_cost op2: %d", (int) (op2->type));
+      printf ("op8_cost op2: %d\n", (int) (op2->type));
       wassert (0);
     }
   return (8);                   // Fallback
@@ -797,7 +799,7 @@ bit8_cost (asmop * op1)
     case AOP_EXSTK:            /* 4 from ld iy, #... */
       return (8);
     default:
-      printf ("bit8_cost op1: %d", (int) (op1->type));
+      printf ("bit8_cost op1: %d\n", (int) (op1->type));
       wassert (0);
     }
   return (8);                   //Fallback
@@ -1203,7 +1205,7 @@ aopForSym (const iCode * ic, symbol * sym, bool result, bool requires_a)
               sym->aop = aop = newAsmop (AOP_SFR);
               aop->aopu.aop_dir = sym->rname;
               aop->size = getSize (sym->type);
-              emitDebug ("; AOP_SFR for %s", sym->rname);
+              /* emitDebug ("; AOP_SFR for %s", sym->rname); */
               return aop;
             }
         }
@@ -1216,7 +1218,7 @@ aopForSym (const iCode * ic, symbol * sym, bool result, bool requires_a)
           aop->size = getSize (sym->type);
           aop->paged = FUNC_REGBANK (sym->type);
           aop->bcInUse = isPairInUse (PAIR_BC, ic);
-          emitDebug (";Z80 AOP_SFR for %s banked:%d bc:%d", sym->rname, FUNC_REGBANK (sym->type), aop->bcInUse);
+          /* emitDebug (";Z80 AOP_SFR for %s banked:%d bc:%d", sym->rname, FUNC_REGBANK (sym->type), aop->bcInUse); */
 
           return (aop);
         }
@@ -1226,7 +1228,7 @@ aopForSym (const iCode * ic, symbol * sym, bool result, bool requires_a)
   /* in which case DPTR gets the address */
   if (IS_GB || IY_RESERVED)
     {
-      emitDebug ("; AOP_HL for %s", sym->rname);
+      /* emitDebug ("; AOP_HL for %s", sym->rname); */
       sym->aop = aop = newAsmop (AOP_HL);
     }
   else
@@ -1418,7 +1420,7 @@ aopOp (operand * op, const iCode * ic, bool result, bool requires_a)
     return;
 
   /* if this a literal */
-  if (IS_OP_LITERAL (op))
+  if (IS_OP_LITERAL (op)) /* TODO:  && !op->isaddr, handle address literals in a sane way */
     {
       op->aop = aop = newAsmop (AOP_LIT);
       aop->aopu.aop_lit = OP_VALUE (op);
@@ -1539,7 +1541,7 @@ aopOp (operand * op, const iCode * ic, bool result, bool requires_a)
         }
 
       /* On stack. */
-      if (sym->usl.spillLoc)
+      if (sym->isspilt && sym->usl.spillLoc)
         {
           asmop *oldAsmOp = NULL;
 
@@ -2329,7 +2331,7 @@ aopGet (asmop * aop, int offset, bool bit16)
         case AOP_IMMD:
           /* PENDING: re-target */
           if (bit16)
-            dbuf_tprintf (&dbuf, "!immedwords", aop->aopu.aop_immd);
+            dbuf_tprintf (&dbuf, "!immedword", aop->aopu.aop_immd);
           else
             {
               switch (offset)
@@ -3175,7 +3177,7 @@ outBitC (operand * result)
 /* toBoolean - emit code for or a,operator(sizeop)                 */
 /*-----------------------------------------------------------------*/
 static void
-_toBoolean (const operand * oper, bool needflag)
+_toBoolean (const operand *oper, bool needflag)
 {
   int size = AOP_SIZE (oper);
   sym_link *type = operandType (oper);
@@ -3735,7 +3737,7 @@ restoreRegs (bool iy, bool de, bool bc, bool hl, const operand *result)
 }
 
 static void
-_saveRegsForCall (const iCode * ic, int sendSetSize, bool dontsaveIY)
+_saveRegsForCall (const iCode * ic, bool dontsaveIY)
 {
   /* Rules:
      o Stack parameters are pushed before this function enters
@@ -3766,7 +3768,6 @@ _saveRegsForCall (const iCode * ic, int sendSetSize, bool dontsaveIY)
       if (options.oldralloc)
         {
           bool deInUse, bcInUse;
-          bool deSending;
           bool bcInRet = FALSE, deInRet = FALSE;
           bitVect *rInUse;
 
@@ -3775,10 +3776,7 @@ _saveRegsForCall (const iCode * ic, int sendSetSize, bool dontsaveIY)
           deInUse = bitVectBitValue (rInUse, D_IDX) || bitVectBitValue (rInUse, E_IDX);
           bcInUse = bitVectBitValue (rInUse, B_IDX) || bitVectBitValue (rInUse, C_IDX);
 
-          deSending = (sendSetSize > 1);
-
-          emitDebug ("; _saveRegsForCall: sendSetSize: %u deInUse: %u bcInUse: %u deSending: %u", sendSetSize, deInUse, bcInUse,
-                     deSending);
+          emitDebug ("; _saveRegsForCall: deInUse: %u bcInUse: %u", deInUse, bcInUse);
 
           push_bc = bcInUse && !bcInRet;
           push_de = deInUse && !deInRet;
@@ -3866,7 +3864,7 @@ genIpush (const iCode * ic)
             }
           walk = walk->next;
         }
-      _saveRegsForCall (walk, nAddSets, FALSE);
+      _saveRegsForCall (walk, FALSE);
     }
 
   /* then do the push */
@@ -3976,7 +3974,7 @@ genIpush (const iCode * ic)
                 }
               else
                 {
-                  if (!regalloc_dry_run && !strcmp (aopGet (AOP (IC_LEFT (ic)), offset, FALSE), "h"))   // todo: More exact cost!
+                  if (AOP_TYPE (IC_LEFT (ic)) != AOP_SFR && !regalloc_dry_run && !strcmp (aopGet (AOP (IC_LEFT (ic)), offset, FALSE), "h"))   // todo: More exact cost!
                     emit2 ("push hl");
                   else
                     {
@@ -4063,49 +4061,85 @@ isInHome (void)
   return _G.in_home;
 }
 
-static int
-_opUsesPair (operand * op, const iCode * ic, PAIR_ID pairId)
+/** Emit the code for a register parameter
+ */
+static void genSend (const iCode *ic)
 {
-  int ret = 0;
-  asmop *aop;
-  symbol *sym = OP_SYMBOL (op);
+  int size;
 
-  if (sym->isspilt || sym->nRegs == 0)
-    return 0;
+  aopOp (IC_LEFT (ic), ic, FALSE, FALSE);
+  size = AOP_SIZE (IC_LEFT (ic));
 
-  aopOp (op, ic, FALSE, FALSE);
+  wassertl (ic->next->op == CALL || ic->next->op == PCALL, "Sending register parameter for missing call");
+  wassertl (!IS_GB, "Register parameters are not supported in gbz80 port");
 
-  aop = AOP (op);
-  if (aop->type == AOP_REG)
+  if (_G.saves.saved == FALSE && !regalloc_dry_run /* Cost is counted at CALL or PCALL instead */ )
     {
-      int i;
-      for (i = 0; i < aop->size; i++)
+      /* Caller saves, and this is the first iPush. */
+      /* Scan ahead until we find the function that we are pushing parameters to.
+         Count the number of addSets on the way to figure out what registers
+         are used in the send set.
+       */
+      int nAddSets = 0;
+      iCode *walk = ic->next;
+
+      while (walk)
         {
-          if (pairId == PAIR_DE)
+          if (walk->op == SEND)
             {
-              emitDebug ("; name %s", aop->aopu.aop_reg[i]->name);
-              if (!strcmp (aop->aopu.aop_reg[i]->name, "e"))
-                ret++;
-              if (!strcmp (aop->aopu.aop_reg[i]->name, "d"))
-                ret++;
+              nAddSets++;
             }
-          else if (pairId == PAIR_BC)
+          else if (walk->op == CALL || walk->op == PCALL)
             {
-              emitDebug ("; name %s", aop->aopu.aop_reg[i]->name);
-              if (!strcmp (aop->aopu.aop_reg[i]->name, "c"))
-                ret++;
-              if (!strcmp (aop->aopu.aop_reg[i]->name, "b"))
-                ret++;
+              /* Found it. */
+              break;
             }
           else
             {
-              wassert (0);
+              /* Keep looking. */
+            }
+          walk = walk->next;
+        }
+      _saveRegsForCall (walk, FALSE);
+    }
+
+  if (size == 2)
+    {
+      fetchPairLong (PAIR_HL, AOP (IC_LEFT (ic)), ic, 0);
+      z80_regs_used_as_parms_in_calls_from_current_function[L_IDX] = true;
+      z80_regs_used_as_parms_in_calls_from_current_function[H_IDX] = true;
+    }
+  else if (size <= 4)
+    {
+      if (AOP_TYPE (IC_LEFT (ic)) == AOP_REG)
+        {
+          int i;
+          short retarray[4], oparray[4];
+
+          for (i = 0; i < AOP_SIZE (IC_LEFT (ic)); i++)
+            {
+              retarray[i] = _fReturn3[i]->aopu.aop_reg[0]->rIdx;
+              if (!regalloc_dry_run)
+                z80_regs_used_as_parms_in_calls_from_current_function[_fReturn3[i]->aopu.aop_reg[0]->rIdx] = true;
+              oparray[i] = AOP (IC_LEFT (ic))->aopu.aop_reg[i]->rIdx;
+            }
+
+          regMove (retarray, oparray, AOP_SIZE (IC_LEFT (ic)), FALSE);
+        }
+      else
+        {
+          int offset = 0;
+          while (size--)
+            {
+              cheapMove (_fReturn3[offset], 0, AOP (IC_LEFT (ic)), offset);
+              if (!regalloc_dry_run)
+                z80_regs_used_as_parms_in_calls_from_current_function[_fReturn3[offset]->aopu.aop_reg[0]->rIdx] = true;
+              offset++;
             }
         }
     }
 
   freeAsmop (IC_LEFT (ic), NULL);
-  return ret;
 }
 
 /** Emit the code for a call statement
@@ -4113,82 +4147,14 @@ _opUsesPair (operand * op, const iCode * ic, PAIR_ID pairId)
 static void
 emitCall (const iCode *ic, bool ispcall)
 {
-  bool SomethingReturned, bigreturn;
+  bool SomethingReturned, bigreturn, z88dk_callee;
   sym_link *dtype = operandType (IC_LEFT (ic));
   sym_link *etype = getSpec (dtype);
   sym_link *ftype = IS_FUNCPTR (dtype) ? dtype->next : dtype;
 
-  _saveRegsForCall (ic, _G.sendSet ? elementsInSet (_G.sendSet) : 0, FALSE);
+  z88dk_callee = IFFUNC_ISZ88DK_CALLEE (ftype);
 
-  /* if send set is not empty then assign */
-  if (_G.sendSet)
-    {
-      iCode *sic;
-      int send = 0;
-      int nSend = elementsInSet (_G.sendSet);
-      bool swapped = FALSE;
-
-      int _z80_sendOrder[] =
-      {
-        PAIR_BC, PAIR_DE
-      };
-
-      if (nSend > 1)
-        {
-          /* Check if the parameters are swapped.  If so route through hl instead. */
-          wassertl (nSend == 2, "Pedantic check.  Code only checks for the two send items case.");
-
-          sic = setFirstItem (_G.sendSet);
-          sic = setNextItem (_G.sendSet);
-
-          if (_opUsesPair (IC_LEFT (sic), sic, _z80_sendOrder[0]))
-            {
-              /* The second send value is loaded from one the one that holds the first
-                 send, i.e. it is overwritten. */
-              /* Cache the first in HL, and load the second from HL instead. */
-              emit2 ("ld h,%s", _pairs[_z80_sendOrder[0]].h);
-              emit2 ("ld l,%s", _pairs[_z80_sendOrder[0]].l);
-              regalloc_dry_run_cost += 2;
-
-              swapped = TRUE;
-            }
-        }
-
-      for (sic = setFirstItem (_G.sendSet); sic; sic = setNextItem (_G.sendSet))
-        {
-          int size;
-          aopOp (IC_LEFT (sic), sic, FALSE, FALSE);
-
-          size = AOP_SIZE (IC_LEFT (sic));
-          wassertl (size <= 2, "Tried to send a parameter that is bigger than two bytes");
-          wassertl (_z80_sendOrder[send] != PAIR_INVALID, "Tried to send more parameters than we have registers for");
-
-          // PENDING: Mild hack
-          if (swapped == TRUE && send == 1)
-            {
-              if (size > 1)
-                {
-                  emit2 ("ld %s,h", _pairs[_z80_sendOrder[send]].h);
-                  regalloc_dry_run_cost += 1;
-                }
-              else
-                {
-                  emit2 ("ld %s,!zero", _pairs[_z80_sendOrder[send]].h);
-                  regalloc_dry_run_cost += 2;
-                }
-              emit2 ("ld %s,l", _pairs[_z80_sendOrder[send]].l);
-              regalloc_dry_run_cost += 1;
-            }
-          else
-            {
-              fetchPair (_z80_sendOrder[send], AOP (IC_LEFT (sic)));
-            }
-
-          send++;
-          freeAsmop (IC_LEFT (sic), NULL);
-        }
-      _G.sendSet = NULL;
-    }
+  _saveRegsForCall (ic, FALSE);
 
   /* Return value of big type or returning struct or union. */
   bigreturn = (getSize (ftype->next) > 4);
@@ -4200,7 +4166,6 @@ emitCall (const iCode *ic, bool ispcall)
       if (ispcall && IS_GB)
         _push (PAIR_HL);
       aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
-      wassertl (IC_RESULT (ic), "Unused return value in call to function returning large type.");
       wassert (AOP_TYPE (IC_RESULT (ic)) == AOP_STK || AOP_TYPE (IC_RESULT (ic)) == AOP_EXSTK);
       fp_offset =
         AOP (IC_RESULT (ic))->aopu.aop_stk + _G.stack.offset + (AOP (IC_RESULT (ic))->aopu.aop_stk >
@@ -4238,11 +4203,19 @@ emitCall (const iCode *ic, bool ispcall)
           emit2 ("call %s", aopGetLitWordLong (AOP (IC_LEFT (ic)), 0, FALSE));
           regalloc_dry_run_cost += 3;
         }
-      else
+      else if (!(isPair (AOP (IC_LEFT (ic))) && getPairId (AOP (IC_LEFT (ic))) == PAIR_IY) && !IFFUNC_ISZ88DK_FASTCALL (ftype))
         {
           spillPair (PAIR_HL);
           fetchPairLong (PAIR_HL, AOP (IC_LEFT (ic)), ic, 0);
-          emit2 ("call __sdcc_call_hl");
+          emit2 ("call ___sdcc_call_hl");
+        }
+      else
+        {
+          wassert (!IS_GB);
+          wassertl (!IY_RESERVED, "__z88dk_fastcall through function pointer for --reserve-regs-iy unimplemented");
+          spillPair (PAIR_IY);
+          fetchPairLong (PAIR_IY, AOP (IC_LEFT (ic)), ic, 0);
+          emit2 ("call ___sdcc_call_iy");
         }
       freeAsmop (IC_LEFT (ic), NULL);
     }
@@ -4266,7 +4239,7 @@ emitCall (const iCode *ic, bool ispcall)
             }
           else
             {
-              bool jump = (!ic->parmBytes && IFFUNC_ISNORETURN (OP_SYMBOL (IC_LEFT (ic))->type));
+              bool jump = (!ic->parmBytes && IFFUNC_ISNORETURN (ftype));
               emit2 ("%s %s", jump ? "jp" : "call",
                 (OP_SYMBOL (IC_LEFT (ic))->rname[0] ? OP_SYMBOL (IC_LEFT (ic))->rname : OP_SYMBOL (IC_LEFT (ic))->name));
               regalloc_dry_run_cost += 3;
@@ -4284,16 +4257,15 @@ emitCall (const iCode *ic, bool ispcall)
                         OP_SYMBOL (IC_RESULT (ic))->accuse == ACCUSE_A)) || IS_TRUE_SYMOP (IC_RESULT (ic));
 
   /* adjust the stack for parameters if required */
-  if ((ic->parmBytes || bigreturn) && IFFUNC_ISNORETURN (OP_SYMBOL (IC_LEFT (ic))->type))
+  if ((ic->parmBytes || bigreturn) && (IFFUNC_ISNORETURN (OP_SYMBOL (IC_LEFT (ic))->type) || z88dk_callee))
     {
-      /* This is just a workaround to not confuse the peephole optimizer too much. */
-      /* Todo: Check for _Noreturn in the peephole optimizer and do not emit the inc sp here. */
-      emit2 ("inc sp");
-      regalloc_dry_run_cost += 1;
       if (!regalloc_dry_run)
-        _G.stack.pushed -= (ic->parmBytes + bigreturn * 2);
+        {
+          _G.stack.pushed -= (ic->parmBytes + bigreturn * 2);
+          z80_symmParm_in_calls_from_current_function = FALSE;
+        }
     }
-  else if (ic->parmBytes || bigreturn)
+  else if ((ic->parmBytes || bigreturn))
     {
       adjustStack (ic->parmBytes + bigreturn * 2, !IS_TLCS90, TRUE, !SomethingReturned, !IY_RESERVED);
 
@@ -4389,18 +4361,11 @@ genFunction (const iCode * ic)
   emitDebug (z80_assignment_optimal ? "; Register assignment is optimal." : "; Register assignment might be sub-optimal.");
   emitDebug ("; Stack space usage: %d bytes.", sym->stack);
 
-  if (!IS_STATIC (sym->etype))
-    {
-      struct dbuf_s dbuf;
-
-      dbuf_init (&dbuf, 128);
-      dbuf_printf (&dbuf, "%s_start", sym->rname);
-      emit2 ("!labeldef", dbuf_c_str (&dbuf));
-      dbuf_detach (&dbuf);
-      if (!regalloc_dry_run)
-        genLine.lineCurr->isLabel = 1;
-    }
-  emit2 ("!functionlabeldef", sym->rname);
+  if (IS_STATIC (sym->etype))
+    emit2 ("!functionlabeldef", sym->rname);
+  else
+    emit2 ("!globalfunctionlabeldef", sym->rname);
+ 
   if (!regalloc_dry_run)
     genLine.lineCurr->isLabel = 1;
 
@@ -4536,14 +4501,13 @@ genFunction (const iCode * ic)
   else if (sym->stack)
     {
       if (!_G.omitFramePtr)
-        emit2 ("!enter");
+        emit2 (optimize.codeSize ? "!enters" : "!enter");
       adjustStack (-sym->stack, !IS_TLCS90, TRUE, TRUE, !IY_RESERVED);
       _G.stack.pushed = 0;
     }
   else if (!_G.omitFramePtr)
     {
-      if (!_G.omitFramePtr)
-        emit2 ("!enter");
+      emit2 (optimize.codeSize ? "!enters" : "!enter");
     }
 
   _G.stack.offset = sym->stack;
@@ -4564,16 +4528,6 @@ genEndFunction (iCode * ic)
   if (IFFUNC_ISNAKED (sym->type) || IFFUNC_ISNORETURN (sym->type))
     {
       emitDebug (IFFUNC_ISNAKED (sym->type) ? "; naked function: No epilogue." : "; _Noreturn function: No epilogue.");
-      if (!IS_STATIC (sym->etype))
-        {
-          struct dbuf_s dbuf;
-
-          dbuf_init (&dbuf, 128);
-          dbuf_printf (&dbuf, "%s_end", sym->rname);
-          emit2 ("!labeldef", dbuf_c_str (&dbuf));
-          dbuf_destroy (&dbuf);
-          genLine.lineCurr->isLabel = 1;
-        }
       return;
     }
 
@@ -4667,17 +4621,6 @@ genEndFunction (iCode * ic)
     {
       /* Both banked and non-banked just ret */
       emit2 ("ret");
-    }
-
-  if (!IS_STATIC (sym->etype))
-    {
-      struct dbuf_s dbuf;
-
-      dbuf_init (&dbuf, 128);
-      dbuf_printf (&dbuf, "%s_end", sym->rname);
-      emit2 ("!labeldef", dbuf_c_str (&dbuf));
-      dbuf_destroy (&dbuf);
-      genLine.lineCurr->isLabel = 1;
     }
 
   _G.flushStatics = 1;
@@ -5643,7 +5586,7 @@ genMinusDec (const iCode * ic)
   unsigned int icount;
   unsigned int size = getDataSize (IC_RESULT (ic));
 
-  /* will try to generate an increment */
+  /* will try to generate a decrement */
   /* if the right side is not a literal we cannot */
   if (AOP_TYPE (IC_RIGHT (ic)) != AOP_LIT)
     return FALSE;
@@ -10016,7 +9959,7 @@ genPointerSet (iCode * ic)
         }
       else
         pairId = getPartPairId (AOP (right), 2);
-      emit2 ("ld (%s), %s", aopGetLitWordLong (AOP (result), offset + 2, FALSE), _pairs[pairId].name);
+      emit2 ("ld (%s+%d), %s", aopGetLitWordLong (AOP (result), offset, FALSE),2,  _pairs[pairId].name); // Handling of literal addresses is somewhat broken, use explicit offset as workaround.
       regalloc_dry_run_cost += (pairId == PAIR_HL) ? 3 : 4;
       goto release;
     }
@@ -10263,7 +10206,7 @@ genAssign (const iCode * ic)
   else if (isPair (AOP (right)) && AOP_TYPE (result) == AOP_IY && size == 2)
     commitPair (AOP (result), getPairId (AOP (right)), ic, FALSE);
   else if (size == 2 && isPairDead (PAIR_HL, ic) &&
-    (!IS_GB && (AOP_TYPE (right) == AOP_STK && !_G.omitFramePtr || AOP_TYPE (right) == AOP_IY) && AOP_TYPE (result) == AOP_IY || // Use ld (nn), hl
+    (!IS_GB && (AOP_TYPE (right) == AOP_STK && !_G.omitFramePtr || AOP_TYPE (right) == AOP_IY || AOP_TYPE (right) == AOP_LIT) && AOP_TYPE (result) == AOP_IY || // Use ld (nn), hl
     !IS_GB && AOP_TYPE (right) == AOP_IY && (AOP_TYPE (result) == AOP_STK && !_G.omitFramePtr || AOP_TYPE (result) == AOP_IY) || // Use ld hl, (nn)
     !IS_GB && AOP_TYPE (right) == AOP_LIT && (AOP_TYPE(result) == AOP_STK || AOP_TYPE(result) == AOP_EXSTK) && (AOP(result)->aopu.aop_stk + offset + _G.stack.offset + (AOP(result)->aopu.aop_stk > 0 ? _G.stack.param_offset : 0) + _G.stack.pushed) == 0 || // Use ex (sp), hl
     (IS_RAB || IS_TLCS90) && (AOP_TYPE(result) == AOP_STK || AOP_TYPE(result) == AOP_EXSTK) && (AOP_TYPE(right) == AOP_LIT || AOP_TYPE (right) == AOP_IMMD))) // Use ld d(sp), hl
@@ -10719,25 +10662,14 @@ release:
 static void
 genReceive (const iCode * ic)
 {
-  wassert (!regalloc_dry_run);
+  int size, offset = 0;
+  aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
+  size = AOP_SIZE (IC_RESULT (ic));
 
-  if (isOperandInFarSpace (IC_RESULT (ic)) && (OP_SYMBOL (IC_RESULT (ic))->isspilt || IS_TRUE_SYMOP (IC_RESULT (ic))))
+  while (size--)
     {
-      wassert (0);
-    }
-  else
-    {
-      // PENDING: HACK
-      int size;
-      int i;
-
-      aopOp (IC_RESULT (ic), ic, FALSE, FALSE);
-      size = AOP_SIZE (IC_RESULT (ic));
-
-      for (i = 0; i < size; i++)
-        {
-          aopPut (AOP (IC_RESULT (ic)), _fReceive[_G.receiveOffset++], i);
-        }
+      cheapMove (AOP (IC_RESULT (ic)), offset, _fReturn3[offset], 0);
+      offset++;
     }
 
   freeAsmop (IC_RESULT (ic), NULL);
@@ -12036,10 +11968,10 @@ genZ80iCode (iCode * ic)
           emitDebug ("; genBuiltIn");
           genBuiltIn (ic);
         }
-      else if (!regalloc_dry_run)
+      else
         {
-          emitDebug ("; addSet");
-          addSet (&_G.sendSet, ic);
+          emitDebug ("; genSend");
+          genSend (ic);
         }
       break;
 
@@ -12144,6 +12076,9 @@ genZ80Code (iCode * lic)
     }
 
   initGenLineElement ();
+
+  memset(z80_regs_used_as_parms_in_calls_from_current_function, 0, sizeof(bool) * (IYH_IDX + 1));
+  z80_symmParm_in_calls_from_current_function = TRUE;
 
   /* if debug information required */
   if (options.debug && currFunc)

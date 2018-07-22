@@ -53,6 +53,7 @@ extern int yylex();
 int yyparse(void);
 extern int noLineno;
 char lbuff[1024];       /* local buffer */
+char function_name[256] = {0};
 
 /* break & continue stacks */
 STACK_DCL(continueStack  ,symbol *,MAX_NEST_LEVEL)
@@ -96,13 +97,13 @@ bool uselessDecl = TRUE;
 %token SD_BOOL SD_CHAR SD_SHORT SD_INT SD_LONG SIGNED UNSIGNED SD_FLOAT DOUBLE FIXED16X16 SD_CONST VOLATILE SD_VOID BIT
 %token STRUCT UNION ENUM RANGE SD_FAR
 %token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
-%token NAKED JAVANATIVE OVERLAY
+%token NAKED JAVANATIVE OVERLAY TRAP
 %token <yystr> STRING_LITERAL INLINEASM
 %token IFX ADDRESS_OF GET_VALUE_AT_ADDRESS SPIL UNSPIL GETHBIT GETABIT GETBYTE GETWORD
 %token BITWISEAND UNARYMINUS IPUSH IPOP PCALL  ENDFUNCTION JUMPTABLE
 %token RRC RLC
 %token CAST CALL PARAM NULLOP BLOCK LABEL RECEIVE SEND ARRAYINIT
-%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP INLINE NORETURN RESTRICT SMALLC ALIGNAS
+%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP INLINE NORETURN RESTRICT SMALLC Z88DK_FASTCALL Z88DK_CALLEE ALIGNAS
 %token ASM
 
 %type <yyint> Interrupt_storage
@@ -252,8 +253,20 @@ function_attributes
                         FUNC_INTNO($$) = $1;
                         FUNC_ISISR($$) = 1;
                      }
+   |  TRAP
+                     {
+					    $$ = newLink (SPECIFIER);
+                        FUNC_INTNO($$) = INTNO_TRAP;
+						FUNC_ISISR($$) = 1;
+				     }
    |  SMALLC         {  $$ = newLink (SPECIFIER);
-                        FUNC_ISSMALLC($$)=1;
+                        FUNC_ISSMALLC($$) = 1;
+                     }
+   |  Z88DK_FASTCALL {  $$ = newLink (SPECIFIER);
+                        FUNC_ISZ88DK_FASTCALL($$) = 1;
+                     }
+   |  Z88DK_CALLEE   {  $$ = newLink (SPECIFIER);
+                        FUNC_ISZ88DK_CALLEE($$) = 1;
                      }
    ;
 
@@ -289,7 +302,29 @@ primary_expr
    ;
 
 string_literal_val
-    : STRING_LITERAL                    { $$ = newAst_VALUE (strVal ($1)); }
+    : STRING_LITERAL {
+                       int cnt = 1;
+                       int max = 253, min = 1;
+                       char fb[256];
+                       /* refer to support/cpp/libcpp/macro.c for details */
+                       while ((((int) ($1[cnt] & 0xff)) & 0xff) == 0xff)
+                         cnt++;
+                       if (cnt <= max)
+                         {
+                           $$ = newAst_VALUE (strVal ($1));
+                         }
+                       else
+                         {
+                           memset (fb, 0x00, sizeof (fb));
+                           fb[0] = '"';
+                           strncpy (fb + 1, function_name, max - min + 1);
+                           fb[max + 1] = '"';
+                           fb[max + 2] = 0;
+                           fb[strlen (fb)] = '"';
+                           fb[strlen (fb) + 1] = 0;
+                           $$ = newAst_VALUE (strVal (fb));
+                         }
+                     }
     ;
 
 postfix_expr
@@ -330,7 +365,15 @@ unary_expr
    : postfix_expr
    | INC_OP unary_expr        { $$ = newNode (INC_OP, NULL, $2); }
    | DEC_OP unary_expr        { $$ = newNode (DEC_OP, NULL, $2); }
-   | unary_operator cast_expr { $$ = newNode ($1, $2, NULL); }
+   | unary_operator cast_expr
+       {
+         if ($1 == '&' && IS_AST_OP ($2) && $2->opval.op == '*' && $2->right == NULL)
+           $$ = $2->left;
+         else if ($1 == '*' && IS_AST_OP ($2) && $2->opval.op == '&' && $2->right == NULL)
+           $$ = $2->left;
+         else
+           $$ = newNode ($1, $2, NULL);
+       }
    | SIZEOF unary_expr        { $$ = newNode (SIZEOF, NULL, $2); }
    | SIZEOF '(' type_name ')' { $$ = newAst_VALUE (sizeofOp ($3)); }
    | ALIGNOF '(' type_name ')'{ $$ = newAst_VALUE (alignofOp ($3)); }
@@ -522,6 +565,16 @@ declaration
 
          for (sym1 = sym = reverseSyms($2);sym != NULL;sym = sym->next) {
              sym_link *lnk = copyLinkChain($1);
+             sym_link *l0 = NULL, *l1 = NULL;
+             /* check creating intances of structs with flexible arrays */
+             for (l0 = sym->type; l0 != NULL; l0 = l0->next)
+               if (IS_PTR (l0))
+                 break;
+             for (l1 = lnk; l1 != NULL; l1 = l1->next)
+               if (IS_STRUCT (l1) && SPEC_STRUCT (l1)->b_flexArrayMember)
+                 break;
+             if (l0 == NULL && l1 != NULL && SPEC_EXTR($1) != 1)
+               werror (W_FLEXARRAY_INSTRUCT, sym->name);
              /* do the pointer stuff */
              pointerTypes(sym->type,lnk);
              addDecl (sym,0,lnk);
@@ -1058,6 +1111,11 @@ struct_declaration
                   addDecl (sym, 0, btype);
               /* make sure the type is complete and sane */
               checkTypeSanity(sym->etype, sym->name);
+
+              /* disabled, see bug 2378
+              if (strlen (sym->name) == 0 && !options.std_c11)
+                werrorfl(sym->fileDef, sym->lineDef, W_ANONYMOUS_MEMBER);
+              */
             }
           ignoreTypedefType = 0;
           $$ = $2;
@@ -1225,11 +1283,18 @@ declarator3
    ;
 
 function_declarator
-   : declarator2_function_attributes    { $$ = $1; }
+   : declarator2_function_attributes
+         {
+             $$ = $1;
+             strncpy (function_name, $$->name, sizeof (function_name) - 4);
+             memset (function_name + sizeof (function_name) - 4, 0x00, 4);
+         }
    | pointer declarator2_function_attributes
          {
              addDecl ($2,0,reverseLink($1));
              $$ = $2;
+             strncpy (function_name, $$->name, sizeof (function_name) - 4);
+             memset (function_name + sizeof (function_name) - 4, 0x00, 4);
          }
    ;
 
@@ -1655,7 +1720,7 @@ critical_statement
    ;
 
 labeled_statement
-   : label statement  { $$ = $1; $1->right = $2; }
+   : label statement  { if ($1) {$$ = $1; $1->right = $2;} else $$ = newNode (BLOCK, NULL, NULL); }
    | label '}'
      { /* Support a label without a statement at the end of a */
        /* compound statement as a SDCC extension. Include the */

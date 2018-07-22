@@ -2,15 +2,17 @@
 
 replace restart {
 	ld	%1, %2
+	%3
 } by {
 	; peephole 0 removed dead load.
-} if notVolatile(%1), notVolatile(%2), notUsed(%1)
+} if notVolatile(%1), notVolatile(%2), notUsed(%1), notSimilar(jr %3)
 
 replace restart {
 	ldw	%1, %2
+	%3
 } by {
 	; peephole 0w removed dead load.
-} if notVolatile(%1), notVolatile(%2), notUsed(%1)
+} if notVolatile(%1), notVolatile(%2), notUsed(%1), notSimilar(jr %3)
 
 replace restart {
 	ld	%1, %2
@@ -182,7 +184,7 @@ replace restart {
 } by {
 	bset	%2, #0
 	; peephole 11-0 replaced or by bset.
-} if notUsed(%1)
+} if notUsed(%1), notUsed('a')
 
 replace restart {
 	ldw	%1, #%2
@@ -192,7 +194,7 @@ replace restart {
 } by {
 	bset	%2, #7
 	; peephole 11-7 replaced or by bset.
-} if notUsed(%1)
+} if notUsed(%1), notUsed('a')
 
 replace restart {
 	ldw	%1, #%2
@@ -202,7 +204,7 @@ replace restart {
 } by {
 	bres	%2, #0
 	; peephole 12-0 replaced and by bres.
-} if notUsed(%1)
+} if notUsed(%1), notUsed('a')
 
 replace restart {
 	ldw	%1, #%2
@@ -212,7 +214,79 @@ replace restart {
 } by {
 	bres	%2, #7
 	; peephole 12-7 replaced and by bres.
-} if notUsed(%1)
+} if notUsed(%1), notUsed('a')
+
+replace restart {
+	addw	sp, #%1
+	addw	sp, #%2
+} by {
+	addw	sp, #%9
+	; peephole 13 combined additions to sp.
+} if immdInRange(0 255 '+' %1 %2 %9)
+
+replace restart {
+	pop	a
+	addw	sp, #%2
+} by {
+	addw	sp, #%9
+	; peephole 13a merged pop a into addw.
+} if notUsed('a'), immdInRange(0 255 '+' 1 %2 %9)
+
+replace restart {
+	addw	sp, #%2
+	pop	a
+} by {
+	addw	sp, #%9
+	; peephole 13c merged pop a into addw.
+} if notUsed('a'), immdInRange(0 255 '+' 1 %2 %9)
+
+replace restart {
+	popw	x
+	addw	sp, #%2
+} by {
+	addw	sp, #%9
+	; peephole 13c merged popw x into addw.
+} if notUsed('x'), immdInRange(0 255 '+' 2 %2 %9)
+
+replace restart {
+	addw	sp, #%2
+	popw	x
+} by {
+	addw	sp, #%9
+	; peephole 13d merged popw x into addw.
+} if notUsed('x'), immdInRange(0 255 '+' 2 %2 %9)
+
+replace restart {
+	popw	a
+	popw	a
+} by {
+	popw	x
+	; peephole 14a merged pop a into popw x
+} if notUsed('a'), notUsed('x')
+
+replace restart {
+	popw	a
+	popw	x
+} by {
+	addw	sp, #3
+	; peephole 14b merged popw x into addw.
+} if notUsed('a'), notUsed('x')
+
+replace restart {
+	popw	x
+	popw	a
+} by {
+	addw	sp, #3
+	; peephole 14c merged popw x into addw.
+} if notUsed('a'), notUsed('x')
+
+replace restart {
+	popw	x
+	popw	x
+} by {
+	addw	sp, #4
+	; peephole 14d merged popw x into addw.
+} if notUsed('x')
 
 replace restart {
 	jp	%5
@@ -511,7 +585,7 @@ replace restart {
 replace restart {
 %1:
 } by {
-	; peephole j18 removed unused label %1.
+	; peephole j30 removed unused label %1.
 } if labelRefCount(%1 0)
 
 // Barrier, since notUsed() is better at dealing with ret than with jp to unknown location.
@@ -522,6 +596,81 @@ replace restart {
 	ret
 } by {
 	jp	%1
-	; peephole j19 replaced call at end of function by jump (tail call optimization).
+	; peephole j31 replaced call at end of function by jump (tail call optimization).
 }
+
+replace restart {
+	ld	xl, a
+	ld	a, xh
+} by {
+	rlwa	x
+	; peephole r1 used rlwa.
+} if notUsed('xh')
+
+replace restart {
+	ld	yl, a
+	ld	a, yh
+} by {
+	rlwa	y
+	; peephole r2 used rlwa.
+} if notUsed('yh')
+
+replace restart {
+	ld	xh, a
+	ld	a, xl
+} by {
+	rrwa	x
+	; peephole r3 used rlwa.
+} if notUsed('xl')
+
+replace restart {
+	ld	yh, a
+	ld	a, yl
+} by {
+	rrwa	y
+	; peephole r4 used rlwa.
+} if notUsed('yl')
+
+// Barrier, so nothing else ever sees the jump-on-false optmiization.
+barrier
+
+// The STM8 has a relative jump-on-false intruction, which never jumps to its target. This can be used to optimize jumps over 1-byte instructions as we can use the instruction we jump over as the offset for the jump.
+replace {
+	jra	%5
+%2:
+	clr	a
+%5:
+} by {
+	.byte 0x21
+	; peephole jrf1 used jump-on-false opcode to shorten jump over 1-byte instruction.
+	%2:
+	clr	a
+	%5:
+} if labelRefCountChange(%5 -1)
+
+replace {
+	jra	%5
+%2:
+	clrw	x
+%5:
+} by {
+	.byte 0x21
+	; peephole jrf2 used jump-on-false opcode to shorten jump over 1-byte instruction.
+	%2:
+	clrw	x
+	%5:
+} if labelRefCountChange(%5 -1)
+
+replace {
+	jra	%5
+%2:
+	ld	a, xl
+%5:
+} by {
+	.byte 0x21
+	; peephole jrf3 used jump-on-false opcode to shorten jump over 1-byte instruction.
+	%2:
+	ld	a, xl
+	%5:
+} if labelRefCountChange(%5 -1)
 

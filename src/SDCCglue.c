@@ -400,7 +400,14 @@ initValPointer (ast * expr)
         {
           return valForStructElem (expr->left->left->left, expr->left->right);
         }
+
+      /* case 2.1. a->b */
+      if (IS_AST_OP (expr->left) && expr->left->opval.op == PTR_OP)
+        {
+          return valForStructElem (expr->left->left, expr->left->right);
+        }
     }
+
   /* case 3. (((char *) &a) +/- constant) */
   if (IS_AST_OP (expr) &&
       (expr->opval.op == '+' || expr->opval.op == '-') &&
@@ -408,6 +415,7 @@ initValPointer (ast * expr)
     {
       return valForCastAggr (expr->left->right->left, expr->left->left->opval.lnk, expr->right, expr->opval.op);
     }
+
   /* case 4. (array type) */
   if (IS_AST_SYM_VALUE (expr) && IS_ARRAY (expr->ftype))
     {
@@ -453,7 +461,24 @@ initValPointer (ast * expr)
      some_struct->element */
   if (IS_AST_OP (expr) && expr->opval.op == PTR_OP)
     {
-      return valForStructElem (expr->left->left, expr->right);
+      ast *t = expr->left;
+
+      /*if (expr->left->left)
+        if (expr->left->left->left)
+          if (expr->left->left->opval.op == '[')
+            t = expr->left->left;
+          else
+            t = expr->left->left->left;
+        else
+          t = expr->left->left;
+      else
+        t = expr->left;*/
+
+      /* a more generic way of above code */
+      while (t->left != NULL && t->opval.op != '[')
+        t = t->left;
+
+      return valForStructElem (t, expr->right); 
     }
 
   return NULL;
@@ -463,14 +488,14 @@ initValPointer (ast * expr)
 /* initPointer - pointer initialization code massaging             */
 /*-----------------------------------------------------------------*/
 value *
-initPointer (initList * ilist, sym_link * toType)
+initPointer (initList * ilist, sym_link * toType, int showError)
 {
   value *val;
   ast *expr;
 
   if (!ilist)
     {
-      return valCastLiteral (toType, 0.0);
+      return valCastLiteral (toType, 0.0, 0);
     }
 
   expr = list2expr (ilist);
@@ -514,14 +539,16 @@ initPointer (initList * ilist, sym_link * toType)
     {
       val = initValPointer (expr);
     }
+
   if (val)
     return val;
 
 wrong:
-  if (expr)
-    werrorfl (expr->filename, expr->lineno, E_INCOMPAT_PTYPES);
-  else
-    werror (E_INCOMPAT_PTYPES);
+  if (showError)
+    if (expr)
+      werrorfl (expr->filename, expr->lineno, E_INCOMPAT_PTYPES);
+    else
+      werror (E_INCOMPAT_PTYPES);
   return NULL;
 }
 
@@ -536,6 +563,11 @@ printChar (struct dbuf_s *oBuf, const char *s, int plen)
   int pplen = 0;
   char buf[100];
   char *p = buf;
+  int strEnd = plen - 1;
+
+  if (s)
+    while (s[strEnd] != 0)
+      strEnd--;
 
   while (len && pplen < plen)
     {
@@ -547,7 +579,7 @@ printChar (struct dbuf_s *oBuf, const char *s, int plen)
               *p = '\0';
               if (p != buf)
                 dbuf_tprintf (oBuf, "\t!ascii\n", buf);
-              dbuf_tprintf (oBuf, "\t!db !constbyte\n", (unsigned char) *s);
+              dbuf_tprintf (oBuf, "\t!db !constbyte\n", pplen < strEnd ? ((unsigned char) *s) : 0x00);
               p = buf;
             }
           else
@@ -616,23 +648,23 @@ _printPointerType (struct dbuf_s *oBuf, const char *name, int size)
   if (size == 4)
     {
       if (port->little_endian)
-        dbuf_printf (oBuf, "\t.byte %s,(%s >> 8),(%s >> 16),(%s >> 24)", name, name, name, name);
+        dbuf_printf (oBuf, "\t.byte %s, (%s >> 8), (%s >> 16), (%s >> 24)", name, name, name, name);
       else
-        dbuf_printf (oBuf, "\t.byte (%s >> 24),(%s >> 16),(%s >> 8),%s", name, name, name, name);
+        dbuf_printf (oBuf, "\t.byte (%s >> 24), (%s >> 16), (%s >> 8), %s", name, name, name, name);
     }
   else if (size == 3)
     {
       if (port->little_endian)
-        dbuf_printf (oBuf, "\t.byte %s,(%s >> 8),(%s >> 16)", name, name, name);
+        dbuf_printf (oBuf, "\t.byte %s, (%s >> 8), (%s >> 16)", name, name, name);
       else
-        dbuf_printf (oBuf, "\t.byte (%s >> 16),(%s >> 8),%s", name, name, name);
+        dbuf_printf (oBuf, "\t.byte (%s >> 16), (%s >> 8), %s", name, name, name);
     }
   else
     {
       if (port->little_endian)
-        dbuf_printf (oBuf, "\t.byte %s,(%s >> 8)", name, name);
+        dbuf_printf (oBuf, "\t.byte %s, (%s >> 8)", name, name);
       else
-        dbuf_printf (oBuf, "\t.byte (%s >> 8),%s", name, name);
+        dbuf_printf (oBuf, "\t.byte (%s >> 8), %s", name, name);
     }
 }
 
@@ -657,6 +689,7 @@ printGPointerType (struct dbuf_s *oBuf, const char *iname, const char *oname, in
   if (byte == -1)
     {
       _printPointerType (oBuf, iname, size + 1);
+      dbuf_printf (oBuf, "\n");
     }
   else
     {
@@ -678,11 +711,40 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
   if (ilist && (ilist->type == INIT_DEEP))
     ilist = ilist->init.deep;
 
-  if (!(val = list2val (ilist)))
+  if (!(val = list2val (ilist, FALSE)))
     {
-      // assuming a warning has been thrown
-      val = constCharVal (0);
+      if (!!(val = initPointer (ilist, type, 0)))
+        {
+          int i, size = getSize (type), le = port->little_endian, top = (options.model == MODEL_FLAT24) ? 3 : 2;;         
+          dbuf_printf (oBuf, "\t.byte ");
+          for (i = (le ? 0 : size - 1); le ? (i < size) : (i > -1); i += (le ? 1 : -1))
+            {
+              if (i == 0)
+			    if (val->name && strlen (val->name) > 0)
+                  dbuf_printf (oBuf, "%s", val->name);
+				else
+                  dbuf_printf (oBuf, "#0x00");
+              else if (0 < i && i < top)
+			    if (val->name && strlen (val->name) > 0)
+                  dbuf_printf (oBuf, "(%s >> %d)", val->name, i * 8);
+				else
+                  dbuf_printf (oBuf, "#0x00");				
+              else
+                dbuf_printf (oBuf, "#0x00");
+              if (i == (le ? (size - 1) : 0))
+                dbuf_printf (oBuf, "\n");
+              else
+                dbuf_printf (oBuf, ", ");
+            }
+          return;
+        }
+      else
+        {
+          werrorfl (ilist->filename, ilist->lineno, E_CONST_EXPECTED);
+          val = constCharVal (0);
+        }
     }
+
   if (val->etype && SPEC_SCLS (val->etype) != S_LITERAL)
     {
       werrorfl (ilist->filename, ilist->lineno, E_CONST_EXPECTED);
@@ -697,7 +759,7 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
 
   if (val->type != type)
     {
-      val = valCastLiteral (type, floatFromVal (val));
+      val = valCastLiteral (type, floatFromVal (val), ullFromVal (val));
     }
 
   if (IS_INTEGRAL (val->type))
@@ -792,8 +854,8 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
       // TODO: Print value as comment. Does dbuf_printf support long long even on MSVC?
       dbuf_printf (oBuf, "\n");
       break;
-	default:
-	  wassertl (0, "Attempting to initialize integer of non-handled size.");
+    default:
+      wassertl (0, "Attempting to initialize integer of non-handled size.");
     }
 }
 
@@ -821,7 +883,7 @@ printIvalBitFields (symbol ** sym, initList ** ilist, struct dbuf_s *oBuf)
       else if (!SPEC_BUNNAMED (lsym->etype))
         {
           /* not an unnamed bit-field structure member */
-          value *val = list2val (lilist);
+          value *val = list2val (lilist, TRUE);
 
           if (val && val->etype && SPEC_SCLS (val->etype) != S_LITERAL)
             {
@@ -949,7 +1011,7 @@ printIvalChar (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
 
   if (!s)
     {
-      val = list2val (ilist);
+      val = list2val (ilist, TRUE);
       /* if the value is a character string  */
       if (IS_ARRAY (val->type) && IS_CHAR (val->etype))
         {
@@ -994,9 +1056,10 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *
       /* take care of the special   case  */
       /* array of characters can be init  */
       /* by a string                      */
+      /* char *p = "abc";                 */
       if (IS_CHAR (type->next) && ilist->type == INIT_NODE)
         {
-          val = list2val (ilist);
+          val = list2val (ilist, TRUE);
           if (!val)
             {
               werrorfl (ilist->filename, ilist->lineno, E_INIT_STRUCT, sym->name);
@@ -1008,9 +1071,28 @@ printIvalArray (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *
               return;
             }
           if (printIvalChar (sym, type,
-                             (ilist->type == INIT_DEEP ? ilist->init.deep : ilist), oBuf, SPEC_CVAL (sym->etype).v_char, check))
+                             ilist, oBuf, SPEC_CVAL (sym->etype).v_char, check))
             return;
         }
+      /* char *p = {"abc"}; */
+      if (IS_CHAR (type->next) && ilist->type == INIT_DEEP && ilist->init.deep && ilist->init.deep->type == INIT_NODE)
+        {
+          val = list2val (ilist->init.deep, TRUE);
+          if (!val)
+            {
+              werrorfl (ilist->init.deep->filename, ilist->init.deep->lineno, E_INIT_STRUCT, sym->name);
+              return;
+            }
+          if (!IS_LITERAL (val->etype))
+            {
+              werrorfl (ilist->init.deep->filename, ilist->init.deep->lineno, E_CONST_EXPECTED);
+              return;
+            }
+          if (printIvalChar (sym, type,
+                             ilist->init.deep, oBuf, SPEC_CVAL (sym->etype).v_char, check))
+            return;
+        }
+
       /* not the special case             */
       if (ilist->type != INIT_DEEP)
         {
@@ -1065,9 +1147,9 @@ printIvalFuncPtr (sym_link * type, initList * ilist, struct dbuf_s *oBuf)
   int size;
 
   if (ilist)
-    val = list2val (ilist);
+    val = list2val (ilist, TRUE);
   else
-    val = valCastLiteral (type, 0.0);
+    val = valCastLiteral (type, 0.0, 0);
 
   if (!val)
     {
@@ -1284,7 +1366,7 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *oB
       return;
     }
 
-  if (!(val = initPointer (ilist, type)))
+  if (!(val = initPointer (ilist, type, 1)))
     return;
 
   /* if character pointer */
@@ -1350,6 +1432,7 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *oB
       printGPointerType (oBuf, val->name, sym->name,
                          (IS_PTR (val->type) ? DCL_TYPE (val->type) : PTR_TYPE (SPEC_OCLS (val->etype))));
     }
+
   return;
 }
 
@@ -1514,9 +1597,9 @@ emitStaticSeg (memmap *map, struct dbuf_s *oBuf)
               /* if sym is a simple string and sym->ival is a string,
                  WE don't need it anymore */
               if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) &&
-                  IS_AST_SYM_VALUE (list2expr (sym->ival)) && list2val (sym->ival)->sym->isstrlit)
+                  IS_AST_SYM_VALUE (list2expr (sym->ival)) && list2val (sym->ival, TRUE)->sym->isstrlit)
                 {
-                  freeStringSymbol (list2val (sym->ival)->sym);
+                  freeStringSymbol (list2val (sym->ival, TRUE)->sym);
                 }
             }
           else
@@ -2148,8 +2231,9 @@ glue (void)
     {
       /* STM8 note: there is no need to call main().
          Instead of that, it's address is specified in the 
-	 interrupts table and always equals to 0x8080.
-	*/
+         interrupts table and always equals to 0x8080.
+       */
+
       /* entry point @ start of HOME */
       fprintf (asmFile, "__sdcc_program_startup:\n");
 
