@@ -13,7 +13,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.rules 4148 2006-05-01 20:47:12Z tecodev $
+### $Id: Makefile.rules 4294 2006-07-20 14:10:16Z tecodev $
 ###
 
 # update dependencies
@@ -48,8 +48,10 @@ else
 %.lib : recurse
 ifndef SILENT
 	@echo "[  LIB  ] $(patsubst $(top_builddir)%,%,$@) <== **/*.o"
-endif
 	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)$(builddir)" -name "*.o"`; echo $${LIB_O}; [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
+else
+	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)$(builddir)" -name "*.o"`;                 [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
+endif
 endif
 
 .PHONY : recurse force

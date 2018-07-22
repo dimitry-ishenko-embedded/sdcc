@@ -9,7 +9,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See GPL for details.
 ###
-### $Id: Makefile.subdir 4148 2006-05-01 20:47:12Z tecodev $
+### $Id: Makefile.subdir 4305 2006-07-27 14:24:33Z borutr $
 ###
 
 include $(top_builddir)Makefile.common
@@ -60,6 +60,9 @@ clean : recurse
 	$(Q)-$(RM) $(TARGETS)
 	$(Q)-$(RM) $(addprefix $(top_builddir)$(installdir)/,$(notdir $(TARGETS)))
 	$(Q)-[ ! -d "$(top_builddir)$(builddir)" ] || $(RMDIR) "$(top_builddir)$(builddir)"
+
+distclean : clean
+	$(Q)-$(RM) Makefile
 
 clean-intermediate : recurse
 	@-echo "dummy" > .dummy
