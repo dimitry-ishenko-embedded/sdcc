@@ -1,0 +1,34 @@
+/(c).1/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/.version/1.8/Mon Jul  2 10:39:19 2001//Tsdcc-230
+/COPYING/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/INSTALL/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/Makefile/1.11/Sat Jul 21 04:40:54 2001//Tsdcc-230
+/README/1.4/Mon Jul  2 10:39:19 2001//Tsdcc-230
+/TODO/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/clean.mk/1.4/Sat Jul 21 04:40:54 2001//Tsdcc-230
+/conf/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/conf.mk/1.3/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/configure/1.12/Thu Aug 30 10:26:10 2001//Tsdcc-230
+/configure.in/1.11/Thu Aug 30 10:26:10 2001//Tsdcc-230
+/ddconfig_in.h/1.5/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/globals.cc/1.2/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/globals.h/1.2/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/i_string.h/1.1/Mon Feb  7 07:45:11 2000//Tsdcc-230
+/install-sh/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/main_in.mk/1.6/Fri Jul  6 01:36:30 2001//Tsdcc-230
+/pobj.cc/1.4/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/pobjcl.h/1.1/Mon Feb  7 07:45:11 2000//Tsdcc-230
+/pobjt.h/1.2/Fri Jun 23 11:22:30 2000//Tsdcc-230
+/pstr.h/1.1/Mon Feb  7 07:45:11 2000//Tsdcc-230
+/put(c)/1.1/Mon Feb  7 07:44:03 2000//Tsdcc-230
+/stypes.h/1.4/Sat Sep  1 23:52:32 2001//Tsdcc-230
+/ucsim.cc/1.2/Mon Jul  2 10:39:19 2001//Tsdcc-230
+/utils.cc/1.2/Mon Apr  2 13:08:47 2001//Tsdcc-230
+/utils.h/1.2/Mon Apr  2 13:08:47 2001//Tsdcc-230
+D/avr.src////
+D/cmd.src////
+D/doc////
+D/gui.src////
+D/s51.src////
+D/sim.src////
+D/z80.src////

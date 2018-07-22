@@ -1,0 +1,12 @@
+/Makefile/1.16/Sun Sep  2 04:21:43 2001//Tsdcc-230
+/README/1.2/Mon Aug 27 06:49:01 2001//Tsdcc-230
+/asm_strings.s/1.3/Mon Aug 27 06:49:01 2001//Tsdcc-230
+/crt0.s/1.9/Fri Aug 31 04:43:11 2001//Tsdcc-230
+/div.s/1.5/Wed Aug  8 03:22:14 2001//Tsdcc-230
+/mul.s/1.7/Mon Aug 27 06:49:01 2001//Tsdcc-230
+/printf.c/1.4/Mon Jul 16 15:14:09 2001//Tsdcc-230
+/putchar.s/1.4/Mon Jul 16 15:14:09 2001//Tsdcc-230
+/shift.s/1.2/Wed Aug  8 03:22:14 2001//Tsdcc-230
+/string.c/1.4/Sun Feb 13 01:12:59 2000//Tsdcc-230
+/stubs.s/1.2/Wed Aug  8 03:22:14 2001//Tsdcc-230
+D
