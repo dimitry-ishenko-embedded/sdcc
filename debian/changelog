@@ -1,3 +1,10 @@
+sdcc (3.5.0+dfsg-2.2) UNRELEASED; urgency=medium
+
+  * Non-maintainer upload.
+  * Recreated git repo content (Closes: 895345)
+
+ -- Geert Stappers <stappers@debian.org>  Sun, 22 Jul 2018 17:18:20 +0200
+
 sdcc (3.5.0+dfsg-2.1) unstable; urgency=medium
 
   * Non-maintainer upload.

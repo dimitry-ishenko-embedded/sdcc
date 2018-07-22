@@ -1,0 +1,5 @@
+
+
+
+This git repo was created with
+  gbp import-dscs --pristine-tar --debsnap --ignore-repo-config sdcc
