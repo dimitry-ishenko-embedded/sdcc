@@ -57,8 +57,8 @@ newiList (int type, void *ilist)
   nilist = Safe_alloc (sizeof (initList));
 
   nilist->type = type;
-  nilist->lineno = mylineno;
-  nilist->filename = currFname;
+  nilist->lineno = lexLineno;
+  nilist->filename = lexFilename;
 
   switch (type)
     {
@@ -273,30 +273,28 @@ list2expr (initList * ilist)
 void
 resolveIvalSym (initList * ilist, sym_link * type)
 {
-  RESULT_TYPE resultType;
+  int is_ptr = IS_PTR (type);
+  RESULT_TYPE resultType = getResultTypeFromType (getSpec (type));
 
-  if (!ilist)
-    return;
-
-  if (ilist->type == INIT_NODE)
+  while (ilist)
     {
-      if (IS_PTR (type))
-        resultType = RESULT_TYPE_INT;
-      else
-        resultType = getResultTypeFromType (getSpec (type));
-      ilist->init.node = decorateType (resolveSymbols (ilist->init.node),
-                                       resultType);
-    }
+      if (ilist->type == INIT_NODE)
+        {
+          ilist->init.node = decorateType (resolveSymbols (ilist->init.node),
+            is_ptr ? RESULT_TYPE_INT : resultType);
+        }
+      else if (ilist->type == INIT_DEEP)
+        {
+          resolveIvalSym (ilist->init.deep, type);
+        }
 
-  if (ilist->type == INIT_DEEP)
-    resolveIvalSym (ilist->init.deep, type);
-
-  resolveIvalSym (ilist->next, type);
+      ilist = ilist->next;
+   }
 }
 
-/*-----------------------------------------------------------------*/
-/* symbolVal - creates a value for a symbol              */
-/*-----------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+/* symbolVal - creates a value for a symbol                         */
+/*------------------------------------------------------------------*/
 value *
 symbolVal (symbol * sym)
 {
@@ -686,7 +684,7 @@ constFixed16x16Val (char *s)
 /*-----------------------------------------------------------------*/
 /* constVal - converts an INTEGER constant into a cheapest value   */
 /*-----------------------------------------------------------------*/
-value *constVal (char *s)
+value *constVal (const char *s)
 {
   value *val;
   short hex = 0, octal = 0;
@@ -805,155 +803,11 @@ value *constVal (char *s)
   return val;
 }
 
-/*! /fn char hexEscape(char **src)
-
-    /param src Pointer to 'x' from start of hex character value
-*/
-
-unsigned char hexEscape(char **src)
-{
-  char *s ;
-  unsigned long value ;
-
-  (*src)++ ;    /* Skip over the 'x' */
-  s = *src ;    /* Save for error detection */
-
-  value = strtol (*src, src, 16);
-
-  if (s == *src) {
-      // no valid hex found
-      werror(E_INVALID_HEX);
-  } else {
-    if (value > 255) {
-      werror(W_ESC_SEQ_OOR_FOR_CHAR);
-    }
-  }
-  return (char) value;
-}
-
-/*------------------------------------------------------------------*/
-/* octalEscape - process an octal constant of max three digits      */
-/* return the octal value, throw a warning for illegal octal        */
-/* adjust src to point at the last proccesed char                   */
-/*------------------------------------------------------------------*/
-
-unsigned char octalEscape (char **str) {
-  int digits;
-  unsigned value=0;
-
-  for (digits=0; digits<3; digits++) {
-    if (**str>='0' && **str<='7') {
-      value = value*8 + (**str-'0');
-      (*str)++;
-    } else {
-      break;
-    }
-  }
-  if (digits) {
-    if (value > 255 /* || (**str>='0' && **str<='7') */ ) {
-      werror (W_ESC_SEQ_OOR_FOR_CHAR);
-    }
-  }
-  return value;
-}
-
-/*!
-  /fn int copyStr (char *dest, char *src)
-
-  Copies a source string to a dest buffer interpreting escape sequences
-  and special characters
-
-  /param dest Buffer to receive the resultant string
-  /param src  Buffer containing the source string with escape sequecnes
-  /return Number of characters in output string
-
-*/
-
-int
-copyStr (char *dest, char *src)
-
-{
-  char *OriginalDest = dest ;
-
-  while (*src)
-    {
-      if (*src == '\"')
-        src++;
-      else if (*src == '\\')
-        {
-          src++;
-          switch (*src)
-            {
-            case 'n':
-              *dest++ = '\n';
-              break;
-            case 't':
-              *dest++ = '\t';
-              break;
-            case 'v':
-              *dest++ = '\v';
-              break;
-            case 'b':
-              *dest++ = '\b';
-              break;
-            case 'r':
-              *dest++ = '\r';
-              break;
-            case 'f':
-              *dest++ = '\f';
-              break;
-            case 'a':
-              *dest++ = '\a';
-              break;
-
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-              *dest++ = octalEscape(&src);
-              src-- ;
-              break;
-
-            case 'x':
-              *dest++ = hexEscape(&src) ;
-              src-- ;
-              break ;
-
-            case '\\':
-              *dest++ = '\\';
-              break;
-            case '\?':
-              *dest++ = '\?';
-              break;
-            case '\'':
-              *dest++ = '\'';
-              break;
-            case '\"':
-              *dest++ = '\"';
-              break;
-            default:
-              *dest++ = *src;
-            }
-          src++;
-        }
-      else
-        *dest++ = *src++;
-    }
-
-  *dest++ = '\0';
-
-  return dest - OriginalDest ;
-}
-
 /*------------------------------------------------------------------*/
 /* strVal - converts a string constant to a value       */
 /*------------------------------------------------------------------*/
 value *
-strVal (char *s)
+strVal (const char *s)
 {
   value *val;
 
@@ -1063,7 +917,7 @@ copyValue (value * src)
 /* charVal - converts a character constant to a value       */
 /*------------------------------------------------------------------*/
 value *
-charVal (char *s)
+charVal (const char *s)
 {
   value *val;
 

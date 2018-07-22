@@ -182,7 +182,7 @@ static struct {
 
 extern int pic16_ptrRegReq ;
 extern int pic16_nRegs;
-extern FILE *codeOutFile;
+extern struct dbuf_s *codeOutBuf;
 //static void saverbank (int, iCode *,bool);
 
 static lineNode *lineHead = NULL;
@@ -266,6 +266,7 @@ void pic16_emitpcomment (char *fmt, ...)
                     (lineHead = newLineNode(lb)));
     lineCurr->isInline = _G.inLine;
     lineCurr->isDebug  = _G.debugLine;
+    lineCurr->isComment = 1;
 
     pic16_addpCode2pBlock(pb,pic16_newpCodeCharP(lb));
     va_end(ap);
@@ -378,6 +379,8 @@ void pic16_emitcode (char *inst,char *fmt, ...)
                     (lineHead = newLineNode(lb)));
     lineCurr->isInline = _G.inLine;
     lineCurr->isDebug  = _G.debugLine;
+    lineCurr->isLabel = (lbp[strlen (lbp) - 1] == ':');
+    lineCurr->isComment = (*lbp == ';');
 
 // VR    fprintf(stderr, "lb = <%s>\n", lbp);
 
@@ -952,7 +955,9 @@ static asmop *aopForRemat (operand *op, bool result) // x symbol *sym)
 	for (;;) {
 		oldic = ic;
 
-//		pic16_emitpcomment("ic: %s\n", printILine(ic));
+//              chat *iLine = printILine(ic);
+//		pic16_emitpcomment("ic: %s\n", iLine);
+//              dbuf_free(iLine);
 	
 		if (ic->op == '+') {
 			val += (int) operandLitValue(IC_RIGHT(ic));
@@ -3592,12 +3597,6 @@ static int resultRemat (iCode *ic)
 
   return 0;
 }
-
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#else
-#define STRCASECMP strcasecmp
-#endif
 
 #if 0
 /*-----------------------------------------------------------------*/
@@ -11722,7 +11721,7 @@ static void genPackBits (sym_link    *etype , operand *result,
       || SPEC_BLEN(etype) <= 8 )  {
     int fsr0_setup = 0;
 
-    if (blen != 8 || bstr != 0) {
+    if (blen != 8 || (bstr % 8) != 0) {
       // we need to combine the value with the old value
       if(!shifted_and_masked)
       {
@@ -11757,7 +11756,12 @@ static void genPackBits (sym_link    *etype , operand *result,
         if (lit != 0)
 	  pic16_emitpcode(POC_IORLW, pic16_popGetLit(lit));
       }
-    } // if (blen != 8 || bstr != 0)
+    } else { // if (blen == 8 && (bstr % 8) == 0)
+	if (shifted_and_masked) {
+	    // move right (literal) to WREG (only case where right is not yet in WREG)
+	    pic16_mov2w(AOP(right), (bstr / 8));
+	}
+    }
 
     /* write new value back */
     if ((IS_SYMOP(result) && !IS_PTR(operandType(result)))
@@ -13171,12 +13175,12 @@ static void genCast (iCode *ic)
 	      tag = GPTR_TAG_CODE;
 	    } else if (IS_PTR(rtype)) {
 	      PERFORM_ONCE(weirdcast,
-	      fprintf (stderr, "%s:%u: WARNING: casting `(generic*)(unknown*)' -- assumimg __data space\n", ic->filename, ic->lineno);
+	      fprintf (stderr, "%s:%u: WARNING: casting `(generic*)(unknown*)' -- assuming __data space\n", ic->filename, ic->lineno);
 	      );
 	      tag = GPTR_TAG_DATA;
 	    } else {
 	      PERFORM_ONCE(weirdcast,
-	      fprintf (stderr, "%s:%u: WARNING: casting `(generic*)(non-pointer)' -- assumimg __data space\n", ic->filename, ic->lineno);
+	      fprintf (stderr, "%s:%u: WARNING: casting `(generic*)(non-pointer)' -- assuming __data space\n", ic->filename, ic->lineno);
 	      );
 	      tag = GPTR_TAG_DATA;
 	    }
@@ -13630,11 +13634,12 @@ void genpic16Code (iCode *lic)
       }
 	
       if(options.iCodeInAsm) {
-        char *l;
+        char *iLine;
 
           /* insert here code to print iCode as comment */
-          l = Safe_strdup(printILine(ic));
-          pic16_emitpcomment("ic:%d: %s", ic->seq, l);
+          iLine = printILine(ic);
+          pic16_emitpcomment("ic:%d: %s", ic->seq, iLine);
+          dbuf_free(iLine);
       }
 
       /* if the result is marked as
@@ -13842,7 +13847,7 @@ void genpic16Code (iCode *lic)
       peepHole (&lineHead);
 
     /* now do the actual printing */
-    printLine (lineHead, codeOutFile);
+    printLine (lineHead, codeOutBuf);
 
 #ifdef PCODE_DEBUG
     DFPRINTF((stderr,"printing pBlock\n\n"));

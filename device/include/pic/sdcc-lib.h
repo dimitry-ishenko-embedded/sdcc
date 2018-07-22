@@ -11,7 +11,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: sdcc-lib.h 3512 2004-10-01 14:32:06Z vrokas $
+ * $Id: sdcc-lib.h 4776 2007-04-29 13:15:51Z borutr $
  *
  */
 

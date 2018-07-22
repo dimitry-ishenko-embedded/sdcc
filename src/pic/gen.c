@@ -44,11 +44,6 @@
 #include "gen.h"
 #include "glue.h"
 
-/* When changing these, you must also update the assembler template
- * in device/lib/libsdcc/macros.inc */
-#define GPTRTAG_DATA	0x00
-#define GPTRTAG_CODE	0x80
-
 /* The PIC port(s) need not differentiate between POINTER and FPOINTER. */
 #define PIC_IS_DATA_PTR(x)	(IS_DATA_PTR(x) || IS_FARPTR(x))
 #define PIC_IS_FARPTR(x)	(PIC_IS_DATA_PTR(x))
@@ -69,6 +64,7 @@ for the next function.
 */
 static int max_key=0;
 static int GpsuedoStkPtr=0;
+static int pic14_inISR = 0;
 
 pCodeOp *popGetImmd(char *name, unsigned int offset, int index,int is_func);
 extern char *get_op( pCodeOp *pcop,char *buff,size_t buf_size);
@@ -81,8 +77,8 @@ kludgy & hacky stuff. This is what it is all about
 CODE GENERATION for a specific MCU . some of the
 routines may be reusable, will have to see */
 
-static char *zero = "#0x00";
-static char *one  = "#0x01";
+static char *zero = "0x00";
+static char *one  = "0x01";
 static char *spname = "sp";
 
 char *fReturnpic14[] = {"temp1","temp2","temp3","temp4" };
@@ -115,7 +111,7 @@ typedef struct resolvedIfx {
 
 extern int pic14_ptrRegReq ;
 extern int pic14_nRegs;
-extern FILE *codeOutFile;
+extern struct dbuf_s *codeOutBuf;
 static void saverbank (int, iCode *,bool);
 
 static lineNode *lineHead = NULL;
@@ -300,7 +296,7 @@ void pic14_emitcode (char *inst,char *fmt, ...)
 {
 	va_list ap;
 	char lb[INITIAL_INLINEASM];  
-	unsigned char *lbp = (unsigned char *)lb;
+	char *lbp = lb;
 	
 	va_start(ap,fmt);   
 	
@@ -321,6 +317,7 @@ void pic14_emitcode (char *inst,char *fmt, ...)
 	(lineHead = newLineNode(lb)));
 	lineCurr->isInline = _G.inLine;
 	lineCurr->isDebug  = _G.debugLine;
+	lineCurr->isLabel = (lbp[strlen (lbp) - 1] == ':');
 	
 	if(debug_verbose)
 		addpCode2pBlock(pb,newpCodeCharP(lb));
@@ -514,84 +511,7 @@ static asmop *aopForSym (iCode *ic,symbol *sym,bool result)
 	if (sym->aop)
 		return sym->aop;
 	
-#if 0
-	/* assign depending on the storage class */
-	/* if it is on the stack or indirectly addressable */
-	/* space we need to assign either r0 or r1 to it	 */    
-	if ((sym->onStack && !options.stack10bit) || sym->iaccess) {
-		sym->aop = aop = newAsmop(0);
-		aop->aopu.aop_ptr = getFreePtr(ic,&aop,result);
-		aop->size = getSize(sym->type);
-		
-		/* now assign the address of the variable to 
-		the pointer register */
-		if (aop->type != AOP_STK) {
-			
-			if (sym->onStack) {
-				if ( _G.accInUse )
-					pic14_emitcode("push","acc");
-				
-				pic14_emitcode("mov","a,_bp");
-				pic14_emitcode("add","a,#0x%02x",
-					((sym->stack < 0) ?
-					((char)(sym->stack - _G.nRegsSaved )) :
-				((char)sym->stack)) & 0xff);
-				pic14_emitcode("mov","%s,a",
-					aop->aopu.aop_ptr->name);
-				
-				if ( _G.accInUse )
-					pic14_emitcode("pop","acc");
-			} else
-				pic14_emitcode("mov","%s,#%s",
-				aop->aopu.aop_ptr->name,
-				sym->rname);
-			aop->paged = space->paged;
-		} else
-			aop->aopu.aop_stk = sym->stack;
-		return aop;
-	}
-	
-	if (sym->onStack && options.stack10bit)
-	{
-		/* It's on the 10 bit stack, which is located in
-		* far data space.
-		*/
-		
-		//DEBUGpic14_emitcode(";","%d",__LINE__);
-		
-		if ( _G.accInUse )
-			pic14_emitcode("push","acc");
-		
-		pic14_emitcode("mov","a,_bp");
-		pic14_emitcode("add","a,#0x%02x",
-			((sym->stack < 0) ?
-			((char)(sym->stack - _G.nRegsSaved )) :
-		((char)sym->stack)) & 0xff);
-		
-		genSetDPTR(1);
-		pic14_emitcode ("mov","dpx1,#0x40");
-		pic14_emitcode ("mov","dph1,#0x00");
-		pic14_emitcode ("mov","dpl1, a");
-		genSetDPTR(0);
-		
-		if ( _G.accInUse )
-			pic14_emitcode("pop","acc");
-		
-		sym->aop = aop = newAsmop(AOP_DPTR2);
-		aop->size = getSize(sym->type); 
-		return aop;
-	}
-#endif
-
 	//DEBUGpic14_emitcode(";","%d",__LINE__);
-	/* if in bit space */
-	if (IN_BITSPACE(space)) {
-		sym->aop = aop = newAsmop (AOP_CRY);
-		aop->aopu.aop_dir = sym->rname ;
-		aop->size = getSize(sym->type);
-		//DEBUGpic14_emitcode(";","%d sym->rname = %s, size = %d",__LINE__,sym->rname,aop->size);
-		return aop;
-	}
 	/* if it is in direct space */
 	if (IN_DIRSPACE(space)) {
 		sym->aop = aop = newAsmop (AOP_DIR);
@@ -1107,6 +1027,7 @@ char *aopGet (asmop *aop, int offset, bool bit16, bool dname)
 	//DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	/* offset is greater than
 	size then zero */
+	assert(aop);
 	if (offset > (aop->size - 1) &&
 		aop->type != AOP_LIT)
 		return zero;
@@ -1234,6 +1155,9 @@ char *aopGet (asmop *aop, int offset, bool bit16, bool dname)
 			pCodeOp *pcop = aop->aopu.pcop;
 			DEBUGpic14_emitcode(";","%d: aopGet AOP_PCODE type %s",__LINE__,pCodeOpType(pcop));
 			if(pcop->name) {
+				if (pcop->type == PO_IMMEDIATE) {
+					offset += PCOI(pcop)->index;
+				}
 				if (offset) {
 					DEBUGpic14_emitcode(";","%s offset %d",pcop->name,offset);
 					sprintf(s,"(%s+%d)", pcop->name,offset);
@@ -1348,26 +1272,31 @@ pCodeOp *popGetWithString(char *str, int isExtern)
 	return pcop;
 }
 
-pCodeOp *popGetExternal (char *str)
+pCodeOp *popGetExternal (char *str, int isReg)
 {
-	pCodeOp *pcop = popGetWithString (str, 1);
+	pCodeOp *pcop;
+	
+	if (isReg) {
+	    pcop = newpCodeOpRegFromStr(str);
+	} else {
+	    pcop = popGetWithString (str, 1);
+	}
 	
 	if (str) {
 	  symbol *sym;
-	  bool found = 0;
 
-	  for (sym = setFirstItem (externs); !found && sym; sym = setNextItem (externs))
+	  for (sym = setFirstItem (externs); sym; sym = setNextItem (externs))
 	  {
-	    if (!strcmp (str, sym->rname))
-	      found = 1;
+	    if (!strcmp (str, sym->rname)) break;
 	  }
 	  
-	  if (!found)
+	  if (!sym)
 	  {
 	    sym = newSymbol(str, 0);
 	    strncpy(sym->rname, str, SDCC_NAME_MAX);
 	    addSet (&externs, sym);
 	  } // if
+	  sym->used++;
 	}
 	return pcop;
 }
@@ -1902,13 +1831,26 @@ static void get_returnvalue (operand *op, int offset, int idx)
 
 static void call_libraryfunc (char *name)
 {
-  /* library code might reside in different page... */
-  emitpcode (POC_PAGESEL, popGetWithString (name, 1));
-  /* call the library function */
-  emitpcode (POC_CALL, popGetExternal (name));
-  /* might return from different page... */
-  emitpcode (POC_PAGESEL, popGetWithString ("$", 0));
+    symbol *sym;
+
+    /* library code might reside in different page... */
+    emitpcode (POC_PAGESEL, popGetWithString (name, 1));
+    /* call the library function */
+    emitpcode (POC_CALL, popGetExternal (name, 0));
+    /* might return from different page... */
+    emitpcode (POC_PAGESEL, popGetWithString ("$", 0));
+
+    /* create symbol, mark it as `extern' */
+    sym = findSym(SymbolTab, NULL, name);
+    if (!sym) {
+	sym = newSymbol(name, 0);
+	strncpy(sym->rname, name, SDCC_NAME_MAX);
+	addSym(SymbolTab, sym, sym->rname, 0, 0, 0);
+	addSet(&externs, sym); 
+    } // if
+    sym->used++;
 }
+
 #if 0
 /*-----------------------------------------------------------------*/
 /* reAdjustPreg - points a register back to where it should        */
@@ -2690,13 +2632,28 @@ static void genCall (iCode *ic)
 	/* make the call */
 	sym = OP_SYMBOL(IC_LEFT(ic));
 	name = sym->rname[0] ? sym->rname : sym->name;
-	isExtern = IS_EXTERN(sym->etype);
+	/*
+	 * As SDCC emits code as soon as it reaches the end of each
+	 * function's definition, prototyped functions that are implemented
+	 * after the current one are always considered EXTERN, which
+	 * introduces many unneccessary PAGESEL instructions.
+	 * XXX: Use a post pass to iterate over all `CALL _name' statements
+	 * and insert `PAGESEL _name' and `PAGESEL $' around the CALL
+	 * only iff there is no definition of the function in the whole
+	 * file (might include this in the PAGESEL pass).
+	 */
+	isExtern = IS_EXTERN(sym->etype) || pic14_inISR;
 	if (isExtern) {
-		emitpcode(POC_PAGESEL,popGetWithString(name,1)); /* Extern functions maybe on another page - must call pagesel */
+		/* Extern functions and ISRs maybe on a different page;
+		 * must call pagesel */
+		emitpcode(POC_PAGESEL,popGetWithString(name,1));
 	}
 	emitpcode(POC_CALL,popGetWithString(name,isExtern));
 	if (isExtern) {
-		emitpcode(POC_PAGESEL,popGetWithString("$",0)); /* May have returned from another page - must call pagesel to restore PCLATH before next goto or call instruction */
+		/* May have returned from a different page;
+		 * must use pagesel to restore PCLATH before next
+		 * goto or call instruction */
+		emitpcode(POC_PAGESEL,popGetWithString("$",0));
 	}
 	GpsuedoStkPtr=0;
 	/* if we need assign a result value */
@@ -2848,12 +2805,6 @@ static int resultRemat (iCode *ic)
 	return 0;
 }
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#else
-#define STRCASECMP strcasecmp
-#endif
-
 #if 0
 /*-----------------------------------------------------------------*/
 /* inExcludeList - return 1 if the string is in exclude Reg list   */
@@ -2903,6 +2854,13 @@ static void genFunction (iCode *ic)
 
 	pic14_emitcode("","%s:",sym->rname);
 	addpCode2pBlock(pb,newpCodeFunction(NULL,sym->rname,!IS_STATIC (sym->etype)));
+
+	/* mark symbol as NOT extern (even if it was declared so previously) */
+	assert(IS_SPEC(sym->etype));
+	SPEC_EXTR(sym->etype) = 0;
+	sym->cdef = 0;
+	if (!SPEC_OCLS(sym->etype)) SPEC_OCLS(sym->etype) = code;
+	addSetIfnotP(&SPEC_OCLS(sym->etype)->syms, sym);
 	
 	ftype = operandType(IC_LEFT(ic));
 	
@@ -2932,75 +2890,28 @@ static void genFunction (iCode *ic)
 #endif
 	
 	/* if this is an interrupt service routine */
+	pic14_inISR = 0;
 	if (IFFUNC_ISISR(sym->type)) {
-	/*  already done in pic14createInterruptVect() - delete me
-	addpCode2pBlock(pb,newpCode(POC_GOTO,newpCodeOp("END_OF_INTERRUPT+1",PO_STR)));
-	emitpcodeNULLop(POC_NOP);
-	emitpcodeNULLop(POC_NOP);
-	emitpcodeNULLop(POC_NOP);
-		*/
+		pic14_inISR = 1;
 		emitpcode(POC_MOVWF,  popCopyReg(&pc_wsave));
 		emitpcode(POC_SWAPFW, popCopyReg(&pc_status));
+		/* XXX: Why? Does this assume that ssave and psave reside
+		 * in a shared bank or bank0? We cannot guarantee the
+		 * latter...
+		 */
 		emitpcode(POC_CLRF,   popCopyReg(&pc_status));
 		emitpcode(POC_MOVWF,  popCopyReg(&pc_ssave));
+		//emitpcode(POC_MOVWF,  popGetExternal("___sdcc_saved_status",1 ));
 		emitpcode(POC_MOVFW,  popCopyReg(&pc_pclath));
+		/* during an interrupt PCLATH must be cleared before a goto or call statement */
+		emitpcode(POC_CLRF,   popCopyReg(&pc_pclath));
 		emitpcode(POC_MOVWF,  popCopyReg(&pc_psave));
-		emitpcode(POC_CLRF,   popCopyReg(&pc_pclath));/* during an interrupt PCLATH must be cleared before a goto or call statement */
+		//emitpcode(POC_MOVWF,  popGetExternal("___sdcc_saved_pclath", 1));
+		emitpcode(POC_MOVFW,  popCopyReg(&pc_fsr));
+		emitpcode(POC_MOVWF,  popGetExternal("___sdcc_saved_fsr", 1));
 		
 		pBlockConvert2ISR(pb);
 		pic14_hasInterrupt = 1;
-#if 0  
-		if (!inExcludeList("acc"))		
-			pic14_emitcode ("push","acc");  
-		if (!inExcludeList("b"))
-			pic14_emitcode ("push","b");
-		if (!inExcludeList("dpl"))
-			pic14_emitcode ("push","dpl");
-		if (!inExcludeList("dph"))
-			pic14_emitcode ("push","dph");
-		if (options.model == MODEL_FLAT24 && !inExcludeList("dpx"))
-		{
-			pic14_emitcode ("push", "dpx");
-			/* Make sure we're using standard DPTR */
-			pic14_emitcode ("push", "dps");
-			pic14_emitcode ("mov", "dps, #0x00");
-			if (options.stack10bit)
-			{ 
-				/* This ISR could conceivably use DPTR2. Better save it. */
-				pic14_emitcode ("push", "dpl1");
-				pic14_emitcode ("push", "dph1");
-				pic14_emitcode ("push", "dpx1");
-			}
-		}
-		/* if this isr has no bank i.e. is going to
-		run with bank 0 , then we need to save more
-		registers :-) */
-		if (!FUNC_REGBANK(sym->type)) {
-			
-		/* if this function does not call any other
-		function then we can be economical and
-			save only those registers that are used */
-			if (! IFFUNC_HASFCALL(sym->type)) {
-				int i;
-				
-				/* if any registers used */
-				if (sym->regsUsed) {
-					/* save the registers used */
-					for ( i = 0 ; i < sym->regsUsed->size ; i++) {
-						if (bitVectBitValue(sym->regsUsed,i) ||
-							(pic14_ptrRegReq && (i == R0_IDX || i == R1_IDX)) )
-							pic14_emitcode("push","junk");//"%s",pic14_regWithIdx(i)->dname); 		
-					}
-				}
-				
-			} else {
-			/* this function has	a function call cannot
-			determines register usage so we will have the
-				entire bank */
-				saverbank(0,ic,FALSE);
-			} 	
-		}
-#endif
 	} else {
 	/* if callee-save to be used for this function
 		then save the registers being used in this function */
@@ -3145,41 +3056,19 @@ registers :-) */
 				unsaverbank(0,ic,FALSE);
 			} 	
 		}
-#if 0
-		if (options.model == MODEL_FLAT24 && !inExcludeList("dpx"))
-		{
-			if (options.stack10bit)
-			{
-				pic14_emitcode ("pop", "dpx1");
-				pic14_emitcode ("pop", "dph1");
-				pic14_emitcode ("pop", "dpl1");
-			} 
-			pic14_emitcode ("pop", "dps");
-			pic14_emitcode ("pop", "dpx");
-		}
-		if (!inExcludeList("dph"))
-			pic14_emitcode ("pop","dph");
-		if (!inExcludeList("dpl"))
-			pic14_emitcode ("pop","dpl");
-		if (!inExcludeList("b"))
-			pic14_emitcode ("pop","b");
-		if (!inExcludeList("acc"))
-			pic14_emitcode ("pop","acc");
-		
-		if (IFFUNC_ISCRITICAL(sym->type))
-			pic14_emitcode("setb","ea");
-#endif
 		
 		/* if debug then send end of function */
-		/*	if (options.debug && currFunc) { */
-		if (currFunc) {
+		if (options.debug && debugFile && currFunc) {
 			debugFile->writeEndFunction (currFunc, ic, 1);
 		}
 		
-		pic14_emitcode ("reti","");
+		emitpcode(POC_MOVFW,  popGetExternal("___sdcc_saved_fsr", 1));
+		emitpcode(POC_MOVWF,  popCopyReg(&pc_fsr));
+		//emitpcode(POC_MOVFW,  popGetExternal("___sdcc_saved_pclath", 1));
 		emitpcode(POC_MOVFW,  popCopyReg(&pc_psave));
 		emitpcode(POC_MOVWF,  popCopyReg(&pc_pclath));
-		emitpcode(POC_CLRF,   popCopyReg(&pc_status));
+		emitpcode(POC_CLRF,   popCopyReg(&pc_status)); // see genFunction
+		//emitpcode(POC_SWAPFW, popGetExternal("___sdcc_saved_status", 1));
 		emitpcode(POC_SWAPFW, popCopyReg(&pc_ssave));
 		emitpcode(POC_MOVWF,  popCopyReg(&pc_status));
 		emitpcode(POC_SWAPF,  popCopyReg(&pc_wsave));
@@ -3207,7 +3096,7 @@ registers :-) */
 		}
 		
 		/* if debug then send end of function */
-		if (currFunc) {
+		if (options.debug && debugFile && currFunc) {
 			debugFile->writeEndFunction (currFunc, ic, 1);
 		}
 		
@@ -3445,22 +3334,24 @@ static void genDivOneByte (operand *left,
 						   operand *result)
 {
 	int size;
+	int sign;
 	
 	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	
-	assert (AOP_SIZE(result) == 1);
 	assert (AOP_SIZE(right) == 1);
 	assert (AOP_SIZE(left) == 1);
 
 	size = min(AOP_SIZE(result),AOP_SIZE(left));
+	sign = !(SPEC_USIGN(operandType(left))
+		&& SPEC_USIGN(operandType(right)));
 
 	if (AOP_TYPE(right) == AOP_LIT)
 	{
 		/* XXX: might add specialized code */
 	}
 
-	if (SPEC_USIGN(operandType(left)) && SPEC_USIGN(operandType(right)))
+	if (!sign)
 	{
 		/* unsigned division */
 	#if 1
@@ -3507,6 +3398,7 @@ static void genDivOneByte (operand *left,
 		emitSKPNC;
 		emitpcode(POC_GOTO, popGetLabel(lbl->key));
 		emitpcode(POC_DECF, popGet(AOP(result),0));
+		popReleaseTempReg(temp);
 	#endif
 	}
 	else
@@ -3520,7 +3412,7 @@ static void genDivOneByte (operand *left,
 	}
 
 	/* now performed the signed/unsigned division -- extend result */
-	addSign(result, 1, !SPEC_USIGN(operandType(result)));
+	addSign(result, 1, sign);
 }
 
 /*-----------------------------------------------------------------*/
@@ -3563,29 +3455,6 @@ release :
 }
 
 /*-----------------------------------------------------------------*/
-/* genModbits :- modulus of bits								   */
-/*-----------------------------------------------------------------*/
-static void genModbits (operand *left, 
-						operand *right, 
-						operand *result)
-{
-	
-	char *l;
-	
-	FENTRY;
-	/* the result must be bit */	  
-	pic14_emitcode("mov","b,%s",aopGet(AOP(right),0,FALSE,FALSE));
-	l = aopGet(AOP(left),0,FALSE,FALSE);
-	
-	MOVA(l);
-	
-	pic14_emitcode("div","ab");
-	pic14_emitcode("mov","a,b");
-	pic14_emitcode("rrc","a");
-	aopPut(AOP(result),"c",0);
-}
-
-/*-----------------------------------------------------------------*/
 /* genModOneByte : 8 bit modulus								   */
 /*-----------------------------------------------------------------*/
 static void genModOneByte (operand *left,
@@ -3593,22 +3462,24 @@ static void genModOneByte (operand *left,
 						   operand *result)
 {
 	int size;
+	int sign;
 	
 	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	
-	assert (AOP_SIZE(result) == 1);
 	assert (AOP_SIZE(right) == 1);
 	assert (AOP_SIZE(left) == 1);
 
 	size = min(AOP_SIZE(result),AOP_SIZE(left));
+	sign = !(SPEC_USIGN(operandType(left))
+		&& SPEC_USIGN(operandType(right)));
 
 	if (AOP_TYPE(right) == AOP_LIT)
 	{
 		/* XXX: might add specialized code */
 	}
 
-	if (SPEC_USIGN(operandType(left)) && SPEC_USIGN(operandType(right)))
+	if (!sign)
 	{
 		/* unsigned division */
 	#if 1
@@ -3668,7 +3539,7 @@ static void genModOneByte (operand *left,
 	}
 
 	/* now we performed the signed/unsigned modulus -- extend result */
-	addSign(result, 1, !SPEC_USIGN(operandType(result)));
+	addSign(result, 1, sign);
 }
 
 /*-----------------------------------------------------------------*/
@@ -3686,14 +3557,6 @@ static void genMod (iCode *ic)
 	aopOp (left,ic,FALSE);
 	aopOp (right,ic,FALSE);
 	aopOp (result,ic,TRUE);
-	
-	/* special cases first */
-	/* both are bits */
-	if (AOP_TYPE(left) == AOP_CRY &&
-		AOP_TYPE(right)== AOP_CRY) {
-		genModbits(left,right,result);
-		goto release ;
-	}
 	
 	/* if both are of size == 1 */
 	if (AOP_SIZE(left) == 1 &&
@@ -5479,7 +5342,11 @@ static void continueIfTrue (iCode *ic)
 	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	if(IC_TRUE(ic))
-		pic14_emitcode("ljmp","%05d_DS_",IC_TRUE(ic)->key+100);
+	{
+		// Why +100?!?
+		emitpcode(POC_GOTO, popGetLabel(IC_TRUE(ic)->key+100));
+		pic14_emitcode("ljmp","%05d_DS_",IC_FALSE(ic)->key+100);
+	}
 	ic->generated = 1;
 }
 
@@ -5491,7 +5358,11 @@ static void jumpIfTrue (iCode *ic)
 	FENTRY;
 	DEBUGpic14_emitcode ("; ***","%s  %d",__FUNCTION__,__LINE__);
 	if(!IC_TRUE(ic))
+	{
+		// Why +100?!?
+		emitpcode(POC_GOTO, popGetLabel(IC_TRUE(ic)->key+100));
 		pic14_emitcode("ljmp","%05d_DS_",IC_FALSE(ic)->key+100);
+	}
 	ic->generated = 1;
 }
 
@@ -5646,16 +5517,29 @@ static void genAnd (iCode *ic, iCode *ifx)
 				pic14_emitcode("setb","c");
 			while(sizel--){
 				if((bytelit = ((lit >> (offset*8)) & 0x0FFL)) != 0x0L){
-					MOVA( aopGet(AOP(left),offset,FALSE,FALSE));
+					mov2w( AOP(left), offset);
 					// byte ==  2^n ?
-					if((posbit = isLiteralBit(bytelit)) != 0)
+					if((posbit = isLiteralBit(bytelit)) != 0) {
+						emitpcode(rIfx.condition ? POC_BTFSC : POC_BTFSS, // XXX: or the other way round?
+							newpCodeOpBit(aopGet(AOP(left),offset,FALSE,FALSE),posbit - 1, 0));
 						pic14_emitcode("jb","acc.%d,%05d_DS_",(posbit-1)&0x07,tlbl->key+100);
+					}
 					else{
+						emitpcode(POC_ANDLW, newpCodeOpLit(bytelit & 0x0ff));
+						if (rIfx.condition) emitSKPZ;
+						else emitSKPNZ;
+						
 						if(bytelit != 0x0FFL)
+						{
 							pic14_emitcode("anl","a,%s",
 							aopGet(AOP(right),offset,FALSE,TRUE));
+						}
 						pic14_emitcode("jnz","%05d_DS_",tlbl->key+100);
 					}
+
+					emitpcode(POC_GOTO, popGetLabel(rIfx.lbl->key));
+					ifx->generated = 1;
+						
 				}
 				offset++;
 			}
@@ -9703,7 +9587,16 @@ static void genGenPointerSet (operand *right, operand *result, iCode *ic)
 	  int size = AOP_SIZE(right);
 	  int idx = 0;
 
-	  assert (size == getSize(OP_SYM_ETYPE(result)));
+	  /* The following assertion fails for
+	   *   struct foo { char a; char b; } bar;
+	   *   void demo(struct foo *dst, char c) { dst->b = c; }
+	   * as size will be 1 (sizeof(c)), whereas dst->b will be accessed
+	   * using (((char *)dst)+1), whose OP_SYM_ETYPE still is struct foo
+	   * of size 2.
+	   * The frontend seems to guarantee that IC_LEFT has the correct size,
+	   * it works fine both for larger and smaller types of `char c'.
+	   * */
+	  //assert (size == getSize(OP_SYM_ETYPE(result)));
 	  assert (size > 0 && size <= 4);
 
 	  /* pass arguments */
@@ -10575,6 +10468,7 @@ static void genReceive (iCode *ic)
 		_G.accInUse++;
 		aopOp(IC_RESULT(ic),ic,FALSE);
 		_G.accInUse--;
+		GpsuedoStkPtr = ic->parmBytes; // address used arg on stack
 		assignResultValue(IC_RESULT(ic));
 	}
 	
@@ -10619,10 +10513,8 @@ void genpic14Code (iCode *lic)
 	addpBlock(pb);
 	
 	/* if debug information required */
-	if (options.debug && currFunc) { 
-		if (currFunc) {
-			debugFile->writeFunction (currFunc, lic);
-		}
+	if (options.debug && debugFile && currFunc) { 
+		debugFile->writeFunction (currFunc, lic);
 	}
 	
 	
@@ -10643,7 +10535,9 @@ void genpic14Code (iCode *lic)
 		}
 		
 		if (options.iCodeInAsm) {
+                  char *iLine = printILine(ic);
 		  emitpComment ("[ICODE] %s:%d: %s", ic->filename, ic->lineno, printILine (ic));
+                  dbuf_free(iLine);
 		}
 		/* if the result is marked as
 		spilt and rematerializable or code for
@@ -10853,7 +10747,7 @@ void genpic14Code (iCode *lic)
 		peepHole (&lineHead);
 	}
 	/* now do the actual printing */
-	printLine (lineHead,codeOutFile);
+	printLine (lineHead,codeOutBuf);
 	
 #ifdef PCODE_DEBUG
 	DFPRINTF((stderr,"printing pBlock\n\n"));
@@ -10891,3 +10785,4 @@ op_isLitLike (operand *op)
   if (IS_PTR(OP_SYM_TYPE(op)) && AOP_TYPE(op) == AOP_PCODE && AOP(op)->aopu.pcop->type == PO_IMMEDIATE) return 1;
   return 0;
 }
+

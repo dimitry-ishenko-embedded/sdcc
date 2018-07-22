@@ -13,27 +13,27 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.rules 4294 2006-07-20 14:10:16Z tecodev $
+### $Id: Makefile.rules 4791 2007-05-06 20:08:22Z tecodev $
 ###
 
 # update dependencies
-$(top_builddir)$(builddir)/%.d : %.c
+$(top_builddir)/$(builddir)/%.d : %.c
 ifndef SILENT
-	@echo "[  CPP  ] ==> $(patsubst $(top_builddir)%,%,$@)"
+	@echo "[  CPP  ] ==> $(patsubst $(top_builddir)/%,%,$@)"
 endif
 	$(Q)$(CPP) $(CPPFLAGS) -o "$@" "$<"
 
 # assemble
-$(top_builddir)$(builddir)/%.o : %.S
+$(top_builddir)/$(builddir)/%.o : %.S
 ifndef SILENT
-	@echo "[  AS   ] ==> $(patsubst $(top_builddir)%,%,$@)"
+	@echo "[  AS   ] ==> $(patsubst $(top_builddir)/%,%,$@)"
 endif
 	$(Q)$(AS) $(ASFLAGS) -o "$@" -c "$<"
 
 # compile
-$(top_builddir)$(builddir)/%.o : %.c
+$(top_builddir)/$(builddir)/%.o : %.c
 ifndef SILENT
-	@echo "[  CC   ] ==> $(patsubst $(top_builddir)%,%,$@)"
+	@echo "[  CC   ] ==> $(patsubst $(top_builddir)/%,%,$@)"
 endif
 	$(Q)$(CC) $(CFLAGS) -o "$@" -c "$<"
 
@@ -41,16 +41,16 @@ endif
 ifneq (,$(strip $(LIB_O)))
 %.lib : $(LIB_O)
 ifndef SILENT
-	@echo "[  LIB  ] $(patsubst $(top_builddir)%,%,$@) <== $(patsubst $(top_builddir)$(builddir)/%,%,$^)"
+	@echo "[  LIB  ] $(patsubst $(top_builddir)/%,%,$@) <== $(patsubst $(top_builddir)/$(builddir)/%,%,$^)"
 endif
 	$(Q)$(RM) "$@"; $(LIB) $(LIBFLAGS) "$@" $^
 else
 %.lib : recurse
 ifndef SILENT
-	@echo "[  LIB  ] $(patsubst $(top_builddir)%,%,$@) <== **/*.o"
-	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)$(builddir)" -name "*.o"`; echo $${LIB_O}; [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
+	@echo "[  LIB  ] $(patsubst $(top_builddir)/%,%,$@) <== **/*.o"
+	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)/$(builddir)" -name "*.o"`; echo $${LIB_O}; [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
 else
-	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)$(builddir)" -name "*.o"`;                 [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
+	$(Q)$(RM) "$@"; LIB_O=`find "$(top_builddir)/$(builddir)" -name "*.o"`;                 [ "x$${LIB_O}" = "x" ] || $(LIB) $(LIBFLAGS) "$@" $${LIB_O}
 endif
 endif
 
@@ -60,8 +60,8 @@ endif
 ifneq (,$(strip $(SUBDIRS)))
 recurse : force
 	$(Q)+for DIR in $(SUBDIRS) ; do \
-		$(GREP) "^$${ARCH}$$" "$(srcdir)/$${DIR}.ignore" &> /dev/null || ( \
-			$(MKDIR) "$(top_builddir)$(builddir)/$${DIR}"; \
+		[ -f "$(srcdir)/$${DIR}.ignore" ] && $(GREP) "^$${ARCH}$$" "$(srcdir)/$${DIR}.ignore" > /dev/null 2>&1 || ( \
+			$(MKDIR) "$(top_builddir)/$(builddir)/$${DIR}"; \
 			$(MAKE) -C "$${DIR}" builddir="$(builddir)/$${DIR}" $(MAKECMDGOALS); \
 		) || exit 1; \
 	done

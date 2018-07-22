@@ -5,6 +5,8 @@
 #ifndef SDCCMEM_H
 #define SDCCMEM_H
 
+#include "dbuf.h"
+
 struct set;
 struct value;
 struct eBBlock;
@@ -23,7 +25,7 @@ typedef struct memmap
     unsigned bitsp:1;		/* 1 = bit addressable space  */
     unsigned codesp:1;		/* 1 = code space             */
     unsigned regsp:1;		/* 1= sfr space               */
-    FILE *oFile;		/* object file associated     */
+    struct dbuf_s oBuf;		/* object buffer associated   */
     struct set *syms;		/* symbols defined in this segment */
   }
 memmap;
@@ -46,6 +48,9 @@ extern FILE *junkFile;
 #define	 HOME_NAME     port->mem.home_name
 #define  OVERLAY_NAME  port->mem.overlay_name
 #define  CONST_NAME    port->mem.const_name
+#define  CABS_NAME     port->mem.cabs_name
+#define  XABS_NAME     port->mem.xabs_name
+#define  IABS_NAME     port->mem.iabs_name
 
 /* forward definition for variables */
 extern memmap *xstack;		/* xternal stack data           */
@@ -59,13 +64,16 @@ extern memmap *xinit;           /* the initializers for xidata  */
 extern memmap *idata;		/* internal data upto 256       */
 extern memmap *bit;		/* bit addressable space        */
 extern memmap *statsg;		/* static code segment          */
+extern memmap *c_abs;		/* constant absolute data       */
+extern memmap *x_abs;		/* absolute xdata/pdata         */
+extern memmap *i_abs;		/* absolute idata upto 256      */
+extern memmap *d_abs;		/* absolute data upto 128       */
 extern memmap *sfr;		/* register space               */
 extern memmap *sfrbit;		/* sfr bit space                */
 extern memmap *reg;		/* register space               */
 extern memmap *generic;		/* unknown                      */
 extern memmap *overlay;		/* the overlay segment          */
-extern memmap *eeprom;		/* eepromp space                */
-extern memmap *eeprom;		/* eepromp space                */
+extern memmap *eeprom;		/* eeprom space                 */
 extern memmap *home;		/* Non-banked home space        */
 
 extern int fatalError;
@@ -97,7 +105,7 @@ int allocVariables (struct symbol *);
 void overlay2Set ();
 void overlay2data ();
 void redoStackOffsets ();
-void printAllocInfo (struct symbol *, FILE *);
+void printAllocInfo (struct symbol *, struct dbuf_s *);
 void doOverlays (struct eBBlock **, int count);
 void deleteFromSeg(struct symbol *);
 #endif

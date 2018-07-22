@@ -31,12 +31,6 @@
 #include "gen.h"
 #include "device.h"
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#else
-#define STRCASECMP strcasecmp
-#endif
-
 #ifndef debugf
 #define debugf(frm, rest)       _debugf(__FILE__, __LINE__, frm, rest)
 #endif
@@ -276,7 +270,6 @@ pic16_decodeOp (unsigned int op)
 		case STRUCT:		return "STRUCT";
 		case UNION:		return "UNION";
 		case ENUM:		return "ENUM";
-		case ELIPSIS:		return "ELIPSIS";
 		case RANGE:		return "RANGE";
 		case FAR:		return "FAR";
 		case CASE:		return "CASE";
@@ -3803,6 +3796,7 @@ static void
 packForPush (iCode * ic, eBBlock * ebp)
 {
   iCode *dic;
+  char *iLine;
   
   debugLog ("%s\n", __FUNCTION__);
   if (ic->op != IPUSH || !IS_ITEMP (IC_LEFT (ic)))
@@ -3811,10 +3805,13 @@ packForPush (iCode * ic, eBBlock * ebp)
 #if 0
   {
     int n1, n2;
+    char *iLine;
 
       n1 = bitVectnBitsOn( OP_DEFS(IC_LEFT(ic)));
       n2 = bitVectnBitsOn( OP_USES(IC_LEFT(ic)));
+      iLine = printILine(ic);
       debugf3("defs: %d\tuses: %d\t%s\n", n1, n2, printILine(ic));
+      dbuf_free(iLine);
       debugf2("IC_LEFT(ic): from %d to %d\n", OP_LIVEFROM(IC_LEFT(ic)), OP_LIVETO(IC_LEFT(ic)));
   }
 #endif
@@ -3848,7 +3845,9 @@ packForPush (iCode * ic, eBBlock * ebp)
      and the that the definition is an assignment */
   IC_LEFT (ic) = IC_RIGHT (dic);
   
-  debugf("remiCodeFromeBBlock: %s\n", printILine(dic));
+  iLine = printILine(dic);
+  debugf("remiCodeFromeBBlock: %s\n", iLine);
+  dbuf_free(iLine);
 
   remiCodeFromeBBlock (ebp, dic);
   bitVectUnSetBit(OP_SYMBOL(IC_RESULT(dic))->defs,dic->key);
@@ -3860,7 +3859,7 @@ static void printSymType(char * str, sym_link *sl)
 	if(!pic16_ralloc_debug)return;
 	
 	debugLog ("    %s Symbol type: ",str);
-	printTypeChain( sl, debugF);
+	printTypeChain (sl, debugF);
 	debugLog ("\n");
 }
 

@@ -8,9 +8,9 @@ License:       GPL
 Group:         Applications/Engineering
 Summary:       Small Device C Compiler
 Requires:      sdcc-common
-Version:       2.6.0
-Release:       1
-Source:        %{name}-%{version}.tar.bz2
+Version:       2.7.0
+Release:       2
+Source:        %{name}-src-%{version}.tar.gz
 URL:           http://sdcc.sourceforge.net/
 Packager:      Bernhard Held <bernhard AT bernhardheld.de>
 BuildRoot:     %{_tmppath}/%{name}-%{version}-build
@@ -48,7 +48,7 @@ degree) include the 8051, ds390, z80, hc08, and PIC.
 %setup -n sdcc
 
 %build
-./configure CFLAGS="$RPM_OPT_FLAGS" --prefix=/usr docdir=$RPM_BUILD_ROOT/%{_defaultdocdir}/%{name}
+./configure CFLAGS="$RPM_OPT_FLAGS" --prefix=/usr --enable-doc docdir=$RPM_BUILD_ROOT/%{_defaultdocdir}/%{name}
 make
 cd doc
 make
@@ -78,6 +78,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc %{_defaultdocdir}
 
 %changelog
+* Sun Dec 26 2006 - bernhard AT bernhardheld.de
+- version updated
+* Sun Sep 03 2006 - Christer Weinigel
+- fixed build of doc
 * Tue Mar 09 2004 - bernhard AT bernhardheld.de
 - split into two packages
 * Wed Feb 26 2004 - bernhard AT bernhardheld.de

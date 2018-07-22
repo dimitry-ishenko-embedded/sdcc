@@ -31,7 +31,8 @@
 #include "SDCCutil.h"
 #include "glue.h"
 #include "pcode.h"
-//#include "gen.h"
+#include "SDCCargs.h"
+#include "dbuf_string.h"
 
 
 static char _defaultRules[] =
@@ -161,258 +162,359 @@ struct {
 } libflags = { 0, 0, 0, 0, 0 };
   
 
+enum {
+  P_MAXRAM = 1,
+  P_STACK,
+  P_CODE,
+  P_UDATA,
+  P_LIBRARY
+};
+
 static int
-_process_pragma(const char *sz)
+do_pragma(int id, const char *name, const char *cp)
 {
-  static const char *WHITE = " \t\n";
-  static const char *WHITECOMMA = " \t\n,";
-  char *ptr = strtok((char *)sz, WHITE);
+  struct pragma_token_s token;
+  int err = 0;
+  int processed = 1;
 
+  init_pragma_token(&token);
+
+  switch (id)
+    {
     /* #pragma maxram [maxram] */
-    if (startsWith (ptr, "maxram")) {
-      char *maxRAM = strtok((char *)NULL, WHITE);
+    case P_MAXRAM:
+      {
+        int max_ram;
 
-        if (maxRAM != (char *)NULL) {
-          int maxRAMaddress;
-          value *maxRAMVal;
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_INT == token.type)
+          max_ram = token.val.int_val;
+        else
+          {
+            err = 1;
+            break;
+          }
 
-            maxRAMVal = constVal(maxRAM);
-            maxRAMaddress = (int)floatFromVal(maxRAMVal);
-            pic16_setMaxRAM(maxRAMaddress);
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_EOL != token.type)
+          {
+            err = 1;
+            break;
+          }
+
+        pic16_setMaxRAM(max_ram);
+      }
+      break;
+
+    /* #pragma stack [stack-position] [stack-len] */
+    case  P_STACK:
+      {
+        unsigned int stackPos, stackLen;
+        regs *reg;
+        symbol *sym;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_INT != token.type)
+          {
+            err = 1;
+            break;
+          }
+        stackPos = token.val.int_val;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_INT != token.type)
+          {
+            err = 1;
+            break;
+          }
+        stackLen = token.val.int_val;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_EOL != token.type)
+          {
+            err = 1;
+            break;
+          }
+
+        if (stackLen < 1) {
+          stackLen = 64;
+          fprintf(stderr, "%s:%d: warning: setting stack to default size %d (0x%04x)\n",
+                  filename, lineno, stackLen, stackLen);
         }
 
-        return 0;
-    }
-  
-  /* #pragma stack [stack-position] [stack-len] */
-  if(startsWith(ptr, "stack")) {
-    char *stackPosS = strtok((char *)NULL, WHITE);
-    char *stackLenS = strtok((char *)NULL, WHITE);
-    value *stackPosVal;
-    value *stackLenVal;
-    regs *reg;
-    symbol *sym;
-
-      if (!stackPosS) {
-        fprintf (stderr, "%s:%d: #pragma stack [stack-pos] [stack-length] -- stack-position missing\n", filename, lineno-1);
-
-        return 0; /* considered an error */
-      }
-
-      stackPosVal = constVal( stackPosS );
-      stackPos = (unsigned int)floatFromVal( stackPosVal );
-
-      if(stackLenS) {
-        stackLenVal = constVal( stackLenS );
-        stackLen = (unsigned int)floatFromVal( stackLenVal );
-      }
-
-      if(stackLen < 1) {
-        stackLen = 64;
-        fprintf(stderr, "%s:%d: warning: setting stack to default size %d (0x%04x)\n",
-                filename, lineno-1, stackLen, stackLen);
-      }
-
-      /* check sanity of stack */
-      if ((stackPos >> 8) != ((stackPos+stackLen-1) >> 8)) {
-        fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] crosses memory bank boundaries (not fully tested)\n",
-		filename,lineno-1, stackPos, stackPos+stackLen-1);
-      }
-
-      if (pic16) {
-        if (stackPos < pic16->acsSplitOfs) {
-          fprintf (stderr, "%s:%u: warning: stack [0x%03X, 0x%03X] intersects with the access bank [0x000,0x%03x] -- this is highly discouraged!\n",
-		filename, lineno-1, stackPos, stackPos+stackLen-1, pic16->acsSplitOfs);
+        /* check sanity of stack */
+        if ((stackPos >> 8) != ((stackPos + stackLen - 1) >> 8)) {
+          fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] crosses memory bank boundaries (not fully tested)\n",
+                  filename, lineno, stackPos, stackPos + stackLen - 1);
         }
 
-        if (stackPos+stackLen > 0xF00 + pic16->acsSplitOfs) {
-          fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] intersects with special function registers [0x%03X,0xFFF]-- this is highly discouraged!\n",
-		filename, lineno-1, stackPos, stackPos+stackLen-1, 0xF00 + pic16->acsSplitOfs);
+        if (pic16) {
+          if (stackPos < pic16->acsSplitOfs) {
+            fprintf (stderr, "%s:%u: warning: stack [0x%03X, 0x%03X] intersects with the access bank [0x000,0x%03x] -- this is highly discouraged!\n",
+                  filename, lineno, stackPos, stackPos + stackLen - 1, pic16->acsSplitOfs);
+          }
+
+          if (stackPos+stackLen > 0xF00 + pic16->acsSplitOfs) {
+            fprintf (stderr, "%s:%u: warning: stack [0x%03X,0x%03X] intersects with special function registers [0x%03X,0xFFF]-- this is highly discouraged!\n",
+                   filename, lineno, stackPos, stackPos + stackLen - 1, 0xF00 + pic16->acsSplitOfs);
+          }
+
+          if (stackPos+stackLen > pic16->RAMsize) {
+            fprintf (stderr, "%s:%u: error: stack [0x%03X,0x%03X] is placed outside available memory [0x000,0x%03X]!\n",
+                  filename, lineno, stackPos, stackPos + stackLen - 1, pic16->RAMsize-1);
+            err = 1;
+            break;
+          }
         }
 
-        if (stackPos+stackLen > pic16->RAMsize) {
-          fprintf (stderr, "%s:%u: error: stack [0x%03X,0x%03X] is placed outside available memory [0x000,0x%03X]!\n",
-		filename, lineno-1, stackPos, stackPos+stackLen-1, pic16->RAMsize-1);
-          exit(EXIT_FAILURE);
-          return 1;	/* considered an error, but this reports "invalid pragma stack"... */
+        reg = newReg(REG_SFR, PO_SFR_REGISTER, stackPos, "_stack", stackLen-1, 0, NULL);
+        addSet(&pic16_fix_udata, reg);
+
+        reg = newReg(REG_SFR, PO_SFR_REGISTER, stackPos + stackLen-1, "_stack_end", 1, 0, NULL);
+        addSet(&pic16_fix_udata, reg);
+
+        sym = newSymbol("stack", 0);
+        sprintf(sym->rname, "_%s", sym->name);
+        addSet(&publics, sym);
+
+        sym = newSymbol("stack_end", 0);
+        sprintf(sym->rname, "_%s", sym->name);
+        addSet(&publics, sym);
+    
+        initsfpnt = 1;    // force glue() to initialize stack/frame pointers */
+      }
+      break;
+
+    /* #pragma code [symbol] [location] */
+    case P_CODE:
+      {
+        absSym *absS;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_STR != token.type)
+          goto code_err;
+
+        absS = Safe_calloc(1, sizeof(absSym));
+        sprintf(absS->name, "_%s", get_pragma_string(&token));
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_INT != token.type)
+          {
+          code_err:
+            //fprintf (stderr, "%s:%d: #pragma code [symbol] [location] -- symbol or location missing\n", filename, lineno);
+            err = 1;
+            break;
+          }
+        absS->address = token.val.int_val;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_EOL != token.type)
+          {
+            err = 1;
+            break;
+          }
+
+        if ((absS->address % 2) != 0) {
+          absS->address--;
+          fprintf(stderr, "%s:%d: warning: code memory locations should be word aligned, will locate to 0x%06x instead\n",
+                  filename, lineno, absS->address);
         }
+
+        addSet(&absSymSet, absS);
+//      fprintf(stderr, "%s:%d symbol %s will be placed in location 0x%06x in code memory\n",
+//        __FILE__, __LINE__, symname, absS->address);
       }
+      break;
 
-      reg=newReg(REG_SFR, PO_SFR_REGISTER, stackPos, "_stack", stackLen-1, 0, NULL);
-      addSet(&pic16_fix_udata, reg);
-    
-      reg = newReg(REG_SFR, PO_SFR_REGISTER, stackPos + stackLen-1, "_stack_end", 1, 0, NULL);
-      addSet(&pic16_fix_udata, reg);
-    
-      sym = newSymbol("stack", 0);
-      sprintf(sym->rname, "_%s", sym->name);
-      addSet(&publics, sym);
+    /* #pragma udata [section-name] [symbol] */
+    case P_UDATA:
+      {
+        char *sectname;
+        const char *symname;
+        symbol *nsym;
+        sectSym *ssym;
+        sectName *snam;
+        int found = 0;
 
-      sym = newSymbol("stack_end", 0);
-      sprintf(sym->rname, "_%s", sym->name);
-      addSet(&publics, sym);
-    
-      initsfpnt = 1;    // force glue() to initialize stack/frame pointers */
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_STR == token.type)
+          sectname = Safe_strdup(get_pragma_string(&token));
+        else
+          {
+            err = 1;
+            break;
+          }
 
-    return 0;
-  }
-  
-  /* #pragma code [symbol] [location] */
-  if(startsWith(ptr, "code")) {
-    char *symname = strtok((char *)NULL, WHITE);
-    char *location = strtok((char *)NULL, WHITE);
-    absSym *absS;
-    value *addr;
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_STR == token.type)
+          symname = get_pragma_string(&token);
+        else
+          {
+            //fprintf (stderr, "%s:%d: #pragma udata [section-name] [symbol] -- section-name or symbol missing!\n", filename, lineno);
+            err = 1;
+            symname = NULL;
+          }
 
-      if (!symname || !location) {
-        fprintf (stderr, "%s:%d: #pragma code [symbol] [location] -- symbol or location missing\n", filename, lineno-1);
-	exit (EXIT_FAILURE);
-        return 1; /* considered an error, but this reports "invalid pragma code"... */
-      }
+        while (symname)
+          {
+            ssym = Safe_calloc(1, sizeof(sectSym));
+            ssym->name = Safe_calloc(1, strlen(symname) + 2);
+            sprintf(ssym->name, "%s%s", port->fun_prefix, symname);
+            ssym->reg = NULL;
 
-      absS = Safe_calloc(1, sizeof(absSym));
-      sprintf(absS->name, "_%s", symname);
-    
-      addr = constVal( location );
-      absS->address = (unsigned int)floatFromVal( addr );
+            addSet(&sectSyms, ssym);
 
-      if((absS->address % 2) != 0) {
-        absS->address--;
-        fprintf(stderr, "%s:%d: warning: code memory locations should be word aligned, will locate to 0x%06x instead\n",
-                filename, lineno-1, absS->address);
-      }
-
-      addSet(&absSymSet, absS);
-//    fprintf(stderr, "%s:%d symbol %s will be placed in location 0x%06x in code memory\n",
-//      __FILE__, __LINE__, symname, absS->address);
-
-    return 0;
-  }
-
-  /* #pragma udata [section-name] [symbol] */
-  if(startsWith(ptr, "udata")) {
-    char *sectname = strtok((char *)NULL, WHITE);
-    char *symname = strtok((char *)NULL, WHITE);
-    symbol *nsym;
-    sectSym *ssym;
-    sectName *snam;
-    int found=0;
-    
-      if (!symname || !sectname) {
-        fprintf (stderr, "%s:%d: #pragma udata [section-name] [symbol] -- section-name or symbol missing!\n", filename, lineno-1);
-	exit (EXIT_FAILURE);
-        return 1; /* considered an error, but this reports "invalid pragma code"... */
-      }
-    
-      while(symname) {
-        ssym = Safe_calloc(1, sizeof(sectSym));
-        ssym->name = Safe_calloc(1, strlen(symname)+2);
-        sprintf(ssym->name, "%s%s", port->fun_prefix, symname);
-        ssym->reg = NULL;
-
-        addSet(&sectSyms, ssym);
-
-        nsym = newSymbol(symname, 0);
-        strcpy(nsym->rname, ssym->name);
+            nsym = newSymbol((char *)symname, 0);
+            strcpy(nsym->rname, ssym->name);
 
 #if 0
-        checkAddSym(&publics, nsym);
+            checkAddSym(&publics, nsym);
 #endif
 
-        found = 0;
-        for(snam=setFirstItem(sectNames);snam;snam=setNextItem(sectNames)) {
-          if(!strcmp(sectname, snam->name)){ found=1; break; }
-        }
-      
-        if(!found) {
-          snam = Safe_calloc(1, sizeof(sectName));
-          snam->name = Safe_strdup( sectname );
-          snam->regsSet = NULL;
-        
-          addSet(&sectNames, snam);
-        }
-      
-        ssym->section = snam;
-        
+            found = 0;
+            for (snam = setFirstItem(sectNames);snam;snam=setNextItem(sectNames))
+              {
+                if (!strcmp(sectname, snam->name))
+                  {
+                    found=1;
+                    break;
+                  }
+              }
+
+            if(!found)
+              {
+                snam = Safe_calloc(1, sizeof(sectName));
+                snam->name = Safe_strdup(sectname);
+                snam->regsSet = NULL;
+
+                addSet(&sectNames, snam);
+              }
+
+            ssym->section = snam;
+
 #if 0
-        fprintf(stderr, "%s:%d placing symbol %s at section %s (%p)\n", __FILE__, __LINE__,
-           ssym->name, snam->name, snam);
+            fprintf(stderr, "%s:%d placing symbol %s at section %s (%p)\n", __FILE__, __LINE__,
+               ssym->name, snam->name, snam);
 #endif
 
-        symname = strtok((char *)NULL, WHITE);
-    }
+            cp = get_pragma_token(cp, &token);
+            if (TOKEN_STR == token.type)
+              symname = get_pragma_string(&token);
+            else if (TOKEN_EOL == token.type)
+              symname = NULL;
+            else
+              {
+                err = 1;
+                symname = NULL;
+              }
+          }
 
-    return 0;
-  }
-  
-  /* #pragma wparam function1[, function2[,...]] */
-  if(startsWith(ptr, "wparam")) {
-    char *fname = strtok((char *)NULL, WHITECOMMA);
+          Safe_free(sectname);
+      }
+      break;
 
-      
-      while(fname) {
-        fprintf(stderr, "PIC16 Warning: `%s' wparam pragma is obsolete. use function attribute `wparam' instead.\n", fname);
-        addSet(&wparamList, Safe_strdup(fname));
-              
-//        debugf("passing with WREG to %s\n", fname);
-        fname = strtok((char *)NULL, WHITECOMMA);
+    /* #pragma library library_module */
+    case P_LIBRARY:
+      {
+        const char *lmodule;
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_EOL != token.type)
+          {
+            lmodule = get_pragma_string(&token);
+
+            /* lmodule can be:
+             * c	link the C library
+             * math	link the math library
+             * io	link the IO library
+             * debug	link the debug libary
+             * anything else, will link as-is */
+     
+            if(!strcmp(lmodule, "c"))
+              libflags.want_libc = 1;
+            else if(!strcmp(lmodule, "math"))
+              libflags.want_libm = 1;
+            else if(!strcmp(lmodule, "io"))
+              libflags.want_libio = 1;
+            else if(!strcmp(lmodule, "debug"))
+              libflags.want_libdebug = 1;
+            else if(!strcmp(lmodule, "ignore"))
+              libflags.ignore = 1;
+            else
+              {
+                if(!libflags.ignore)
+                  {
+                    fprintf(stderr, "link library %s\n", lmodule);
+                    addSetHead(&libFilesSet, (char *)lmodule);
+                  }
+              }
+          }
+        else
+          {
+            err = 1;
+            break;
+          }
+
+        cp = get_pragma_token(cp, &token);
+        if (TOKEN_EOL != token.type)
+          {
+            err = 1;
+            break;
+          }
       }
-            
-      return 0;
-  }
-        
-  /* #pragma library library_module */
-  if(startsWith(ptr, "library")) {
-  char *lmodule = strtok((char *)NULL, WHITE);
-        
-    if(lmodule) {
-      /* lmodule can be:
-       * c	link the C library
-       * math	link the math library
-       * io	link the IO library
-       * debug	link the debug libary
-       * anything else, will link as-is */
-       
-      if(!strcmp(lmodule, "c"))libflags.want_libc = 1;
-      else if(!strcmp(lmodule, "math"))libflags.want_libm = 1;
-      else if(!strcmp(lmodule, "io"))libflags.want_libio = 1;
-      else if(!strcmp(lmodule, "debug"))libflags.want_libdebug = 1;
-      else if(!strcmp(lmodule, "ignore"))libflags.ignore = 1;
-      else {
-        if(!libflags.ignore) {
-          fprintf(stderr, "link library %s\n", lmodule);
-          addSetHead(&libFilesSet, lmodule);
-        }
-      }
-    }
-    
-    return 0;
-  }
-   
+      break;
+
 #if 0
   /* This is an experimental code for #pragma inline
      and is temporarily disabled for 2.5.0 release */
-  if(startsWith(ptr, "inline")) {
-    char *tmp = strtok((char *)NULL, WHITECOMMA);
-
-      while(tmp) {
-        addSet(&asmInlineMap, Safe_strdup( tmp ));
-        tmp = strtok((char *)NULL, WHITECOMMA);
-      }
-
+    case P_INLINE:
       {
-        char *s;
+        char *tmp = strtok((char *)NULL, WHITECOMMA);
+
+        while(tmp) {
+          addSet(&asmInlineMap, Safe_strdup( tmp ));
+          tmp = strtok((char *)NULL, WHITECOMMA);
+        }
+
+        {
+          char *s;
           
           for(s = setFirstItem(asmInlineMap); s ; s = setNextItem(asmInlineMap)) {
             debugf("inline asm: `%s'\n", s);
           }
+        }
       }
-      
-      return 0;
-  }
+      break;
 #endif  /* 0 */
 
-  return 1;
+    default:
+      processed = 0;
+      break;
+  }
+
+  get_pragma_token(cp, &token);
+
+  if (1 == err)
+    werror(W_BAD_PRAGMA_ARGUMENTS, name);
+
+  free_pragma_token(&token);
+  return processed;
+}
+
+static struct pragma_s pragma_tbl[] = {
+  { "maxram",  P_MAXRAM,  0, do_pragma },
+  { "stack",   P_STACK,   0, do_pragma },
+  { "code",    P_CODE,    0, do_pragma },
+  { "udata",   P_UDATA,   0, do_pragma },
+  { "library", P_LIBRARY, 0, do_pragma },
+/*{ "inline",  P_INLINE,  0, do_pragma }, */
+  { NULL,      0,         0, NULL },
+  };
+
+static int
+_process_pragma(const char *s)
+{
+  return process_pragma_tbl(pragma_tbl, s);
 }
 
 #define REP_UDATA	"--preplace-udata-with="
@@ -427,7 +529,6 @@ _process_pragma(const char *sz)
 #define NO_DEFLIBS	"--nodefaultlibs"
 #define MPLAB_COMPAT	"--mplab-comp"
 
-#define NL_OPT		"--nl="
 #define USE_CRT		"--use-crt="
 
 #define	OFMSG_LRSUPPORT	"--flr-support"
@@ -444,52 +545,46 @@ extern int pic16_debug_verbose;
 extern int pic16_ralloc_debug;
 extern int pic16_pcode_verbose;
 
-int pic16_fstack=0;
 int pic16_enable_peeps=0;
-int pic16_nl=0;			/* 0 for LF, 1 for CRLF */
 
 OPTION pic16_optionsTable[]= {
-	{ 0,	NO_DEFLIBS,		&pic16_options.nodefaultlibs,	"do not link default libraries when linking"},
-	{ 0,	"--pno-banksel",	&pic16_options.no_banksel,	"do not generate BANKSEL assembler directives"},
-	{ 0,	OPT_BANKSEL,		NULL,				"set banksel optimization level (default=0 no)"},
-//	{ 0,	"--pomit-config-words",	&pic16_options.omit_configw,	"omit the generation of configuration words"},
-//	{ 0,	"--pomit-ivt",		&pic16_options.omit_ivt,	"omit the generation of the Interrupt Vector Table"},
-//	{ 0,	"--pleave-reset-vector",&pic16_options.leave_reset,	"when omitting IVT leave RESET vector"},
+	/* code generation options */
 	{ 0,	STACK_MODEL,		NULL,				"use stack model 'small' (default) or 'large'"},
-
-	{ 0,	"--debug-xtra",		&pic16_debug_verbose,	"show more debug info in assembly output"},
-	{ 0,	"--debug-ralloc",	&pic16_ralloc_debug,	"dump register allocator debug file *.d"},
-	{ 0,	"--pcode-verbose",	&pic16_pcode_verbose,	"dump pcode related info"},
-		
-	{ 0,	REP_UDATA,	NULL,	"Place udata variables at another section: udata_acs, udata_ovr, udata_shr"},
-
-	{ 0,	ALT_ASM,	NULL,	"Use alternative assembler"},
-	{ 0,	ALT_LINK,	NULL,	"Use alternative linker"},
-
-	{ 0,	"--denable-peeps",	&pic16_enable_peeps,	"explicit enable of peepholes"},
-	{ 0,	IVT_LOC,	NULL,	"<nnnn> interrupt vector table location"},
-	{ 0,	"--calltree",		&pic16_options.dumpcalltree,	"dump call tree in .calltree file"},
-	{ 0,	MPLAB_COMPAT,		&pic16_mplab_comp,	"enable compatibility mode for MPLAB utilities (MPASM/MPLINK)"},
-	{ 0,	"--fstack",		&pic16_fstack,		"enable stack optimizations"},
-	{ 0,	NL_OPT,		NULL,				"new line, \"lf\" or \"crlf\""},
-	{ 0,	USE_CRT,	NULL,	"use <crt-o> run-time initialization module"},
-	{ 0,	"--no-crt",	&pic16_options.no_crt,	"do not link any default run-time initialization module"},
-	{ 0,	"--gstack",	&pic16_options.gstack,	"trace stack pointer push/pop to overflow"},
-	{ 0,    OPTIMIZE_GOTO,  NULL,			"try to use (conditional) BRA instead of GOTO"},
-	{ 0,	OPTIMIZE_CMP,	NULL,			"try to optimize some compares"},
-	{ 0,	OPTIMIZE_DF,	NULL,			"thoroughly analyze data flow (memory and time intensive!)"},
-	{ 0,    "--num-func-alloc-regs", &pic16_options.CATregs, "dump number of temporary registers allocated for each function"},
 #if XINST
 	{ 'y',  "--extended",   &xinst, "enable Extended Instruction Set/Literal Offset Addressing mode"},
 #endif
+	{ 0,	"--pno-banksel",	&pic16_options.no_banksel,	"do not generate BANKSEL assembler directives"},
+
+	/* optimization options */
+	{ 0,	OPT_BANKSEL,		NULL,				"set banksel optimization level (default=0 no)"},
+	{ 0,	"--denable-peeps",	&pic16_enable_peeps,	"explicit enable of peepholes"},
+	{ 0,    OPTIMIZE_GOTO,  NULL,			"try to use (conditional) BRA instead of GOTO"},
+	{ 0,	OPTIMIZE_CMP,	NULL,			"try to optimize some compares"},
+	{ 0,	OPTIMIZE_DF,	NULL,			"thoroughly analyze data flow (memory and time intensive!)"},
+
+	/* assembling options */
+	{ 0,	ALT_ASM,	NULL,	"Use alternative assembler"},
+	{ 0,	MPLAB_COMPAT,		&pic16_mplab_comp,	"enable compatibility mode for MPLAB utilities (MPASM/MPLINK)"},
+
+	/* linking options */
+	{ 0,	ALT_LINK,	NULL,	"Use alternative linker"},
+	{ 0,	REP_UDATA,	NULL,	"Place udata variables at another section: udata_acs, udata_ovr, udata_shr"},
+	{ 0,	IVT_LOC,	NULL,	"Set address of interrupt vector table."},
+	{ 0,	NO_DEFLIBS,		&pic16_options.nodefaultlibs,	"do not link default libraries when linking"},
+	{ 0,	USE_CRT,	NULL,	"use <crt-o> run-time initialization module"},
+	{ 0,	"--no-crt",	&pic16_options.no_crt,	"do not link any default run-time initialization module"},
+
+	/* debugging options */
+	{ 0,	"--debug-xtra",		&pic16_debug_verbose,	"show more debug info in assembly output"},
+	{ 0,	"--debug-ralloc",	&pic16_ralloc_debug,	"dump register allocator debug file *.d"},
+	{ 0,	"--pcode-verbose",	&pic16_pcode_verbose,	"dump pcode related info"},
+	{ 0,	"--calltree",		&pic16_options.dumpcalltree,	"dump call tree in .calltree file"},
+	{ 0,	"--gstack",	&pic16_options.gstack,	"trace stack pointer push/pop to overflow"},
 	{ 0,	NULL,		NULL,	NULL}
-	};
+};
 
 
 #define ISOPT(str)	!strncmp(argv[ *i ], str, strlen(str) )
-
-extern char *getStringArg(const char *,  char **, int *, int);
-extern int getIntArg(const char *, char **, int *, int);
 
 static bool
 _pic16_parseOptions (int *pargc, char **argv, int *i)
@@ -547,19 +642,6 @@ _pic16_parseOptions (int *pargc, char **argv, int *i)
       return TRUE;
     }
 	
-    if(ISOPT(NL_OPT)) {
-      char *tmp;
-            
-        tmp = Safe_strdup( getStringArg(NL_OPT, argv, i, *pargc) );
-        if(!STRCASECMP(tmp, "lf"))pic16_nl = 0;
-        else if(!STRCASECMP(tmp, "crlf"))pic16_nl = 1;
-        else {
-          fprintf(stderr, "invalid termination character id\n");
-          exit(EXIT_FAILURE);
-        }
-        return TRUE;
-    }
-
     if(ISOPT(USE_CRT)) {
       pic16_options.no_crt = 0;
       pic16_options.crt_name = Safe_strdup( getStringArg(USE_CRT, argv, i, *pargc) );
@@ -597,8 +679,6 @@ extern set *userIncDirsSet;
 
 static void _pic16_initPaths(void)
 {
-  char pic16incDir[512];
-  char pic16libDir[512];
   set *pic16incDirsSet=NULL;
   set *pic16libDirsSet=NULL;
   char devlib[512];
@@ -609,13 +689,15 @@ static void _pic16_initPaths(void)
     setMainValue("mcu1", pic16->name[1] );
     addSet(&preArgvSet, Safe_strdup("-D__{mcu1}"));
 
-    sprintf(pic16incDir, "%s%cpic16", INCLUDE_DIR_SUFFIX, DIR_SEPARATOR_CHAR);
-    sprintf(pic16libDir, "%s%cpic16", LIB_DIR_SUFFIX, DIR_SEPARATOR_CHAR);
-
-
     if(!options.nostdinc) {
+      struct dbuf_s pic16incDir;
+
+      dbuf_init(&pic16incDir, 128);
+      dbuf_makePath(&pic16incDir, INCLUDE_DIR_SUFFIX, "pic16");
+
       /* setup pic16 include directory */
-      pic16incDirsSet = appendStrSet(dataDirsSet, NULL, pic16incDir);
+      pic16incDirsSet = appendStrSet(dataDirsSet, NULL, dbuf_c_str(&pic16incDir));
+      dbuf_destroy(&pic16incDir);
       includeDirsSet = pic16incDirsSet;
 //      mergeSets(&includeDirsSet, pic16incDirsSet);
     }
@@ -624,8 +706,13 @@ static void _pic16_initPaths(void)
     mergeSets(&pic16incDirsSet, userIncDirsSet);
 
     if(!options.nostdlib) {
+      struct dbuf_s pic16libDir;
+
+      dbuf_init(&pic16libDir, 128);
+      dbuf_makePath(&pic16libDir, LIB_DIR_SUFFIX, "pic16");
       /* setup pic16 library directory */
-      pic16libDirsSet = appendStrSet(dataDirsSet, NULL, pic16libDir);
+      pic16libDirsSet = appendStrSet(dataDirsSet, NULL, dbuf_c_str(&pic16libDir));
+      dbuf_destroy(&pic16libDir);
       libDirsSet = pic16libDirsSet;
 //      mergeSets(&libDirsSet, pic16libDirsSet);
     }
@@ -664,7 +751,7 @@ static void _pic16_linkEdit(void)
   	 * {linker} {incdirs} {lflags} -o {outfile} {spec_ofiles} {ofiles} {libs}
   	 *
   	 */
-  	sprintf(lfrm, "{linker} {incdirs} {lflags} -o {outfile} {user_ofile} {ofiles} {spec_ofiles} {libs}");
+  	sprintf(lfrm, "{linker} {incdirs} {lflags} -w -r -o {outfile} {user_ofile} {ofiles} {spec_ofiles} {libs}");
 
   	shash_add(&linkValues, "linker", pic16_linkCmd[0]);
 
@@ -830,7 +917,6 @@ _pic16_setDefaultOptions (void)
   pic16_options.ip_stack = 1;		/* set to 1 to enable ipop/ipush for stack */
   pic16_options.gstack = 0;
   pic16_options.debgen = 0;
-  pic16_options.CATregs = 0;
 }
 
 static const char *
@@ -863,6 +949,10 @@ _pic16_genAssemblerPreamble (FILE * of)
 	}
 
 	fprintf (of, "\tlist\tp=%s\n",&name[1]);
+	if (pic16_mplab_comp) {
+	  // provide ACCESS macro used during SFR accesses
+	  fprintf (of, "\tinclude <p%s.inc>\n", &name[1]);
+	}
 
 	if(!pic16_options.omit_configw) {
 		pic16_emitConfigRegs(of);
@@ -875,35 +965,35 @@ _pic16_genAssemblerPreamble (FILE * of)
 
 /* Generate interrupt vector table. */
 static int
-_pic16_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_pic16_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
 #if 1
 	/* PIC18F family has only two interrupts, the high and the low
 	 * priority interrupts, which reside at 0x0008 and 0x0018 respectively - VR */
 
 	if((!pic16_options.omit_ivt) || (pic16_options.omit_ivt && pic16_options.leave_reset)) {
-		fprintf(of, "; RESET vector\n");
-		fprintf(of, "\tgoto\t__sdcc_gsinit_startup\n");
+		dbuf_printf(oBuf, "; RESET vector\n");
+		dbuf_printf(oBuf, "\tgoto\t__sdcc_gsinit_startup\n");
 	}
 	
 	if(!pic16_options.omit_ivt) {
-		fprintf(of, "\tres 4\n");
+		dbuf_printf(oBuf, "\tres 4\n");
 
 
-		fprintf(of, "; High priority interrupt vector 0x0008\n");
+		dbuf_printf(oBuf, "; High priority interrupt vector 0x0008\n");
 		if(interrupts[1]) {
-			fprintf(of, "\tgoto\t%s\n", interrupts[1]->rname);
-			fprintf(of, "\tres\t12\n"); 
+			dbuf_printf(oBuf, "\tgoto\t%s\n", interrupts[1]->rname);
+			dbuf_printf(oBuf, "\tres\t12\n"); 
 		} else {
-			fprintf(of, "\tretfie\n");
-			fprintf(of, "\tres\t14\n");
+			dbuf_printf(oBuf, "\tretfie\n");
+			dbuf_printf(oBuf, "\tres\t14\n");
 		}
 
-		fprintf(of, "; Low priority interrupt vector 0x0018\n");
+		dbuf_printf(oBuf, "; Low priority interrupt vector 0x0018\n");
 		if(interrupts[2]) {
-			fprintf(of, "\tgoto\t%s\n", interrupts[2]->rname);
+			dbuf_printf(oBuf, "\tgoto\t%s\n", interrupts[2]->rname);
 		} else {
-			fprintf(of, "\tretfie\n");
+			dbuf_printf(oBuf, "\tretfie\n");
 		}
 	}
 #endif
@@ -1099,7 +1189,7 @@ oclsExpense (struct memmap *oclass)
 */
 const char *pic16_linkCmd[] =
 {
-  "gplink", "$l", "-o \"$2\"", "\"$1\"","$3", NULL
+  "gplink", "$l", "-w", "-r", "-o \"$2\"", "\"$1\"","$3", NULL
 };
 
 
@@ -1187,6 +1277,9 @@ PORT pic16_port =
     NULL,			// xidata
     NULL,			// xinit
     "CONST   (CODE)",		// const_name - const data (code or not)
+    "CABS    (ABS,CODE)",	// cabs_name - const absolute data (code or not)
+    "XABS    (ABS,XDATA)",	// xabs_name - absolute xdata
+    "IABS    (ABS,DATA)",	// iabs_name - absolute data
     NULL,			// default location for auto vars
     NULL,			// default location for global vars
     1				// code is read only 1=yes

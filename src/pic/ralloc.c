@@ -26,18 +26,12 @@
 
 #include "common.h"
 #include "ralloc.h"
+#include "device.h"
 #include "pcode.h"
 #include "gen.h"
 
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
 #define FENTRY2			1 ? (void)0 : printf 
-#else
-#define STRCASECMP strcasecmp
-//#define FENTRY2(fmt,...)	do { fprintf (stderr, "%s:%d: called.\n", __FUNCTION__, __LINE__); fprintf (stderr, fmt, ## __VA_ARGS__); } while (0)
-#define FENTRY2			1 ? (void)0 : printf 
-#endif
 
 /* this should go in SDCCicode.h, but it doesn't. */
 #define IS_REF(op)       (IS_SYMOP(op) && op->operand.symOperand->isref == 1)
@@ -82,8 +76,7 @@ set *dynInternalRegs=NULL;
 static hTab  *dynDirectRegNames= NULL;
 // static hTab  *regHash = NULL;    /* a hash table containing ALL registers */
 
-static int dynrIdx=0x20;
-static int rDirectIdx=0;
+static int dynrIdx = 0x1000;
 
 int pic14_nRegs = 128;   // = sizeof (regspic14) / sizeof (regs);
 
@@ -95,14 +88,14 @@ int Gstack_size = 0;
 
 
 static void spillThis (symbol *);
-static int debug = 1;
+static int debug = 0;	// should be 0 when committed, creates .d files
 static FILE *debugF = NULL;
 /*-----------------------------------------------------------------*/
 /* debugLog - open a file for debugging information                */
 /*-----------------------------------------------------------------*/
 //static void debugLog(char *inst,char *fmt, ...)
 static void
-	debugLog (char *fmt,...)
+debugLog (char *fmt,...)
 {
 	static int append = 0;	// First time through, open the file without append.
 
@@ -125,41 +118,29 @@ static void
 			werror (E_FILE_OPEN_ERR, buffer);
 			exit (1);
 		}
-		append = 1;		// Next time debubLog is called, we'll append the debug info
+		append = 1;		// Next time debugLog is called, we'll append the debug info
 
 	}
 
 	va_start (ap, fmt);
-
 	vsprintf (buffer, fmt, ap);
+	va_end (ap);
 
 	fprintf (debugF, "%s", buffer);
 	//if (options.verbose) fprintf (stderr, "%s: %s", __FUNCTION__, buffer);
-	/*
-	while (isspace((unsigned char)*bufferP)) bufferP++;
-
-	if (bufferP && *bufferP) 
-		lineCurr = (lineCurr ?
-		connectLine(lineCurr,newLineNode(lb)) :
-		(lineHead = newLineNode(lb)));
-	lineCurr->isInline = _G.inLine;
-	lineCurr->isDebug  = _G.debugLine;
-	*/
-	va_end (ap);
-
 }
  
 static void
-	debugNewLine (void)
+debugNewLine (void)
 {
 	if (debugF)
 		fputc ('\n', debugF);
 }
  /*-----------------------------------------------------------------*/
- /* debugLogClose - closes the debug log file (if opened)           */
+ /* pic14_debugLogClose - closes the debug log file (if opened)           */
  /*-----------------------------------------------------------------*/
-static void
-	debugLogClose (void)
+void
+pic14_debugLogClose (void)
 {
 	if (debugF)
 	{
@@ -170,20 +151,20 @@ static void
 #define AOP(op) op->aop
  
 static char *
-	debugAopGet (char *str, operand * op)
+debugAopGet (char *str, operand * op)
 {
-	if (str)
-		debugLog (str);
+	if (!debug) return NULL;
+
+        if (str) debugLog (str);
 
 	printOperand (op, debugF);
 	debugNewLine ();
 
 	return NULL;
-
 }
 
 static char *
-	decodeOp (unsigned int op)
+decodeOp (unsigned int op)
 {
 
 	if (op < 128 && op > ' ')
@@ -257,7 +238,6 @@ static char *
 	case STRUCT:			return "STRUCT";
 	case UNION:			return "UNION";
 	case ENUM:			return "ENUM";
-	case ELIPSIS:			return "ELIPSIS";
 	case RANGE:			return "RANGE";
 	case FAR:			return "FAR";
 	case CASE:			return "CASE";
@@ -343,22 +323,20 @@ static regs *regWithIdx (set *dRegs, int idx, int fixed);
 static regs* newReg(short type, PIC_OPTYPE pc_type, int rIdx, char *name, int size, int alias)
 {
 	
-	regs *dReg;
+	regs *dReg, *reg_alias;
 
 	/* check whether a matching register already exists */
 	dReg = dirregWithName( name );
 	if (dReg) {
-	  //printf( "%s: already present: %s\n", __FUNCTION__, name );
-	  return (dReg);
-	}
-	dReg = regWithIdx( dynDirectRegs, rIdx, 0 );
-	if (!dReg) dReg = regWithIdx( dynDirectRegs, rIdx, 1 );
-	if (dReg)
-	{
-	  //printf(  "%s: already present %s (idx:%d/%x)", __FUNCTION__, name, rIdx, rIdx );
-	  return (dReg);
+		//printf( "%s: already present: %s\n", __FUNCTION__, name );
+		return (dReg);
 	}
 	
+	// check whether a register at that location exists
+	reg_alias = regWithIdx( dynDirectRegs, rIdx, 0 );
+	if (!reg_alias) reg_alias = regWithIdx( dynDirectRegs, rIdx, 1 );
+	
+	// create a new register
 	dReg = Safe_calloc(1,sizeof(regs));
 	dReg->type = type;
 	dReg->pc_type = pc_type;
@@ -383,18 +361,12 @@ static regs* newReg(short type, PIC_OPTYPE pc_type, int rIdx, char *name, int si
 	dReg->address = 0;
 	dReg->size = size;
 	dReg->alias = alias;
-	dReg->reg_alias = NULL;
+	dReg->reg_alias = reg_alias;
 	dReg->reglives.usedpFlows = newSet();
 	dReg->reglives.assignedpFlows = newSet();
+	if (type != REG_STK) hTabAddItem(&dynDirectRegNames, regname2key(dReg->name), dReg);
+	debugLog( "%s: Created register %s.\n", __FUNCTION__, dReg->name);
 	
-	hTabAddItem(&dynDirectRegNames, regname2key(dReg->name), dReg);
-#ifdef __GNUC__
-	debugLog( "%s: Created register %s (%p).\n",
-		__FUNCTION__, dReg->name, __builtin_return_address(0) );
-#else
-	debugLog( "%s: Created register %s.\n",
-		__FUNCTION__, dReg->name);
-#endif
 	return dReg;
 }
 
@@ -410,6 +382,7 @@ regWithIdx (set *dRegs, int idx, int fixed)
 	dReg = setNextItem(dRegs)) {
 		
 		if(idx == dReg->rIdx && (fixed == (int)dReg->isFixed)) {
+			while (dReg->reg_alias) dReg = dReg->reg_alias;
 			return dReg;
 		}
 	}
@@ -495,11 +468,13 @@ regFindFree (set *dRegs)
 /*-----------------------------------------------------------------*/
 /* initStack - allocate registers for a pseudo stack               */
 /*-----------------------------------------------------------------*/
-void initStack(int base_address, int size)
+void initStack(int base_address, int size, int shared)
 {
 	
 	int i;
-	
+	PIC_device *pic;
+
+	pic = pic14_getPIC();
 	Gstack_base_addr = base_address;
 	Gstack_size = size;
 	//fprintf(stderr,"initStack [base:0x%02x, size:%d]\n", base_address, size);
@@ -508,14 +483,13 @@ void initStack(int base_address, int size)
 		char buffer[16];
 		regs *r;
 		SNPRINTF(&buffer[0], 16, "STK%02d", i);
-		r = newReg(REG_STK, PO_GPR_TEMP,base_address,buffer,1,0);
-		r->address = base_address; // Pseudo stack needs a fixed location that can be known by all modules
+		// multi-bank device, sharebank prohibited by user
+		r = newReg(REG_STK, PO_GPR_TEMP, base_address--, buffer, 1, shared ? (pic ? pic->bankMask : 0x180) : 0x0);
 		r->isFixed = 1;
 		r->isPublic = 1;
+		r->isEmitted = 1;
 		//r->name[0] = 's';
-		r->alias = 0x180; // Using shared memory for pseudo stack
 		addSet(&dynStackRegs,r);
-		base_address--;
 	}
 }
 
@@ -590,6 +564,8 @@ dirregWithName (char *name)
 	while(reg) {
 		
 		if(STRCASECMP(reg->name, name) == 0) {
+			// handle registers with multiple names
+			while (reg->reg_alias) reg = reg->reg_alias;
 			return(reg);
 		}
 		
@@ -636,7 +612,7 @@ allocNewDirReg (sym_link *symlnk,const char *name)
 			else
 				idx = address;
 		} else {
-			idx = rDirectIdx++;
+			idx = dynrIdx++;
 		}
 		reg = newReg(REG_GPR, PO_DIR, idx, (char*)name,getSize (symlnk),0 );
 		debugLog ("  -- added %s to hash, size = %d\n", (char*)name,reg->size);
@@ -749,7 +725,7 @@ allocDirReg (operand *op )
 		if(!IS_CONFIG_ADDRESS(address)) {
 			//fprintf(stderr,"allocating new reg %s\n",name);
 			
-			reg = newReg(REG_GPR, PO_DIR, rDirectIdx++, name,getSize (OP_SYMBOL (op)->type),0 );
+			reg = newReg(REG_GPR, PO_DIR, dynrIdx++, name,getSize (OP_SYMBOL (op)->type),0 );
 			debugLog ("  -- added %s to hash, size = %d\n", name,reg->size);
 			
 			//hTabAddItem(&dynDirectRegNames, regname2key(name), reg);
@@ -826,7 +802,7 @@ allocRegByName (char *name, int size)
 		* a new one and put it in the hash table AND in the 
 		* dynDirectRegNames set */
 		//fprintf (stderr,"%s symbol name %s, size:%d\n", __FUNCTION__,name,size);
-		reg = newReg(REG_GPR, PO_DIR, rDirectIdx++, name,size,0 );
+		reg = newReg(REG_GPR, PO_DIR, dynrIdx++, name,size,0 );
 		for (sym = setFirstItem(sfr->syms); sym; sym = setNextItem(sfr->syms)) {
 			if (strcmp(reg->name+1,sym->name)==0) {
 				unsigned a = SPEC_ADDR(sym->etype);
@@ -902,14 +878,18 @@ typeRegWithIdx (int idx, int type, int fixed)
 		
 		break;
 	case REG_STK:
-		if( (dReg = regWithIdx ( dynStackRegs, idx, fixed)) != NULL ) {
+		if( (dReg = regWithIdx ( dynStackRegs, idx, 0)) != NULL ) {
+			debugLog ("Found a Stack Register!\n");
+			return dReg;
+		} else
+		if( (dReg = regWithIdx ( dynStackRegs, idx, 1)) != NULL ) {
 			debugLog ("Found a Stack Register!\n");
 			return dReg;
 		}
 		else {
 		  werror (E_STACK_OUT, "Register");
                   /* return an existing register just to avoid the SDCC crash */
-		  return regWithIdx ( dynStackRegs, 0x7f, fixed);
+		  return regWithIdx ( dynStackRegs, 0x7f, 0);
                 }
 		break;
 	case REG_SFR:
@@ -1075,10 +1055,7 @@ void writeSetUsedRegs(FILE *of, set *dRegs)
 	}
 	
 }
-extern void assignFixedRegisters(set *regset);
-extern void assignRelocatableRegisters(set *regset,int used);
 extern void dump_map(void);
-extern void dump_sfr(FILE *of);
 
 void packBits(set *bregs)
 {
@@ -1129,7 +1106,7 @@ void packBits(set *bregs)
 				bit_no=0;
 				sprintf (buffer, "bitfield%d", byte_no);
 				//fprintf(stderr,"new relocatable bit field\n");
-				relocbitfield = newReg(REG_GPR, PO_GPR_BIT,rDirectIdx++,buffer,1,0);
+				relocbitfield = newReg(REG_GPR, PO_GPR_BIT,dynrIdx++,buffer,1,0);
 				relocbitfield->isBitField = 1;
 				//addSet(&dynDirectRegs,relocbitfield);
 				addSet(&dynInternalRegs,relocbitfield);
@@ -1138,7 +1115,7 @@ void packBits(set *bregs)
 			}
 			
 			breg->reg_alias = relocbitfield;
-			breg->address = rDirectIdx;   /* byte_no; */
+			breg->address = dynrIdx;   /* byte_no; */
 			breg->rIdx = bit_no++;
 		}
 	}
@@ -1177,6 +1154,7 @@ void bitEQUs(FILE *of, set *bregs)
 	}
 	
 }
+
 void aliasEQUs(FILE *of, set *fregs, int use_rIdx)
 {
 	regs *reg;
@@ -1202,62 +1180,13 @@ void aliasEQUs(FILE *of, set *fregs, int use_rIdx)
 
 void writeUsedRegs(FILE *of) 
 {
+	
 	packBits(dynDirectBitRegs);
 	
-	assignFixedRegisters(dynInternalRegs);
-	assignFixedRegisters(dynAllocRegs);
-	assignFixedRegisters(dynStackRegs);
-	assignFixedRegisters(dynDirectRegs);
-	
-	assignRelocatableRegisters(dynInternalRegs,0);
-	assignRelocatableRegisters(dynAllocRegs,0);
-	assignRelocatableRegisters(dynStackRegs,0);
-	
-	assignRelocatableRegisters(dynDirectRegs,0);
-	/*
-	assignRelocatableRegisters(dynDirectRegs,0);
-	printf("assignRelocatableRegisters(dynDirectRegs,0);\n");
-	*/
 	//dump_map();
 	
-	dump_sfr(of);
 	bitEQUs(of,dynDirectBitRegs);
-	/*
-	aliasEQUs(of,dynAllocRegs,0);
-	aliasEQUs(of,dynDirectRegs,0);
-	aliasEQUs(of,dynStackRegs,0);
-	aliasEQUs(of,dynProcessorRegs,1);
-	*/
 }
-
-#if 0
-/*-----------------------------------------------------------------*/
-/* allDefsOutOfRange - all definitions are out of a range          */
-/*-----------------------------------------------------------------*/
-static bool
-allDefsOutOfRange (bitVect * defs, int fseq, int toseq)
-{
-	int i;
-	
-	debugLog ("%s\n", __FUNCTION__);
-	if (!defs)
-		return TRUE;
-	
-	for (i = 0; i < defs->size; i++)
-	{
-		iCode *ic;
-		
-		if (bitVectBitValue (defs, i) &&
-			(ic = hTabItemWithKey (iCodehTab, i)) &&
-			(ic->seq >= fseq && ic->seq <= toseq))
-			
-			return FALSE;
-		
-	}
-	
-	return TRUE;
-}
-#endif
 
 /*-----------------------------------------------------------------*/
 /* computeSpillable - given a point find the spillable live ranges */
@@ -3699,10 +3628,11 @@ packForPush (iCode * ic, eBBlock * ebp)
 
 void printSymType(char * str, sym_link *sl)
 {
-	debugLog ("    %s Symbol type: ",str);
-	printTypeChain( sl, debugF);
-	debugLog ("\n");
-	
+	if (debug) {
+		debugLog ("    %s Symbol type: ",str);
+		printTypeChain( sl, debugF);
+		debugLog ("\n");
+	}
 }
 
 /*-----------------------------------------------------------------*/
@@ -3714,7 +3644,8 @@ void isData(sym_link *sl)
 {
 	FILE *of = stderr;
 	
-	if(!sl)
+	// avoid garbage `data' and `sfr' output
+	if(!sl || !debugF)
 		return;
 	
 	if(debugF)
@@ -4228,6 +4159,6 @@ pic14_assignRegisters (ebbIndex * ebbi)
 	//pic14_freeAllRegs ();
 	
 	debugLog ("leaving\n<><><><><><><><><><><><><><><><><>\n");
-	debugLogClose ();
+	pic14_debugLogClose ();
 	return;
 }

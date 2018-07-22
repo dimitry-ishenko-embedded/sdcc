@@ -89,6 +89,20 @@
 #endif
 #endif
 
+#ifdef _WIN32       /* WIN32 native */
+
+#  define NATIVE_WIN32          1
+#  ifdef __MINGW32__  /* GCC MINGW32 depends on configure */
+#    include "../../sdccconf.h"
+#  else
+#    include "../../sdcc_vc.h"
+#    define PATH_MAX  _MAX_PATH
+#  endif
+
+#else               /* Assume Un*x style system */
+#  include "../../sdccconf.h"
+#endif
+
 /*
  * Assembler definitions.
  */
@@ -683,4 +697,8 @@ extern  struct  mne     mne[];
 /* Machine dependent functions */
 
 extern  VOID            minit();
-extern VOID machine(struct mne *);
+extern  VOID            machine(struct mne *);
+
+/* strcmpi.c */
+extern  int as_strcmpi(const char *s1, const char *s2);
+extern  int as_strncmpi(const char *s1, const char *s2, size_t n);

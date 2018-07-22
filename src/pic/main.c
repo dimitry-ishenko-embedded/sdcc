@@ -12,6 +12,8 @@
 #include "SDCCmacro.h"
 #include "MySystem.h"
 #include "glue.h"
+#include "dbuf_string.h"
+#include <errno.h>
 //#include "gen.h"
 
 
@@ -51,10 +53,15 @@ static char *_pic14_keywords[] =
 
 pic14_options_t pic14_options;
 
+#define ARG_STACKLOC	"--stack-loc"
+#define ARG_STACKSIZ	"--stack-size"
+
 extern int debug_verbose;	/* from pcode.c */
 static OPTION _pic14_poptions[] = {
 	{ 0 , "--debug-xtra", &debug_verbose, "show more debug info in assembly output" },
 	{ 0 , "--no-pcode-opt", &pic14_options.disable_df, "disable (slightly faulty) optimization on pCode" },
+	{ 0 , ARG_STACKLOC, NULL, "sets the lowest address of the argument passing stack" },
+	{ 0 , ARG_STACKSIZ, NULL, "sets the size if the argument passing stack (default: 16, minimum: 4)" },
 	{ 0 , NULL, NULL, NULL }
 };
 
@@ -90,60 +97,6 @@ _pic14_regparm (sym_link * l, bool reentrant)
 	//  return 0;
 	
 	regParmFlg++;// = 1;
-	return 1;
-}
-
-static int
-_process_pragma(const char *sz)
-{
-	static const char *WHITE = " \t";
-	char	*ptr = strtok((char *)sz, WHITE);
-	
-	if (startsWith (ptr, "memmap"))
-	{
-		char	*start;
-		char	*end;
-		char	*type;
-		char	*alias;
-		
-		start = strtok((char *)NULL, WHITE);
-		end = strtok((char *)NULL, WHITE);
-		type = strtok((char *)NULL, WHITE);
-		alias = strtok((char *)NULL, WHITE);
-		
-		if (start != (char *)NULL
-			&& end != (char *)NULL
-			&& type != (char *)NULL) {
-			value		*startVal = constVal(start);
-			value		*endVal = constVal(end);
-			value		*aliasVal;
-			memRange	r;
-			
-			if (alias == (char *)NULL) {
-				aliasVal = constVal(0);
-			} else {
-				aliasVal = constVal(alias);
-			}
-			
-			r.start_address = (int)floatFromVal(startVal);
-			r.end_address = (int)floatFromVal(endVal);
-			r.alias = (int)floatFromVal(aliasVal);
-			r.bank = (r.start_address >> 7) & 3;
-			
-			if (strcmp(type, "RAM") == 0) {
-				addMemRange(&r, 0);
-			} else if (strcmp(type, "SFR") == 0) {
-				addMemRange(&r, 1);
-			} else {
-				return 1;
-			}
-		}
-		
-		return 0;
-	} else if (startsWith (ptr, "maxram")) {
-		// not used any more - comes from device config file pic14devices.txt instead
-		return 0;
-	}
 	return 1;
 }
 
@@ -305,7 +258,7 @@ _pic14_genAssemblerPreamble (FILE * of)
 
 /* Generate interrupt vector table. */
 static int
-_pic14_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_pic14_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
 	int i;
 	
@@ -315,18 +268,18 @@ _pic14_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
 		return FALSE;
 	}
 	
-	fprintf (of, "\t;ajmp\t__sdcc_gsinit_startup\n");
+	dbuf_printf (oBuf, "\t;ajmp\t__sdcc_gsinit_startup\n");
 	
 	/* now for the other interrupts */
 	for (i = 0; i < maxInterrupts; i++)
 	{
 		if (interrupts[i])
 		{
-			fprintf (of, "\t;ljmp\t%s\n\t.ds\t4\n", interrupts[i]->rname);
+			dbuf_printf (oBuf, "\t;ljmp\t%s\n\t.ds\t4\n", interrupts[i]->rname);
 		}
 		else
 		{
-			fprintf (of, "\t;reti\n\t.ds\t7\n");
+			dbuf_printf (oBuf, "\t;reti\n\t.ds\t7\n");
 		}
 	}
 	
@@ -419,7 +372,7 @@ MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] =
 {
-	"gplink", "$l", "-o \"$2\"", "\"$1\"", "$3", NULL
+	"gplink", "$l", "-w", "-r", "-o \"$2\"", "\"$1\"", "$3", NULL
 };
 
 static const char *_asmCmd[] =
@@ -453,7 +406,7 @@ static void _pic14_do_link (void)
    *
    */
 
-  sprintf(lfrm, "{linker} {incdirs} {sysincdirs} {lflags} -o {outfile} {user_ofile} {spec_ofiles} {ofiles} {libs}");
+  sprintf(lfrm, "{linker} {incdirs} {sysincdirs} {lflags} -w -r -o {outfile} {user_ofile} {spec_ofiles} {ofiles} {libs}");
 
   shash_add(&linkValues, "linker", "gplink");
 
@@ -559,6 +512,9 @@ PORT pic_port =
 		NULL, // xidata
 		NULL, // xinit
 		"CONST   (CODE)",		// const_name - const data (code or not)
+		"CABS    (ABS,CODE)",	// cabs_name - const absolute data (code or not)
+		"XABS    (ABS,XDATA)",	// xabs_name - absolute xdata
+		"IABS    (ABS,DATA)",	// iabs_name - absolute data
 		NULL,
 		NULL,
 		1        // code is read only
@@ -601,7 +557,7 @@ PORT pic_port =
 	NULL, 				/* genInitStartup */
 	_pic14_reset_regparm,
 	_pic14_regparm,
-	_process_pragma,				/* process a pragma */
+	NULL,				/* process a pragma */
 	NULL,
 	_hasNativeMulFor,
 	hasExtBitOp,			/* hasExtBitOp */

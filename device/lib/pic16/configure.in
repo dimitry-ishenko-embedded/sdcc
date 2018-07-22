@@ -8,11 +8,11 @@
 # The GNU PIC Library is maintained by,
 # 	Vangelis Rokas <vrokas@otenet.gr>
 #
-# $Id: configure.in 4173 2006-05-15 01:00:07Z vrokas $
+# $Id: configure.in 4555 2007-01-03 21:19:58Z bernhardheld $
 #
 
 # Process this file with autoconf to produce a configure script.
-AC_PREREQ(2.57)
+AC_PREREQ(2.60)
 AC_INIT
 
 AC_DEFUN(AC_CONFIG_SRCDIR)

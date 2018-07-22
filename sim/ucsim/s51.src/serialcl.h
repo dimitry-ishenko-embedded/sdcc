@@ -41,22 +41,24 @@ protected:
   class cl_address_space *sfr;
   bool there_is_t2, t2_baud;
   class cl_memory_cell *sbuf, *pcon, *scon;
+#ifdef HAVE_TERMIOS_H
   struct termios saved_attributes_in; // Attributes of serial interface
   struct termios saved_attributes_out;
+#endif
   class cl_optref *serial_in_file_option;
   class cl_optref *serial_out_file_option;
-  FILE *serial_in;	// Serial line input
-  FILE *serial_out;	// Serial line output
-  uchar s_in;		// Serial channel input reg
-  uchar s_out;		// Serial channel output reg
-  bool  s_sending;	// Transmitter is working
-  bool  s_receiving;	// Receiver is working
-  int   s_rec_bit;	// Bit counter of receiver
-  int   s_tr_bit;	// Bit counter of transmitter
-  int   s_rec_t1;	// T1 overflows for receiving
-  int   s_tr_t1;	// T1 overflows for sending
-  int   s_rec_tick;	// Machine cycles for receiving
-  int   s_tr_tick;	// Machine cycles for sending
+  FILE *serial_in;      // Serial line input
+  FILE *serial_out;     // Serial line output
+  uchar s_in;           // Serial channel input reg
+  uchar s_out;          // Serial channel output reg
+  bool  s_sending;      // Transmitter is working
+  bool  s_receiving;    // Receiver is working
+  int   s_rec_bit;      // Bit counter of receiver
+  int   s_tr_bit;       // Bit counter of transmitter
+  int   s_rec_t1;       // T1 overflows for receiving
+  int   s_tr_t1;        // T1 overflows for sending
+  int   s_rec_tick;     // Machine cycles for receiving
+  int   s_tr_tick;      // Machine cycles for sending
   uchar _mode;
   uchar _bmREN;
   uchar _bmSMOD;
@@ -81,7 +83,7 @@ public:
   virtual void reset(void);
   virtual void happen(class cl_hw *where, enum hw_event he, void *params);
 
-  virtual void print_info(class cl_console *con);
+  virtual void print_info(class cl_console_base *con);
 };
 
 

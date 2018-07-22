@@ -15,7 +15,7 @@
 */
 
 /*
-** $Id: ulong2fs.c 3607 2004-12-20 21:48:32Z vrokas $
+** $Id: ulong2fs.c 4776 2007-04-29 13:15:51Z borutr $
 */
 
 /* (c)2000/2001: hacked a little by johan.knol@iduna.nl for sdcc */

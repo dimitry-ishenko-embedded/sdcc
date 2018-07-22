@@ -25,7 +25,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: printf_tiny.c 3714 2005-04-02 13:13:53Z vrokas $
+** $Id: printf_tiny.c 4511 2006-12-10 17:07:41Z tecodev $
 */
 
 /* This function uses function putchar() to dump a character
@@ -132,8 +132,10 @@ void printf_tiny(char *fmt, ...)
             } else {
               if(ISLONG)val = va_arg(ap, long);
               else
-              if(ISCHAR)val = va_arg(ap, char);
-              else {
+              if(ISCHAR) {
+		  val = (unsigned char)va_arg(ap, int); // FIXME: SDCC casts char arguments into ints
+		  if (!HAVESIGN) val = (char)val; // FIXME cont'd: sign-extend if required
+	      } else {
                   val = va_arg(ap, int);
               }
 

@@ -123,7 +123,7 @@ _xa51_getRegName (struct regs *reg)
 
 /* Generate interrupt vector table. */
 static int
-_xa51_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_xa51_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
   return TRUE;
 }
@@ -288,6 +288,9 @@ PORT xa51_port =
     "XISEG   (XDATA)", // initialized xdata
     "XINIT   (CODE)", // a code copy of xiseg
     "CONST   (CODE)",		// const_name - const data (code or not)
+    "CABS    (ABS,CODE)",	// cabs_name - const absolute data (code or not)
+    "XABS    (ABS,XDATA)",	// xabs_name - absolute xdata
+    "IABS    (ABS,DATA)",	// iabs_name - absolute data
     NULL, // default local map
     NULL, // default global map
     1

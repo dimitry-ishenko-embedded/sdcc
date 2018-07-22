@@ -93,7 +93,15 @@ SOURCE=.\main.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\peep.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ralloc.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\rtrack.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -106,6 +114,10 @@ SOURCE=.\gen.h
 # Begin Source File
 
 SOURCE=.\main.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\peep.h
 # End Source File
 # Begin Source File
 

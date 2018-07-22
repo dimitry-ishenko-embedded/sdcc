@@ -126,9 +126,9 @@ _avr_genAssemblerPreamble (FILE * of)
 
 /* Generate interrupt vector table. */
 static int
-_avr_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_avr_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
-	return TRUE;
+  return TRUE;
 }
 
 /* Indicate which extended bit operations this port supports */
@@ -221,7 +221,10 @@ PORT avr_port = {
 	 "HOME",
 	 NULL, // initialized xdata
 	 NULL, // a code copy of xiseg
-	 "CONST   (CODE)",		// const_name - const data (code or not)
+	 "CONST   (CODE)",           // const_name - const data (code or not)
+	 "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
+	 "XABS    (ABS,XDATA)",      // xabs_name - absolute xdata/pdata
+	 "IABS    (ABS,DATA)",       // iabs_name - absolute idata/data
 	 NULL,
 	 NULL,
 	 0,

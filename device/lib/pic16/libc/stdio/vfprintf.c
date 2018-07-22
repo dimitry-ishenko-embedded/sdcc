@@ -25,7 +25,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: vfprintf.c 4249 2006-06-25 12:22:18Z borutr $
+** $Id: vfprintf.c 4511 2006-12-10 17:07:41Z tecodev $
 */
 
 /* following formats are supported :-
@@ -138,7 +138,8 @@ unsigned int vfprintf(FILE *stream, char *fmt, va_list ap)
 #endif
         }
         else if(fchar) {
-          val = va_arg(ap, char);
+          val = (unsigned char)va_arg(ap, int); // FIXME: SDCC passes 1-byte char varargs as 2-byte ints...
+	  if (!nosign) val = (char) val; // (FIXME cont'd) sign extend if required
 #if _DEBUG
           io_long(val);
 #endif

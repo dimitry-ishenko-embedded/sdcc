@@ -19,7 +19,7 @@
 /* Version 1.0 - Initial release */
 
 /*
-** $Id: floorf.c 3654 2005-01-24 10:38:53Z vrokas $
+** $Id: floorf.c 4776 2007-04-29 13:15:51Z borutr $
 */
 
 #include <math.h>

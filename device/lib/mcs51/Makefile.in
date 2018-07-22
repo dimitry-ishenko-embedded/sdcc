@@ -4,11 +4,11 @@ srcdir = @srcdir@
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 
-SAS = $(top_builddir)bin/asx8051
-SCC = $(top_builddir)bin/sdcc
+SAS = $(top_builddir)/bin/asx8051
+SCC = $(top_builddir)/bin/sdcc
 
 OBJ = crtstart.rel crtxinit.rel crtxclear.rel crtclear.rel crtxstack.rel \
-      crtpagesfr.rel crtbank.rel
+      crtpagesfr.rel crtbank.rel crtcall.rel
 
 LIB = mcs51.lib
 
@@ -16,7 +16,7 @@ CC = $(SCC)
 AS = $(SAS)
 ASFLAGS = -plosgff
 
-CFLAGS = -I$(top_srcdir)/include
+CFLAGS = -I$(top_srcdir)/include --std-c89
 
 all: $(LIB)
 

@@ -9,7 +9,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See GPL for details.
 ###
-### $Id: Makefile.in 4305 2006-07-27 14:24:33Z borutr $
+### $Id: Makefile.in 4555 2007-01-03 21:19:58Z bernhardheld $
 ###
 
 top_builddir = @top_builddir@
@@ -18,7 +18,7 @@ top_srcdir   = @top_srcdir@
 VPATH  = @srcdir@
 srcdir = @srcdir@
 
-include $(top_builddir)Makefile.common
+include $(top_builddir)/Makefile.common
 
 ifeq (:,$(findstring :,$(LD) $(AS) $(LIB)))
 
@@ -45,7 +45,7 @@ all : install
 install : recurse
 
 clean : recurse
-	$(Q)-$(RMDIR) "$(top_builddir)$(builddir)"
+	$(Q)-$(RMDIR) "$(top_builddir)/$(builddir)"
 
 distclean: clean
 	$(Q)-$(RM) config.cache config.log config.status Makefile Makefile.common

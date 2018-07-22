@@ -22,7 +22,7 @@
  * interrupt routine).  Code size is under 270 bytes.  Only one library
  * function is called (_gptrget, 41 bytes), in addition to calls to
  * putchar().
- * 
+ *
  * Five simple formats are supported
  *
  *	%d	signed 16 bit integer decimal (-32768 to 32767)
@@ -33,7 +33,7 @@
  *
  * For a more complete printf that supports longs, floating point and
  * field width, try using printf_fast() or printf_large().
- */	
+ */
 
 
 // This removes the negative number code, causing "%d" to be the same
@@ -61,16 +61,19 @@
 #warning "printf_tiny not built, does not support --xstack"
 #elif defined(_SDCC_NO_ASM_LIB_FUNCS)
 #warning "printf_tiny not built, _SDCC_NO_ASM_LIB_FUNCS defined"
+#else
+/* Disable "ISO C forbids an empty source file" wraning message */
+#pragma disable_warning 190
 #endif
 #else // defines are compatible with printf_tiny
 
 
 
-void printf_tiny(code char *fmt, ...) reentrant
+void printf_tiny(__code char *fmt, ...) __reentrant
 {
 	fmt;	/* suppress unreferenced variable warning */
 
-	_asm
+	__asm
 
 printf_begin:
 	mov	a, _bp		// r0 will point to va_args (stack)
@@ -128,6 +131,7 @@ printf_str_loop:
 printf_format_c:
 	//cjne	a, #'c', printf_format_d
 	cjne	a, #99, printf_format_d
+	dec	r0
 	mov	a, @r0		// Acc has the character to print
 	dec	r0
 	lcall	printf_putchar
@@ -281,9 +285,8 @@ printf_ret:
 
 
 printf_end:
-	_endasm;
+	__endasm;
 }
 
 
 #endif // defines compatible with printf_tiny
-

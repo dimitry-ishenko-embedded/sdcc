@@ -19,7 +19,7 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-/* $Id: graph.c 4148 2006-05-01 20:47:12Z tecodev $ */
+/* $Id: graph.c 4781 2007-04-29 20:33:44Z borutr $ */
 
 #include "graph.h"
 

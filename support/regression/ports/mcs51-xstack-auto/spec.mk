@@ -5,11 +5,11 @@
 include $(PORTS_DIR)/mcs51/spec.mk
 
 LIBSRCDIR   = $(top_srcdir)/device/lib
-LIBBUILDDIR = $(top_builddir)device/lib
+LIBBUILDDIR = $(top_builddir)/device/lib
 LIBDIR      = $(PORT_CASES_DIR)/lib
 
-LIBSDCCFLAGS+=--std-sdcc99 --stack-auto --xstack
-SDCCFLAGS   +=$(LIBSDCCFLAGS)
+LIBSDCCFLAGS+= --stack-auto --xstack --std-c99
+SDCCFLAGS   += --stack-auto --xstack --std-sdcc99
 
 # use C sources from mcs51
 $(PORT_CASES_DIR)/%$(OBJEXT): $(PORTS_DIR)/mcs51/%.c
@@ -39,7 +39,7 @@ SOURCES = _atoi.c _atol.c _autobaud.c _bp.c _schar2fs.c \
           _strncpy.c _strpbrk.c _strrchr.c _strspn.c \
           _strstr.c _strtok.c \
           _uchar2fs.c _uint2fs.c _ulong2fs.c \
-          calloc.c malloc.c realloc.c free.c \
+          _heap.c calloc.c malloc.c realloc.c free.c \
           serial.c ser_ir.c printfl.c \
           printf_large.c sprintf.c vprintf.c puts.c gets.c \
           assert.c time.c bpx.c

@@ -1,24 +1,24 @@
 /*-------------------------------------------------------------------------
   tinibios.c - startup and serial routines for the DS80C400 (tested on TINIM400)
-  
+
    Written By - Johan Knol, johan.knol@iduna.nl
-   
+
    Further hacked by Kevin Vigor with invaluable assistance from Bob Heise.
-    
+
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
    Free Software Foundation; either version 2, or (at your option) any
    later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-   
+
    In other words, you are welcome to use, share and improve this program.
    You are forbidden to forbid anyone else to use, share and improve
    what you give them.   Help stamp out software-hoarding!  
@@ -33,34 +33,34 @@
 
 unsigned char _sdcc_external_startup(void)
 {
-    IE = 0; // Disable all interrupts.
+  IE = 0; // Disable all interrupts.
 
-    PSW = 0;
-    
-  _asm
-    ; save the 24-bit return address
-    pop ar2; msb
-    pop ar1
-    pop ar0; lsb
+  PSW = 0;
+  
+  __asm
+  ; save the 24-bit return address
+  pop ar2; msb
+  pop ar1
+  pop ar0; lsb
 
 
-    mov _ESP,#0x00; reinitialize the stack
-    mov _SP,#0x00
+  mov _ESP,#0x00; reinitialize the stack
+  mov _SP,#0x00
 
-    ; restore the 24-bit return address
-    push ar0; lsb
-    push ar1
-    push ar2; msb
-  _endasm;    
-    
-    // Stub: call rom_init here, then fixup IVT.
-    // 
-    
-    Serial0Init(1, 0); // baud argument ignored.
-    
-    IE = 0x80; // Enable interrupts.
-    
-    return 0;
+  ; restore the 24-bit return address
+  push ar0; lsb
+  push ar1
+  push ar2; msb
+  __endasm;    
+  
+  // Stub: call rom_init here, then fixup IVT.
+  // 
+  
+  Serial0Init(1, 0); // baud argument ignored.
+  
+  IE = 0x80; // Enable interrupts.
+  
+  return 0;
 }
 
 // now the serial0 stuff
@@ -75,7 +75,7 @@ static volatile int receive0BufferTail=0;
 // no buffering for transmit
 static volatile char transmit0IsBusy=0;
 
-static data unsigned char serial0Buffered;
+static __data unsigned char serial0Buffered;
 
 /* Initialize serial0.
 
@@ -88,22 +88,22 @@ static data unsigned char serial0Buffered;
 
 #define TIMER_RELOAD (65536 - ((OSCILLATOR) / (32 * SERIAL_0_BAUD)))
 
-void Serial0Init (unsigned long baud, unsigned char buffered) {
-  
+void Serial0Init (unsigned long baud, unsigned char buffered)
+{
   ES0 = 0; // disable serial channel 0 interrupt
 
-#if 0    
+#if 0
   // Need no port setup, done by boot rom.
   baud;
 #else
-    SCON0 = 0x5A; // 10 bit serial 0, use timer baud rate, enable recieving
-    RCAP2H = (TIMER_RELOAD >> 8) & 0xff;
-    RCAP2L = TIMER_RELOAD & 0xff;
-    T2CON = 0x30; // Enable timer 2 for serial port
-    TR2 = 1; // Set timer 2 to run
-    
-    baud;
-#endif    
+  SCON0 = 0x5A; // 10 bit serial 0, use timer baud rate, enable recieving
+  RCAP2H = (TIMER_RELOAD >> 8) & 0xff;
+  RCAP2L = TIMER_RELOAD & 0xff;
+  T2CON = 0x30; // Enable timer 2 for serial port
+  TR2 = 1; // Set timer 2 to run
+
+  baud;
+#endif
 
   serial0Buffered=buffered;
  
@@ -119,17 +119,18 @@ void Serial0Init (unsigned long baud, unsigned char buffered) {
 
 void Serial0SwitchToBuffered(void)
 {
-    IE &= ~0x80;
-    
-    serial0Buffered = 1;
-    installInterrupt(Serial0IrqHandler, 0x23);
-    RI_0=TI_0=0; // clear "pending" interrupts
-    ES0 = 1; // enable serial channel 0 interrupt
-    
-    IE |= 0x80;
+  IE &= ~0x80;
+  
+  serial0Buffered = 1;
+  installInterrupt(Serial0IrqHandler, 0x23);
+  RI_0=TI_0=0; // clear "pending" interrupts
+  ES0 = 1; // enable serial channel 0 interrupt
+  
+  IE |= 0x80;
 }
 
-void Serial0IrqHandler (void) interrupt 4 {
+void Serial0IrqHandler (void) __interrupt 4
+{
   if (RI_0) {
     receive0Buffer[receive0BufferHead]=SBUF0;
     receive0BufferHead=(receive0BufferHead+1)&(S0RBS-1);
@@ -145,7 +146,8 @@ void Serial0IrqHandler (void) interrupt 4 {
   }
 }
 
-char Serial0CharArrived(void) {
+char Serial0CharArrived(void)
+{
   if (serial0Buffered) {
     if (receive0BufferHead!=receive0BufferTail)
       return receive0Buffer[receive0BufferTail];
@@ -190,13 +192,15 @@ char Serial0GetChar (void)
   return c;
 }
 
-void Serial0SendBreak() {
+void Serial0SendBreak()
+{
   P3 &= ~0x02;
   ClockMilliSecondsDelay(2);
   P3 |= 0x02;
 }
 
-void Serial0Flush() {
+void Serial0Flush()
+{
   ES0=0; // disable interrupts
   receive0BufferHead=receive0BufferTail=0;
   RI_0=0;
@@ -214,56 +218,59 @@ void Serial0Flush() {
 // for now, this timer runs too fast by about 20%. We need an implementation of
 // task_settickreload to fix this.
 
-void ClockInit() {
-    // nada, all done by DSS_rom_init
+void ClockInit()
+{
+  // nada, all done by DSS_rom_init
 }
 
 // we can't just use milliSeconds
-unsigned long ClockTicks(void) {
-    return task_gettimemillis_long();
+unsigned long ClockTicks(void)
+{
+  return task_gettimemillis_long();
 }
 
-void ClockMilliSecondsDelay(unsigned long delay) {
+void ClockMilliSecondsDelay(unsigned long delay)
+{
   unsigned long ms = task_gettimemillis_long() + delay;
 
-    while (ms > task_gettimemillis_long())
-        ;
+  while (ms > task_gettimemillis_long())
+    ;
 }
 
 // Return the start of the XI_SEG. Really just a workaround for the
 // fact that the linker defined symbol (s_XISEG) isn't directly accessible
 // from C due to the lack of a leading underscore, and I'm too lazy to hack 
 // the linker.
-static void xdata *_xisegStart(void) _naked
+static void __xdata *_xisegStart(void) __naked
 {
-_asm    
-	mov	dptr, #(s_XISEG)
-	ret
-_endasm;
+  __asm    
+  mov dptr, #(s_XISEG)
+  ret
+  __endasm;
 }
 
 // Return the length of the XI_SEG. Really just a workaround for the
 // fact that the linker defined symbol (l_XISEG) isn't directly accessible
 // from C due to the lack of a leading underscore, and I'm too lazy to hack 
 // the linker.
-static unsigned  _xisegLen(void) _naked
+static unsigned  _xisegLen(void) __naked
 {
-_asm    
-	mov	dptr, #(l_XISEG)
-	ret
-_endasm;
+  __asm
+  mov dptr, #(l_XISEG)
+  ret
+  __endasm;
 }
 
 // Returns the address of the first byte available for heap memory, 
 // i.e. the first byte following the XI_SEG.
-static void xdata *_firstHeapByte(void)
+static void __xdata *_firstHeapByte(void)
 {
-    unsigned char xdata *start;
-    
-    start = (unsigned char xdata *) _xisegStart();	
-    start += _xisegLen();
+  unsigned char __xdata *start;
+  
+  start = (unsigned char __xdata *) _xisegStart();
+  start += _xisegLen();
 
-    return (void xdata *)start;
+  return (void __xdata *)start;
 }
 
 // TINIm400 specific startup.
@@ -271,74 +278,73 @@ static void xdata *_firstHeapByte(void)
 // The last addressible byte of the CE0 area. 
 #define CE0_END 0xfffff
 
-unsigned char romInit(unsigned char noisy,
-		      char           speed)
+unsigned char romInit(unsigned char noisy, char speed)
 {
-    void xdata *heapStart;
-    void xdata *heapEnd;
-    unsigned long heapLen; 
-    unsigned char rc;
+  void __xdata *heapStart;
+  void __xdata *heapEnd;
+  unsigned long heapLen; 
+  unsigned char rc;
 
-    if (speed == SPEED_2X)
+  if (speed == SPEED_2X)
+  {
+    PMR = 0x82;
+    PMR = 0x92;
+
+    while (!(EXIF & 8))
+      ;
+
+    PMR = 0x12;
+  }
+  else if (speed == SPEED_4X)
+  {
+    // Hangs on TINIm400!
+    PMR = 0x82;
+    PMR = 0x8a;
+    PMR = 0x9a;
+
+    while (!(EXIF & 8))
+      ;
+
+    PMR = 0x1a;
+  }
+
+  heapStart = _firstHeapByte();
+  heapEnd = (void __xdata *)CE0_END;
+
+  rc = init_rom(heapStart, heapEnd);
+
+  if (noisy)
+  {
+    if (rc)
     {
-	PMR = 0x82;
-        PMR = 0x92;
-
-        while (!(EXIF & 8))
-            ;
-
-        PMR = 0x12;
+      printf("error: rom_init returns %d\n", (int)rc);
+      return rc;
     }
-    else if (speed == SPEED_4X)
+    else
     {
-	// Hangs on TINIm400!
-	PMR = 0x82;
-	PMR = 0x8a;
-        PMR = 0x9a;
-
-        while (!(EXIF & 8))
-            ;
-
-        PMR = 0x1a;
+      heapLen = CE0_END - (unsigned long)heapStart;
+      printf("Heap starts at %p, length %luK\n", heapStart, heapLen / 1024);
     }
-    
-    heapStart = _firstHeapByte();
-    heapEnd = (void xdata *)CE0_END;
+  }
 
-    rc = init_rom(heapStart, heapEnd);
-    
-    if (noisy)
-    {
-	if (rc)
-	{
-	    printf("error: rom_init returns %d\n", (int)rc);
-	    return rc;
-	}
-	else
-	{
-	    heapLen = CE0_END - (unsigned long)heapStart;
-	    printf("Heap starts at %p, length %luK\n", heapStart, heapLen / 1024);
-	}
-    }
-    
-    task_settickreload(RELOAD_14_746);
-    
-    // Switch to interrupt driven serial I/O now that the rom is initialized.
-    Serial0SwitchToBuffered();
-    
-    P5 &= ~4; // LED on.
-    
-    return 0;
+  task_settickreload(RELOAD_14_746);
+
+  // Switch to interrupt driven serial I/O now that the rom is initialized.
+  Serial0SwitchToBuffered();
+
+  P5 &= ~4; // LED on.
+
+  return 0;
 }
 
 // Install an interrupt handler.
 void installInterrupt(void (*isrPtr)(void), unsigned char offset)
 {
-    unsigned char xdata * vectPtr = (unsigned char xdata *) offset;
-    unsigned long isr = (unsigned long)isrPtr;
+  unsigned char __xdata * vectPtr = (unsigned char __xdata *) offset;
+  unsigned long isr = (unsigned long)isrPtr;
 
-    *vectPtr++ = 0x02;
-    *vectPtr++ = (unsigned char)(isr >> 16);
-    *vectPtr++ = (unsigned char)(isr >> 8);
-    *vectPtr = (unsigned char)isr;
+  *vectPtr++ = 0x02;
+  *vectPtr++ = (unsigned char)(isr >> 16);
+  *vectPtr++ = (unsigned char)(isr >> 8);
+  *vectPtr = (unsigned char)isr;
 }

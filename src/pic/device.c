@@ -31,14 +31,6 @@
 #include "ralloc.h"
 #include "device.h"
 
-#if defined(__BORLANDC__) || defined(_MSC_VER)
-#define STRCASECMP stricmp
-#define STRNCASECMP strnicmp
-#else
-#define STRCASECMP strcasecmp
-#define STRNCASECMP strncasecmp
-#endif
-
 extern int Gstack_base_addr;
 extern int Gstack_size;
 
@@ -49,7 +41,6 @@ static int num_of_supported_PICS = 0;
 static PIC_device *pic=NULL;
 
 int maxRAMaddress = 0;
-AssignedMemory *finalMapping=NULL;
 
 #define CONFIG_WORD_ADDRESS 0x2007
 #define CONFIG2_WORD_ADDRESS 0x2008
@@ -62,9 +53,7 @@ AssignedMemory *finalMapping=NULL;
 
 static unsigned int config_word = DEFAULT_CONFIG_WORD;
 static unsigned int config2_word = DEFAULT_CONFIG2_WORD;
-
-extern int pic14_is_shared (regs *reg);
-extern void emitSymbolToFile (FILE *of, const char *name, const char *section_type, int size, int addr, int useEQU, int globalize);
+static memRange *rangeRAM = NULL;
 
 
 /* parse a value from the configuration file */
@@ -141,6 +130,8 @@ static PIC_device *create_pic(char *pic_name, int maxram, int bankmsk, int confs
 	new_pic->dataMemSize = data;
 	new_pic->eepromMemSize = eeprom;
 	new_pic->ioPins = io;
+
+	new_pic->ram = rangeRAM;
 	
 	Pics[num_of_supported_PICS] = new_pic;
 	num_of_supported_PICS++;
@@ -152,23 +143,24 @@ static PIC_device *create_pic(char *pic_name, int maxram, int bankmsk, int confs
 /* mark some registers as being duplicated across banks */
 static void register_map(int num_words, char word[SPLIT_WORDS_MAX][PIC14_STRING_LEN])
 {
-	memRange r;
+	memRange *r;
 	int pcount;
 	
 	if (num_words < 3) {
 		fprintf(stderr, "WARNING: not enough values in %s regmap directive\n", DEVICE_FILE_NAME);
 		return;
 	}
-	
-	r.alias = parse_config_value(word[1]);
 
 	for (pcount = 2; pcount < num_words; pcount++) {
-	    
-		r.start_address = parse_config_value(word[pcount]);
-		r.end_address = parse_config_value(word[pcount]);
-		r.bank = (r.start_address >> 7) & 3;
+		r = Safe_calloc(1, sizeof(memRange));
 		
-		addMemRange(&r, 1);
+		r->start_address = parse_config_value(word[pcount]);
+		r->end_address = parse_config_value(word[pcount]);
+		r->alias = parse_config_value(word[1]);
+		r->bank = (r->start_address >> 7) & 3;
+		// add memRange to device entry for future lookup (sharebanks)
+		r->next = rangeRAM;
+		rangeRAM = r;
 	}
 }
 
@@ -176,19 +168,24 @@ static void register_map(int num_words, char word[SPLIT_WORDS_MAX][PIC14_STRING_
 /* define ram areas - may be duplicated across banks */
 static void ram_map(int num_words, char word[SPLIT_WORDS_MAX][PIC14_STRING_LEN])
 {
-	memRange r;
+	memRange *r;
 	
 	if (num_words < 4) {
 		fprintf(stderr, "WARNING: not enough values in %s memmap directive\n", DEVICE_FILE_NAME);
 		return;
 	}
+
+	r = Safe_calloc(1, sizeof(memRange));
+	//fprintf (stderr, "%s: %s %s %s\n", __FUNCTION__, word[1], word[2], word[3]);
 	
-	r.start_address = parse_config_value(word[1]);
-	r.end_address = parse_config_value(word[2]);
-	r.alias = parse_config_value(word[3]);
-	r.bank = (r.start_address >> 7) & 3;
+	r->start_address = parse_config_value(word[1]);
+	r->end_address = parse_config_value(word[2]);
+	r->alias = parse_config_value(word[3]);
+	r->bank = (r->start_address >> 7) & 3;
 		
-	addMemRange(&r, 0);
+	// add memRange to device entry for future lookup (sharebanks)
+	r->next = rangeRAM;
+	rangeRAM = r;
 }
 
 extern set *includeDirsSet;
@@ -400,69 +397,14 @@ static PIC_device *find_device(char *pic_name)
 	return NULL;
 }
 
-void addMemRange(memRange *r, int type)
-{
-	int i;
-	int alias = r->alias;
-	
-	if (maxRAMaddress < 0) {
-		fprintf(stderr, "missing maxram setting in %s\n", DEVICE_FILE_NAME);
-		return;
-	}
-	
-	do {
-		for (i=r->start_address; i<= r->end_address; i++) {
-			if ((i|alias) <= maxRAMaddress) {
-				/* if we haven't seen this address before, enter it */
-				if (!finalMapping[i | alias].isValid) {
-				finalMapping[i | alias].isValid = 1;
-				finalMapping[i | alias].alias = r->alias;
-				finalMapping[i | alias].bank  = r->bank;
-				if(type) {
-					/* hack for now */
-					finalMapping[i | alias].isSFR  = 1;
-				} else {
-					finalMapping[i | alias].isSFR  = 0;
-				}
-				}
-			} else {
-				if (getenv("SDCCPICDEBUG")) {
-					fprintf(stderr, "WARNING: %s:%s memory at 0x%x is beyond max ram = 0x%x\n",
-						__FILE__,__FUNCTION__,(i|alias), maxRAMaddress);
-				}
-			}
-		}
-		
-		/* Decrement alias */
-		if (alias) {
-			alias -= ((alias & (alias - 1)) ^ alias);
-		} else {
-			alias--;
-		}
-		
-	} while (alias >= 0);
-}
-
 void setMaxRAM(int size)
 {
-	int i;
 	maxRAMaddress = size;
 	
 	if (maxRAMaddress < 0) {
 		fprintf(stderr, "invalid maxram 0x%x setting in %s\n",
 			maxRAMaddress, DEVICE_FILE_NAME);
 		return;
-	}
-	
-	finalMapping = Safe_calloc(1+maxRAMaddress,
-		sizeof(AssignedMemory));
-	
-	/* Now initialize the finalMapping array */
-	
-	for(i=0; i<=maxRAMaddress; i++) {
-		finalMapping[i].reg = NULL;
-		finalMapping[i].isValid = 0;
-		finalMapping[i].bank = (i>>7);
 	}
 }
 
@@ -494,152 +436,15 @@ int REGallBanks(regs *reg)
 }
 
 /*-----------------------------------------------------------------*
-*-----------------------------------------------------------------*/
-
-int isSFR(int address)
-{
-	
-	if( (address > maxRAMaddress) || !finalMapping[address].isSFR)
-		return 0;
-	
-	return 1;
-	
-}
-
-/*
-*  dump_map -- debug stuff
-*/
-
-void dump_map(void)
-{
-	int i;
-	
-	for(i=0; i<=maxRAMaddress; i++) {
-		//fprintf(stdout , "addr 0x%02x is %s\n", i, ((finalMapping[i].isValid) ? "valid":"invalid"));
-		
-		if(finalMapping[i].isValid) {
-			fprintf(stderr,"addr: 0x%02x",i);
-			if(finalMapping[i].isSFR)
-				fprintf(stderr," isSFR");
-			if(finalMapping[i].reg) 
-				fprintf( stderr, "  reg %s", finalMapping[i].reg->name);
-			fprintf(stderr, "\n");
-		}
-	}
-	
-}
-
-void dump_sfr(FILE *of)
-{
-#if 0
-	int start=-1;
-	int bank_base;
-	static int udata_flag=0;
-#endif
-	int addr=0;
-	
-	//dump_map();   /* display the register map */
-	//fprintf(stdout,";dump_sfr  \n");
-	if (maxRAMaddress < 0) {
-		fprintf(stderr, "missing maxram setting in %s\n", DEVICE_FILE_NAME);
-		return;
-	}
-	
-	for (addr = 0; addr <= maxRAMaddress; addr++)
-	{
-		regs *reg = finalMapping[addr].reg;
-		
-		if (reg && !reg->isEmitted)
-		{
-		  if (pic14_options.isLibrarySource && pic14_is_shared (reg))
-		  {
-		    /* rely on external declarations for the non-fixed stack */
-		    /* Update: We always emit the STACK symbols into a
-		     * udata_shr section, so no extern declaration is
-		     * required. */
-		    //fprintf (of, "\textern\t%s\n", reg->name);
-		  } else {
-		    emitSymbolToFile (of, reg->name, "udata", reg->size, reg->isFixed ? reg->address : -1, 0, pic14_is_shared (reg));
-		  }
-		  
-		  reg->isEmitted = 1;
-		}
-	} // for
-
-#if 0
-	do {
-
-		if(finalMapping[addr].reg && !finalMapping[addr].reg->isEmitted) {
-			
-			if(start<0)
-				start = addr;
-		} else {
-			if(start>=0) {
-				
-				/* clear the lower 7-bits of the start address of the first
-				* variable declared in this bank. The upper bits for the mid
-				* range pics are the bank select bits.
-				*/
-				
-				bank_base = start & 0xfff8;
-				
-				/* The bank number printed in the cblock comment tacitly
-				* assumes that the first register in the contiguous group
-				* of registers represents the bank for the whole group */
-				
-				if ( (start != addr) && (!udata_flag) ) {
-					udata_flag = 1;
-					//fprintf(of,"\tudata\n");
-				}
-				
-				for( ; start < addr; start++) {
-					if((finalMapping[start].reg) && 
-						(!finalMapping[start].reg->isEmitted) &&
-						(!finalMapping[start].instance) && 
-						(!finalMapping[start].isSFR)) {
-						
-						if (finalMapping[start].reg->isFixed) {
-							unsigned i;
-							for (i=0; i<finalMapping[start].reg->size; i++) {
-								fprintf(of,"%s\tEQU\t0x%04x\n",
-									finalMapping[start].reg->name, 
-									finalMapping[start].reg->address+i);
-							}
-						} else {
-							emitSymbolToFile (of, finalMapping[start].reg->name, finalMapping[start].reg->size);
-#if 0
-							fprintf(of,"%s\tres\t%i\n",
-								finalMapping[start].reg->name, 
-								finalMapping[start].reg->size);
-#endif
-						}
-						finalMapping[start].reg->isEmitted = 1;
-					}
-				}
-				
-				start = -1;
-			}
-			
-		}
-		
-		addr++;
-		
-	} while(addr <= maxRAMaddress);
-
-
-#endif
-}
-
-/*-----------------------------------------------------------------*
-*  void list_valid_pics(int ncols, int list_alias)
-*
-* Print out a formatted list of valid PIC devices
-*
-* ncols - number of columns in the list.
-*
-* list_alias - if non-zero, print all of the supported aliases
-*              for a device (e.g. F84, 16F84, etc...)
-*-----------------------------------------------------------------*/
+ *  void list_valid_pics(int ncols, int list_alias)
+ *
+ * Print out a formatted list of valid PIC devices
+ *
+ * ncols - number of columns in the list.
+ *
+ * list_alias - if non-zero, print all of the supported aliases
+ *              for a device (e.g. F84, 16F84, etc...)
+ *-----------------------------------------------------------------*/
 void list_valid_pics(int ncols)
 {
 	int col=0,longest;
@@ -710,7 +515,7 @@ void list_valid_pics(int ncols)
 /*-----------------------------------------------------------------*
 *  
 *-----------------------------------------------------------------*/
-void init_pic(char *pic_type)
+PIC_device *init_pic(char *pic_type)
 {
 	char long_name[PIC14_STRING_LEN];
 	
@@ -730,6 +535,7 @@ void init_pic(char *pic_type)
 			exit(1);
 		}
 	}
+	return pic;
 }
 
 /*-----------------------------------------------------------------*
@@ -760,8 +566,6 @@ char *processor_base_name(void)
 *-----------------------------------------------------------------*/
 int validAddress(int address, int reg_size)
 {
-	int i;
-	
 	if (maxRAMaddress < 0) {
 		fprintf(stderr, "missing maxram setting in %s\n", DEVICE_FILE_NAME);
 		return 0;
@@ -771,14 +575,11 @@ int validAddress(int address, int reg_size)
 	if(address + (reg_size - 1) > maxRAMaddress)
 		return 0;
 	
-	for (i=0; i<reg_size; i++)
-		if(!finalMapping[address + i].isValid || 
-			finalMapping[address+i].reg ||
-			finalMapping[address+i].isSFR )
-			return 0;
-		
-		return 1;
+	return 1;
 }
+
+#if 0
+/* The following code should be (and is) implemented in the linker. */
 
 /*-----------------------------------------------------------------*
 *-----------------------------------------------------------------*/
@@ -799,6 +600,8 @@ void mapRegister(regs *reg)
 	}
 	
 	for(i=0; i<reg->size; i++) {
+		
+		assert(reg->address >= 0 && reg->address < maxRAMaddress);
 		
 		alias = finalMapping[reg->address].alias;
 		reg->alias = alias;
@@ -836,11 +639,6 @@ int assignRegister(regs *reg, int start_address)
 		
 		if (validAddress(reg->address,reg->size)) {
 			//fprintf(stderr,"%s -  %s address = 0x%03x\n",__FUNCTION__,reg->name, reg->address);
-			mapRegister(reg);
-			return reg->address;
-		}
-		
-		if( isSFR(reg->address)) {
 			mapRegister(reg);
 			return reg->address;
 		}
@@ -923,6 +721,7 @@ void assignRelocatableRegisters(set *regset, int used)
 	}
 	
 }
+#endif
 
 /* Keep track of whether we found an assignment to the __config words. */
 static int pic14_hasSetConfigWord = 0;
@@ -1019,29 +818,118 @@ int pic14_getHasSecondConfigReg(void)
 }
 
 /*-----------------------------------------------------------------*
- * Query the size of the sharebank of the selected device.
- * FIXME: Currently always returns 16.
+ * True iff the device has memory aliased in every bank.
+ * If true, low and high will be set to the low and high address
+ * occupied by the (last) sharebank found.
  *-----------------------------------------------------------------*/
-int pic14_getSharebankSize(void)
+int pic14_hasSharebank(int *low, int *high, int *size)
 {
-	return 16;
+	memRange *r;
+
+	assert(pic);
+	r = pic->ram;
+
+	while (r) {
+	    //fprintf (stderr, "%s: region %x..%x, bank %x, alias %x, pic->bankmask %x, min_size %d\n",  __FUNCTION__, r->start_address, r->end_address, r->bank, r->alias, pic->bankMask, size ? *size : 0);
+	    // find sufficiently large shared region
+	    if ((r->alias == pic->bankMask)
+		    && (r->end_address != r->start_address) // ignore SFRs
+		    && (!size || (*size <= (r->end_address - r->start_address + 1))))
+	    {
+		if (low) *low = r->start_address;
+		if (high) *high = r->end_address;
+		if (size) *size = r->end_address - r->start_address + 1;
+		return 1;
+	    } // if
+	    r = r->next;
+	} // while
+
+	if (low) *low = 0x0;
+	if (high) *high = 0x0;
+	if (size) *size = 0x0;
+	//fprintf (stderr, "%s: no shared bank found\n", __FUNCTION__);
+	return 0;
 }
 
-/*-----------------------------------------------------------------*
- * Query the highest byte address occupied by the sharebank of the
- * selected device.
- * FIXME: Currently always returns 0x7f.
- * THINK: Might not be needed, if we assign all shareable objects to
- *        a `udata_shr' section and let the linker do the rest...
- * Tried it, but yields `no target memory available' for pic16f877...
- *-----------------------------------------------------------------*/
-int pic14_getSharebankAddress(void)
+/*
+ * True iff the memory region [low, high] is aliased in all banks.
+ */
+int pic14_isShared(int low, int high)
 {
-	int sharebankAddress = 0x7f;
-	/* If total RAM is less than 0x7f as with 16f84 then reduce
-	 * sharebankAddress to fit */
-	if ((unsigned)sharebankAddress > pic14_getMaxRam())
-		sharebankAddress = (int)pic14_getMaxRam();
-	return sharebankAddress;
+	memRange *r;
+
+	assert(pic);
+	r = pic->ram;
+
+	while (r) {
+	    //fprintf (stderr, "%s: region %x..%x, bank %x, alias %x, pic->bankmask %x\n", __FUNCTION__, r->start_address, r->end_address, r->bank, r->alias, pic->bankMask);
+	    if ((r->alias == pic->bankMask) && (r->start_address <= low) && (r->end_address >= high)) {
+		return 1;
+	    } // if
+	    r = r->next;
+	} // while
+
+	return 0;
 }
 
+/*
+ * True iff all RAM is aliased in all banks (no BANKSELs required except for
+ * SFRs).
+ */
+int pic14_allRAMShared(void)
+{
+	memRange *r;
+
+	assert(pic);
+	r = pic->ram;
+
+	while (r) {
+	    if (r->alias != pic->bankMask) return 0;
+	    r = r->next;
+	} // while
+	
+	return 1;
+}
+
+/*
+ * True iff the pseudo stack is a sharebank --> let linker place it.
+ * [low, high] denotes a size byte long block of (shared or banked)
+ * memory to be used.
+ */
+int pic14_getSharedStack(int *low, int *high, int *size)
+{
+    int haveShared;
+    int l, h, s;
+
+    s = options.stack_size ? options.stack_size : 0x10;
+    haveShared = pic14_hasSharebank(&l, &h, &s);
+    if ((options.stack_loc != 0) || !haveShared)
+    {
+	// sharebank not available or not to be used
+	s = options.stack_size ? options.stack_size : 0x10;
+	l = options.stack_loc ? options.stack_loc : 0x20;
+	h = l + s - 1;
+	if (low) *low = l;
+	if (high) *high = h;
+	if (size) *size = s;
+	// return 1 iff [low, high] is present in all banks
+	//fprintf(stderr, "%s: low %x, high %x, size %x, shared %d\n", __FUNCTION__, l, h, s, pic14_isShared(l, h));
+	return (pic14_isShared(l, h));
+    } else {
+	// sharebanks available for use by the stack
+	if (options.stack_size) s = options.stack_size;
+	else if (!s || s > 16) s = 16; // limit stack to 16 bytes in SHAREBANK
+
+	// provide addresses for sharebank
+	if (low) *low = l;
+	if (high) *high = l + s - 1;
+	if (size) *size = s;
+	//fprintf(stderr, "%s: low %x, high %x, size %x, shared 1\n", __FUNCTION__, l, h, s);
+	return 1;
+    }
+}
+
+PIC_device * pic14_getPIC(void)
+{
+    return pic;
+}

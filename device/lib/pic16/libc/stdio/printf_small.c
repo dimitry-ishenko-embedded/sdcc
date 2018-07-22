@@ -25,7 +25,7 @@
 -------------------------------------------------------------------------*/
 
 /*
-** $Id: printf_small.c 3714 2005-04-02 13:13:53Z vrokas $
+** $Id: printf_small.c 4511 2006-12-10 17:07:41Z tecodev $
 */
 
 /* This function uses function putchar() to dump a character
@@ -111,7 +111,7 @@ void printf_small(char *fmt, ...) __reentrant
             } else {
               if(flong)val = va_arg(ap, long);
               else
-              if(fchar)val = va_arg(ap, char);
+              if(fchar)val = (char)va_arg(ap, int); // FIXME: SDCC casts char arguments into ints
               else {
                   val = va_arg(ap, int);
               }

@@ -8,7 +8,7 @@
 ; written by Vangelis Rokas, 2006 <vrokas AT users.sourceforge.net>
 ;
 ;
-; $Id$
+; $Id: stack.S 4776 2007-04-29 13:15:51Z borutr $
 ;
 
 ; object will only be used if and only if #pragma stack is not
@@ -25,7 +25,7 @@
 
 ; allocate space for stack
 stack_section	udata	0x0200
-_stack		res	63
+_stack		res	0xff
 _stack_end	res	1
 
 	end

@@ -38,6 +38,8 @@ typedef struct lineNode
     unsigned int isInline:1;
     unsigned int isComment:1;
     unsigned int isDebug:1;
+    unsigned int isLabel:1;
+    unsigned int visited:1;
     struct asmLineNode *aln;
     struct lineNode *prev;
     struct lineNode *next;
@@ -55,8 +57,24 @@ typedef struct peepRule
   }
 peepRule;
 
-void printLine (lineNode *, FILE *);
-lineNode *newLineNode (char *);
+typedef struct
+  {
+    char name[SDCC_NAME_MAX + 1];
+    int refCount;
+    /* needed for deadMove: */
+    bool passedLabel;
+    int jmpToCount;
+  }
+labelHashEntry;
+
+bool isLabelDefinition (const char *line, const char **start, int *len,
+                        bool isPeepRule);
+
+extern hTab *labelHash;
+labelHashEntry *getLabelRef (const char *label, lineNode *head);
+
+void printLine (lineNode *, struct dbuf_s *);
+lineNode *newLineNode (const char *);
 lineNode *connectLine (lineNode *, lineNode *);
 void initPeepHole (void);
 void peepHole (lineNode **);

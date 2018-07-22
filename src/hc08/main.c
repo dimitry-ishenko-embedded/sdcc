@@ -8,9 +8,9 @@
 #include "main.h"
 #include "ralloc.h"
 #include "gen.h"
+#include "dbuf_string.h"
 #include "../SDCCutil.h"
 
-void copyFile(FILE *dest, FILE *src);
 extern char * iComments2;
 extern DEBUGFILE dwarf2DebugFile;
 extern int dwarf2FinalizeFile(FILE *);
@@ -252,28 +252,28 @@ _hc08_genExtraAreas (FILE * asmFile, bool mainExists)
     fprintf (asmFile, "%s", iComments2);
     fprintf (asmFile, "; extended address mode data\n");
     fprintf (asmFile, "%s", iComments2);
-    copyFile (asmFile, xdata->oFile);
+    dbuf_write_and_destroy (&xdata->oBuf, asmFile);
 }
 
 
 /* Generate interrupt vector table. */
 static int
-_hc08_genIVT (FILE * of, symbol ** interrupts, int maxInterrupts)
+_hc08_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
   int i;
   
-  fprintf (of, "\t.area\tCODEIVT (ABS)\n");
-  fprintf (of, "\t.org\t0x%04x\n",
+  dbuf_printf (oBuf, "\t.area\tCODEIVT (ABS)\n");
+  dbuf_printf (oBuf, "\t.org\t0x%04x\n",
     (0xfffe - (maxInterrupts * 2)));
   
   for (i=maxInterrupts;i>0;i--)
     {
       if (interrupts[i])
-        fprintf (of, "\t.dw\t%s\n", interrupts[i]->rname);
+        dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[i]->rname);
       else
-        fprintf (of, "\t.dw\t0xffff\n");
+        dbuf_printf (oBuf, "\t.dw\t0xffff\n");
     }
-  fprintf (of, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
+  dbuf_printf (oBuf, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
         
   return TRUE;
 }
@@ -438,7 +438,10 @@ PORT hc08_port =
     "HOME (CODE)",
     "XISEG", // initialized xdata
     "XINIT", // a code copy of xiseg
-    "CONST   (CODE)", // const_name - const data (code or not)
+    "CONST   (CODE)",     // const_name - const data (code or not)
+    "CABS    (ABS,CODE)", // cabs_name - const absolute data (code or not)
+    "XABS    (ABS)",      // xabs_name - absolute xdata
+    "IABS    (ABS)",      // iabs_name - absolute data
     NULL,
     NULL,
     1

@@ -30,6 +30,7 @@
 #include "gen.h"
 #include "main.h"
 #include "device.h"
+#include "dbuf_string.h"
 
 
 #ifdef WORDS_BIGENDIAN
@@ -39,9 +40,10 @@
 #endif
 
 #define BYTE_IN_LONG(x,b) ((x>>(8*_ENDIAN(b)))&0xff)
+#define IS_GLOBAL(sym)	((sym)->level == 0)
 
 extern symbol *interrupts[256];
-static void printIval (symbol * sym, sym_link * type, initList * ilist, pBlock *pb);
+static void showAllMemmaps(FILE *of); // XXX: emits initialized symbols
 extern int noAlloc;
 extern set *publics;
 extern set *externs;
@@ -49,9 +51,7 @@ extern unsigned maxInterrupts;
 extern int maxRegBank;
 extern symbol *mainf;
 extern char *VersionString;
-extern FILE *codeOutFile;
-extern set *tmpfileSet;
-extern set *tmpfileNameSet;
+extern struct dbuf_s *codeOutBuf;
 extern char *iComments1;
 extern char *iComments2;
 //extern void emitStaticSeg (memmap * map);
@@ -61,7 +61,6 @@ extern DEFSETFUNC (closeTmpFiles);
 extern DEFSETFUNC (rmTmpFiles);
 
 extern void AnalyzeBanking (void);
-extern void copyFile (FILE * dest, FILE * src);
 extern void ReuseReg(void);
 extern void InlinepCode(void);
 extern void writeUsedRegs(FILE *);
@@ -73,11 +72,17 @@ extern void printChar (FILE * ofile, char *s, int plen);
 void  pCodeInitRegisters(void);
 int getConfigWord(int address);
 int getHasSecondConfigReg(void);
-int pic14_getSharebankSize(void);
-int pic14_getSharebankAddress(void);
+void pic14_debugLogClose(void); // from ralloc.c
 
 char *udata_section_name=0;		// FIXME Temporary fix to change udata section name -- VR
 int pic14_hasInterrupt = 0;		// Indicates whether to emit interrupt handler or not
+
+/* dbufs for initialized data (idata and code sections),
+ * extern, and global declarations */
+struct dbuf_s *ivalBuf, *extBuf, *gloBuf, *gloDefBuf;
+
+static set *emitted = NULL;
+int pic14_stringInSet(const char *str, set **world, int autoAdd);
 
 /*-----------------------------------------------------------------*/
 /* aopLiteral - string from a literal value                        */
@@ -107,22 +112,7 @@ unsigned int pic14aopLiteral (value *val, int offset)
 	
 }
 
-/* Check whether the given reg is shared amongst all .o files of a project.
- * This is true for the pseudo stack and WSAVE, SSAVE and PSAVE. */
-static int
-is_shared_address (int addr)
-{
-  return ((addr > Gstack_base_addr - 18)
-  	&& (addr <= Gstack_base_addr));
-}
-
-int
-pic14_is_shared (regs *reg)
-{
-	if (!reg) return 0;
-	return is_shared_address (reg->address);
-}
-
+#if 0
 static int
 is_valid_identifier( const char *name )
 {
@@ -149,87 +139,82 @@ is_valid_identifier( const char *name )
   /* valid identifier */
   return 1;
 }
-
-/* set of already emitted symbols; we store only pointers to the emitted
- * symbol names so these MUST NO BE CHANGED afterwards... */
-static set *symbolsEmitted = NULL;
-
-/*-------------------------------------------------------------------*/
-/* emitSymbolToFile - write a symbol definition only if it is not    */
-/*                    already present                                */
-/*-------------------------------------------------------------------*/
-void
-emitSymbolToFile (FILE *of, const char *name, const char *section_type, int size, int addr, int useEQU, int globalize)
-{
-	const char *sym;
-	static unsigned int sec_idx = 0;
-
-	/* workaround: variables declared via `sbit' result in a numeric
-	 * identifier (0xHH), EQU'ing them is invalid, so just ignore it.
-	 * sbit is heavily used in the inc2h-generated header files!
-	 */
-	if (!is_valid_identifier(name))
-	{
-	  //fprintf( stderr, "%s:%s:%u: ignored symbol: %s\n", __FILE__, __FUNCTION__, __LINE__, name );
-	  return;
-	}
-	
-	/* check whether the symbol is already defined */
-	for (sym = (const char *) setFirstItem (symbolsEmitted);
-		sym;
-		sym = (const char *) setNextItem (symbolsEmitted))
-	{
-		if (!strcmp (sym, name))
-		{
-			//fprintf (stderr, "%s: already emitted: %s\n", __FUNCTION__, name);
-			return;
-		}
-	} // for
-	
-	/* new symbol -- define it */
-	//fprintf (stderr, "%s: emitting %s (%d)\n", __FUNCTION__, name, size);
-	if (useEQU)
-	  fprintf (of, "%s\tEQU\t0x%04x\n", name, addr);
-	else
-	{
-	  /* we place each symbol into a section of its own to allow the linker
-	   * to distribute the data into all available memory banks */
-	  if (!section_type) section_type = "udata";
-	  if (addr != -1)
-	  {
-	    /* absolute symbols are handled in pic14_constructAbsMap */
-	    /* do nothing */
-#if 0
-	    /* workaround gpasm bug with symbols being EQUated and placed in absolute sections */
-	    if (1 || !is_shared_address (addr))
-	    {
-	      if (globalize) fprintf (of, "\tglobal\t%s\n", name);
-	      fprintf (of, "udata_%s_%u\t%s\t0x%04x\n", moduleName,
-	          sec_idx++, "udata_ovr", addr);
-	      fprintf (of, "%s\tres\t%d\n", name, size);
-	    }
-	    else
-	    {
-	      /* EQUs cannot be exported... */
-	      fprintf (of, "%s\tEQU\t0x%04x\n", name, addr);
-	    }
 #endif
-	  } else {
-	    if (globalize) fprintf (of, "\tglobal\t%s\n", name);
-	    fprintf (of, "udata_%s_%u\t%s\n", moduleName,
-	          sec_idx++, section_type);
-	    fprintf (of, "%s\tres\t%d\n", name, size);
-	  }
-	}
 
-	//if (options.verbose) fprintf (stderr, "%s: emitted %s\n", __FUNCTION__, name);
-	addSet (&symbolsEmitted, (void *) name);
+static void
+emitPseudoStack(struct dbuf_s *oBuf, struct dbuf_s *oBufExt)
+{
+    int shared, low, high, size, i;
+    PIC_device *pic;
+
+    /* also emit STK symbols
+     * XXX: This is ugly and fails as soon as devices start to get
+     *      differently sized sharebanks, since STK12 will be
+     *      required by larger devices but only up to STK03 might
+     *      be defined using smaller devices. */
+    shared = pic14_getSharedStack(&low, &high, &size);
+    if (!pic14_options.isLibrarySource)
+    {
+	pic = pic14_getPIC();
+
+	dbuf_printf (oBuf, "\n");
+	dbuf_printf (oBuf, "\tglobal PSAVE\n");
+	dbuf_printf (oBuf, "\tglobal SSAVE\n");
+	dbuf_printf (oBuf, "\tglobal WSAVE\n");
+	for (i = size - 4; i >= 0; i--) {
+	    dbuf_printf (oBuf, "\tglobal STK%02d\n", i);
+	} // for i
+	dbuf_printf (oBuf, "\n");
+
+	// 16f84 has no SHAREBANK (in linkerscript) but memory aliased in two
+	// banks, sigh...
+	if (1 || !shared) {
+	    // for single banked devices: use normal, "banked" RAM
+	    dbuf_printf (oBuf, "sharebank udata_ovr 0x%04X\n", low);
+	} else {
+	    // for devices with at least two banks, require a sharebank section
+	    dbuf_printf (oBuf, "sharebank udata_shr\n");
+	}
+	dbuf_printf (oBuf, "PSAVE\tres 1\n");
+	dbuf_printf (oBuf, "SSAVE\tres 1\n");
+	dbuf_printf (oBuf, "WSAVE\tres 1\n"); // WSAVE *must* be in sharebank (IRQ handlers)
+	/* fill rest of sharebank with stack STKxx .. STK00 */
+	for (i = size - 4; i >= 0; i--) {
+	    dbuf_printf (oBuf, "STK%02d\tres 1\n", i);
+	} // for i
+    } else {
+	/* declare STKxx as extern for all files
+	 * except the one containing main() */
+	dbuf_printf (oBufExt, "\n");
+	dbuf_printf (oBufExt, "\textern PSAVE\n");
+	dbuf_printf (oBufExt, "\textern SSAVE\n");
+	dbuf_printf (oBufExt, "\textern WSAVE\n");
+	for (i = size - 4; i >= 0; i--) {
+	    char buffer[128];
+	    SNPRINTF(&buffer[0], 127, "STK%02d", i);
+	    dbuf_printf (oBufExt, "\textern %s\n", &buffer[0]);
+	    pic14_stringInSet(&buffer[0], &emitted, 1);
+	} // for i
+    }
+    dbuf_printf (oBuf, "\n");
+}
+
+static int
+emitIfNew(struct dbuf_s *oBuf, set **emitted, const char *fmt,
+	const char *name)
+{
+    int wasPresent = pic14_stringInSet(name, emitted, 1);
+
+    if (!wasPresent) {
+	dbuf_printf (oBuf, fmt, name);
+    } // if
+    return (!wasPresent);
 }
 
 #define IS_DEFINED_HERE(sym)	(!IS_EXTERN(sym->etype))
 extern int IS_CONFIG_ADDRESS( int addr );
 static void
-pic14_constructAbsMap (FILE *ofile)
+pic14_constructAbsMap (struct dbuf_s *oBuf, struct dbuf_s *gloBuf)
 {
   memmap *maps[] = { data, sfr, NULL };
   int i;
@@ -282,65 +267,47 @@ pic14_constructAbsMap (FILE *ofile)
   } // for i
 
   /* now emit definitions for all absolute symbols */
-  fprintf (ofile, "%s", iComments2);
-  fprintf (ofile, "; absolute symbol definitions\n");
-  fprintf (ofile, "%s", iComments2);
+  dbuf_printf (oBuf, "%s", iComments2);
+  dbuf_printf (oBuf, "; absolute symbol definitions\n");
+  dbuf_printf (oBuf, "%s", iComments2);
   for (addr=min; addr <= max; addr++)
   {
     size = 1;
     aliases = hTabItemWithKey (ht, addr);
     if (aliases && elementsInSet(aliases)) {
-      fprintf (ofile, "udata_abs_%s_%x\tudata_ovr\t0x%04x",
+      /* Make sure there is no initialized value at this location! */
+      for (sym = setFirstItem(aliases); sym; sym = setNextItem(aliases)) {
+	  if (sym->ival) break;
+      } // for
+      if (sym) continue;
+      
+      dbuf_printf (oBuf, "UD_abs_%s_%x\tudata_ovr\t0x%04x\n",
 	  moduleName, addr, addr);
       for (sym = setFirstItem (aliases); sym;
 	  sym = setNextItem (aliases))
       {
-        /* emit STATUS as well as _STATUS, required for SFRs only */
-	fprintf (ofile, "\n%s", sym->name);
-	fprintf (ofile, "\n%s", sym->rname);
 	if (getSize(sym->type) > size) {
 	  size = getSize(sym->type);
 	}
+	
+	/* initialized values are handled somewhere else */
+	if (sym->ival) continue;
+	
+        /* emit STATUS as well as _STATUS, required for SFRs only */
+	//dbuf_printf (oBuf, "%s\tres\t0\n", sym->name);
+	dbuf_printf (oBuf, "%s\n", sym->rname);
+
+	if (IS_GLOBAL(sym) && !IS_STATIC(sym->etype)) {
+	    //emitIfNew(gloBuf, &emitted, "\tglobal\t%s\n", sym->name);
+	    emitIfNew(gloBuf, &emitted, "\tglobal\t%s\n", sym->rname);
+	} // if
       } // for
-      fprintf (ofile, "\tres\t%d\n", size);
+      dbuf_printf (oBuf, "\tres\t%d\n", size);
     } // if
   } // for i
-
-  /* also emit STK symbols
-   * XXX: This is ugly and fails as soon as devices start to get
-   *      differently sized sharebanks, since STK12 will be
-   *      required by larger devices but only up to STK03 might
-   *      be defined using smaller devices. */
-  fprintf (ofile, "\n");
-  if (!pic14_options.isLibrarySource)
-  {
-    fprintf (ofile, "\tglobal PSAVE\n");
-    fprintf (ofile, "\tglobal SSAVE\n");
-    fprintf (ofile, "\tglobal WSAVE\n");
-    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
-      fprintf (ofile, "\tglobal STK%02d\n", i);
-    } // for i
-    fprintf (ofile, "sharebank udata_ovr 0x%04x\n",
-	  pic14_getSharebankAddress() - pic14_getSharebankSize() + 1);
-    fprintf (ofile, "PSAVE\tres 1\n");
-    fprintf (ofile, "SSAVE\tres 1\n");
-    fprintf (ofile, "WSAVE\tres 1\n");
-    /* fill rest of sharebank with stack STKxx .. STK00 */
-    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
-      fprintf (ofile, "STK%02d\tres 1\n", i);
-    } // for i
-  } else {
-    /* declare STKxx as extern for all files
-     * except the one containing main() */
-    fprintf (ofile, "\textern PSAVE\n");
-    fprintf (ofile, "\textern SSAVE\n");
-    fprintf (ofile, "\textern WSAVE\n");
-    for (i=pic14_getSharebankSize()-4; i >= 0; i--) {
-      fprintf (ofile, "\textern STK%02d\n", i);
-    } // for i
-  }
 }
 
+#if 0
 /*-----------------------------------------------------------------*/
 /* emitRegularMap - emit code for maps with no special cases       */
 /*-----------------------------------------------------------------*/
@@ -352,7 +319,7 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 	
 	/* print the area name */
 	if (addPublics)
-		fprintf (map->oFile, ";\t.area\t%s\n", map->sname);
+		dbuf_printf (&map->oBuf, ";\t.area\t%s\n", map->sname);
 	
 	for (sym = setFirstItem (map->syms); sym;
 	sym = setNextItem (map->syms)) {
@@ -402,13 +369,13 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 		{
 			if (!sym->level)	/* global */
 				if (IS_STATIC (sym->etype))
-					fprintf (map->oFile, "F%s_", moduleName);		/* scope is file */
+					dbuf_printf (&map->oBuf, "F%s_", moduleName);		/* scope is file */
 				else
-					fprintf (map->oFile, "G_");	/* scope is global */
+					dbuf_printf (&map->oBuf, "G_");	/* scope is global */
 				else
 					/* symbol is local */
-					fprintf (map->oFile, "L%s_", (sym->localof ? sym->localof->name : "-null-"));
-				fprintf (map->oFile, "%s_%d_%d", sym->name, sym->level, sym->block);
+					dbuf_printf (&map->oBuf, "L%s_", (sym->localof ? sym->localof->name : "-null-"));
+				dbuf_printf (&map->oBuf, "%s_%d_%d", sym->name, sym->level, sym->block);
 		}
 #endif
 		/* absolute symbols are handled in pic14_constructAbsMap */
@@ -420,9 +387,9 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 		if (0 && SPEC_ABSA (sym->etype))
 		{
 			//if (options.debug || sym->level == 0)
-			//fprintf (map->oFile,"; == 0x%04x\n",SPEC_ADDR (sym->etype));
+			//dbuf_printf (&map->oBuf,"; == 0x%04x\n",SPEC_ADDR (sym->etype));
 			
-			fprintf (map->oFile, "%s\tEQU\t0x%04x\n",
+			dbuf_printf (&map->oBuf, "%s\tEQU\t0x%04x\n",
 				sym->rname,
 				SPEC_ADDR (sym->etype));
 		}
@@ -439,7 +406,8 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 			}
 			else
 			{
-				emitSymbolToFile (map->oFile,
+			    if (!sym->ival) {
+				emitSymbol (&map->oBuf,
 					sym->rname, 
 					NULL,
 					getSize (sym->type) & 0xffff,
@@ -448,6 +416,7 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 						: -1,
 					0,
 					0);
+			    }
 				/*
 				{
 				int i, size;
@@ -455,14 +424,22 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 				  if ((size = (unsigned int) getSize (sym->type) & 0xffff) > 1)
 				  {
 				  for (i = 1; i < size; i++)
-				  fprintf (map->oFile, "\t%s_%d\n", sym->rname, i);
+				  dbuf_printf (&map->oBuf, "\t%s_%d\n", sym->rname, i);
 				  }
 				  }
 				*/
 			}
-			//fprintf (map->oFile, "\t.ds\t0x%04x\n", (unsigned int)getSize (sym->type) & 0xffff);
+			//dbuf_printf (&map->oBuf, "\t.ds\t0x%04x\n", (unsigned int)getSize (sym->type) & 0xffff);
 		}
-		
+
+		/* if it has a initial value then do it only if
+		it is a global variable */
+		if (sym->ival) {
+		    /* mark symbol as already defined */
+		    pic14_stringInSet(sym->name, &emitted, 1);
+		    pic14_stringInSet(sym->rname, &emitted, 1);
+		}
+#if 0		
 		/* if it has a initial value then do it only if
 		it is a global variable */
 		if (sym->ival && sym->level == 0) {
@@ -473,15 +450,18 @@ pic14emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 			else
 				ival = newNode ('=', newAst_VALUE(symbolVal (sym)),
 				decorateType (resolveSymbols (list2expr (sym->ival)), RESULT_TYPE_NONE));
-			codeOutFile = statsg->oFile;
+			codeOutBuf = &statsg->oBuf;
 			GcurMemmap = statsg;
 			eBBlockFromiCode (iCodeFromAst (ival));
 			sym->ival = NULL;
 		}
+#endif
 	}
 }
+#endif
 
 
+#if 0
 /*-----------------------------------------------------------------*/
 /* printIvalType - generates ival for int/char                     */
 /*-----------------------------------------------------------------*/
@@ -858,7 +838,9 @@ printIval (symbol * sym, sym_link * type, initList * ilist, pBlock *pb)
 		return;
 	}
 }
+#endif
 
+#if 0
 extern void pCodeConstString(char *name, char *value);
 /*-----------------------------------------------------------------*/
 /* emitStaticSeg - emitcode for the static segment                 */
@@ -868,7 +850,7 @@ pic14emitStaticSeg (memmap * map)
 {
 	symbol *sym;
 	
-	fprintf (map->oFile, ";\t.area\t%s\n", map->sname);
+	dbuf_printf (&map->oBuf, ";\t.area\t%s\n", map->sname);
 	
 	//fprintf(stderr, "%s\n",__FUNCTION__);
 	
@@ -893,15 +875,15 @@ pic14emitStaticSeg (memmap * map)
 			if (!sym->level)
 			{			/* global */
 				if (IS_STATIC (sym->etype))
-					fprintf (code->oFile, "F%s_", moduleName);	/* scope is file */
+					dbuf_printf (&code->oBuf, "F%s_", moduleName);	/* scope is file */
 				else
-					fprintf (code->oFile, "G_");	/* scope is global */
+					dbuf_printf (&code->oBuf, "G_");	/* scope is global */
 			}
 			else
 				/* symbol is local */
-				fprintf (code->oFile, "L%s_",
+				dbuf_printf (&code->oBuf, "L%s_",
 				(sym->localof ? sym->localof->name : "-null-"));
-			fprintf (code->oFile, "%s_%d_%d", sym->name, sym->level, sym->block);
+			dbuf_printf (&code->oBuf, "%s_%d_%d", sym->name, sym->level, sym->block);
 			
 		}
 		
@@ -909,38 +891,40 @@ pic14emitStaticSeg (memmap * map)
 		if (SPEC_ABSA (sym->etype))
 		{
 			if (options.debug || sym->level == 0)
-				fprintf (code->oFile, " == 0x%04x\n", SPEC_ADDR (sym->etype));
+				dbuf_printf (&code->oBuf, " == 0x%04x\n", SPEC_ADDR (sym->etype));
 			
-			fprintf (code->oFile, "%s\t=\t0x%04x\n",
+			dbuf_printf (&code->oBuf, "%s\t=\t0x%04x\n",
 				sym->rname,
 				SPEC_ADDR (sym->etype));
 		}
 		else
 		{
 			if (options.debug || sym->level == 0)
-				fprintf (code->oFile, " == .\n");
+				dbuf_printf (&code->oBuf, " == .\n");
 			
 			/* if it has an initial value */
 			if (sym->ival)
 			{
+#if 0
 				pBlock *pb;
 				
-				fprintf (code->oFile, "%s:\n", sym->rname);
+				dbuf_printf (&code->oBuf, "%s:\n", sym->rname);
 				noAlloc++;
 				resolveIvalSym (sym->ival, sym->type);
-				//printIval (sym, sym->type, sym->ival, code->oFile);
+				//printIval (sym, sym->type, sym->ival, &code->oBuf);
 				pb = newpCodeChain(NULL, 'P',newpCodeCharP("; Starting pCode block for Ival"));
 				addpBlock(pb);
 				addpCode2pBlock(pb,newpCodeLabel(sym->rname,-1));
 				
 				printIval (sym, sym->type, sym->ival, pb);
 				noAlloc--;
+#endif
 			}
 			else
 			{
 				
 				/* allocate space */
-				fprintf (code->oFile, "%s:\n", sym->rname);
+				dbuf_printf (&code->oBuf, "%s:\n", sym->rname);
 				/* special case for character strings */
 				if (IS_ARRAY (sym->type) && IS_CHAR (sym->type->next) &&
 					SPEC_CVAL (sym->etype).v_char)
@@ -949,21 +933,24 @@ pic14emitStaticSeg (memmap * map)
 					SPEC_CVAL (sym->etype).v_char,
 				strlen (SPEC_CVAL (sym->etype).v_char) + 1);*/
 				else
-					fprintf (code->oFile, "\t.ds\t0x%04x\n", (unsigned int) getSize (sym->type) & 0xffff);
+					dbuf_printf (&code->oBuf, "\t.ds\t0x%04x\n", (unsigned int) getSize (sym->type) & 0xffff);
 			}
 		}
 	}
 	
 }
+#endif
 
 
+#if 0
 /*-----------------------------------------------------------------*/
 /* emitMaps - emits the code for the data portion the code         */
 /*-----------------------------------------------------------------*/
 static void
 pic14emitMaps ()
 {
-	pic14_constructAbsMap (sfr->oFile);
+	pic14_constructAbsMap (&sfr->oBuf);
+	emitPseudoStack(&sfr->oBuf, &sfr->oBuf);
 /* no special considerations for the following
 	data, idata & bit & xdata */
 	pic14emitRegularMap (data, TRUE, TRUE);
@@ -974,13 +961,16 @@ pic14emitMaps ()
 	pic14emitRegularMap (sfrbit, FALSE, FALSE);
 	pic14emitRegularMap (code, TRUE, FALSE);
 	pic14emitStaticSeg (statsg);
+	pic14emitStaticSeg (c_abs);
 }
+#endif
 
 /*-----------------------------------------------------------------*/
 /* createInterruptVect - creates the interrupt vector              */
 /*-----------------------------------------------------------------*/
+pCodeOp *popGetExternal (char *str, int isReg);
 static void
-pic14createInterruptVect (FILE * vFile)
+pic14createInterruptVect (struct dbuf_s * vBuf)
 {
 	mainf = newSymbol ("main", 0);
 	mainf->block = 0;
@@ -1005,13 +995,14 @@ pic14createInterruptVect (FILE * vFile)
 		return;
 	}
 	
-	fprintf (vFile, "%s", iComments2);
-	fprintf (vFile, "; reset vector \n");
-	fprintf (vFile, "%s", iComments2);
-	fprintf (vFile, "STARTUP\t%s\n", CODE_NAME); // Lkr file should place section STARTUP at address 0x0
-	fprintf (vFile, "\tnop\n"); /* first location for used by incircuit debugger */
-	fprintf( vFile, "\tpagesel __sdcc_gsinit_startup\n");
-	fprintf (vFile, "\tgoto\t__sdcc_gsinit_startup\n");
+	dbuf_printf (vBuf, "%s", iComments2);
+	dbuf_printf (vBuf, "; reset vector \n");
+	dbuf_printf (vBuf, "%s", iComments2);
+	dbuf_printf (vBuf, "STARTUP\t%s\n", CODE_NAME); // Lkr file should place section STARTUP at address 0x0
+	dbuf_printf (vBuf, "\tnop\n"); /* first location for used by incircuit debugger */
+	dbuf_printf (vBuf, "\tpagesel __sdcc_gsinit_startup\n");
+	dbuf_printf (vBuf, "\tgoto\t__sdcc_gsinit_startup\n");
+	popGetExternal("__sdcc_gsinit_startup", 0);
 }
 
 
@@ -1046,11 +1037,10 @@ pic14_stringInSet(const char *str, set **world, int autoAdd)
   return 0;
 }
 
+#if 0
 static int
 pic14_emitSymbolIfNew(FILE *file, const char *fmt, const char *sym, int checkLocals)
 {
-  static set *emitted = NULL;
-
   if (!pic14_stringInSet(sym, &emitted, 1)) {
     /* sym was not in emittedSymbols */
     if (!checkLocals || !pic14_stringInSet(sym, &pic14_localFunctions, 0)) {
@@ -1061,7 +1051,55 @@ pic14_emitSymbolIfNew(FILE *file, const char *fmt, const char *sym, int checkLoc
   }
   return 1;
 }
+#endif
 
+#if 0
+/*-------------------------------------------------------------------*/
+/* emitSymbol - write a symbol definition only if it is not    */
+/*                    already present                                */
+/*-------------------------------------------------------------------*/
+static void
+emitSymbol (struct dbuf_s *oBuf, const char *name, const char *section_type, int size, int addr, int useEQU, int globalize)
+{
+    static unsigned int sec_idx = 0;
+
+    /* workaround: variables declared via `sbit' result in a numeric
+     * identifier (0xHH), EQU'ing them is invalid, so just ignore it.
+     * sbit is heavily used in the inc2h-generated header files!
+     */
+    if (!is_valid_identifier(name))
+    {
+	//fprintf( stderr, "%s:%s:%u: ignored symbol: %s\n", __FILE__, __FUNCTION__, __LINE__, name );
+	return;
+    }
+
+    /* check whether the symbol is already defined */
+    if (pic14_stringInSet(name, &emitted, 1)) return;
+
+    /* new symbol -- define it */
+    //fprintf (stderr, "%s: emitting %s (%d)\n", __FUNCTION__, name, size);
+    if (useEQU) {
+	dbuf_printf (oBuf, "%s\tEQU\t0x%04x\n", name, addr);
+    } else {
+	/* we place each symbol into a section of its own to allow the linker
+	 * to distribute the data into all available memory banks */
+	if (!section_type) section_type = "udata";
+	if (addr != -1)
+	{
+	    /* absolute symbols are handled in pic14_constructAbsMap */
+	    /* do nothing */
+	} else {
+	    if (globalize) dbuf_printf (oBuf, "\tglobal\t%s\n", name);
+	    dbuf_printf (oBuf, "udata_%s_%u\t%s\n", moduleName,
+		    sec_idx++, section_type);
+	    dbuf_printf (oBuf, "%s\tres\t%d\n", name, size);
+	}
+    }
+}
+#endif
+
+
+#if 0
 /*-----------------------------------------------------------------*/
 /* printExterns - generates extern for external variables          */
 /*-----------------------------------------------------------------*/
@@ -1087,7 +1125,7 @@ pic14printPublics (FILE * afile)
   symbol *sym;
 
   fprintf (afile, "%s", iComments2);
-  fprintf (afile, "; publics variables in this module\n");
+  fprintf (afile, "; public variables in this module\n");
   fprintf (afile, "%s", iComments2);
 
   for (sym = setFirstItem (publics); sym;
@@ -1104,12 +1142,86 @@ pic14printPublics (FILE * afile)
     }
   }
 }
+#endif
+
+/*
+ * Interface to BANKSEL generation.
+ * This function should return != 0 iff str1 and str2 denote operands that
+ * are known to be allocated into the same bank. Consequently, there will
+ * be no BANKSEL emitted if str2 is accessed while str1 has been used to
+ * select the current bank just previously.
+ *
+ * If in doubt, return 0.
+ */
+int
+pic14_operandsAllocatedInSameBank(const char *str1, const char *str2) {
+    // see pic14printLocals
+    
+    if (getenv("SDCC_PIC14_SPLIT_LOCALS")) {
+	// no clustering applied, each register resides in its own bank
+    } else {
+	// check whether BOTH names are local registers
+	// XXX: This is some kind of shortcut, should be safe...
+	// In this model, all r0xXXXX are allocated into a single section
+	// per file, so no BANKSEL required if accessing a r0xXXXX after a
+	// (different) r0xXXXX. Works great for multi-byte operands.
+	if (str1 && str2 && str1[0] == 'r' && str2[0] == 'r') return (1);
+    } // if
+
+    // assume operands in different banks
+    return (0);
+}
+
+static void
+pic14printLocals (struct dbuf_s *oBuf)
+{
+    set *allregs[6] = { dynAllocRegs/*, dynStackRegs, dynProcessorRegs*/,
+	dynDirectRegs, dynDirectBitRegs/*, dynInternalRegs */ };
+    regs *reg;
+    int i, is_first = 1;
+    static unsigned sectionNr = 0;
+
+    /* emit all registers from all possible sets */
+    for (i = 0; i < 6; i++) {
+	if (allregs[i] == NULL) continue;
+
+	for (reg = setFirstItem(allregs[i]); reg; reg = setNextItem(allregs[i])) {
+	    if (reg->isEmitted) continue;
+
+	    if (reg->wasUsed && !reg->isExtern) {
+		if (!pic14_stringInSet(reg->name, &emitted, 1)) {
+		    if (reg->isFixed) {
+			// Should not happen, really...
+			assert ( !"Compiler-assigned variables should not be pinned... This is a bug." );
+			dbuf_printf(oBuf, "UDL_%s_%u\tudata\t0x%04X\n%s\tres\t%d\n",
+				moduleName, sectionNr++, reg->address, reg->name, reg->size);
+		    } else {
+			if (getenv("SDCC_PIC14_SPLIT_LOCALS")) {
+			    // assign each local register into its own section
+			    dbuf_printf(oBuf, "UDL_%s_%u\tudata\n%s\tres\t%d\n",
+				    moduleName, sectionNr++, reg->name, reg->size);
+			} else {
+			    // group all local registers into a single section
+			    // This should greatly improve BANKSEL generation...
+			    if (is_first) {
+				dbuf_printf(oBuf, "UDL_%s_%u\tudata\n", moduleName, sectionNr++);
+				is_first = 0;
+			    }
+			    dbuf_printf(oBuf, "%s\tres\t%d\n", reg->name, reg->size);
+			}
+		    }
+		}
+	    }
+	    reg->isEmitted = 1;
+	} // for
+    } // for
+}
 
 /*-----------------------------------------------------------------*/
 /* emitOverlay - will emit code for the overlay stuff              */
 /*-----------------------------------------------------------------*/
 static void
-pic14emitOverlay (FILE * afile)
+pic14emitOverlay (struct dbuf_s * aBuf)
 {
 	set *ovrset;
 	
@@ -1117,7 +1229,7 @@ pic14emitOverlay (FILE * afile)
 	
 	/* the hack below, fixes translates for devices which
 	* only have udata_shr memory */
-	fprintf (afile, "%s\t%s\n",
+	dbuf_printf (aBuf, "%s\t%s\n",
 		(elementsInSet(ovrSetSets)?"":";"),
 		port->mem.overlay_name);
 	
@@ -1137,9 +1249,9 @@ pic14emitOverlay (FILE * afile)
 			
 			/* I don't think this applies to us. We are using gpasm.  CRF */
 			
-			fprintf (afile, ";\t.area _DUMMY\n");
+			dbuf_printf (aBuf, ";\t.area _DUMMY\n");
 			/* output the area informtion */
-			fprintf (afile, ";\t.area\t%s\n", port->mem.overlay_name);	/* MOF */
+			dbuf_printf (aBuf, ";\t.area\t%s\n", port->mem.overlay_name);	/* MOF */
 		}
 		
 		for (sym = setFirstItem (ovrset); sym;
@@ -1175,15 +1287,15 @@ pic14emitOverlay (FILE * afile)
 				if (!sym->level)
 				{		/* global */
 					if (IS_STATIC (sym->etype))
-						fprintf (afile, "F%s_", moduleName);	/* scope is file */
+						dbuf_printf (aBuf, "F%s_", moduleName);	/* scope is file */
 					else
-						fprintf (afile, "G_");	/* scope is global */
+						dbuf_printf (aBuf, "G_");	/* scope is global */
 				}
 				else
 					/* symbol is local */
-					fprintf (afile, "L%s_",
+					dbuf_printf (aBuf, "L%s_",
 					(sym->localof ? sym->localof->name : "-null-"));
-				fprintf (afile, "%s_%d_%d", sym->name, sym->level, sym->block);
+				dbuf_printf (aBuf, "%s_%d_%d", sym->name, sym->level, sym->block);
 			}
 			
 			/* if is has an absolute address then generate
@@ -1192,20 +1304,20 @@ pic14emitOverlay (FILE * afile)
 			{
 				
 				if (options.debug || sym->level == 0)
-					fprintf (afile, " == 0x%04x\n", SPEC_ADDR (sym->etype));
+					dbuf_printf (aBuf, " == 0x%04x\n", SPEC_ADDR (sym->etype));
 				
-				fprintf (afile, "%s\t=\t0x%04x\n",
+				dbuf_printf (aBuf, "%s\t=\t0x%04x\n",
 					sym->rname,
 					SPEC_ADDR (sym->etype));
 			}
 			else
 			{
 				if (options.debug || sym->level == 0)
-					fprintf (afile, "==.\n");
+					dbuf_printf (aBuf, "==.\n");
 				
 				/* allocate space */
-				fprintf (afile, "%s:\n", sym->rname);
-				fprintf (afile, "\t.ds\t0x%04x\n", (unsigned int) getSize (sym->type) & 0xffff);
+				dbuf_printf (aBuf, "%s:\n", sym->rname);
+				dbuf_printf (aBuf, "\t.ds\t0x%04x\n", (unsigned int) getSize (sym->type) & 0xffff);
 			}
 			
 		}
@@ -1239,12 +1351,13 @@ pic14_emitInterruptHandler (FILE * asmFile)
 void
 picglue ()
 {
-	char udata_name[80];
-	FILE *vFile;
 	FILE *asmFile;
-	FILE *ovrFile = tempfile();
-	
-	addSetHead(&tmpfileSet,ovrFile);
+        struct dbuf_s ovrBuf;
+        struct dbuf_s vBuf;
+
+        dbuf_init(&ovrBuf, 4096);
+        dbuf_init(&vBuf, 4096);
+
 	pCodeInitRegisters();
 
 	/* check for main() */
@@ -1297,20 +1410,16 @@ picglue ()
 	/* print the global struct definitions */
 	if (options.debug)
 		cdbStructBlock (0);
-	
-	vFile = tempfile();
-	
-	addSetHead(&tmpfileSet,vFile);
-	
+
 	/* emit code for the all the variables declared */
-	pic14emitMaps ();
+	//pic14emitMaps ();
 	/* do the overlay segments */
-	pic14emitOverlay(ovrFile);
+	pic14emitOverlay(&ovrBuf);
 	
 	/* PENDING: this isnt the best place but it will do */
 	if (port->general.glue_up_main) {
 		/* create the interrupt vector table */
-		pic14createInterruptVect (vFile);
+		pic14createInterruptVect (&vBuf);
 	}
 	
 	AnalyzepCode('*');
@@ -1321,7 +1430,7 @@ picglue ()
 	
 	AnalyzepCode('*');
 	
-	pcode_test();
+	if (options.debug) pcode_test();
 	
 	
 	/* now put it all together into the assembler file */
@@ -1357,20 +1466,18 @@ picglue ()
 		port->genAssemblerPreamble(asmFile);
 	}
 
-	/* Emit the __config directive */
-	pic14_emitConfigWord (asmFile);
-	
 	/* print the global variables in this module */
-	pic14printPublics (asmFile);
+	//pic14printPublics (asmFile);
 	
 	/* print the extern variables in this module */
-	pic14printExterns (asmFile);
+	//pic14printExterns (asmFile);
 	
 	/* copy the sfr segment */
+#if 0
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "; special function registers\n");
 	fprintf (asmFile, "%s", iComments2);
-	copyFile (asmFile, sfr->oFile);
+        dbuf_write_and_destroy (&sfr->oBuf, asmFile);
 	
 	
 	if (udata_section_name) {
@@ -1382,17 +1489,23 @@ picglue ()
 	fprintf (asmFile, "; udata\n");
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "%s\tudata\n", udata_name);
-	copyFile (asmFile, data->oFile);
-	
+        dbuf_write_and_destroy(&data->oBuf, asmFile);
+#endif
+
 	/* Put all variables into a cblock */
 	AnalyzeBanking();
+
+	/* emit initialized data */
+	showAllMemmaps(asmFile);
+
+	/* print the locally defined variables in this module */
 	writeUsedRegs(asmFile);
 	
 	/* create the overlay segments */
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "; overlayable items in internal ram \n");
 	fprintf (asmFile, "%s", iComments2);    
-	copyFile (asmFile, ovrFile);
+        dbuf_write_and_destroy (&ovrBuf, asmFile);
 	
 #if 0
 	
@@ -1409,8 +1522,8 @@ picglue ()
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "; indirectly addressable internal ram data\n");
 	fprintf (asmFile, "%s", iComments2);
-	copyFile (asmFile, idata->oFile);
-	
+        dbuf_write_and_destroy (&idata->oBuf, asmFile);
+
 	/* if external stack then reserve space of it */
 	if (mainf && IFFUNC_HASBODY(mainf->type) && options.useXstack ) {
 		fprintf (asmFile, "%s", iComments2);
@@ -1424,45 +1537,26 @@ picglue ()
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "; external ram data\n");
 	fprintf (asmFile, "%s", iComments2);
-	copyFile (asmFile, xdata->oFile);
-	
+        dbuf_write_and_destroy (&xdata->oBuf, asmFile);
+
 #endif
 	
 	/* copy the bit segment */
+#if 0
 	fprintf (asmFile, "%s", iComments2);
 	fprintf (asmFile, "; bit data\n");
 	fprintf (asmFile, "%s", iComments2);
-	copyFile (asmFile, bit->oFile);
+        dbuf_write_and_destroy (&bit->oBuf, asmFile);
+#endif
 
 	/* copy the interrupt vector table */
-	if (mainf && IFFUNC_HASBODY(mainf->type)) {
-		copyFile (asmFile, vFile);
-	}
-	
+	if (mainf && IFFUNC_HASBODY(mainf->type))
+	  dbuf_write_and_destroy (&vBuf, asmFile);
+        else
+	  dbuf_destroy(&vBuf);
+
 	/* create interupt ventor handler */
 	pic14_emitInterruptHandler (asmFile);
-	
-	if (mainf && IFFUNC_HASBODY(mainf->type)) {
-		/* initialize data memory */
-		fprintf (asmFile, "code_init\t%s\n", CODE_NAME); // Note - for mplink may have to enlarge section vectors in .lnk file
-		fprintf (asmFile,"__sdcc_gsinit_startup\n");
-		/* FIXME: This is temporary.  The idata section should be used.  If 
-		not, we could add a special feature to the linker.  This will 
-		work in the mean time.  Put all initalized data in main.c */
-		copypCode(asmFile, statsg->dbName);
-		fprintf (asmFile,"\tpagesel _main\n");
-		fprintf (asmFile,"\tgoto _main\n");
-	}
-	
-#if 0    
-	
-	/* copy global & static initialisations */
-	fprintf (asmFile, "%s", iComments2);
-	fprintf (asmFile, "; global & static initialisations\n");
-	fprintf (asmFile, "%s", iComments2);
-	copypCode(asmFile, statsg->dbName);
-	
-#endif
 	
 	/* copy over code */
 	fprintf (asmFile, "%s", iComments2);
@@ -1487,6 +1581,602 @@ picglue ()
 	fprintf (asmFile,"\tend\n");
 	
 	fclose (asmFile);
-	
-	rm_tmpfiles();
+	pic14_debugLogClose();
 }
+
+/*
+ * Deal with initializers.
+ */
+#undef DEBUGprintf
+#if 0
+// debugging output
+#define DEBUGprintf printf
+#else
+// be quiet
+#define DEBUGprintf 1 ? (void)0 : (void)printf
+#endif
+
+
+void ast_print (ast * tree, FILE *outfile, int indent);
+
+#if 0
+/*
+ * Emit all memmaps.
+ */
+static void
+showInitList(initList *list, int level)
+{
+    static const char *list_type[] = { "INIT_NODE", "INIT_DEEP", "INIT_HOLE" };
+    static const char *ast_type[] = { "EX_OP", "EX_VALUE", "EX_LINK", "EX_OPERAND" };
+    struct ast *ast;
+    while (list) {
+	printf ("      %d: type %u (%s), init %p, next %p\n", level, list->type, list_type[list->type], list->init.node, list->next);
+	if (list->type == INIT_DEEP) {
+	    showInitList(list->init.deep, level + 1);
+	} else if (list->type == INIT_NODE) {
+	    ast = list->init.node;
+	    printf ("        type %u (%s), level %d, block %d, seqPoint %d\n",
+		    ast->type, ast_type[ast->type], ast->level, ast->block, ast->seqPoint);
+	    if (ast->type == EX_VALUE) {
+		printf ("          VAL %lf\n", floatFromVal(ast->opval.val));
+	    } else if (ast->type == EX_LINK) {
+		printTypeChain(ast->opval.lnk, NULL);
+	    } else if (ast->type == EX_OP) {
+		printf ("          OP %u\n", ast->opval.op);
+	    }
+	} // if
+	list = list->next;
+    } // while
+}
+#endif
+
+/*
+ * DEBUG: Print a value.
+ */
+void
+printVal(value *val)
+{
+    printf ("value %p: name %s, type %p, etype %p, sym %s, vArgs %d, lit 0x%lx/%ld\n",
+	    val, val->name, val->type, val->etype,
+	    val->sym ? val->sym->name : NULL, val->vArgs,
+	    (long)floatFromVal(val), (long)floatFromVal(val));
+    printTypeChain(val->type, stdout);
+    printf ("\n");
+    printTypeChain(val->etype, stdout);
+    printf ("\n");
+}
+
+//prototype from ../SDCCicode.c
+operand *operandFromAst (ast * tree,int lvl);
+
+char *
+parseIvalAst (ast *node, int *inCodeSpace) {
+#define LEN 4096
+    char *buffer = NULL;
+    char *left, *right;
+    
+    if (IS_AST_VALUE(node)) {
+	value *val = AST_VALUE(node);
+	symbol *sym = IS_AST_SYM_VALUE(node) ? AST_SYMBOL(node) : NULL;
+	if (inCodeSpace && val->type
+		&& (IS_FUNC(val->type) || IS_CODE(getSpec(val->type))))
+	{
+	    *inCodeSpace = 1;
+	}
+	if (inCodeSpace && sym
+		&& (IS_FUNC(sym->type)
+		    || IS_CODE(getSpec(sym->type))))
+	{
+	    *inCodeSpace = 1;
+	}
+	
+	DEBUGprintf ("%s: AST_VALUE\n", __FUNCTION__);
+	if (IS_AST_LIT_VALUE(node)) {
+	    buffer = Safe_alloc(LEN);
+	    SNPRINTF(buffer, LEN, "0x%lx", (long)AST_LIT_VALUE(node));
+	} else if (IS_AST_SYM_VALUE(node)) {
+	    assert ( AST_SYMBOL(node) );
+	    /*
+	    printf ("sym %s: ", AST_SYMBOL(node)->rname);
+	    printTypeChain(AST_SYMBOL(node)->type, stdout);
+	    printTypeChain(AST_SYMBOL(node)->etype, stdout);
+	    printf ("\n---sym %s: done\n", AST_SYMBOL(node)->rname);
+	    */
+	    buffer = Safe_strdup(AST_SYMBOL(node)->rname);
+	} else {
+	    assert ( !"Invalid values type for initializers in AST." );
+	}
+    } else if (IS_AST_OP(node)) {
+	DEBUGprintf ("%s: AST_OP\n", __FUNCTION__);
+	switch (node->opval.op) {
+	case CAST:
+	    assert (node->right);
+	    buffer = parseIvalAst(node->right, inCodeSpace);
+	    DEBUGprintf ("%s: %s\n", __FUNCTION__, buffer);
+	    break;
+	case '&':
+	    assert ( node->left && !node->right );
+	    buffer = parseIvalAst(node->left, inCodeSpace);
+	    DEBUGprintf ("%s: %s\n", __FUNCTION__, buffer);
+	    break;
+	case '+':
+	    assert (node->left && node->right );
+	    left = parseIvalAst(node->left, inCodeSpace);
+	    right = parseIvalAst(node->right, inCodeSpace);
+	    buffer = Safe_alloc(LEN);
+	    SNPRINTF(buffer, LEN, "(%s + %s)", left, right);
+	    DEBUGprintf ("%s: %s\n", __FUNCTION__, buffer);
+	    Safe_free(left);
+	    Safe_free(right);
+	    break;
+	case '[':
+	    assert ( node->left && node->right );
+	    assert ( IS_AST_VALUE(node->left) && AST_VALUE(node->left)->sym );
+	    right = parseIvalAst(node->right, inCodeSpace);
+	    buffer = Safe_alloc(LEN);
+	    SNPRINTF(buffer, LEN, "(%s + %u * %s)",
+		    AST_VALUE(node->left)->sym->rname, getSize(AST_VALUE(node->left)->type), right);
+	    Safe_free(right);
+	    DEBUGprintf ("%s: %s\n", __FUNCTION__, &buffer[0]);
+	    break;
+	default:
+	    assert ( !"Unhandled operation in initializer." );
+	    break;
+	}
+    } else {
+	assert ( !"Invalid construct in initializer." );
+    }
+    
+    return (buffer);
+}
+
+/*
+ * Emit the section preamble, absolute location (if any) and 
+ * symbol name(s) for intialized data.
+ */
+static int
+emitIvalLabel(struct dbuf_s *oBuf, symbol *sym)
+{
+    char *segname;
+    static int in_code = 0;
+    static int sectionNr = 0;
+    
+    if (sym) {
+	// code or data space?
+	if (IS_CODE(getSpec(sym->type))) {
+	    segname = "code";
+	    in_code = 1;
+	} else {
+	    segname = "idata";
+	    in_code  = 0;
+	}
+	dbuf_printf(oBuf, "\nID_%s_%d\t%s", moduleName, sectionNr++, segname);
+	if (SPEC_ABSA(getSpec(sym->type))) {
+	    // specify address for absolute symbols
+	    dbuf_printf(oBuf, "\t0x%04X", SPEC_ADDR(getSpec(sym->type)));
+	} // if
+	dbuf_printf(oBuf, "\n%s\n", sym->rname);
+
+	addSet(&emitted, sym->rname);
+    }
+    return (in_code);
+}
+
+char *get_op(pCodeOp *pcop,char *buffer, size_t size);
+/*
+ * Actually emit the initial values in .asm format.
+ */
+static void
+emitIvals(struct dbuf_s *oBuf, symbol *sym, initList *list, long lit, int size)
+{
+    int i;
+    ast *node;
+    operand *op;
+    value *val = NULL;
+    int inCodeSpace = 0;
+    char *str = NULL;
+    int in_code;
+    
+    assert (size <= sizeof(long));
+    assert (!list || (list->type == INIT_NODE));
+    node = list ? list->init.node : NULL;
+    
+    in_code = emitIvalLabel(oBuf, sym);
+    if (!in_code) dbuf_printf (oBuf, "\tdb\t");
+
+    if (!node) {
+	// initialize as zero
+	for (i=0; i < size; i++) {
+	    if (in_code) {
+		dbuf_printf (oBuf, "\tretlw 0x00");
+	    } else {
+		dbuf_printf (oBuf, "%s0x00", (i == 0) ? "" : ", ");
+	    }
+	} // for
+	dbuf_printf (oBuf, "\n");
+	return;
+    } // if
+    
+    op = NULL;
+    if (constExprTree(node) && (val = constExprValue(node, 0))) {
+	op = operandFromValue(val);
+	DEBUGprintf ("%s: constExpr ", __FUNCTION__);
+	//printVal(val);
+    } else if (IS_AST_VALUE(node)) {
+	op = operandFromAst(node, 0);
+    } else if (IS_AST_OP(node)) {
+	str = parseIvalAst(node, &inCodeSpace);
+	DEBUGprintf("%s: AST_OP: %s\n", __FUNCTION__, str);
+	op = NULL;
+    } else {
+	assert ( !"Unhandled construct in intializer." );
+    }
+
+    if (op) { 
+	aopOp(op, NULL, 1);
+	assert(AOP(op));
+	//printOperand(op, of);
+    }
+    
+    for (i=0; i < size; i++) {
+	char *text = op ? aopGet(AOP(op), i, 0, 0)
+	    : get_op(newpCodeOpImmd(str, i, 0, inCodeSpace, 0), NULL, 0);
+	if (in_code) {
+	    dbuf_printf (oBuf, "\tretlw %s\n", text);
+	} else {
+	    dbuf_printf (oBuf, "%s%s", (i == 0) ? "" : ", ", text);
+	}
+    } // for
+    dbuf_printf (oBuf, "\n");
+}
+
+/*
+ * For UNIONs, we first have to find the correct alternative to map the
+ * initializer to. This function maps the structure of the initializer to
+ * the UNION members recursively.
+ * Returns the type of the first `fitting' member.
+ */
+static sym_link *
+matchIvalToUnion (initList *list, sym_link *type, int size)
+{
+    symbol *sym;
+    
+    assert (type);
+
+    if (IS_PTR(type) || IS_CHAR(type) || IS_INT(type) || IS_LONG(type)
+	    || IS_FLOAT(type)) 
+    {
+	if (!list || (list->type == INIT_NODE)) {
+	    DEBUGprintf ("OK, simple type\n");
+	    return (type);
+	} else {
+	    DEBUGprintf ("ERROR, simple type\n");
+	    return (NULL);
+	}
+    } else if (IS_BITFIELD(type)) {
+	if (!list || (list->type == INIT_NODE)) {
+	    DEBUGprintf ("OK, bitfield\n");
+	    return (type);
+	} else {
+	    DEBUGprintf ("ERROR, bitfield\n");
+	    return (NULL);
+	}
+    } else if (IS_STRUCT(type) && SPEC_STRUCT(getSpec(type))->type == STRUCT) {
+	if (!list || (list->type == INIT_DEEP)) {
+	    if (list) list = list->init.deep;
+	    sym = SPEC_STRUCT(type)->fields;
+	    while (sym) {
+		DEBUGprintf ("Checking STRUCT member %s\n", sym->name);
+		if (!matchIvalToUnion(list, sym->type, 0)) {
+		    DEBUGprintf ("ERROR, STRUCT member %s\n", sym->name);
+		    return (NULL);
+		}
+		if (list) list = list->next;
+		sym = sym->next;
+	    } // while
+	    
+	    // excess initializers?
+	    if (list) {
+		DEBUGprintf ("ERROR, excess initializers\n");
+		return (NULL);
+	    }
+	    
+	    DEBUGprintf ("OK, struct\n");
+	    return (type);
+	}
+	return (NULL);
+    } else if (IS_STRUCT(type) && SPEC_STRUCT(getSpec(type))->type == UNION) {
+	if (!list || (list->type == INIT_DEEP)) {
+	    if (list) list = list->init.deep;
+	    sym = SPEC_STRUCT(type)->fields;
+	    while (sym) {
+		DEBUGprintf ("Checking UNION member %s.\n", sym->name);
+		if (((IS_STRUCT(sym->type) || getSize(sym->type) == size))
+			&& matchIvalToUnion(list, sym->type, size))
+		{
+		    DEBUGprintf ("Matched UNION member %s.\n", sym->name);
+		    return (sym->type);
+		}
+		sym = sym->next;
+	    } // while
+	} // if
+	// no match found
+	DEBUGprintf ("ERROR, no match found.\n");
+	return (NULL);
+    } else {
+	assert ( !"Unhandled type in UNION." );
+    }
+
+    assert ( !"No match found in UNION for the given initializer structure." );
+    return (NULL);
+}
+
+/*
+ * Parse the type and its initializer and emit it (recursively).
+ */
+static void
+emitInitVal(struct dbuf_s *oBuf, symbol *topsym, sym_link *my_type, initList *list)
+{
+    symbol *sym;
+    int size, i;
+    long lit;
+    unsigned char *str;
+
+    size = getSize(my_type);
+
+    if (IS_PTR(my_type)) {
+	DEBUGprintf ("(pointer, %d byte) %p\n", size, list ? (void *)(long)list2int(list) : NULL);
+	emitIvals(oBuf, topsym, list, 0, size);
+	return;
+    }
+
+    if (IS_ARRAY(my_type) && topsym && topsym->isstrlit) {
+	str = (unsigned char *)SPEC_CVAL(topsym->etype).v_char;
+	emitIvalLabel(oBuf, topsym);
+	do {
+	    dbuf_printf (oBuf, "\tretlw 0x%02x ; '%c'\n", str[0], (str[0] >= 0x20 && str[0] < 128) ? str[0] : '.');
+	} while (*(str++));
+	return;
+    }
+
+    if (IS_ARRAY(my_type) && list && list->type == INIT_NODE) {
+	fprintf (stderr, "Unhandled initialized symbol: %s\n", topsym->name);
+	assert ( !"Initialized char-arrays are not yet supported, assign at runtime instead." );
+	return;
+    }
+
+    if (IS_ARRAY(my_type)) {
+	DEBUGprintf ("(array, %d items, %d byte) below\n", DCL_ELEM(my_type), size);
+	assert (!list || list->type == INIT_DEEP);
+	if (list) list = list->init.deep;
+	for (i = 0; i < DCL_ELEM(my_type); i++) {
+	    emitInitVal(oBuf, topsym, my_type->next, list);
+	    topsym = NULL;
+	    if (list) list = list->next;
+	} // for i
+	return;
+    }
+    
+    if (IS_FLOAT(my_type)) {
+	// float, 32 bit
+	DEBUGprintf ("(float, %d byte) %lf\n", size, list ? list2int(list) : 0.0);
+	emitIvals(oBuf, topsym, list, 0, size);
+	return;
+    }
+    
+    if (IS_CHAR(my_type) || IS_INT(my_type) || IS_LONG(my_type)) {
+	// integral type, 8, 16, or 32 bit
+	DEBUGprintf ("(integral, %d byte) 0x%lx/%ld\n", size, list ? (long)list2int(list) : 0, list ? (long)list2int(list) : 0);
+	emitIvals(oBuf, topsym, list, 0, size);
+	return;
+	
+    } else if (IS_STRUCT(my_type) && SPEC_STRUCT(my_type)->type == STRUCT) {
+	// struct
+	DEBUGprintf ("(struct, %d byte) handled below\n", size);
+	assert (!list || (list->type == INIT_DEEP));
+
+	// iterate over struct members and initList
+	if (list) list = list->init.deep;
+	sym = SPEC_STRUCT(my_type)->fields;
+	while (sym) {
+	    long bitfield = 0;
+	    int len = 0;
+	    if (IS_BITFIELD(sym->type)) {
+		while (sym && IS_BITFIELD(sym->type)) {
+		    assert (!list || ((list->type == INIT_NODE) 
+				&& IS_AST_LIT_VALUE(list->init.node)));
+		    lit = list ? list2int(list) : 0;
+		    DEBUGprintf ( "(bitfield member) %02lx (%d bit, starting at %d, bitfield %02lx)\n",
+			    lit, SPEC_BLEN(getSpec(sym->type)),
+			    SPEC_BSTR(getSpec(sym->type)), bitfield);
+		    bitfield |= (lit & ((1ul << SPEC_BLEN(getSpec(sym->type))) - 1)) << SPEC_BSTR(getSpec(sym->type));
+		    len += SPEC_BLEN(getSpec(sym->type));
+
+		    sym = sym->next;
+		    if (list) list = list->next;
+		} // while
+		assert (len < sizeof (long) * 8); // did we overflow our initializer?!?
+		len = (len + 7) & ~0x07; // round up to full bytes
+		emitIvals(oBuf, topsym, NULL, bitfield, len / 8);
+		topsym = NULL;
+	    } // if
+	    
+	    if (sym) {
+		emitInitVal(oBuf, topsym, sym->type, list);
+		topsym = NULL;
+		sym = sym->next;
+		if (list) list = list->next;
+	    } // if
+	} // while
+	if (list) {
+	    assert ( !"Excess initializers." );
+	} // if
+	return;
+	
+    } else if (IS_STRUCT(my_type) && SPEC_STRUCT(my_type)->type == UNION) {
+	// union
+	DEBUGprintf ("(union, %d byte) handled below\n", size);
+	assert (list && list->type == INIT_DEEP);
+
+	// iterate over union members and initList, try to map number and type of fields and initializers
+	my_type = matchIvalToUnion(list, my_type, size);
+	if (my_type) {
+	    emitInitVal(oBuf, topsym, my_type, list->init.deep);
+	    topsym = NULL;
+	    size -= getSize(my_type);
+	    if (size > 0) {
+		// pad with (leading) zeros
+		emitIvals(oBuf, NULL, NULL, 0, size);
+	    }
+	    return;
+	} // if
+	
+	assert ( !"No UNION member matches the initializer structure.");
+    } else if (IS_BITFIELD(my_type)) {
+	assert ( !"bitfields should only occur in structs..." );
+	
+    } else {
+	printf ("SPEC_NOUN: %d\n", SPEC_NOUN(my_type));
+	assert( !"Unhandled initialized type.");
+    }
+}
+
+/*
+ * Emit a set of symbols.
+ * type - 0: have symbol tell whether it is local, extern or global
+ *        1: assume all symbols in set to be global
+ *        2: assume all symbols in set to be extern
+ */
+static void
+emitSymbolSet(set *s, int type)
+{
+    symbol *sym;
+    initList *list;
+    unsigned sectionNr = 0;
+
+    for (sym = setFirstItem(s); sym; sym = setNextItem(s)) {
+#if 0
+	fprintf (stdout, ";    name %s, rname %s, level %d, block %d, key %d, local %d, ival %p, static %d, cdef %d, used %d\n",
+		sym->name, sym->rname, sym->level, sym->block, sym->key, sym->islocal, sym->ival, IS_STATIC(sym->etype), sym->cdef, sym->used);
+#endif
+
+	if (sym->etype && SPEC_ABSA(sym->etype)
+		&& IS_CONFIG_ADDRESS(SPEC_ADDR(sym->etype))
+		&& sym->ival)
+	{
+	    // handle config words
+	    pic14_assignConfigWordValue(SPEC_ADDR(sym->etype),
+		    (int)list2int(sym->ival));
+	    pic14_stringInSet(sym->rname, &emitted, 1);
+	    continue;
+	}
+
+	if (sym->isstrlit) {
+	    // special case: string literals
+	    emitInitVal(ivalBuf, sym, sym->type, NULL);
+	    continue;
+	}
+
+	if (type != 0 || sym->cdef
+		|| (!IS_STATIC(sym->etype)
+		    && IS_GLOBAL(sym)))
+	{
+	    // bail out for ___fsadd and friends
+	    if (sym->cdef && !sym->used) continue;
+
+	    /* export or import non-static globals */
+	    if (!pic14_stringInSet(sym->rname, &emitted, 0)) {
+
+		if (type == 2 || IS_EXTERN(sym->etype) || sym->cdef)
+		{
+		    /* do not add to emitted set, it might occur again! */
+		    //if (!sym->used) continue;
+		    // declare symbol
+		    emitIfNew (extBuf, &emitted, "\textern\t%s\n", sym->rname);
+		} else {
+		    // declare symbol
+		    emitIfNew (gloBuf, &emitted, "\tglobal\t%s\n", sym->rname);
+		    if (!sym->ival && !IS_FUNC(sym->type)) {
+			// also define symbol
+			if (IS_ABSOLUTE(sym->etype)) {
+			    // absolute location?
+			    //dbuf_printf (gloDefBuf, "UD_%s_%u\tudata\t0x%04X\n", moduleName, sectionNr++, SPEC_ADDR(sym->etype));
+			    // deferred to pic14_constructAbsMap
+			} else {
+			    dbuf_printf (gloDefBuf, "UD_%s_%u\tudata\n", moduleName, sectionNr++);
+			    dbuf_printf (gloDefBuf, "%s\tres\t%d\n\n", sym->rname, getSize(sym->type));
+			}
+		    } // if
+		} // if
+		pic14_stringInSet(sym->rname, &emitted, 1);
+	    } // if
+	} // if
+	list = sym->ival;
+	//if (list) showInitList(list, 0);
+	if (list) {
+	    resolveIvalSym( list, sym->type );
+	    emitInitVal(ivalBuf, sym, sym->type, sym->ival);
+	    dbuf_printf (ivalBuf, "\n");
+	}
+    } // for sym
+}
+
+/*
+ * Iterate over all memmaps and emit their contents (attributes, symbols).
+ */
+static void
+showAllMemmaps(FILE *of)
+{
+    struct dbuf_s locBuf;
+    memmap *maps[] = {
+	xstack, istack, code, data, pdata, xdata, xidata, xinit,
+	idata, bit, statsg, c_abs, x_abs, i_abs, d_abs,
+	sfr, sfrbit, reg, generic, overlay, eeprom, home };
+    memmap * map;
+    int i;
+
+    DEBUGprintf ("---begin memmaps---\n");
+    if (!extBuf) extBuf = dbuf_new(1024);
+    if (!gloBuf) gloBuf = dbuf_new(1024);
+    if (!gloDefBuf) gloDefBuf = dbuf_new(1024);
+    if (!ivalBuf) ivalBuf = dbuf_new(1024);
+    dbuf_init(&locBuf, 1024);
+
+    dbuf_printf (extBuf, "%s; external declarations\n%s", iComments2, iComments2);
+    dbuf_printf (gloBuf, "%s; global declarations\n%s", iComments2, iComments2);
+    dbuf_printf (gloDefBuf, "%s; global definitions\n%s", iComments2, iComments2);
+    dbuf_printf (ivalBuf, "%s; initialized data\n%s", iComments2, iComments2);
+    dbuf_printf (&locBuf, "%s; compiler-defined variables\n%s", iComments2, iComments2);
+
+    for (i = 0; i < sizeof(maps) / sizeof (memmap *); i++) {
+	map = maps[i];
+	//DEBUGprintf ("memmap %i: %p\n", i, map);
+	if (map) {
+#if 0
+	    fprintf (stdout, ";  pageno %c, sname %s, dbName %c, ptrType %d, slbl %d, sloc %u, fmap %u, paged %u, direct %u, bitsp %u, codesp %u, regsp %u, syms %p\n", 
+		    map->pageno, map->sname, map->dbName, map->ptrType, map->slbl,
+		    map->sloc, map->fmap, map->paged, map->direct, map->bitsp,
+		    map->codesp, map->regsp, map->syms);
+#endif
+	    emitSymbolSet(map->syms, 0);
+	} // if (map)
+    } // for i
+    DEBUGprintf ("---end of memmaps---\n");
+
+    emitSymbolSet(publics, 1);
+    emitSymbolSet(externs, 2);
+
+    emitPseudoStack(gloBuf, extBuf);
+    pic14_constructAbsMap(gloDefBuf, gloBuf);
+    pic14printLocals (&locBuf);
+    pic14_emitConfigWord(of); // must be done after all the rest
+
+    dbuf_write_and_destroy(extBuf, of);
+    dbuf_write_and_destroy(gloBuf, of);
+    dbuf_write_and_destroy(gloDefBuf, of);
+    dbuf_write_and_destroy(&locBuf, of);
+    dbuf_write_and_destroy(ivalBuf, of);
+
+    extBuf = gloBuf = gloDefBuf = ivalBuf = NULL;
+}
+

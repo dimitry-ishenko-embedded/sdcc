@@ -187,7 +187,7 @@ struct
 { E_INIT_COUNT, ERROR_LEVEL_ERROR,
    "too many initializers" },
 { E_INIT_STRUCT, ERROR_LEVEL_ERROR,
-   "struct/union/array '%s' :initialization needs curly braces" },
+   "struct/union/array '%s': initialization needs curly braces" },
 { E_INIT_NON_ADDR, ERROR_LEVEL_ERROR,
    "non-address initialization expression" },
 { E_INT_DEFINED, ERROR_LEVEL_ERROR,
@@ -432,6 +432,14 @@ struct
    "flexible array member not at end of struct" },
 { E_FLEXARRAY_INEMPTYSTRCT, ERROR_LEVEL_ERROR,
    "flexible array in otherwise empty struct" },
+{ W_EMPTY_SOURCE_FILE, ERROR_LEVEL_WARNING,
+   "ISO C forbids an empty source file" },
+{ W_BAD_PRAGMA_ARGUMENTS, ERROR_LEVEL_WARNING,
+   "#pragma %s: bad argument(s); pragma ignored" },
+{ E_BAD_RESTRICT, ERROR_LEVEL_ERROR,
+   "Only pointers may be qualified with 'restrict'" },
+{ E_BAD_INLINE, ERROR_LEVEL_ERROR,
+   "Only functions may be qualified with 'inline'" },
 };
 
 /*

@@ -22,7 +22,7 @@
 #include <malloc.h>
 
 #if defined(SDCC_STACK_AUTO) || defined(SDCC_z80) || defined(SDCC_gbz80)
-  #define CRITICAL critical
+  #define CRITICAL __critical
 #else
   #define CRITICAL
 #endif
@@ -136,56 +136,55 @@ malloc (unsigned int size)
             //--------------------------------------------------------------------
             //malloc and free functions implementation for embedded system
             //Non-ANSI keywords are C51 specific.
-            // xdata - variable in external memory (just RAM)
+            // __xdata - variable in external memory (just RAM)
             //--------------------------------------------------------------------
+
+            #define MEMHEADER   struct MAH// Memory Allocation Header
+
+            MEMHEADER
+            {
+              MEMHEADER __xdata *  next;
+              unsigned int         len;
+              unsigned char        mem[];
+            };
 
             #define HEADER_SIZE sizeof(MEMHEADER)
 
-            MEMHEADER xdata * _sdcc_first_memheader;
+            MEMHEADER __xdata * _sdcc_first_memheader = NULL;
 
-            void init_dynamic_memory(void xdata * heap, unsigned int size)
+            extern __xdata char _sdcc_heap[];
+            extern const unsigned int _sdcc_heap_size;
+
+            static void init_dynamic_memory(void)
             {
+              char __xdata * heap = (char __xdata *)_sdcc_heap;
+              unsigned int size = _sdcc_heap_size;
 
-            //This function MUST be called after the RESET.
-            //Parameters: heap - pointer to memory allocated by the linker
-            //            size - size of this memory pool
-            //Example:
-            //     #define DYNAMIC_MEMORY_SIZE 0x2000
-            //     .....
-            //     unsigned char xdata dynamic_memory_pool[DYNAMIC_MEMORY_SIZE];
-            //     unsigned char xdata * current_buffer;
-            //     .....
-            //     void main(void)
-            //     {
-            //         ...
-            //         init_dynamic_memory(dynamic_memory_pool,DYNAMIC_MEMORY_SIZE);
-            //         Now it is possible to use malloc.
-            //         ...
-            //         current_buffer = malloc(0x100);
-            //
-            //
-              char xdata * array = (char xdata *)heap;
-
-              if ( !array ) //Reserved memory starts at 0x0000 but that's NULL...
+              if ( !heap ) //Reserved memory starts at 0x0000 but that's NULL...
               {             //So, we lost one byte!
-                 array++;
-                 size--;
+                heap++;
+                size--;
               }
-              _sdcc_first_memheader = (MEMHEADER xdata * ) array;
+              _sdcc_first_memheader = (MEMHEADER __xdata * ) heap;
               //Reserve a mem for last header
-              _sdcc_first_memheader->next = (MEMHEADER xdata * )(array + size - sizeof(MEMHEADER xdata *));
-              _sdcc_first_memheader->next->next = (MEMHEADER xdata * ) NULL; //And mark it as last
+              _sdcc_first_memheader->next = (MEMHEADER __xdata * )(heap + size - sizeof(MEMHEADER __xdata *));
+              _sdcc_first_memheader->next->next = (MEMHEADER __xdata * ) NULL; //And mark it as last
               _sdcc_first_memheader->len        = 0;    //Empty and ready.
             }
 
-            void xdata * malloc (unsigned int size)
+            void __xdata * malloc (unsigned int size)
             {
-              register MEMHEADER xdata * current_header;
-              register MEMHEADER xdata * new_header;
-              register void xdata * ret;
+              register MEMHEADER __xdata * current_header;
+              register MEMHEADER __xdata * new_header;
+              register void __xdata * ret;
 
-              if (size>(0xFFFF-HEADER_SIZE)) return (void xdata *) NULL; //To prevent overflow in next line
+              if (size>(0xFFFF-HEADER_SIZE))
+                return (void __xdata *) NULL; //To prevent overflow in next line
               size += HEADER_SIZE; //We need a memory for header too
+
+              if (!_sdcc_first_memheader)
+                init_dynamic_memory();
+
               current_header = _sdcc_first_memheader;
               CRITICAL
               {
@@ -209,7 +208,7 @@ malloc (unsigned int size)
                   current_header = current_header->next;    //else try next
                   if (!current_header->next)
                   { //if end_of_list reached
-                    ret = (void xdata *) NULL;
+                    ret = (void __xdata *) NULL;
                     break;
                   }
                 }
@@ -217,11 +216,11 @@ malloc (unsigned int size)
                 {
                   if (!current_header->len)
                   { //This code works only for first_header in the list and only
-                     current_header->len = size; //for first allocation
+                    current_header->len = size; //for first allocation
                   }
                   else
                   { //else create new header at the begin of spare
-                    new_header = (MEMHEADER xdata * )((char xdata *)current_header + current_header->len);
+                    new_header = (MEMHEADER __xdata * )((char __xdata *)current_header + current_header->len);
                     new_header->next = current_header->next; //and plug it into the chain
                     current_header->next  = new_header;
                     new_header->len  = size; //mark as used

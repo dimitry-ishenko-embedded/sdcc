@@ -36,12 +36,13 @@ srcdir = @srcdir@
 
 
 LIBS = @LIBS@
-CFLAGS = @CFLAGS@
+CFLAGS = @CFLAGS@ -Wall
 ALL_CFLAGS = $(INTERNAL_CFLAGS) $(X_CFLAGS) $(T_CFLAGS) \
   $(CFLAGS) $(WARN_CFLAGS) $(XCFLAGS) @DEFS@
 ALL_CPPFLAGS = $(CPPFLAGS) $(X_CPPFLAGS) $(T_CPPFLAGS)
 LDFLAGS = @LDFLAGS@
 
+AWK = @AWK@
 CC = @CC@
 AR = ar
 AR_FLAGS = rc
@@ -69,6 +70,7 @@ STAMP = echo timestamp >
 
 # Where to find some libiberty headers.
 LIBIBERTY_DIR = $(srcdir)/libiberty
+LIBCPP_DIR = $(srcdir)/libcpp
 OBSTACK_H   = $(LIBIBERTY_DIR)/obstack.h
 SPLAY_TREE_H= $(LIBIBERTY_DIR)/splay-tree.h
 
@@ -92,6 +94,10 @@ includedir = $(local_prefix)/include
 exeext = @host_exeext@
 
 transform       = @program_transform_name@
+lang_opt_files=$(srcdir)/sdcpp.opt
+
+# All option source files
+ALL_OPT_FILES=$(lang_opt_files) $(extra_opt_files)
 
 # Top build directory, relative to here.
 top_builddir = @top_builddir@
@@ -117,10 +123,11 @@ uninstall:
 	rm -f $(DESTDIR)$(bindir)/sdcpp$(EXEEXT)
 clean:
 	-rm -f $(TARGET) *.o core libcpp.a
+	rm -f s-options optionlist options.h s-options-h options.c
 
 distclean: clean
 	-rm -f auto-host.h auto-build.h cstamp-h Makefile
-	-rm -f configargs.h config.status config.run config.cache config.bak config.log *~
+	config.status config.run config.cache config.bak config.log *~
 
 # This tells GNU Make version 3 not to put all variables in the environment.
 .NOEXPORT:
@@ -146,7 +153,7 @@ SYSTEM_H = system.h hwint.h
 #@build_overrides@
 #
 
-INCLUDES = -I$(srcdir) -I$(LIBIBERTY_DIR) -I.
+INCLUDES = -I$(srcdir) -I$(LIBCPP_DIR) -I$(LIBCPP_DIR)/include -I$(LIBIBERTY_DIR) -I.
 
 # Always use -I$(srcdir)/config when compiling.
 .c.o:
@@ -181,19 +188,23 @@ config.status: $(srcdir)/configure  version.c
 	  LANGUAGES="$(CONFIG_LANGUAGES)" $(SHELL) config.status --recheck; \
 	fi
 
-version.o: version.c version.h
 
-hashtable.o: hashtable.c hashtable.h $(CONFIG_H) $(SYSTEM_H) $(OBSTACK_H)
+optionlist: s-options ; @true
+s-options: $(ALL_OPT_FILES) Makefile $(srcdir)/opt-gather.awk
+	$(AWK) -f $(srcdir)/opt-gather.awk $(ALL_OPT_FILES) > tmp-optionlist
+	$(SHELL) $(srcdir)/move-if-change tmp-optionlist optionlist
+	$(STAMP) s-options
 
-prefix.o: prefix.c $(CONFIG_H) $(SYSTEM_H) Makefile prefix.h
-	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
-	-DPREFIX=\"$(prefix)\" \
-	  -c $(srcdir)/prefix.c
+options.c: optionlist $(srcdir)/opt-functions.awk $(srcdir)/optc-gen.awk
+	$(AWK) -f $(srcdir)/opt-functions.awk -f $(srcdir)/optc-gen.awk \
+	       -v header_name="config.h system.h options.h" < $< > $@
 
-intl.o: intl.c intl.h Makefile
-	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
-	  -DLOCALEDIR=\"$(localedir)\" \
-	  -c $(srcdir)/intl.c
+options.h: s-options-h ; @true
+s-options-h: optionlist $(srcdir)/opt-functions.awk $(srcdir)/opth-gen.awk
+	$(AWK) -f $(srcdir)/opt-functions.awk -f $(srcdir)/opth-gen.awk \
+	       < $< > tmp-options.h
+	$(SHELL) $(srcdir)/move-if-change tmp-options.h options.h
+	$(STAMP) $@
 
 #
 # Remake cpp and protoize.
@@ -207,11 +218,14 @@ PREPROCESSOR_DEFINES = \
   -DCROSS_INCLUDE_DIR=\"$(gcc_tooldir)/sys-include\" \
   -DTOOL_INCLUDE_DIR=\"$(gcc_tooldir)/include\"
 
-LIBCPP_OBJS =	cpplib.o cpplex.o cppmacro.o cppexp.o cppfiles.o \
-		cpphash.o cpperror.o cppinit.o cppdefault.o \
-		hashtable.o mkdeps.o prefix.o version.o mbchar.o
+##########################
+# Libcpp
 
-LIBCPP_DEPS =	cpplib.h cpphash.h hashtable.h intl.h $(OBSTACK_H) $(SYSTEM_H)
+LIBCPP_OBJS =	charset.o directives.o errors.o expr.o files.o identifiers.o \
+		init.o lex.o line-map.o macro.o mkdeps.o symtab.o traditional.o
+
+
+##LIBCPP_DEPS =	cpplib.h cpphash.h hashtable.h intl.h options.h $(OBSTACK_H) $(SYSTEM_H)
 
 # Most of the other archives built/used by this makefile are for
 # targets.  This one is strictly for the host.
@@ -220,37 +234,133 @@ libcpp.a: $(LIBCPP_OBJS)
 	$(AR) $(AR_FLAGS) libcpp.a $(LIBCPP_OBJS)
 	-$(RANLIB) libcpp.a
 
-MY_LIBIBERTY_BITS = safe-ctype.o obstack.o splay-tree.o \
-		    lbasename.o
-
-$(TARGET): cppmain.o intl.o $(MY_LIBIBERTY_BITS) libcpp.a $(LIBDEPS) 
-	mkdir -p $(dir $@)
-	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ cppmain.o \
-	$(MY_LIBIBERTY_BITS) libcpp.a $(LIBS)
-
-cppmain.o:  cppmain.c  $(CONFIG_H) cpplib.h intl.h $(SYSTEM_H)
-
-cpperror.o: cpperror.c $(CONFIG_H) $(LIBCPP_DEPS)
-cppexp.o:   cppexp.c   $(CONFIG_H) $(LIBCPP_DEPS)
-cpplex.o:   cpplex.c   $(CONFIG_H) $(LIBCPP_DEPS) mbchar.h
-cppmacro.o: cppmacro.c $(CONFIG_H) $(LIBCPP_DEPS)
-cpplib.o:   cpplib.c   $(CONFIG_H) $(LIBCPP_DEPS)
-cpphash.o:  cpphash.c  $(CONFIG_H) $(LIBCPP_DEPS)
-cppfiles.o: cppfiles.c $(CONFIG_H) $(LIBCPP_DEPS) $(SPLAY_TREE_H) mkdeps.h
-cppinit.o:  cppinit.c  $(CONFIG_H) $(LIBCPP_DEPS) cppdefault.h \
-		mkdeps.h prefix.h output.h version.h
-safe-ctype.o: $(LIBIBERTY_DIR)/safe-ctype.c $(LIBIBERTY_DIR)/safe-ctype.h $(CONFIG_H) $(LIBCPP_DEPS)
+charset.o: $(LIBCPP_DIR)/charset.c $(CONFIG_H) $(LIBCPP_DEPS)
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+directives.o: $(LIBCPP_DIR)/directives.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+errors.o: $(LIBCPP_DIR)/errors.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+expr.o: $(LIBCPP_DIR)/expr.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+files.o: $(LIBCPP_DIR)/files.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+identifiers.o: $(LIBCPP_DIR)/identifiers.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+init.o: $(LIBCPP_DIR)/init.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+lex.o: $(LIBCPP_DIR)/lex.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+line-map.o: $(LIBCPP_DIR)/line-map.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+macro.o: $(LIBCPP_DIR)/macro.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+mkdeps.o: $(LIBCPP_DIR)/mkdeps.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+symtab.o: $(LIBCPP_DIR)/symtab.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+traditional.o: $(LIBCPP_DIR)/traditional.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+##########################
+# Libiberty
+
+MY_LIBIBERTY_BITS = concat.o fopen_unlocked.o getpwd.o hashtab.o hex.o \
+		    lbasename.o md5.o obstack.o safe-ctype.o splay-tree.o \
+		    vasprintf.o xexit.o xmalloc.o xmemdup.o xstrdup.o \
+		    xstrerror.o
+
+concat.o: $(LIBIBERTY_DIR)/concat.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+fopen_unlocked.o: $(LIBIBERTY_DIR)/fopen_unlocked.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+getpwd.o: $(LIBIBERTY_DIR)/getpwd.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+hashtab.o: $(LIBIBERTY_DIR)/hashtab.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+hex.o: $(LIBIBERTY_DIR)/hex.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+lbasename.o: $(LIBIBERTY_DIR)/lbasename.c $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+md5.o: $(LIBIBERTY_DIR)/md5.c $(LIBIBERTY_DIR)/obstack.h $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
 obstack.o: $(LIBIBERTY_DIR)/obstack.c $(LIBIBERTY_DIR)/obstack.h $(CONFIG_H) $(LIBCPP_DEPS)
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+safe-ctype.o: $(LIBIBERTY_DIR)/safe-ctype.c $(LIBIBERTY_DIR)/safe-ctype.h $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
 splay-tree.o: $(LIBIBERTY_DIR)/splay-tree.c $(LIBIBERTY_DIR)/splay-tree.h $(CONFIG_H) $(LIBCPP_DEPS)
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
-lbasename.o: $(LIBIBERTY_DIR)/lbasename.c  $(CONFIG_H) $(LIBCPP_DEPS)
+
+vasprintf.o: $(LIBIBERTY_DIR)/vasprintf.c  $(CONFIG_H) $(LIBCPP_DEPS)
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+xexit.o: $(LIBIBERTY_DIR)/xexit.c  $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+xmalloc.o: $(LIBIBERTY_DIR)/xmalloc.c  $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+xmemdup.o: $(LIBIBERTY_DIR)/xmemdup.c  $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+xstrdup.o: $(LIBIBERTY_DIR)/xstrdup.c  $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+xstrerror.o: $(LIBIBERTY_DIR)/xstrerror.c  $(CONFIG_H) $(LIBCPP_DEPS)
+	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) $< $(OUTPUT_OPTION)
+
+##########################
+# Sdcpp
+
+SDCC_OBJS = sdcpp.o sdcpp-opts.o c-ppoutput.o cppdefault.o prefix.o version.o opts.o options.o c-incpath.o
+
+$(TARGET): $(SDCC_OBJS) $(MY_LIBIBERTY_BITS) libcpp.a $(LIBDEPS)
+	mkdir -p $(dir $@)
+	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ $(SDCC_OBJS) \
+	$(MY_LIBIBERTY_BITS) libcpp.a $(LIBS)
+
+sdcpp.o: sdcpp.c $(CONFIG_H) $(SYSTEM_H) options.h
+
+sdcpp-opts.o: sdcpp-opts.c $(CONFIG_H) $(LIBCPP_DEPS) options.h
+
+c-ppoutput.o: c-ppoutput.c $(CONFIG_H) $(SYSTEM_H)
+
+options.o: options.c $(CONFIG_H) $(LIBCPP_DEPS) options.h
+
+opts.o: opts.c $(CONFIG_H) $(LIBCPP_DEPS) options.h
+
+c-incpath.o: $(CONFIG_H) $(LIBCPP_DEPS) c-incpath.h
+
+version.o: version.c version.h
+
+cppcharset.o: cppcharset.c $(CONFIG_H) $(SYSTEM_H)
+
+prefix.o: prefix.c $(CONFIG_H) $(SYSTEM_H) Makefile prefix.h
+	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
+	-DPREFIX=\"$(prefix)\" \
+	  -c $(srcdir)/prefix.c
+
 cppdefault.o: cppdefault.c $(CONFIG_H) $(SYSTEM_H) cppdefault.h Makefile
 	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
 	  $(PREPROCESSOR_DEFINES) \
 	  -c $(srcdir)/cppdefault.c
-
-mkdeps.o: mkdeps.c $(CONFIG_H) $(SYSTEM_H) mkdeps.h
-

@@ -3,7 +3,6 @@
 
 unsigned char failures=0;
 
-bit bit0 = 0;
 signed int aint0 = 0;
 signed int aint1 = 0;
 signed char achar0 = 0;
@@ -84,7 +83,7 @@ void main(void)
   achar1 = 4;
   achar0 = 0xf0;
   shift_right_var();
-  if(achar0 != 0xff)
+  if(achar0 != (char)0xff)
     failures++;
 
   aint0 = 1;

@@ -61,24 +61,67 @@ MTL=midl.exe
 # Name "sdcppa - Win32 Debug"
 # Begin Source File
 
-SOURCE=.\auto-host_vc_in.h
+SOURCE=".\auto-host_vc_in.h"
 
 !IF  "$(CFG)" == "sdcppa - Win32 Release"
 
 # Begin Custom Build
-InputPath=.\auto-host_vc_in.h
+InputPath=".\auto-host_vc_in.h"
 
 "auto-host.h" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
 	copy auto-host_vc_in.h auto-host.h > nul
+
 # End Custom Build
 
 !ELSEIF  "$(CFG)" == "sdcppa - Win32 Debug"
 
 # Begin Custom Build
-InputPath=.\auto-host_vc_in.h
+InputPath=".\auto-host_vc_in.h"
 
 "auto-host.h" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
 	copy auto-host_vc_in.h auto-host.h > nul
+
+# End Custom Build
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\sdcpp.opt
+
+!IF  "$(CFG)" == "sdcppa - Win32 Release"
+
+# Begin Custom Build
+InputPath=.\sdcpp.opt
+
+BuildCmds= \
+	gawk -f opt-gather.awk sdcpp.opt | gawk -f opt-functions.awk -f optc-gen.awk -v header_name="config.h system.h options.h" > options.c \
+	gawk -f opt-gather.awk sdcpp.opt | gawk -f opt-functions.awk -f opth-gen.awk > options.h \
+	
+
+"options.c" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
+   $(BuildCmds)
+
+"options.h" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
+   $(BuildCmds)
+# End Custom Build
+
+!ELSEIF  "$(CFG)" == "sdcppa - Win32 Debug"
+
+# Begin Custom Build
+InputPath=.\sdcpp.opt
+
+BuildCmds= \
+	gawk -f opt-gather.awk sdcpp.opt | gawk -f opt-functions.awk -f optc-gen.awk -v header_name="config.h system.h options.h" > options.c \
+	gawk -f opt-gather.awk sdcpp.opt | gawk -f opt-functions.awk -f opth-gen.awk > options.h \
+	
+
+"options.c" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
+   $(BuildCmds)
+
+"options.h" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)"
+   $(BuildCmds)
 # End Custom Build
 
 !ENDIF 
