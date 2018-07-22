@@ -1,20 +1,30 @@
-/*  sincosf.c: Computes sin or cos of a 32-bit float as outlined in [1]
+/*-------------------------------------------------------------------------
+   sincosf.c - Computes sin or cos of a 32-bit float as outlined in [1]
 
-    Copyright (C) 2001, 2002  Jesus Calvino-Fraga, jesusc@ieee.org
+   Copyright (C) 2001, 2002, Jesus Calvino-Fraga, jesusc@ieee.org
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA */
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 /* [1] William James Cody and W.  M.  Waite.  _Software manual for the
    elementary functions_, Englewood Cliffs, N.J.:Prentice-Hall, 1980. */
@@ -24,6 +34,10 @@
 #include <math.h>
 #include <errno.h>
 #include <stdbool.h>
+
+#ifndef BOOL
+#define BOOL _Bool
+#endif
 
 #define r1      -0.1666665668E+0
 #define r2       0.8333025139E-2
@@ -37,11 +51,11 @@
 /*A reasonable value for YMAX is the int part of PI*B**(t/2)=3.1416*2**(12)*/
 #define YMAX     12867.0
 
-float sincosf(const float x, const int iscos)
+float sincosf(const float x, const BOOL iscos)
 {
     float y, f, r, g, XN;
     int N;
-	BOOL sign;
+    BOOL sign;
 
     if(iscos)
     {

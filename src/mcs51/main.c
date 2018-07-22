@@ -24,7 +24,7 @@ static OPTION _mcs51_options[] =
     { 0, OPTION_STACK_SIZE,  &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
     { 0, "--parms-in-bank1", &options.parms_in_bank1, "use Bank1 for parameter passing"},
     { 0, "--pack-iram",      NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",   &options.no_pack_iram, "Tells the linker not to pack variables in internal ram"},
+    { 0, "--no-pack-iram",   &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--acall-ajmp",     &options.acall_ajmp, "Use acall/ajmp instead of lcall/ljmp" },
     { 0, NULL }
   };
@@ -39,26 +39,21 @@ static char *_mcs51_keywords[] =
   "critical",
   "data",
   "far",
+  "generic",
   "idata",
   "interrupt",
+  "naked",
   "near",
+  "nonbanked",
+  "overlay",
   "pdata",
   "reentrant",
+  "sbit",
   "sfr",
   "sfr16",
   "sfr32",
-  "sbit",
   "using",
   "xdata",
-  "_data",
-  "_code",
-  "_generic",
-  "_near",
-  "_xdata",
-  "_pdata",
-  "_idata",
-  "_naked",
-  "_overlay",
   NULL
 };
 
@@ -85,38 +80,45 @@ _mcs51_reset_regparm (void)
 static int
 _mcs51_regparm (sym_link * l, bool reentrant)
 {
-    if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT)) {
-        /* bit parameters go to b0 thru b7 */
-        if (reentrant && (regBitParmFlg < 8)) {
-            regBitParmFlg++;
-            return 12 + regBitParmFlg;
+  if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
+    {
+      /* bit parameters go to b0 thru b7 */
+      if (reentrant && (regBitParmFlg < 8))
+        {
+          regBitParmFlg++;
+          return 12 + regBitParmFlg;
         }
-        return 0;
+      return 0;
     }
-    if (options.parms_in_bank1 == 0) {
-        /* simple can pass only the first parameter in a register */
-        if (regParmFlg)
-            return 0;
+  if (options.parms_in_bank1 == 0)
+    {
+      /* simple can pass only the first parameter in a register */
+      if (regParmFlg)
+        return 0;
 
-        regParmFlg = 1;
-        return 1;
-    } else {
-        int size = getSize(l);
-        int remain ;
+      regParmFlg = 1;
+      return 1;
+    }
+  else
+    {
+      int size = getSize(l);
+      int remain ;
 
-        /* first one goes the usual way to DPTR */
-        if (regParmFlg == 0) {
-            regParmFlg += 4 ;
-            return 1;
+      /* first one goes the usual way to DPTR */
+      if (regParmFlg == 0)
+        {
+          regParmFlg += 4 ;
+          return 1;
         }
-        /* second one onwards goes to RB1_0 thru RB1_7 */
-        remain = regParmFlg - 4;
-        if (size > (8 - remain)) {
-            regParmFlg = 12 ;
-            return 0;
+      /* second one onwards goes to RB1_0 thru RB1_7 */
+      remain = regParmFlg - 4;
+      if (size > (8 - remain))
+        {
+          regParmFlg = 12 ;
+          return 0;
         }
-        regParmFlg += size ;
-        return regParmFlg - size + 1;
+      regParmFlg += size ;
+      return regParmFlg - size + 1;
     }
 }
 
@@ -132,9 +134,8 @@ _mcs51_parseOptions (int *pargc, char **argv, int *i)
 static void
 _mcs51_finaliseOptions (void)
 {
-  if (options.noXinitOpt) {
+  if (options.noXinitOpt)
     port->genXINIT=0;
-  }
 
   switch (options.model)
     {
@@ -149,6 +150,7 @@ _mcs51_finaliseOptions (void)
       port->s.gptr_size = 3;
       break;
     case MODEL_LARGE:
+    case MODEL_HUGE:
       port->mem.default_local_map = xdata;
       port->mem.default_globl_map = xdata;
       port->s.gptr_size = 3;
@@ -159,9 +161,19 @@ _mcs51_finaliseOptions (void)
       break;
     }
 
-  if (options.parms_in_bank1) {
-      addSet(&preArgvSet, Safe_strdup("-DSDCC_PARMS_IN_BANK1"));
-  }
+  if (options.parms_in_bank1)
+    addSet(&preArgvSet, Safe_strdup("-DSDCC_PARMS_IN_BANK1"));
+
+  /* mcs51 has an assembly coded float library that's almost always reentrant */
+  if (!options.useXstack)
+    options.float_rent = 1;
+
+  if (options.omitFramePtr)
+    port->stack.reent_overhead = 0;
+
+  /* set up external stack location if not explicitly specified */
+  if (!options.xstack_loc)
+    options.xstack_loc = options.xdata_loc;
 }
 
 static void
@@ -170,7 +182,7 @@ _mcs51_setDefaultOptions (void)
 }
 
 static const char *
-_mcs51_getRegName (struct regs *reg)
+_mcs51_getRegName (const struct reg_info *reg)
 {
   if (reg)
     return reg->name;
@@ -180,10 +192,11 @@ _mcs51_getRegName (struct regs *reg)
 static void
 _mcs51_genAssemblerPreamble (FILE * of)
 {
-    if (options.parms_in_bank1) {
-        int i ;
-        for (i=0; i < 8 ; i++ )
-            fprintf (of,"b1_%d = 0x%x \n",i,8+i);
+  if (options.parms_in_bank1)
+    {
+      int i;
+      for (i=0; i < 8 ; i++ )
+        fprintf (of,"b1_%d = 0x%x \n",i,8+i);
     }
 }
 
@@ -255,7 +268,8 @@ _mcs51_genInitStartup (FILE *of)
 
 
 /* Generate code to copy XINIT to XISEG */
-static void _mcs51_genXINIT (FILE * of) {
+static void _mcs51_genXINIT (FILE * of)
+{
   tfprintf (of, "\t!global\n", "__mcs51_genXINIT");
 
   if (!getenv("SDCC_NOGENRAMCLEAR"))
@@ -266,23 +280,24 @@ static void _mcs51_genXINIT (FILE * of) {
 /* Do CSE estimation */
 static bool cseCostEstimation (iCode *ic, iCode *pdic)
 {
-    operand *result = IC_RESULT(ic);
-    sym_link *result_type = operandType(result);
+  operand *result = IC_RESULT(ic);
+  sym_link *result_type = operandType(result);
 
-    /* if it is a pointer then return ok for now */
-    if (IC_RESULT(ic) && IS_PTR(result_type)) return 1;
+  /* if it is a pointer then return ok for now */
+  if (IC_RESULT(ic) && IS_PTR(result_type)) return 1;
 
-    /* if bitwise | add & subtract then no since mcs51 is pretty good at it
-       so we will cse only if they are local (i.e. both ic & pdic belong to
-       the same basic block */
-    if (IS_BITWISE_OP(ic) || ic->op == '+' || ic->op == '-') {
-        /* then if they are the same Basic block then ok */
-        if (ic->eBBlockNum == pdic->eBBlockNum) return 1;
-        else return 0;
+  /* if bitwise | add & subtract then no since mcs51 is pretty good at it
+     so we will cse only if they are local (i.e. both ic & pdic belong to
+     the same basic block */
+  if (IS_BITWISE_OP(ic) || ic->op == '+' || ic->op == '-')
+    {
+      /* then if they are the same Basic block then ok */
+      if (ic->eBBlockNum == pdic->eBBlockNum) return 1;
+      else return 0;
     }
 
-    /* for others it is cheaper to do the cse */
-    return 1;
+  /* for others it is cheaper to do the cse */
+  return 1;
 }
 
 /* Indicate which extended bit operations this port supports */
@@ -311,8 +326,6 @@ oclsExpense (struct memmap *oclass)
 
   return 0;
 }
-
-
 
 static int
 instructionSize(char *inst, char *op1, char *op2)
@@ -452,37 +465,37 @@ mcs51operanddata;
 
 static mcs51operanddata mcs51operandDataTable[] =
   {
-    {"a", A_IDX, -1},
-    {"ab", A_IDX, B_IDX},
-    {"ac", CND_IDX, -1},
-    {"acc", A_IDX, -1},
-    {"ar0", R0_IDX, -1},
-    {"ar1", R1_IDX, -1},
-    {"ar2", R2_IDX, -1},
-    {"ar3", R3_IDX, -1},
-    {"ar4", R4_IDX, -1},
-    {"ar5", R5_IDX, -1},
-    {"ar6", R6_IDX, -1},
-    {"ar7", R7_IDX, -1},
-    {"b", B_IDX, -1},
-    {"c", CND_IDX, -1},
-    {"cy", CND_IDX, -1},
-    {"dph", DPH_IDX, -1},
-    {"dpl", DPL_IDX, -1},
+    {"a",    A_IDX,   -1},
+    {"ab",   A_IDX,   B_IDX},
+    {"ac",   CND_IDX, -1},
+    {"acc",  A_IDX,   -1},
+    {"ar0",  R0_IDX,  -1},
+    {"ar1",  R1_IDX,  -1},
+    {"ar2",  R2_IDX,  -1},
+    {"ar3",  R3_IDX,  -1},
+    {"ar4",  R4_IDX,  -1},
+    {"ar5",  R5_IDX,  -1},
+    {"ar6",  R6_IDX,  -1},
+    {"ar7",  R7_IDX,  -1},
+    {"b",    B_IDX,   -1},
+    {"c",    CND_IDX, -1},
+    {"cy",   CND_IDX, -1},
+    {"dph",  DPH_IDX, -1},
+    {"dpl",  DPL_IDX, -1},
     {"dptr", DPL_IDX, DPH_IDX},
-    {"f0", CND_IDX, -1},
-    {"f1", CND_IDX, -1},
-    {"ov", CND_IDX, -1},
-    {"p", CND_IDX, -1},
-    {"psw", CND_IDX, -1},
-    {"r0", R0_IDX, -1},
-    {"r1", R1_IDX, -1},
-    {"r2", R2_IDX, -1},
-    {"r3", R3_IDX, -1},
-    {"r4", R4_IDX, -1},
-    {"r5", R5_IDX, -1},
-    {"r6", R6_IDX, -1},
-    {"r7", R7_IDX, -1},
+    {"f0",   CND_IDX, -1},
+    {"f1",   CND_IDX, -1},
+    {"ov",   CND_IDX, -1},
+    {"p",    CND_IDX, -1},
+    {"psw",  CND_IDX, -1},
+    {"r0",   R0_IDX,  -1},
+    {"r1",   R1_IDX,  -1},
+    {"r2",   R2_IDX,  -1},
+    {"r3",   R3_IDX,  -1},
+    {"r4",   R4_IDX,  -1},
+    {"r5",   R5_IDX,  -1},
+    {"r6",   R6_IDX,  -1},
+    {"r7",   R7_IDX,  -1},
   };
 
 static int
@@ -693,6 +706,43 @@ getRegsWritten (lineNode *line)
   return line->aln->regsWritten;
 }
 
+static const char * models[] = 
+{
+  "small",  "small-xstack",  "small-stack-auto",  "small-xstack-auto",
+  "medium", "medium-xstack", "medium-stack-auto", "medium-xstack-auto",
+  "large",  "large-xstack",  "large-stack-auto",  "large-xstack-auto",
+  "huge",   "huge-xstack",   "huge-stack-auto",   "huge-xstack-auto",
+};
+
+static const char *
+get_model (void)
+{
+  int index;
+
+  switch (options.model)
+    {
+    case MODEL_SMALL:
+      index = 0;
+      break;
+    case MODEL_MEDIUM:
+      index = 4;
+      break;
+    case MODEL_LARGE:
+      index = 8;
+      break;
+    case MODEL_HUGE:
+      index = 12;
+      break;
+    default:
+      werror (W_UNKNOWN_MODEL, __FILE__, __LINE__);
+      return "unknown";
+    }
+  if (options.stackAuto)
+    index += 2;
+  if (options.useXstack)
+    index += 1;
+  return models[index];
+}
 
 /** $1 is always the basename.
     $2 is always the output file.
@@ -702,14 +752,16 @@ getRegsWritten (lineNode *line)
 */
 static const char *_linkCmd[] =
 {
-  "aslink", "-nf", "\"$1\"", NULL
+  "sdld", "-nf", "\"$1\"", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
 static const char *_asmCmd[] =
 {
-  "asx8051", "$l", "$3", "\"$1.asm\"", NULL
+  "sdas8051", "$l", "$3", "\"$2\"", "\"$1.asm\"", NULL
 };
+
+static const char * const _libs[] = { "mcs51", STD_LIB, STD_INT_LIB, STD_LONG_LIB, STD_FP_LIB, NULL, };
 
 /* Globals */
 PORT mcs51_port =
@@ -720,15 +772,16 @@ PORT mcs51_port =
   NULL,                         /* Processor name */
   {
     glue,
-    TRUE,                       /* Emit glue around main */
-    MODEL_SMALL | MODEL_MEDIUM | MODEL_LARGE,
-    MODEL_SMALL
+    TRUE,                       /* glue_up_main: Emit glue around main */
+    MODEL_SMALL | MODEL_MEDIUM | MODEL_LARGE | MODEL_HUGE,
+    MODEL_SMALL,
+    get_model,
   },
   {                             /* Assembler */
     _asmCmd,
     NULL,
-    "-plosgffc",                /* Options with debug */
-    "-plosgff",                 /* Options without debug */
+    "-plosgffwzc",              /* Options with debug */
+    "-plosgffwz",               /* Options without debug */
     0,
     ".asm",
     NULL                        /* no do_assemble function */
@@ -738,7 +791,9 @@ PORT mcs51_port =
     NULL,
     NULL,
     ".rel",
-    1
+    1,
+    NULL,                       /* crt */
+    _libs,                      /* libs */
   },
   {                             /* Peephole optimizer */
     _defaultRules,
@@ -746,14 +801,15 @@ PORT mcs51_port =
     getRegsRead,
     getRegsWritten,
     mcs51DeadMove,
-    0
+    0,
+    0,
   },
   {
-    /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-    1, 2, 2, 4, 1, 2, 3, 1, 4, 4
+    /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+    1, 2, 2, 4, 8, 1, 2, 3, 1, 4, 4
   },
   /* tags for generic pointers */
-  { 0x00, 0x40, 0x60, 0x80 },		/* far, near, xstack, code */
+  { 0x00, 0x40, 0x60, 0x80 },   /* far, near, xstack, code */
   {
     "XSTK    (PAG,XDATA)",      // xstack_name
     "STACK   (DATA)",           // istack_name
@@ -763,7 +819,7 @@ PORT mcs51_port =
     "PSEG    (PAG,XDATA)",      // pdata_name
     "XSEG    (XDATA)",          // xdata_name
     "BSEG    (BIT)",            // bit_name
-    "RSEG    (DATA)",           // reg_name
+    "RSEG    (ABS,DATA)",       // reg_name
     "GSINIT  (CODE)",           // static_name
     "OSEG    (OVR,DATA)",       // overlay_name
     "GSFINAL (CODE)",           // post_static_name
@@ -785,7 +841,7 @@ PORT mcs51_port =
     4,          /* isr_overhead */
     1,          /* call_overhead (2 for return address - 1 for pre-incrementing push */
     1,          /* reent_overhead */
-    0           /* banked_overhead (switch between code banks) */
+    1           /* banked_overhead (switch between code banks) */
   },
   {
     /* mcs51 has an 8 bit mul */
@@ -819,13 +875,13 @@ PORT mcs51_port =
   _mcs51_genInitStartup,
   _mcs51_reset_regparm,
   _mcs51_regparm,
-  NULL,
-  NULL,
-  NULL,
+  NULL,                         /* process_pragma */
+  NULL,                         /* getMangledFunctionName */
+  NULL,                         /* hasNativeMulFor */
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
-  FALSE,
-  TRUE,                         /* little endian */
+  FALSE,                        /* use_dw_for_init */
+  TRUE,                         /* little_endian */
   0,                            /* leave lt */
   0,                            /* leave gt */
   1,                            /* transform <= to ! > */

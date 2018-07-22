@@ -1,5 +1,5 @@
 NOTES file for SDCC pic16 port
-$Id: NOTES 4121 2006-04-24 20:29:10Z bernhardheld $
+$Id: NOTES 5487 2009-08-08 15:04:04Z MaartenBrock $
 
 Current pic16 port status is: Development
 
@@ -159,7 +159,7 @@ programs is:
 			callee-saves
 	--no-peep	peephole optimizer is better to be switched off,
 			because it behaves strangely in some cases
-	--fommit-frame-pointer	this omits frame pointer in functions that
+	--fomit-frame-pointer	this omits frame pointer in functions that
 			don't use registers (maybe changed later, not
 			important)
 

@@ -10,15 +10,17 @@ VERSIONLO       = @VERSIONLO@
 VERSIONP        = @VERSIONP@
 
 # Programs
-SHELL		= /bin/sh
-CC		= @CCACHE@ @CC@
-CPP		= @CCACHE@ @CPP@
-RANLIB		= @RANLIB@
-INSTALL		= @INSTALL@
+SHELL           = /bin/sh
+CC              = @CCACHE@ @CC@
+CPP             = @CCACHE@ @CPP@
+CXX             = @CCACHE@ @CXX@
+RANLIB          = @RANLIB@
+INSTALL         = @INSTALL@
 YACC            = @YACC@
 LEX             = @LEX@
 AWK             = @AWK@
 STRIP           = @STRIP@
+MAKEDEP         = @MAKEDEP@
 prefix          = @prefix@
 exec_prefix     = @exec_prefix@
 bindir          = @bindir@
@@ -42,10 +44,13 @@ OPT_DISABLE_DS390 = @OPT_DISABLE_DS390@
 OPT_DISABLE_DS400 = @OPT_DISABLE_DS400@
 OPT_DISABLE_HC08  = @OPT_DISABLE_HC08@
 OPT_DISABLE_MCS51 = @OPT_DISABLE_MCS51@
-OPT_DISABLE_PIC   = @OPT_DISABLE_PIC@
+OPT_DISABLE_PIC14 = @OPT_DISABLE_PIC14@
 OPT_DISABLE_PIC16 = @OPT_DISABLE_PIC16@
 OPT_DISABLE_XA51  = @OPT_DISABLE_XA51@
 OPT_DISABLE_Z80   = @OPT_DISABLE_Z80@
+OPT_DISABLE_Z180  = @OPT_DISABLE_Z180@
+OPT_DISABLE_R2K   = @OPT_DISABLE_R2K@
+OPT_DISABLE_GBZ80  = @OPT_DISABLE_GBZ80@
 
 OPT_DISABLE_UCSIM     = @OPT_DISABLE_UCSIM@
 OPT_DISABLE_DEVICE_LIB= @OPT_DISABLE_DEVICE_LIB@
@@ -53,7 +58,7 @@ OPT_DISABLE_PACKIHX   = @OPT_DISABLE_PACKIHX@
 OPT_ENABLE_DOC        = @OPT_ENABLE_DOC@
 OPT_DISABLE_SDCPP     = @OPT_DISABLE_SDCPP@
 
-SLIB			= $(top_builddir)/support/Util
+SLIB                  = $(top_builddir)/support/util
 
 EXEEXT          = @EXEEXT@
 transform       = @program_transform_name@
@@ -62,9 +67,9 @@ transform       = @program_transform_name@
 
 DEFS           += $(subs -DHAVE_CONFIG_H,,@DEFS@)
 CPPFLAGS       += @CPPFLAGS@ $(INCLUDEFLAGS) -I. -I$(top_builddir) -I$(srcdir)/$(SLIB) -I$(srcdir)
-CFLAGS         += -Wall @CFLAGS@
+CFLAGS         += @CFLAGS@ @WALL_FLAG@
+CXXFLAGS       += @CXXFLAGS@
 LDFLAGS        += @LDFLAGS@
-M_OR_MM         = @M_OR_MM@
 
 EXTRALIBS      += @LIBS@
 
@@ -75,4 +80,4 @@ EXTRALIBS      += @LIBS@
 # Library compilation options
 CLEANSPEC = *.lst *.asm *.sym *~ *.cdb *.dep *.rul
 
-OBJ = $(SOURCES:.c=.o)
+OBJ = $(SOURCES:.c=.o) $(CXXSOURCES:.cc=.o)

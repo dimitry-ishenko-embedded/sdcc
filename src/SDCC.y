@@ -75,13 +75,14 @@ bool uselessDecl = TRUE;
     int        yyint;      /* integer value returned     */
     value      *val ;      /* for integer constant       */
     initList   *ilist;     /* initial list               */
+    designation*dsgn;      /* designator                 */
     const char *yyinline;  /* inlined assembler code     */
     ast        *asts;      /* expression tree            */
 }
 
 %token <yychar> IDENTIFIER TYPE_NAME
 %token <val> CONSTANT STRING_LITERAL
-%token SIZEOF TYPEOF
+%token SIZEOF TYPEOF OFFSETOF
 %token PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP
 %token <yyint> MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
@@ -89,9 +90,9 @@ bool uselessDecl = TRUE;
 %token <yyint> XOR_ASSIGN OR_ASSIGN
 %token TYPEDEF EXTERN STATIC AUTO REGISTER CODE EEPROM INTERRUPT SFR SFR16 SFR32
 %token AT SBIT REENTRANT USING  XDATA DATA IDATA PDATA VAR_ARGS CRITICAL
-%token NONBANKED BANKED SHADOWREGS WPARAM
-%token CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE FIXED16X16 CONST VOLATILE VOID BIT
-%token STRUCT UNION ENUM RANGE FAR
+%token NONBANKED BANKED SHADOWREGS SD_WPARAM
+%token SD_BOOL SD_CHAR SD_SHORT SD_INT SD_LONG SIGNED UNSIGNED SD_FLOAT DOUBLE FIXED16X16 SD_CONST VOLATILE SD_VOID BIT
+%token STRUCT UNION ENUM RANGE SD_FAR
 %token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 %token NAKED JAVANATIVE OVERLAY
 %token <yyinline> INLINEASM
@@ -99,7 +100,7 @@ bool uselessDecl = TRUE;
 %token BITWISEAND UNARYMINUS IPUSH IPOP PCALL  ENDFUNCTION JUMPTABLE
 %token RRC RLC
 %token CAST CALL PARAM NULLOP BLOCK LABEL RECEIVE SEND ARRAYINIT
-%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP INLINE RESTRICT
+%token DUMMY_READ_VOLATILE ENDCRITICAL SWAP INLINE RESTRICT SMALLC
 
 %type <yyint> Interrupt_storage
 %type <sym> identifier declarator declarator2 declarator3 enumerator_list enumerator
@@ -108,15 +109,15 @@ bool uselessDecl = TRUE;
 %type <sym> declaration init_declarator_list init_declarator
 %type <sym> declaration_list identifier_list
 %type <sym> declarator2_function_attributes while do for critical
-%type <lnk> pointer type_specifier_list type_specifier type_name
+%type <lnk> pointer type_specifier_list type_specifier_list_ type_specifier type_name
 %type <lnk> storage_class_specifier struct_or_union_specifier function_specifier
-%type <lnk> declaration_specifiers sfr_reg_bit sfr_attributes type_specifier2
+%type <lnk> declaration_specifiers declaration_specifiers_ sfr_reg_bit sfr_attributes
 %type <lnk> function_attribute function_attributes enum_specifier
 %type <lnk> abstract_declarator abstract_declarator2 unqualified_pointer
 %type <val> parameter_type_list parameter_list parameter_declaration opt_assign_expr
 %type <sdef> stag opt_stag
 %type <asts> primary_expr
-%type <asts> postfix_expr unary_expr cast_expr multiplicative_expr
+%type <asts> postfix_expr unary_expr offsetof_member_designator cast_expr multiplicative_expr
 %type <asts> additive_expr shift_expr relational_expr equality_expr
 %type <asts> and_expr exclusive_or_expr inclusive_or_expr logical_or_expr
 %type <asts> logical_and_expr conditional_expr assignment_expr constant_expr
@@ -125,6 +126,7 @@ bool uselessDecl = TRUE;
 %type <asts> expression_statement selection_statement iteration_statement
 %type <asts> jump_statement function_body else_statement string_literal
 %type <asts> critical_statement
+%type <dsgn> designator designator_list designation designation_opt
 %type <ilist> initializer initializer_list
 %type <yyint> unary_operator assignment_operator struct_or_union
 
@@ -183,8 +185,6 @@ function_definition
    | declaration_specifiers function_declarator function_body
                                 {
                                     pointerTypes($2->type,copyLinkChain($1));
-                                    if (options.unsigned_char && SPEC_NOUN($1) == V_CHAR && !($1)->select.s.b_signed)
-                                      SPEC_USIGN($1) = 1;
                                     addDecl($2,0,$1);
                                     $$ = createFunction($2,$3);
                                 }
@@ -224,16 +224,13 @@ function_attributes
    |  SHADOWREGS     {$$ = newLink (SPECIFIER);
                         FUNC_ISSHADOWREGS($$) = 1;
                      }
-   |  WPARAM         {$$ = newLink (SPECIFIER);
+   |  SD_WPARAM      {$$ = newLink (SPECIFIER);
                         FUNC_ISWPARAM($$) = 1;
                      }
    |  BANKED         {$$ = newLink (SPECIFIER);
                         FUNC_BANKED($$) = 1;
                         if (FUNC_NONBANKED($$)) {
                             werror(W_BANKED_WITH_NONBANKED);
-                        }
-                        if (SPEC_STAT($$)) {
-                            werror(W_BANKED_WITH_STATIC);
                         }
                      }
    |  Interrupt_storage
@@ -242,22 +239,40 @@ function_attributes
                         FUNC_INTNO($$) = $1 ;
                         FUNC_ISISR($$) = 1;
                      }
+   |  SMALLC         {  $$ = newLink (SPECIFIER);
+                        FUNC_ISSMALLC($$)=1;
+                     }
    ;
 
 function_body
    : compound_statement
    | declaration_list compound_statement
-         {
-            werror(E_OLD_STYLE,($1 ? $1->name: "")) ;
-            exit(1);
-         }
+                     {
+                       werror (E_OLD_STYLE, ($1 ? $1->name: "")) ;
+                       exit (1);
+                     }
+   ;
+
+offsetof_member_designator
+   : identifier      { $$ = newAst_VALUE (symbolVal ($1)); }
+   | offsetof_member_designator '.' { ignoreTypedefType = 1; } identifier
+                     {
+                       ignoreTypedefType = 0;
+                       $4 = newSymbol ($4->name, NestLevel);
+                       $4->implicit = 1;
+                       $$ = newNode ('.', $1, newAst_VALUE (symbolVal ($4))) ;
+                     }
+   | offsetof_member_designator '[' expr ']'
+                     {
+                       $$ = newNode ('[', $1, $3);
+                     }
    ;
 
 primary_expr
-   : identifier      {  $$ = newAst_VALUE(symbolVal($1));  }
-   | CONSTANT        {  $$ = newAst_VALUE($1);  }
+   : identifier      { $$ = newAst_VALUE (symbolVal ($1)); }
+   | CONSTANT        { $$ = newAst_VALUE ($1); }
    | string_literal
-   | '(' expr ')'    {  $$ = $2 ;                   }
+   | '(' expr ')'    { $$ = $2; }
    ;
 
 string_literal
@@ -279,7 +294,6 @@ postfix_expr
                         $4 = newSymbol($4->name,NestLevel);
                         $4->implicit = 1;
                         $$ = newNode(PTR_OP,newNode('&',$1,NULL),newAst_VALUE(symbolVal($4)));
-/*                      $$ = newNode('.',$1,newAst(EX_VALUE,symbolVal($4))) ;                   */
                       }
    | postfix_expr PTR_OP { ignoreTypedefType = 1; } identifier
                       {
@@ -301,12 +315,13 @@ argument_expr_list
 
 unary_expr
    : postfix_expr
-   | INC_OP unary_expr        { $$ = newNode(INC_OP,NULL,$2);  }
-   | DEC_OP unary_expr        { $$ = newNode(DEC_OP,NULL,$2);  }
-   | unary_operator cast_expr { $$ = newNode($1,$2,NULL)    ;  }
-   | SIZEOF unary_expr        { $$ = newNode(SIZEOF,NULL,$2);  }
-   | SIZEOF '(' type_name ')' { $$ = newAst_VALUE(sizeofOp($3)); }
-   | TYPEOF unary_expr        { $$ = newNode(TYPEOF,NULL,$2);  }
+   | INC_OP unary_expr        { $$ = newNode (INC_OP, NULL, $2); }
+   | DEC_OP unary_expr        { $$ = newNode (DEC_OP, NULL, $2); }
+   | unary_operator cast_expr { $$ = newNode ($1, $2, NULL); }
+   | SIZEOF unary_expr        { $$ = newNode (SIZEOF, NULL, $2); }
+   | SIZEOF '(' type_name ')' { $$ = newAst_VALUE (sizeofOp ($3)); }
+   | TYPEOF unary_expr        { $$ = newNode (TYPEOF, NULL, $2); }
+   | OFFSETOF '(' type_name ',' offsetof_member_designator ')' { $$ = offsetofOp($3, $5); }
    ;
 
 unary_operator
@@ -429,9 +444,6 @@ assignment_expr
                                      $$ = createRMW($1, '^', $3);
                                      break;
                              case OR_ASSIGN:
-/*                                   $$ = newNode('=',$1,newNode('|',removeIncDecOps(copyAst($1)),$3)); */
-/*                                   $$ = newNode('=',removePostIncDecOps(copyAst($1)),
-                                                      newNode('|',removePreIncDecOps(copyAst($1)),$3)); */
                                      $$ = createRMW($1, '|', $3);
                                      break;
                              default :
@@ -479,8 +491,6 @@ declaration
 
          for (sym1 = sym = reverseSyms($2);sym != NULL;sym = sym->next) {
              sym_link *lnk = copyLinkChain($1);
-             if (options.unsigned_char && SPEC_NOUN(lnk) == V_CHAR && !lnk->select.s.b_signed)
-               SPEC_USIGN(lnk) = 1;
              /* do the pointer stuff */
              pointerTypes(sym->type,lnk);
              addDecl (sym,0,lnk) ;
@@ -491,48 +501,26 @@ declaration
       }
    ;
 
-declaration_specifiers
+declaration_specifiers : declaration_specifiers_ { $$ = finalizeSpec($1); } ;
+
+declaration_specifiers_
    : storage_class_specifier                                            { $$ = $1; }
-   | storage_class_specifier declaration_specifiers {
+   | storage_class_specifier declaration_specifiers_ {
      /* if the decl $2 is not a specifier */
      /* find the spec and replace it      */
-     if ( !IS_SPEC($2)) {
-       sym_link *lnk = $2 ;
-       while (lnk && !IS_SPEC(lnk->next))
-         lnk = lnk->next;
-       lnk->next = mergeSpec($1,lnk->next, "storage_class_specifier declaration_specifiers - skipped");
-       $$ = $2 ;
-     }
-     else
-       $$ = mergeSpec($1,$2, "storage_class_specifier declaration_specifiers");
+     $$ = mergeDeclSpec($1, $2, "storage_class_specifier declaration_specifiers - skipped");
    }
    | type_specifier                                 { $$ = $1; }
-   | type_specifier declaration_specifiers          {
+   | type_specifier declaration_specifiers_         {
      /* if the decl $2 is not a specifier */
      /* find the spec and replace it      */
-     if ( !IS_SPEC($2)) {
-       sym_link *lnk = $2 ;
-       while (lnk && !IS_SPEC(lnk->next))
-         lnk = lnk->next;
-       lnk->next = mergeSpec($1,lnk->next, "type_specifier declaration_specifiers - skipped");
-       $$ = $2 ;
-     }
-     else
-       $$ = mergeSpec($1,$2, "type_specifier declaration_specifiers");
+     $$ = mergeDeclSpec($1, $2, "type_specifier declaration_specifiers - skipped");
    }
    | function_specifier                             { $$ = $1; }
-   | function_specifier declaration_specifiers          {
+   | function_specifier declaration_specifiers_     {
      /* if the decl $2 is not a specifier */
      /* find the spec and replace it      */
-     if ( !IS_SPEC($2)) {
-       sym_link *lnk = $2 ;
-       while (lnk && !IS_SPEC(lnk->next))
-         lnk = lnk->next;
-       lnk->next = mergeSpec($1,lnk->next, "function_specifier declaration_specifiers - skipped");
-       $$ = $2 ;
-     }
-     else
-       $$ = mergeSpec($1,$2, "function_specifier declaration_specifiers");
+     $$ = mergeDeclSpec($1, $2, "function_specifier declaration_specifiers - skipped");
    }
    ;
 
@@ -546,6 +534,45 @@ init_declarator
    | declarator '=' initializer  { $1->ival = $3   ; }
    ;
 
+designation_opt
+   :                             { $$ = NULL; }
+   | designation
+   ;
+
+designation
+   : designator_list '='         { $$ = revDesignation($1); }
+   ;
+
+designator_list
+   : designator
+   | designator_list designator  { $2->next = $1; $$ = $2; }
+   ;
+
+designator
+   : '[' constant_expr ']'
+         {
+            value *tval;
+            int elemno;
+
+            tval = constExprValue($2, TRUE);
+            /* if it is not a constant then Error  */
+            if (!tval || (SPEC_SCLS(tval->etype) != S_LITERAL))
+              {
+                werror (E_CONST_EXPECTED);
+                elemno = 0; /* arbitrary fixup */
+              }
+            else
+              {
+                if ((elemno = (int) ulFromVal(tval)) < 0)
+                  {
+                    werror (E_BAD_DESIGNATOR);
+                    elemno = 0; /* arbitrary fixup */
+                  }
+              }
+            $$ = newDesignation(DESIGNATOR_ARRAY, &elemno);
+         }
+   | '.' identifier              { $$ = newDesignation(DESIGNATOR_STRUCT,$2); }
+   ;
 
 storage_class_specifier
    : TYPEDEF   {
@@ -571,7 +598,7 @@ storage_class_specifier
    ;
 
 function_specifier
-   : INLINE   {
+   : INLINE    {
                   $$ = newLink (SPECIFIER) ;
                   SPEC_INLINE($$) = 1 ;
                }
@@ -592,33 +619,27 @@ Interrupt_storage
    ;
 
 type_specifier
-   : type_specifier2
-   | type_specifier2 AT constant_expr
-        {
-           /* add this to the storage class specifier  */
-           SPEC_ABSA($1) = 1;   /* set the absolute addr flag */
-           /* now get the abs addr from value */
-           SPEC_ADDR($1) = (unsigned int) ulFromVal(constExprValue($3,TRUE)) ;
-        }
-   ;
-
-type_specifier2
-   : CHAR      {
+   : SD_BOOL   {
+                  $$=newLink(SPECIFIER);
+                  SPEC_NOUN($$) = V_BOOL   ;
+                  ignoreTypedefType = 1;
+               }
+   | SD_CHAR   {
                   $$=newLink(SPECIFIER);
                   SPEC_NOUN($$) = V_CHAR  ;
                   ignoreTypedefType = 1;
                }
-   | SHORT     {
+   | SD_SHORT  {
                   $$=newLink(SPECIFIER);
                   SPEC_SHORT($$) = 1 ;
                   ignoreTypedefType = 1;
                }
-   | INT       {
+   | SD_INT    {
                   $$=newLink(SPECIFIER);
                   SPEC_NOUN($$) = V_INT   ;
                   ignoreTypedefType = 1;
                }
-   | LONG      {
+   | SD_LONG   {
                   $$=newLink(SPECIFIER);
                   SPEC_LONG($$) = 1       ;
                   ignoreTypedefType = 1;
@@ -633,12 +654,12 @@ type_specifier2
                   SPEC_USIGN($$) = 1      ;
                   ignoreTypedefType = 1;
                }
-   | VOID      {
+   | SD_VOID   {
                   $$=newLink(SPECIFIER);
                   SPEC_NOUN($$) = V_VOID  ;
                   ignoreTypedefType = 1;
                }
-   | CONST     {
+   | SD_CONST  {
                   $$=newLink(SPECIFIER);
                   SPEC_CONST($$) = 1;
                }
@@ -650,7 +671,7 @@ type_specifier2
                   $$=newLink(SPECIFIER);
                   SPEC_RESTRICT($$) = 1 ;
                }
-   | FLOAT     {
+   | SD_FLOAT  {
                   $$=newLink(SPECIFIER);
                   SPEC_NOUN($$) = V_FLOAT;
                   ignoreTypedefType = 1;
@@ -691,6 +712,14 @@ type_specifier2
                   SPEC_BLEN($$) = 1;
                   SPEC_BSTR($$) = 0;
                   ignoreTypedefType = 1;
+               }
+
+   | AT constant_expr {
+                  $$=newLink(SPECIFIER);
+                  /* add this to the storage class specifier  */
+                  SPEC_ABSA($$) = 1;   /* set the absolute addr flag */
+                  /* now get the abs addr from value */
+                  SPEC_ADDR($$) = (unsigned int) ulFromVal(constExprValue($2,TRUE)) ;
                }
 
    | struct_or_union_specifier  {
@@ -839,25 +868,27 @@ struct_or_union_specifier
    ;
 
 struct_or_union
-   : STRUCT          { $$ = STRUCT ; }
-   | UNION           { $$ = UNION  ; }
+   : STRUCT          { $$ = STRUCT ; ignoreTypedefType = 1; }
+   | UNION           { $$ = UNION  ; ignoreTypedefType = 1; }
    ;
 
 opt_stag
 : stag
 |  {  /* synthesize a name add to structtable */
+     ignoreTypedefType = 0;
      $$ = newStruct(genSymName(NestLevel)) ;
      $$->level = NestLevel ;
-     addSym (StructTab, $$, $$->tag,$$->level,currBlockno, 0);
+     addSym (StructTab, $$, $$->tag, $$->level, currBlockno, 0);
 };
 
 stag
 :  identifier  {  /* add name to structure table */
-     $$ = findSymWithBlock (StructTab,$1,currBlockno);
+     ignoreTypedefType = 0;
+     $$ = findSymWithBlock (StructTab, $1, currBlockno);
      if (! $$ ) {
        $$ = newStruct($1->name) ;
        $$->level = NestLevel ;
-       addSym (StructTab, $$, $$->tag,$$->level,currBlockno,0);
+       addSym (StructTab, $$, $$->tag, $$->level, currBlockno, 0);
      }
 };
 
@@ -883,8 +914,6 @@ struct_declaration
            symbol *sym ;
            for ( sym = $2 ; sym != NULL ; sym = sym->next ) {
                sym_link *btype = copyLinkChain($1);
-               if (options.unsigned_char && SPEC_NOUN(btype) == V_CHAR && !(btype)->select.s.b_signed)
-                 SPEC_USIGN(btype) = 1;
 
                /* make the symbol one level up */
                sym->level-- ;
@@ -1025,7 +1054,7 @@ opt_assign_expr
                               value *val ;
 
                               val = constExprValue($2,TRUE);
-                              if (!IS_INT(val->type) && !IS_CHAR(val->type))
+                              if (!IS_INT(val->type) && !IS_CHAR(val->type) && !IS_BOOL(val->type))
                                 {
                                   werror(E_ENUM_NON_INTEGER);
                                   SNPRINTF(lbuff, sizeof(lbuff),
@@ -1248,21 +1277,15 @@ unqualified_pointer
       }
    ;
 
-type_specifier_list
+type_specifier_list : type_specifier_list_ { $$ = finalizeSpec($1); } ;
+
+type_specifier_list_
    : type_specifier
-   //| type_specifier_list type_specifier         {  $$ = mergeSpec ($1,$2, "type_specifier_list"); }
-   | type_specifier_list type_specifier {
+   //| type_specifier_list_ type_specifier         {  $$ = mergeSpec ($1,$2, "type_specifier_list"); }
+   | type_specifier_list_ type_specifier {
      /* if the decl $2 is not a specifier */
      /* find the spec and replace it      */
-     if ( !IS_SPEC($2)) {
-       sym_link *lnk = $2 ;
-       while (lnk && !IS_SPEC(lnk->next))
-         lnk = lnk->next;
-       lnk->next = mergeSpec($1,lnk->next, "type_specifier_list type_specifier skipped");
-       $$ = $2 ;
-     }
-     else
-       $$ = mergeSpec($1,$2, "type_specifier_list type_specifier");
+     $$ = mergeDeclSpec($1, $2, "type_specifier_list type_specifier skipped");
    }
    ;
 
@@ -1290,44 +1313,63 @@ parameter_list
    ;
 
 parameter_declaration
-   : type_specifier_list declarator
-               {
-                  symbol *loop ;
-                  pointerTypes($2->type,$1);
-                  if (options.unsigned_char && SPEC_NOUN($1) == V_CHAR && !($1)->select.s.b_signed)
-                    SPEC_USIGN($1) = 1;
-                  addDecl ($2,0,$1);
-                  for (loop=$2;loop;loop->_isparm=1,loop=loop->next);
-                  addSymChain (&$2);
-                  $$ = symbolVal($2);
-                  ignoreTypedefType = 0;
-               }
-   | type_name {
-                  $$ = newValue() ;
-                  if (options.unsigned_char && SPEC_NOUN($1) == V_CHAR && !($1)->select.s.b_signed)
-                    SPEC_USIGN($1) = 1;
-                  $$->type = $1;
-                  $$->etype = getSpec($$->type);
-                  ignoreTypedefType = 0;
-               }
+   : declaration_specifiers declarator
+        {
+          symbol *loop;
+
+          if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
+            {
+              werror (E_STORAGE_CLASS_FOR_PARAMETER, $2->name);
+            }
+          pointerTypes ($2->type, $1);
+          addDecl ($2, 0, $1);
+          for (loop = $2; loop; loop->_isparm = 1, loop = loop->next)
+            ;
+          addSymChain (&$2);
+          $$ = symbolVal ($2);
+          ignoreTypedefType = 0;
+        }
+   | type_name
+        {
+          $$ = newValue ();
+          $$->type = $1;
+          $$->etype = getSpec ($$->type);
+          ignoreTypedefType = 0;
+         }
    ;
 
 type_name
-   : type_specifier_list  { $$ = $1; ignoreTypedefType = 0;}
-   | type_specifier_list abstract_declarator
-               {
-                 /* go to the end of the list */
-                 sym_link *p;
-                 pointerTypes($2,$1);
-                 for ( p = $2 ; p && p->next ; p=p->next);
-                 if (!p) {
-                   werror(E_SYNTAX_ERROR, yytext);
-                 } else {
-                   p->next = $1 ;
-                 }
-                 $$ = $2 ;
-                 ignoreTypedefType = 0;
-               }
+   : declaration_specifiers
+        {
+          if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
+            {
+              werror (E_STORAGE_CLASS_FOR_PARAMETER, "type name");
+            }
+          $$ = $1; ignoreTypedefType = 0;
+        }
+   | declaration_specifiers abstract_declarator
+        {
+          /* go to the end of the list */
+          sym_link *p;
+
+          if (IS_SPEC ($1) && !IS_VALID_PARAMETER_STORAGE_CLASS_SPEC ($1))
+            {
+              werror (E_STORAGE_CLASS_FOR_PARAMETER, "type name");
+            }
+          pointerTypes ($2,$1);
+          for (p = $2; p && p->next; p = p->next)
+            ;
+          if (!p)
+            {
+              werror(E_SYNTAX_ERROR, yytext);
+            }
+          else
+            {
+              p->next = $1 ;
+            }
+          $$ = $2 ;
+          ignoreTypedefType = 0;
+        }
    ;
 
 abstract_declarator
@@ -1381,25 +1423,26 @@ abstract_declarator2
      $1->next=p;
    }
    | abstract_declarator2 '(' { NestLevel++ ; currBlockno++; } parameter_type_list ')' {
-       sym_link *p=newLink(DECLARATOR);
+       sym_link *p = newLink(DECLARATOR);
        DCL_TYPE(p) = FUNCTION;
 
        FUNC_HASVARARGS(p) = IS_VARG($4);
        FUNC_ARGS(p) = reverseVal($4);
 
        /* nest level was incremented to take care of the parms  */
-       NestLevel-- ;
+       NestLevel--;
        currBlockno--;
        if (!$1) {
          /* ((void (code *) (void)) 0) () */
-         $1=newLink(DECLARATOR);
-         DCL_TYPE($1)=CPOINTER;
+         $1 = newLink(DECLARATOR);
+         DCL_TYPE($1) = CPOINTER;
          $$ = $1;
        }
-       $1->next=p;
+       $1->next = p;
 
-       // remove the symbol args (if any)
-       cleanUpLevel(SymbolTab,NestLevel+1);
+       // disabled to fix bug 3190029
+//       // remove the symbol args (if any)
+//       cleanUpLevel(SymbolTab, NestLevel+1);
    }
    ;
 
@@ -1410,8 +1453,13 @@ initializer
    ;
 
 initializer_list
-   : initializer
-   | initializer_list ',' initializer  {  $3->next = $1; $$ = $3; }
+   : designation_opt initializer    { $2->designation = $1; $$ = $2; }
+   | initializer_list ',' designation_opt initializer
+                                    {
+                                       $4->designation = $3;
+                                       $4->next = $1;
+                                       $$ = $4;
+                                    }
    ;
 
 statement
@@ -1472,7 +1520,7 @@ labeled_statement
 
 start_block : '{'
               {
-                STACK_PUSH(blockNum,currBlockno);
+                STACK_PUSH(blockNum, currBlockno);
                 currBlockno = ++blockNo ;
                 ignoreTypedefType = 0;
               }
@@ -1515,7 +1563,7 @@ declaration_list
          $$ = $1 ;
        }
        else {
-                                /* get to the end of the previous decl */
+         /* get to the end of the previous decl */
          if ( $1 ) {
            $$ = sym = $1 ;
            while (sym->next)

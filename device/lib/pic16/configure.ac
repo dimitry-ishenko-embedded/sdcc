@@ -1,16 +1,9 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-#
-# The (generated) configure script should be called with
-#     --build=<your-build-system> --target=pic16
-# to force cross-compilation mode; rather use the wrapper
-# ./configure.gnu instead of ./configure directly.
-#
-
 AC_PREREQ(2.61)
 AC_INIT([pic16lib], [0.3], [tecodev AT users sourceforge net])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([debug/gstack/gstack.c])
 AC_CONFIG_HEADER([config.h])
 
@@ -39,6 +32,21 @@ AC_ARG_ENABLE(
     [if test "yes" = $enableval; then USE_FLOATS="-DUSE_FLOATS=1"; fi]
 )
 
+NEWPICS=no;
+AC_ARG_ENABLE(
+    [new-pics],
+    AS_HELP_STRING([--enable-new-pics], [Enable use of PIC devices added to gputils after the 0.13.7 release. Requires custom-built gputils obtained from their SVN repository!]),
+    [ case "x$enableval" in
+      xyes) NEWPICS=yes;
+            AC_MSG_NOTICE([Enabling support for PICs from unreleased gputils -- make sure you have up-to-date gputils from SVN.]);;
+      xno) NEWPICS=no;;
+      *) AC_MSG_ERROR([bad value "${enableval}" for --enable-new-pics]);;
+      esac],
+    [ NEWPICS=no ]
+)
+
+AM_CONDITIONAL([HAVE_NEW_PICS], [ test x$NEWPICS = xyes ])
+
 # Checks for programs.
 
 # The default architecture can be selected at configure time by setting the
@@ -47,15 +55,23 @@ AC_SUBST(ARCH, [${ARCH:-18f452}])
 
 # We cannot use AC_PROG_CC(sdcc) as sdcc might not be built at configure-time...
 AC_SUBST(CC, [\'$abs_top_builddir/../../../bin/sdcc\'])
-AC_SUBST(CFLAGS, ["-mpic16 -p$ARCH"])
 AC_PATH_PROG(CCAS, gpasm, :)
-AC_SUBST(CCAS, [\'$CCAS\'])
-AC_SUBST(CCASFLAGS, ["-p$ARCH"])
 AC_PATH_PROG(LD, gplink, :)
-AC_SUBST(LD, [\'$LD\'])
 AC_PATH_PROG(AR, gplib, :)
-AC_SUBST(AR, [\'$AR\'])
+
+case ":$CCAS:$LD:$AR:" in
+    *:::*)
+        AC_MSG_ERROR([gputils (gpasm, gplink, and gplib) are required but not found.
+Either install gputils or reconfigure with --disable-pic14-port and --disable-pic16-port.])
+        ;;
+esac;
+
+AC_SUBST(CFLAGS, ["-mpic16 -p$ARCH"])
+AC_SUBST(CCASFLAGS, ["-p$ARCH"])
 AC_SUBST(ARFLAGS, [-c])
+AC_SUBST(CCAS, [\'$CCAS\'])
+AC_SUBST(LD, [\'$LD\'])
+AC_SUBST(AR, [\'$AR\'])
 
 # $RANLIB is called by the autotools but not provided nor required
 AC_SUBST(RANLIB, [:])
@@ -72,19 +88,11 @@ _AM_DEPENDENCIES(CCAS)
 
 # Checks for library functions.
 
-case "$CCAS:$LD:$AR" in
-    *::*)
-        AC_MSG_ERROR([gputils (gpasm, gplink, and gplib) are required but not found.])
-        ;;
-esac
-
 AC_CONFIG_FILES([Makefile
                  debug/Makefile
                  libc/Makefile
-                 libdev/Makefile
                  libio/Makefile
                  libm/Makefile
                  libsdcc/Makefile
                  startup/Makefile])
 AC_OUTPUT
-

@@ -72,9 +72,9 @@ typedef struct asmop
     union
       {
 	value *aop_lit;		/* if literal */
-	regs *aop_reg[4];	/* array of registers */
+	reg_info *aop_reg[4];	/* array of registers */
 	char *aop_dir;		/* if direct  */
-	regs *aop_ptr;		/* either -> to r0 or r1 */
+	reg_info *aop_ptr;		/* either -> to r0 or r1 */
 	struct {
 		int  from_cast_remat;   /* cast remat created this : immd2 field used for highest order*/
 		char *aop_immd1;	/* if immediate others are implied */
@@ -88,7 +88,7 @@ typedef struct asmop
 asmop;
 
 void genhc08Code (iCode *);
-void hc08_emitDebuggerSymbol (char *);
+void hc08_emitDebuggerSymbol (const char *);
 
 //extern char *fReturn8051[];
 extern unsigned fReturnSizeHC08;

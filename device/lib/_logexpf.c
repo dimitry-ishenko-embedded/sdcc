@@ -1,3 +1,31 @@
+/*-------------------------------------------------------------------------
+   _logexpf.c
+
+   Copyright (C) 2005, Paul Stoffregen
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
+
 #define SDCC_MATH_LIB
 #include <math.h>
 
@@ -8,9 +36,18 @@
 // separate file to allow the linker to include it when either
 // function is needed, but only 1 copy when both are used.
 
-void _fs_cordic_rshift_r765_unsigned(void)
+void _fs_cordic_rshift_r765_unsigned(void) __naked
 {
 	__asm
+	ar2 = 0x02
+	ar3 = 0x03
+	ar4 = 0x04
+	ar5 = 0x05
+	ar6 = 0x06
+	ar7 = 0x07
+	ar0 = 0x00
+	ar1 = 0x01
+
 	add	a, #248
 	jnc	00003$
 	mov	b, r5
@@ -52,6 +89,7 @@ void _fs_cordic_rshift_r765_unsigned(void)
 	djnz	r0, 00010$
 	pop	ar0
 00030$:
+	ret
 	__endasm;
 }
 
@@ -89,4 +127,3 @@ __code unsigned char _fs_natural_log_table[] = {
 };
 
 #endif
-

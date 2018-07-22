@@ -1,6 +1,26 @@
-/*-----------------------------------------------------------------*/
-/* SDCCmem.c - 8051 memory management routines                     */
-/*-----------------------------------------------------------------*/
+/*-------------------------------------------------------------------------
+  SDCCmem.c - 8051 memory management routines
+                Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1998)
+
+   This program is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2, or (at your option) any
+   later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+   In other words, you are welcome to use, share and improve this program.
+   You are forbidden to forbid anyone else to use, share and improve
+   what you give them.   Help stamp out software-hoarding!
+-------------------------------------------------------------------------*/
+
 
 #include "common.h"
 #include "dbuf_string.h"
@@ -393,10 +413,10 @@ void deleteFromSeg(symbol *sym)
 }
 
 /*-----------------------------------------------------------------*/
-/* allocDefault - assigns the output segment based on SCLASS       */
+/* defaultOClass - set the output segment based on SCLASS          */
 /*-----------------------------------------------------------------*/
 bool
-allocDefault (symbol * sym)
+defaultOClass (symbol * sym)
 {
   switch (SPEC_SCLS (sym->etype))
     {
@@ -471,17 +491,29 @@ allocDefault (symbol * sym)
     default:
       return FALSE;
     }
-  allocIntoSeg (sym);
   return TRUE;
 }
 
 /*-----------------------------------------------------------------*/
-/* allocGlobal - assigns the output segment to a global var       */
+/* allocDefault - assigns the output segment based on SCLASS       */
+/*-----------------------------------------------------------------*/
+bool
+allocDefault (struct symbol * sym)
+{
+  if (defaultOClass (sym))
+    {
+      allocIntoSeg (sym);
+      return TRUE;
+  }
+  return FALSE;
+}
+
+/*-----------------------------------------------------------------*/
+/* allocGlobal - assigns the output segment to a global var        */
 /*-----------------------------------------------------------------*/
 void
 allocGlobal (symbol * sym)
 {
-
   /* symbol name is internal name  */
   if (!sym->level)              /* local statics can come here */
     SNPRINTF (sym->rname, sizeof(sym->rname),
@@ -541,8 +573,8 @@ allocGlobal (symbol * sym)
   if (SPEC_SCLS (sym->etype) == S_REGISTER)
     SPEC_SCLS (sym->etype) = S_FIXED;
 
-  /* if it is fixed, then allocate depending on the  */
-  /* current memory model, same for automatics        */
+  /* if it is fixed, then allocate depending on the */
+  /* current memory model, same for automatics      */
   if (SPEC_SCLS (sym->etype) == S_FIXED ||
       (TARGET_IS_PIC16 && (SPEC_SCLS (sym->etype) == S_REGISTER) && (sym->level==0)) ||
       SPEC_SCLS (sym->etype) == S_AUTO) {
@@ -618,7 +650,6 @@ allocParms (value * val)
                   /* PENDING: isr, bank overhead, ... */
                   SPEC_STAK (lval->etype) = SPEC_STAK (lval->sym->etype) = lval->sym->stack =
                     stackPtr +
-                    ((IFFUNC_ISBANKEDCALL (currFunc->type) && !SPEC_STAT(getSpec(currFunc->etype)))? port->stack.banked_overhead : 0) +
                     (FUNC_ISISR (currFunc->type) ? port->stack.isr_overhead : 0) +
                     0;
                   stackPtr += getSize (lval->type);
@@ -980,7 +1011,6 @@ redoStackOffsets (void)
   for (sym = setFirstItem (istack->syms); sym;
        sym = setNextItem (istack->syms))
     {
-
       int size = getSize (sym->type);
       /* nothing to do with parameters so continue */
       if ((sym->_isparm && !IS_REGPARM (sym->etype)))
@@ -1027,7 +1057,6 @@ redoStackOffsets (void)
   for (sym = setFirstItem (xstack->syms); sym;
        sym = setNextItem (xstack->syms))
     {
-
       int size = getSize (sym->type);
       /* nothing to do with parameters so continue */
       if ((sym->_isparm && !IS_REGPARM (sym->etype)))
@@ -1055,29 +1084,31 @@ redoStackOffsets (void)
 
 }
 
+#define SP_BP(sp, bp) (options.omitFramePtr ? sp : bp)
+#define SYM_BP(sym)   (SPEC_OCLS (sym->etype)->paged ? SP_BP("_spx", "_bpx") : SP_BP("sp", "_bp"))
+
 /*-----------------------------------------------------------------*/
 /* printAllocInfoSeg- print the allocation for a given section     */
 /*-----------------------------------------------------------------*/
-static void
+static int
 printAllocInfoSeg (memmap * map, symbol * func, struct dbuf_s *oBuf)
 {
   symbol *sym;
+  int flg = FALSE;
 
-  if (!map)
-    return;
-  if (!map->syms)
-    return;
+  if (!map || !map->syms)
+    return 0;
 
   for (sym = setFirstItem (map->syms); sym;
        sym = setNextItem (map->syms))
     {
-
       if (sym->level == 0)
         continue;
       if (sym->localof != func)
         continue;
 
       dbuf_printf (oBuf, ";%-25s Allocated ", sym->name);
+      flg = TRUE;
 
       /* if assigned to registers */
       if (!sym->allocreq && sym->reqv)
@@ -1102,13 +1133,25 @@ printAllocInfoSeg (memmap * map, symbol * func, struct dbuf_s *oBuf)
       /* if on stack */
       if (sym->onStack)
         {
-          dbuf_printf (oBuf, "to stack - offset %d\n", sym->stack);
+          int stack_offset = 0;
+
+          if (options.omitFramePtr)
+            {
+              if (SPEC_OCLS (sym->etype)->paged)
+                stack_offset = func->xstack;
+              else
+                stack_offset = func->stack;
+            }
+
+          dbuf_printf (oBuf, "to stack - %s %+d\n", SYM_BP (sym), sym->stack - stack_offset);
           continue;
         }
 
       /* otherwise give rname */
       dbuf_printf (oBuf, "with name '%s'\n", sym->rname);
     }
+
+  return flg;
 }
 
 /*-----------------------------------------------------------------*/
@@ -1184,22 +1227,25 @@ doOverlays (eBBlock ** ebbs, int count)
 void
 printAllocInfo (symbol * func, struct dbuf_s * oBuf)
 {
+#define BREAKLINE ";------------------------------------------------------------\n"
+  int cnt = 0;
+
   if (!func)
-        return;
+    return;
 
   /* must be called after register allocation is complete */
-  dbuf_append_str (oBuf, ";------------------------------------------------------------\n");
+  dbuf_append_str (oBuf, BREAKLINE);
   dbuf_printf (oBuf, ";Allocation info for local variables in function '%s'\n", func->name);
-  dbuf_append_str (oBuf, ";------------------------------------------------------------\n");
+  dbuf_append_str (oBuf, BREAKLINE);
 
-  printAllocInfoSeg (xstack, func, oBuf);
-  printAllocInfoSeg (istack, func, oBuf);
-  printAllocInfoSeg (code, func, oBuf);
-  printAllocInfoSeg (data, func, oBuf);
-  printAllocInfoSeg (xdata, func, oBuf);
-  printAllocInfoSeg (idata, func, oBuf);
-  printAllocInfoSeg (sfr, func, oBuf);
-  printAllocInfoSeg (sfrbit, func, oBuf);
+  cnt += printAllocInfoSeg (xstack, func, oBuf);
+  cnt += printAllocInfoSeg (istack, func, oBuf);
+  cnt += printAllocInfoSeg (code, func, oBuf);
+  cnt += printAllocInfoSeg (data, func, oBuf);
+  cnt += printAllocInfoSeg (xdata, func, oBuf);
+  cnt += printAllocInfoSeg (idata, func, oBuf);
+  cnt += printAllocInfoSeg (sfr, func, oBuf);
+  cnt += printAllocInfoSeg (sfrbit, func, oBuf);
 
   {
     set *ovrset;
@@ -1210,10 +1256,11 @@ printAllocInfo (symbol * func, struct dbuf_s * oBuf)
          ovrset = setNextItem (ovrSetSets))
       {
         overlay->syms = ovrset;
-        printAllocInfoSeg (overlay, func, oBuf);
+        cnt += printAllocInfoSeg (overlay, func, oBuf);
       }
     overlay->syms = tempOverlaySyms;
   }
 
-  dbuf_append_str (oBuf, ";------------------------------------------------------------\n");
+  if (cnt)
+    dbuf_append_str (oBuf, BREAKLINE);
 }

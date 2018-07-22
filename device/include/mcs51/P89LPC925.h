@@ -1,26 +1,30 @@
 /*-------------------------------------------------------------------------
-   Register Declarations for NXP  P89LPC924 and P89LPC925
+   P89LPC925.h - Register Declarations for NXP  P89LPC924 and P89LPC925
    (Based on datasheet Rev. 03 — 15 December 2004)
 
-   Written By -  Jesus Calvino-Fraga / jesusc at ece.ubc.ca (February 2007)
+   Copyright (C) 2007, Jesus Calvino-Fraga / jesusc at ece.ubc.ca
 
-   This library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option); any later version
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
    This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
 
-   You should have received a copy of the GNU Lesser General Public
-   License along with this library; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
 
-   In other words, you are welcome to use, share and improve this program
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
 #ifndef REG_P89LPC925_H
@@ -252,13 +256,13 @@ SFR(P0, 0x80); // Port 0
    SBIT(P0_0, 0x80, 0);
    //P0 alternate pin functions
    SBIT(T1,     0x80, 7);
-   SBIT(CMP1b,  0x80, 6); //Should be CMP1 but there is SFR with that name
+   SBIT(CMP_1,  0x80, 6); //Should be CMP1 but there is SFR with that name
    SBIT(CMPREF, 0x80, 5);
    SBIT(CIN1A,  0x80, 4);
    SBIT(CIN1B,  0x80, 3);
    SBIT(CIN2A,  0x80, 2);
    SBIT(CIN2B,  0x80, 1);
-   SBIT(CMP2b,  0x80, 0); //Should be CMP2 but there is SFR with that name
+   SBIT(CMP_2,  0x80, 0); //Should be CMP2 but there is SFR with that name
    //More P0 alternate pin functions
    SBIT(KB7, 0x80, 7);
    SBIT(KB6, 0x80, 6);

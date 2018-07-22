@@ -8,9 +8,9 @@ VERSIONLO       = @VERSIONLO@
 VERSIONP        = @VERSIONP@
 
 SHELL           = /bin/sh
-CPP             = @CPP@
 INSTALL         = @INSTALL@
 CP              = @CP@
+AR_S            = @AR@ @AR_S_FLAG@
 
 LIB_TYPE        = @LIB_TYPE@
 
@@ -55,7 +55,7 @@ BUILDDIR        = build
 # Default
 PORT            = z80
 ifndef PORTDIR
-PORTDIR         = $(abspath $(BUILDDIR)/$(PORT))
+PORTDIR         = $(BUILDDIR)/$(PORT)
 endif
 
 OPT_DISABLE_AVR   = @OPT_DISABLE_AVR@
@@ -64,10 +64,12 @@ OPT_DISABLE_DS400 = @OPT_DISABLE_DS400@
 OPT_DISABLE_GBZ80 = @OPT_DISABLE_GBZ80@
 OPT_DISABLE_HC08  = @OPT_DISABLE_HC08@
 OPT_DISABLE_MCS51 = @OPT_DISABLE_MCS51@
-OPT_DISABLE_PIC   = @OPT_DISABLE_PIC@
+OPT_DISABLE_PIC14 = @OPT_DISABLE_PIC14@
 OPT_DISABLE_PIC16 = @OPT_DISABLE_PIC16@
 OPT_DISABLE_XA51  = @OPT_DISABLE_XA51@
 OPT_DISABLE_Z80   = @OPT_DISABLE_Z80@
+OPT_DISABLE_Z180  = @OPT_DISABLE_Z180@
+OPT_DISABLE_R2K   = @OPT_DISABLE_R2K@
 
 SOURCES_FLOAT = $(COMMON_FLOAT) \
   _fscmp.c \
@@ -145,15 +147,7 @@ XA51_SDCC = $(COMMON_SDCC) \
 XA51SOURCES = $(XA51_FLOAT) $(XA51_INT) $(XA51_LONG) $(XA51_SDCC)
 XA51OBJECTS = $(XA51SOURCES:%.c=$(PORT)/%.rel)
 
-ifeq ($(LIB_TYPE), SDCCLIB)
 LIB_FILES = $(PORTDIR)/libfloat.lib $(PORTDIR)/libint.lib $(PORTDIR)/liblong.lib $(PORTDIR)/libsdcc.lib
-else ifeq ($(LIB_TYPE), AR)
-LIB_FILES = $(PORTDIR)/libfloat.lib $(PORTDIR)/libint.lib $(PORTDIR)/liblong.lib $(PORTDIR)/libsdcc.lib
-else ifeq ($(LIB_TYPE), RANLIB)
-LIB_FILES = $(PORTDIR)/libfloat.lib $(PORTDIR)/libint.lib $(PORTDIR)/liblong.lib $(PORTDIR)/libsdcc.lib
-else
-LIB_FILES = $(OBJECTS_FLOAT) $(OBJECTS_INT) $(OBJECTS_LONG) $(OBJECTS_SDCC) $(PORTDIR)/libfloat.lib $(PORTDIR)/libint.lib $(PORTDIR)/liblong.lib $(PORTDIR)/libsdcc.lib
-endif
 
 OEXT            = .rel
 
@@ -175,7 +169,7 @@ ifeq ($(OPT_DISABLE_MCS51), 0)
 TARGETS        += models small-mcs51-stack-auto
 endif
 
-ifeq ($(OPT_DISABLE_PIC), 0)
+ifeq ($(OPT_DISABLE_PIC14), 0)
 TARGETS        += model-pic14
 endif
 
@@ -187,6 +181,14 @@ ifeq ($(OPT_DISABLE_Z80), 0)
 TARGETS        += model-z80
 endif
 
+ifeq ($(OPT_DISABLE_Z180), 0)
+TARGETS        += model-z180
+endif
+
+ifeq ($(OPT_DISABLE_R2K), 0)
+TARGETS        += model-r2k
+endif
+
 ifeq ($(OPT_DISABLE_GBZ80), 0)
 TARGETS        += model-gbz80
 endif
@@ -195,7 +197,9 @@ endif
 # ------------------------------------------
 all:
 	$(MAKE) checkconf
+ifneq ($(TARGETS), )
 	$(MAKE) $(TARGETS)
+endif
 
 objects:
 	$(MAKE) build-dir
@@ -214,14 +218,14 @@ models:
 small-mcs51-stack-auto:
 	if grep '^mcs51\>' $(top_builddir)/ports.build > /dev/null; then \
 	  mkdir -p small-stack-auto; cp small/Makefile small-stack-auto; \
-	  $(MAKE) MODELFLAGS="--model-small --stack-auto" PORT=small-stack-auto PORTDIR=$(abspath $(BUILDDIR)/small-stack-auto) PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	  $(MAKE) MODELFLAGS="--model-small --stack-auto" PORT=small-stack-auto PORTDIR=$(BUILDDIR)/small-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	fi
 
 model-mcs51-stack-auto:
 	if grep '^mcs51\>' $(top_builddir)/ports.build > /dev/null; then \
 	  for model in $(MODELS); do \
 	    mkdir -p $${model}-stack-auto; cp $${model}/Makefile $${model}-stack-auto; \
-	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$${model}-stack-auto PORTDIR=$(abspath $(BUILDDIR)/$${model}-stack-auto) PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$${model}-stack-auto PORTDIR=$(BUILDDIR)/$${model}-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
@@ -229,7 +233,7 @@ model-mcs51-xstack-auto:
 	if grep '^mcs51\>' $(top_builddir)/ports.build > /dev/null; then \
 	  for model in $(MODELS); do \
 	    mkdir -p $${model}-xstack-auto; cp $${model}/Makefile $${model}-xstack-auto; \
-	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --xstack -DUSE_FLOATS=1" PORT=$${model}-xstack-auto PORTDIR=$(abspath $(BUILDDIR)/$${model}-xstack-auto) PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --xstack" PORT=$${model}-xstack-auto PORTDIR=$(BUILDDIR)/$${model}-xstack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	  done \
 	fi
 
@@ -256,20 +260,34 @@ objects-xa51:
 $(PORTDIR)/lib$(PORT).lib: $(XA51OBJECTS)
 ifeq ($(LIB_TYPE), SDCCLIB)
 	../../bin/sdcclib -a $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
-else ifeq ($(LIB_TYPE), AR)
-	ar -Sq $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
-else ifeq ($(LIB_TYPE), RANLIB)
-	ar -Sq $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
-	$(top_builddir)/bin/asranlib $(PORTDIR)/lib$(PORT).lib
 else
+  ifeq ($(LIB_TYPE), AR)
+	$(AR_S) -q $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
+  else
+    ifeq ($(LIB_TYPE), RANLIB)
+	$(AR_S) -q $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
+	$(top_builddir)/bin/sdranlib $(PORTDIR)/lib$(PORT).lib
+    else
 	rm -f $(PORTDIR)/lib$(PORT).lib
 	for i in $(notdir $(basename $(XA51OBJECTS))); do echo $$i >> $(PORTDIR)/lib$(PORT).lib; done
 	cp $(XA51OBJECTS) $(PORTDIR)
+    endif
+  endif
 endif
 
 model-z80:
 	if grep '^z80\>' $(top_builddir)/ports.build > /dev/null; then \
 	  $(MAKE) MODELFLAGS="-mz80" PORT=z80 objects-z80 OEXT=.o; \
+	fi
+
+model-z180:
+	if grep '^z80\>' $(top_builddir)/ports.build > /dev/null; then \
+	  $(MAKE) MODELFLAGS="-mz180" PORT=z180 objects-z80 OEXT=.o; \
+	fi
+
+model-r2k:
+	if grep '^z80\>' $(top_builddir)/ports.build > /dev/null; then \
+	  $(MAKE) MODELFLAGS="-mr2k" PORT=r2k objects-z80 OEXT=.o; \
 	fi
 
 model-gbz80:
@@ -303,8 +321,8 @@ objects-pic16:
 	$(MAKE) clean_intermediate-pic16
 
 model-pic14:
-	if grep '^pic\>' $(top_builddir)/ports.build > /dev/null; then \
-	  $(MAKE) PORT=pic objects-pic14; \
+	if grep '^pic14\>' $(top_builddir)/ports.build > /dev/null; then \
+	  $(MAKE) PORT=pic14 objects-pic14; \
 	fi
 
 objects-pic14:
@@ -323,59 +341,93 @@ $(PORT):
 	mkdir -p $(PORT)
 
 port-specific-objects:
-ifneq ($(LIB_TYPE), LIB)
 	-if [ -f $(PORT)/Makefile ]; then \
 	  $(MAKE) -C $(PORT) PORT=$(PORT); \
 	fi
-else
-	-if [ -f $(PORT)/Makefile ]; then \
-	  $(MAKE) -C $(PORT) PORT=$(PORT); \
-	 fi
-endif
 
 port-specific-objects-pic16:
 	-if [ -f $(PORT)/Makefile ]; then \
 	  $(MAKE) -C $(PORT); \
-	  for i in $(PORT)/*/lib*.a; do cp -f $$i $(PORTDIR)/$$(basename $$i .a).lib; done; \
+	  for i in $(PORT)/*/lib*.a; do cp -f $$i $(PORTDIR)/`basename $$i .a`.lib; done; \
 	  cp -f $(PORT)/*/crt0*.o $(PORTDIR); \
 	fi
 
 port-specific-objects-pic14:
 	-if [ -f $(PORT)/Makefile ]; then \
-	  mkdir -p $(PORT)/bin; \
 	  $(MAKE) -C $(PORT); \
-	  cp -f $(PORT)/bin/*.* $(PORTDIR); \
+          find $(PORT) -name 'lib*.a' | while read i; do \
+            cp -f "$$i" $(PORTDIR)/`basename "$$i" .a`.lib; \
+          done; \
 	fi
 
-$(LIB_FILES): $(OBJECTS_FLOAT) $(OBJECTS_INT) $(OBJECTS_LONG) $(OBJECTS_SDCC)
 ifeq ($(LIB_TYPE), SDCCLIB)
+
+$(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
 	../../bin/sdcclib -a $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
+
+$(PORTDIR)/libint.lib: $(OBJECTS_INT)
 	../../bin/sdcclib -a $(PORTDIR)/libint.lib $(OBJECTS_INT)
+
+$(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
 	../../bin/sdcclib -a $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
+
+$(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
 	../../bin/sdcclib -a $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
-else ifeq ($(LIB_TYPE), AR)
-	ar -Scq $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
-	ar -Scq $(PORTDIR)/libint.lib $(OBJECTS_INT)
-	ar -Scq $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
-	ar -Scq $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
-else ifeq ($(LIB_TYPE), RANLIB)
-	ar -Scq $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT); $(top_builddir)/bin/asranlib $(PORTDIR)/libfloat.lib
-	ar -Scq $(PORTDIR)/libint.lib $(OBJECTS_INT); $(top_builddir)/bin/asranlib $(PORTDIR)/libint.lib
-	ar -Scq $(PORTDIR)/liblong.lib $(OBJECTS_LONG); $(top_builddir)/bin/asranlib $(PORTDIR)/liblong.lib
-	ar -Scq $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC); $(top_builddir)/bin/asranlib $(PORTDIR)/libsdcc.lib
+
 else
+  ifeq ($(LIB_TYPE), AR)
+
+$(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
+	$(AR_S) -cq $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
+
+$(PORTDIR)/libint.lib: $(OBJECTS_INT)
+	$(AR_S) -cq $(PORTDIR)/libint.lib $(OBJECTS_INT)
+
+$(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
+	$(AR_S) -cq $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
+
+$(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
+	$(AR_S) -cq $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
+
+  else
+    ifeq ($(LIB_TYPE), RANLIB)
+
+$(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
+	$(AR_S) -cq $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT); $(top_builddir)/bin/sdranlib $(PORTDIR)/libfloat.lib
+
+$(PORTDIR)/libint.lib: $(OBJECTS_INT)
+	$(AR_S) -cq $(PORTDIR)/libint.lib $(OBJECTS_INT); $(top_builddir)/bin/sdranlib $(PORTDIR)/libint.lib
+
+$(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
+	$(AR_S) -cq $(PORTDIR)/liblong.lib $(OBJECTS_LONG); $(top_builddir)/bin/sdranlib $(PORTDIR)/liblong.lib
+
+$(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
+	$(AR_S) -cq $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC); $(top_builddir)/bin/sdranlib $(PORTDIR)/libsdcc.lib
+
+    else
+
+$(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
 	rm -f $(PORTDIR)/libfloat.lib
 	for i in $(notdir $(basename $(OBJECTS_FLOAT))); do echo $$i >> $(PORTDIR)/libfloat.lib; done
 	cp $(OBJECTS_FLOAT) $(PORTDIR)
+
+$(PORTDIR)/libint.lib: $(OBJECTS_INT)
 	rm -f $(PORTDIR)/libint.lib
 	for i in $(notdir $(basename $(OBJECTS_INT))); do echo $$i >> $(PORTDIR)/libint.lib; done
 	cp $(OBJECTS_INT) $(PORTDIR)
+
+$(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
 	rm -f $(PORTDIR)/liblong.lib
 	for i in $(notdir $(basename $(OBJECTS_LONG))); do echo $$i >> $(PORTDIR)/liblong.lib; done
 	cp $(OBJECTS_LONG) $(PORTDIR)
+
+$(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
 	rm -f $(PORTDIR)/libsdcc.lib
 	for i in $(notdir $(basename $(OBJECTS_SDCC))); do echo $$i >> $(PORTDIR)/libsdcc.lib; done
 	cp $(OBJECTS_SDCC) $(PORTDIR)
+
+    endif
+  endif
 endif
 
 clean_intermediate:
@@ -390,13 +442,13 @@ clean_intermediate-pic14:
 # Compiling and installing everything and runing test
 # ---------------------------------------------------
 install: all installdirs
-	$(CP_U) -r $(BUILDDIR)/* $(sdcc_libdir)
+	[ ! -d "$(BUILDDIR)" ] || $(CP_U) -r $(BUILDDIR)/* $(sdcc_libdir)
 	$(CP_U) -r $(MODELS) $(srcdir)/mcs51 $(srcdir)/ds390 $(srcdir)/ds400 \
-	                     $(srcdir)/gbz80 $(srcdir)/z80 $(srcdir)/hc08 \
-	                     $(srcdir)/pic $(srcdir)/pic16 $(srcdir)/*.c $(sdcc_libdir)/src
-	$(CP_U) -r $(MODELS) mcs51 ds390 ds400 gbz80 z80 hc08 $(sdcc_libdir)/src
+	                     $(srcdir)/z80 $(srcdir)/z180 $(srcdir)/r2k $(srcdir)/gbz80 $(srcdir)/hc08 \
+	                     $(srcdir)/pic14 $(srcdir)/pic16 $(srcdir)/*.c $(sdcc_libdir)/src
+	$(CP_U) -r $(MODELS) mcs51 ds390 ds400 z80 z180 r2k gbz80 hc08 $(sdcc_libdir)/src
 
-	for src in $(MODELS) ds390 ds400 gbz80 z80 hc08 pic pic16; do \
+	for src in $(MODELS) ds390 ds400 z80 z180 r2k gbz80 hc08 pic14 pic16; do \
 	  find $(sdcc_libdir)/src/$$src -depth \
 	    \( -name '*.rel' -o -name '*.dump*' -o -name '*.sym' -o -name '*.o' -o -name '*.lib' -o \
 	    -name '*.lst' -o -name '*.asm' -o -name '.svn' -o -name 'autom4te.cache' -o \
@@ -429,13 +481,11 @@ installcheck:
 # Creating installation directories
 # ---------------------------------
 installdirs:
-	[ -d $(sdcc_libdir) ] || mkdir -p $(sdcc_libdir)
 	for model in $(MODELS); do \
-	  [ -d $(sdcc_libdir)/$$model ] || \
 	  mkdir -p $(sdcc_libdir)/$$model; \
 	done
-	for libdir in small-stack-auto ds390 ds400 hc08 pic16 pic; do \
-	  [ -d $(sdcc_libdir)/$$libdir ] || mkdir -p $(sdcc_libdir)/$$libdir; \
+	for libdir in small-stack-auto ds390 ds400 hc08 pic16 pic14; do \
+	  mkdir -p $(sdcc_libdir)/$$libdir; \
 	done
 	mkdir -p $(sdcc_libdir)/src
 

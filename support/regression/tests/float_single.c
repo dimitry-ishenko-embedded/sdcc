@@ -1,6 +1,6 @@
 /** Test of float functions with a single float argument
 
-   func: SINF, SINHF, ASINF, COSF, COSHF, ACOSF, TANF, TANHF, ATANF, SQRTF, EXPF, LOGF, LOG10F, FLOORF, CEILF, FABSF
+   func: SINF, SINHF, ASINF, COSF, COSHF, ACOSF, TANF, TANHF, ATANF, SQRTF, EXPF, LOGF, LOG10F, FLOORF, CEILF, FABSF, NEG
 */
 
 #include <testfwk.h>
@@ -9,6 +9,13 @@
 #if 0
 #   include <stdio.h>
 #   define DEBUG(x) x      /* only for "make test-host" */
+#   ifdef SDCC
+        void _putchar(char c);
+        void putchar(char c)
+        {
+            _putchar(c);
+        }
+#   endif
 #else
 #   define DEBUG(x)
 #endif
@@ -17,52 +24,25 @@
 
 #define TOLERANCE (1e-5)
 
-#ifdef SDCC_mcs51
-#   define STORAGE __code
-#else
-#   define STORAGE
-#endif
-
-#ifdef SDCC
-#   ifndef REENTRANT
-#       define REENTRANT reentrant
-#   endif
-#else
-#   define REENTRANT
-#endif
-
-
 /* now exceptions for targets/functions which would not pass */
-#if defined(SDCC_ds390)
-#   define ACOSF_DISABLED (1)
-#endif
-
 #if defined(SDCC_hc08)
-#   define ACOSF_DISABLED (1)
 #   define EXPF_DISABLED  (1)
-#   define SINHF_DISABLED (1)
 #   define TANF_DISABLED  (1)
 #endif
 
-#if defined(SDCC_mcs51) && defined(SDCC_USE_XSTACK)
-#   define SINF_DISABLED  (1)
-#   define ACOSF_DISABLED (1)
-#   define COSF_DISABLED  (1)
-#endif
-
-#if defined(SDCC_z80)
-#   define ACOSF_DISABLED (1)
-#   define ASINF_DISABLED (1)
-#   define ATANF_DISABLED (1)
-#endif
-
-
-static float dummy(float a)
+static float
+dummy (float a)
 {
-    return a;
+  return a;
 }
 
-typedef float (*float_test_func)(float) REENTRANT;
+static float
+neg (float a)
+{
+  return -a;
+}
+
+typedef float (*float_test_func)(float) __reentrant;
 
 /* the table with functions, their argument, expected result, tolerance.
    For most 8-bitters each testpoint uses 14 bytes so we could have a few:) */
@@ -71,7 +51,7 @@ struct
     float_test_func f;
     float arg, result, tolerance;
 }
-static const STORAGE testpoint[] =
+static const testpoint[] =
 {
 
     #if SINF
@@ -205,8 +185,7 @@ static const STORAGE testpoint[] =
     #   else
     { floorf,     1.0+0.000001,           1.0,            TOLERANCE },
     { floorf,     1.0-0.000001,           0.0,            TOLERANCE },
-    //{ floorf,   1.0-0.000001,          -0.0,            TOLERANCE }, /* oops */
-    //{ dummy,    0.0,                   -0.0,            TOLERANCE }, /* oops */
+    { floorf,     1.0-0.000001,          -0.0,            TOLERANCE },
     { floorf,    -1.0+0.000001,          -1.0,            TOLERANCE },
     { floorf,    -1.0-0.000001,          -2.0,            TOLERANCE },
     #   endif
@@ -226,25 +205,36 @@ static const STORAGE testpoint[] =
     { fabsf,      9999999,                9999999,        TOLERANCE },
     #endif
 
+
+    #if NEG
+    #   if {func}_DISABLED
+    #       warning {func} disabled
+    { dummy,      0.0,                    0.0,            TOLERANCE },
+    #   else
+    { neg,        0.0,                   -0.0,            TOLERANCE },
+    { dummy,      0.0,                   -0.0,            TOLERANCE },
+    #   endif
+    #endif
+
 };
 
 
 void
-testFloat(void)
+testFloat (void)
 {
-    unsigned char i;
-    float result, rel_error;
+  unsigned char i;
+  float result, rel_error;
 
-    for( i = 0; i < sizeof testpoint / sizeof testpoint[0]; i++ ) {
+  for ( i = 0; i < sizeof testpoint / sizeof testpoint[0]; i++ )
+    {
+      result = testpoint[i].f (testpoint[i].arg);
 
-        result = testpoint[i].f(testpoint[i].arg);
+      rel_error = testpoint[i].result ? result/testpoint[i].result - 1.0 : result;
 
-        rel_error = testpoint[i].result ? result/testpoint[i].result - 1.0 : 0.0;
+      DEBUG (printf ("Test No: %d f(%f) = %f should: %f rel_error: %f %s\n",
+                     i, testpoint[i].arg, result, testpoint[i].result, rel_error,
+                     (fabsf (rel_error) < testpoint[i].tolerance) ? "Ok" : "Fail");)
 
-        DEBUG(printf ("Test No: %d f(%f) = %f should: %f rel_error: %f %s\n",
-                      i, testpoint[i].arg, result, testpoint[i].result, rel_error,
-                      (fabsf(rel_error) < testpoint[i].tolerance) ? "Ok" : "Fail");)
-
-        ASSERT(fabsf(rel_error) < testpoint[i].tolerance);
+      ASSERT (fabsf (rel_error) < testpoint[i].tolerance);
     }
 }

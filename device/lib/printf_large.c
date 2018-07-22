@@ -1,30 +1,34 @@
-/*-------------------------------------------------------------------------
-  printf_large.c - formatted output conversion
+/*-----------------------------------------------------------------
+   printf_large.c - formatted output conversion
 
-             Written By - Martijn van Balen aed@iae.nl (1999)
-             Added %f By - johan.knol@iduna.nl (2000)
-             Refactored by - Maarten Brock (2004)
+   Copyright (C) 1999, Martijn van Balen <aed AT iae.nl>
+   Added %f By - <johan.knol AT iduna.nl> (2000)
+   Refactored by - Maarten Brock (2004)
 
-   This library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
    This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details.
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-   You should have received a copy of the GNU Lesser General Public
-   License along with this library; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+   You should have received a copy of the GNU General Public License
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
 
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
-#if defined (SDCC_ds390)
+#if defined (SDCC_ds390) || defined (SDCC_USE_XSTACK) || defined (SDCC_MODEL_HUGE)
 #define USE_FLOATS 1
 #endif
 
@@ -34,6 +38,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <sdcc-lib.h>
+
+#ifndef BOOL
+#define BOOL _Bool
+#endif
 
 #define PTR value.ptr
 
@@ -52,8 +60,8 @@
 
 /****************************************************************************/
 
-//typedef char * ptr_t;
-#define ptr_t char *
+//typedef const char * ptr_t;
+#define ptr_t const char *
 
 #ifdef toupper
 #undef toupper
@@ -80,7 +88,7 @@ typedef union
   long           l;
   unsigned long  ul;
   float          f;
-  char           *ptr;
+  const char     *ptr;
 } value_t;
 
 #ifndef SDCC_STACK_AUTO
@@ -97,7 +105,8 @@ typedef union
   #define OUTPUT_CHAR(c, p) { output_char (c, p); charsOutputted++; }
 #else
   #define OUTPUT_CHAR(c, p) _output_char (c)
-  static void _output_char( unsigned char c )
+  static void
+  _output_char (unsigned char c)
   {
     output_char( c, p );
     charsOutputted++;
@@ -107,7 +116,8 @@ typedef union
 /*--------------------------------------------------------------------------*/
 
 #ifdef SDCC_STACK_AUTO
-  static void output_digit( unsigned char n, BOOL lower_case, pfn_outputchar output_char, void* p )
+  static void
+  output_digit (unsigned char n, BOOL lower_case, pfn_outputchar output_char, void* p)
   {
     register unsigned char c = n + (unsigned char)'0';
 
@@ -120,7 +130,8 @@ typedef union
     output_char( c, p );
   }
 #else
-  static void output_digit( unsigned char n )
+  static void
+  output_digit (unsigned char n)
   {
     register unsigned char c = n + (unsigned char)'0';
 
@@ -138,14 +149,16 @@ typedef union
 
 #ifdef SDCC_STACK_AUTO
   #define OUTPUT_2DIGITS( B )   { output_2digits( B, lower_case, output_char, p ); charsOutputted += 2; }
-  static void output_2digits( unsigned char b, BOOL lower_case, pfn_outputchar output_char, void* p )
+  static void
+  output_2digits (unsigned char b, BOOL lower_case, pfn_outputchar output_char, void* p)
   {
     output_digit( b>>4,   lower_case, output_char, p );
     output_digit( b&0x0F, lower_case, output_char, p );
   }
 #else
   #define OUTPUT_2DIGITS( B )   output_2digits( B )
-  static void output_2digits( unsigned char b )
+  static void
+  output_2digits (unsigned char b)
   {
     output_digit( b>>4   );
     output_digit( b&0x0F );
@@ -155,7 +168,8 @@ typedef union
 /*--------------------------------------------------------------------------*/
 
 #if defined SDCC_STACK_AUTO
-static void calculate_digit( value_t _AUTOMEM * value, unsigned char radix )
+static void
+calculate_digit (value_t _AUTOMEM * value, unsigned char radix)
 {
   unsigned long ul = value->ul;
   unsigned char _AUTOMEM * pb4 = &value->byte[4];
@@ -175,7 +189,8 @@ static void calculate_digit( value_t _AUTOMEM * value, unsigned char radix )
   value->ul = ul;
 }
 #else
-static void calculate_digit( unsigned char radix )
+static void
+calculate_digit (unsigned char radix)
 {
   register unsigned long ul = value.ul;
   register unsigned char b4 = value.byte[4];
@@ -242,21 +257,27 @@ output_float (float f, unsigned char reqWidth,
   signed char exp = -128;
 
   // save the sign
-  if (f<0) {
+  if (f<0)
+  {
     negative=1;
     f=-f;
   }
 
-  if (f>0x00ffffff) {
+  if (f>0x00ffffff)
+  {
     // this part is from Frank van der Hulst
 
     for (exp = 0; f >= 10.0; exp++) f /=10.0;
     for (       ; f < 1.0;   exp--) f *=10.0;
 
-    if (negative) {
+    if (negative)
+    {
       OUTPUT_CHAR ('-', p);
-    } else {
-      if (sign) {
+    }
+    else
+    {
+      if (sign)
+      {
         OUTPUT_CHAR ('+', p);
       }
     }
@@ -273,7 +294,8 @@ output_float (float f, unsigned char reqWidth,
 
   // round the float
   rounding = 0.5;
-  for (i=reqDecimals; i>0; i--) {
+  for (i=reqDecimals; i>0; i--)
+  {
       rounding /= 10.0;
   }
   f += rounding;
@@ -283,11 +305,13 @@ output_float (float f, unsigned char reqWidth,
   decimalPart = f - integerPart;
 
   // fill the buffer with the integerPart (in reversed order!)
-  while (integerPart) {
+  while (integerPart)
+  {
     fpBuffer[fpBI++]='0' + integerPart%10;
     integerPart /= 10;
   }
-  if (!fpBI) {
+  if (!fpBI)
+  {
     // we need at least a 0
     fpBuffer[fpBI++]='0';
   }
@@ -295,7 +319,8 @@ output_float (float f, unsigned char reqWidth,
   // fill buffer with the decimalPart (in normal order)
   fpBD=fpBI;
 
-  for (i=reqDecimals; i>0; i--) {
+  for (i=reqDecimals; i>0; i--)
+  {
       decimalPart *= 10.0;
       // truncate the float
       integerPart = decimalPart;
@@ -308,8 +333,10 @@ output_float (float f, unsigned char reqWidth,
   if (negative || sign || space)
     minWidth++; // and maybe even this :)
 
-  if (!left && reqWidth>i) {
-    if (zero) {
+  if (!left && reqWidth>i)
+  {
+    if (zero)
+    {
       if (negative)
       {
         OUTPUT_CHAR('-', p);
@@ -326,7 +353,9 @@ output_float (float f, unsigned char reqWidth,
       {
         OUTPUT_CHAR('0', p);
       }
-    } else {
+    }
+    else
+    {
       while (reqWidth-->minWidth)
       {
         OUTPUT_CHAR(' ', p);
@@ -344,7 +373,9 @@ output_float (float f, unsigned char reqWidth,
         OUTPUT_CHAR(' ', p);
       }
     }
-  } else {
+  }
+  else
+  {
     if (negative)
     {
       OUTPUT_CHAR('-', p);
@@ -366,7 +397,8 @@ output_float (float f, unsigned char reqWidth,
   } while (i--);
 
   // ouput the decimal part
-  if (reqDecimals) {
+  if (reqDecimals)
+  {
     OUTPUT_CHAR ('.', p);
     i=fpBI;
     while (reqDecimals--)
@@ -375,16 +407,19 @@ output_float (float f, unsigned char reqWidth,
     }
   }
 
-  if (left && reqWidth>minWidth) {
+  if (left && reqWidth>minWidth)
+  {
     while (reqWidth-->minWidth)
     {
       OUTPUT_CHAR(' ', p);
     }
   }
 
-  if (exp != -128) {
+  if (exp != -128)
+  {
     OUTPUT_CHAR ('e', p);
-    if (exp<0) {
+    if (exp<0)
+    {
       OUTPUT_CHAR ('-', p);
       exp = -exp;
     }
@@ -399,7 +434,8 @@ output_float (float f, unsigned char reqWidth,
 }
 #endif //USE_FLOATS
 
-int _print_format (pfn_outputchar pfn, void* pvoid, const char *format, va_list ap)
+int
+_print_format (pfn_outputchar pfn, void* pvoid, const char *format, va_list ap)
 {
   BOOL   left_justify;
   BOOL   zero_padding;
@@ -434,7 +470,8 @@ int _print_format (pfn_outputchar pfn, void* pvoid, const char *format, va_list 
   charsOutputted = 0;
 
 #ifdef SDCC_ds390
-  if (format==0) {
+  if (format==0)
+  {
     format=NULL_STRING;
   }
 #endif
@@ -459,26 +496,34 @@ get_conversion_spec:
 
       c = *format++;
 
-      if (c=='%') {
+      if (c=='%')
+      {
         OUTPUT_CHAR(c, p);
         continue;
       }
 
-      if (isdigit(c)) {
-        if (decimals==-1) {
-          width = 10*width + (c - '0');
-          if (width == 0) {
+      if (isdigit(c))
+      {
+        if (decimals==-1)
+        {
+          width = 10*width + c - '0';
+          if (width == 0)
+          {
             /* first character of width is a zero */
             zero_padding = 1;
           }
-        } else {
-          decimals = 10*decimals + (c-'0');
+        }
+        else
+        {
+          decimals = 10*decimals + c - '0';
         }
         goto get_conversion_spec;
       }
 
-      if (c=='.') {
-        if (decimals==-1) decimals=0;
+      if (c=='.')
+      {
+        if (decimals==-1)
+          decimals=0;
         else
           ; // duplicate, ignore
         goto get_conversion_spec;
@@ -503,10 +548,16 @@ get_conversion_spec:
       case ' ':
         prefix_space = 1;
         goto get_conversion_spec;
-      case 'B':
+      case 'B': /* byte */
         char_argument = 1;
         goto get_conversion_spec;
-      case 'L':
+//      case '#': /* not supported */
+      case 'H': /* short */
+      case 'J': /* intmax_t */
+      case 'T': /* ptrdiff_t */
+      case 'Z': /* size_t */
+        goto get_conversion_spec;
+      case 'L': /* long */
         long_argument = 1;
         goto get_conversion_spec;
 
@@ -522,10 +573,13 @@ get_conversion_spec:
         PTR = va_arg(ap,ptr_t);
 
 #ifdef SDCC_ds390
-        if (PTR==0) {
+        if (PTR==0)
+        {
           PTR=NULL_STRING;
           length=NULL_STRING_LENGTH;
-        } else {
+        }
+        else
+        {
           length = strlen(PTR);
         }
 #else
@@ -640,8 +694,9 @@ get_conversion_spec:
         break;
       }
 
-      if (float_argument) {
-        value.f=va_arg(ap,float);
+      if (float_argument)
+      {
+        value.f = va_arg(ap, float);
 #if !USE_FLOATS
         PTR="<NO FLOAT>";
         while (c=*PTR++)
@@ -663,7 +718,8 @@ get_conversion_spec:
                      zero_padding, prefix_sign, prefix_space);
 #endif //SDCC_STACK_AUTO
 #endif //USE_FLOATS
-      } else if (radix != 0)
+      }
+      else if (radix != 0)
       {
         // Apparently we have to output an integral type
         // with radix "radix"
@@ -673,7 +729,7 @@ get_conversion_spec:
         // store value in byte[0] (LSB) ... byte[3] (MSB)
         if (char_argument)
         {
-          value.l = va_arg(ap,char);
+          value.l = va_arg(ap, char);
           if (!signed_argument)
           {
             value.l &= 0xFF;
@@ -681,11 +737,11 @@ get_conversion_spec:
         }
         else if (long_argument)
         {
-          value.l = va_arg(ap,long);
+          value.l = va_arg(ap, long);
         }
         else // must be int
         {
-          value.l = va_arg(ap,int);
+          value.l = va_arg(ap, int);
           if (!signed_argument)
           {
             value.l &= 0xFFFF;
@@ -728,7 +784,7 @@ get_conversion_spec:
           // default width. We set it to 1 to output
           // at least one character in case the value itself
           // is zero (i.e. length==0)
-          width=1;
+          width = 1;
         }
 
         /* prepend spaces if needed */
@@ -766,10 +822,12 @@ get_conversion_spec:
 
         /* prepend zeroes/spaces if needed */
         if (!left_justify)
+        {
           while ( width-- > length )
           {
             OUTPUT_CHAR( zero_padding ? '0' : ' ', p );
           }
+        }
         else
         {
           /* spaces are appended after the digits */
@@ -800,10 +858,12 @@ get_conversion_spec:
 #endif
         }
         if (left_justify)
+        {
           while (width-- > 0)
           {
             OUTPUT_CHAR(' ', p);
           }
+        }
       }
     }
     else

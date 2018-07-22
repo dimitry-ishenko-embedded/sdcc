@@ -355,7 +355,7 @@ void pic16_emitcode (char *inst,char *fmt, ...)
 /*   with a debugger symbol                                        */
 /*-----------------------------------------------------------------*/
 void
-pic16_emitDebuggerSymbol (char * debugSym)
+pic16_emitDebuggerSymbol (const char * debugSym)
 {
   _G.debugLine = 1;
   pic16_emitcode (";", "%s ==.", debugSym);
@@ -947,7 +947,7 @@ void pic16_aopOp (operand *op, iCode *ic, bool result)
     /* if this a literal */
     if (IS_OP_LITERAL(op)) {
         op->aop = aop = newAsmop(AOP_LIT);
-        aop->aopu.aop_lit = op->operand.valOperand;
+        aop->aopu.aop_lit = OP_VALUE (op);
         aop->size = getSize(operandType(op));
         return;
     }
@@ -1164,7 +1164,7 @@ void pic16_freeAsmop (operand *op, asmop *aaop, iCode *ic, bool pop)
                 }
 
                 if (_G.sregsAllocSet) {
-                  regs *sr;
+                  reg_info *sr;
 
                     _G.sregsAllocSet = reverseSet( _G.sregsAllocSet );
                     for(sr=setFirstItem(_G.sregsAllocSet) ; sr; sr=setFirstItem(_G.sregsAllocSet)) {
@@ -1448,7 +1448,7 @@ pCodeOp *pic16_popGetTempRegCond(bitVect *f, bitVect *v, int lock)
 
 
               {
-                regs *sr;
+                reg_info *sr;
 
                   for(sr=setFirstItem(_G.sregsAllocSet);sr;sr=setNextItem(_G.sregsAllocSet)) {
 
@@ -2835,10 +2835,10 @@ static void genPcall (iCode *ic)
     pic16_emitpcode(POC_MOVLW, pic16_popGetImmd(pcop_lbl->name, 2, 0));
     pic16_emitpcode(POC_MOVWF, pic16_popCopyReg(&pic16_pc_tosu));
 
-
-    /* restore interrupt control register */
-    pic16_emitpcode(POC_MOVFW, pic16_popCopyReg(&pic16_pc_preinc1));
-    pic16_emitpcode(POC_MOVWF, pic16_popCopyReg(&pic16_pc_intcon));
+    /* Conditionally re-enable interrupts, but keep interrupt flags in
+     * INTCON intact (thanks to J. van der Boon, #3420588). */
+    pic16_emitpcode(POC_BTFSC, pic16_popCopyGPR2Bit(pic16_popCopyReg(&pic16_pc_preinc1), 7));
+    pic16_emitpcode(POC_BSF, pic16_popCopyGPR2Bit(pic16_popCopyReg(&pic16_pc_intcon), 7));
 
     /* make the call by writing the pointer into pc */
     mov2fp(pic16_popCopyReg(&pic16_pc_pclatu), AOP(IC_LEFT(ic)), 2);
@@ -3029,7 +3029,7 @@ static void genFunction (iCode *ic)
     }
 
     if(IFFUNC_ISNAKED(ftype)) {
-      DEBUGpic16_emitcode("; ***", "_naked function, no prologue");
+      DEBUGpic16_emitcode("; ***", "__naked function, no prologue");
       return;
     }
 
@@ -3076,7 +3076,7 @@ static void genFunction (iCode *ic)
 //    debugf(stderr, "function name: %s ARGS=%p\n", sym->name, FUNC_ARGS(sym->type));
     if(strcmp(sym->name, "main")) {
       if(0
-        || !options.ommitFramePtr
+        || !options.omitFramePtr
 //        || sym->regsUsed
         || IFFUNC_ARGS(sym->type)
         || FUNC_HASSTACKPARM(sym->etype)
@@ -3171,7 +3171,7 @@ static void genEndFunction (iCode *ic)
     FENTRY;
 
     if(IFFUNC_ISNAKED(sym->type)) {
-      DEBUGpic16_emitcode("; ***", "_naked function, no epilogue");
+      DEBUGpic16_emitcode("; ***", "__naked function, no epilogue");
       return;
     }
 
@@ -3191,7 +3191,7 @@ static void genEndFunction (iCode *ic)
 
     /* first restore registers that might be used for stack access */
     if(_G.sregsAllocSet) {
-    regs *sr;
+    reg_info *sr;
 
       _G.sregsAllocSet = reverseSet( _G.sregsAllocSet );
       for(sr=setFirstItem(_G.sregsAllocSet) ; sr; sr=setNextItem(_G.sregsAllocSet)) {
@@ -3235,7 +3235,7 @@ static void genEndFunction (iCode *ic)
 
     if(strcmp(sym->name, "main")) {
       if(0
-        || !options.ommitFramePtr
+        || !options.omitFramePtr
 //        || sym->regsUsed
         || IFFUNC_ARGS(sym->type)
         || FUNC_HASSTACKPARM(sym->etype)
@@ -6362,6 +6362,7 @@ static void genInline (iCode *ic)
           ++bp;
           break;
 
+        case '\x87':
         case '\n':
           inComment = FALSE;
           *bp++ = '\0';
@@ -7790,6 +7791,18 @@ static void genGenericShift (iCode *ic, int isShiftLeft)
     label_negative = newiTempLabel ( NULL );
   } // if
 
+  /*
+   * The code below overwrites the shift count for `val = (1 << val)'
+   * when it assigns LEFT to RESULT (== RIGHT == shift count).
+   * XXX: This problem should have been/is also addressed in ralloc.c,
+   *      but the code there seems not to catch this case ...
+   */
+  if (pic16_sameRegs (AOP(right), AOP(result))) {
+    // We abuse FSR0L as a temporary, pic16_popGetTempReg() is too costly.
+    pic16_mov2w (AOP(right), 0);
+    pic16_emitpcode (POC_MOVWF, pic16_popCopyReg (&pic16_pc_fsr0l));
+  } // if
+
   // copy source to result -- this will effectively truncate the left operand to the size of result!
   // (e.g. char c = 0x100 << -3 will become c = 0x00 >> 3 == 0x00 instad of 0x20)
   // This is fine, as it only occurs for left shifting with negative count which is not standardized!
@@ -7815,7 +7828,13 @@ static void genGenericShift (iCode *ic, int isShiftLeft)
     }
   } // if (size mismatch)
 
-  pic16_mov2w (AOP(right), 0);
+  /* load/restore shift count */
+  if (pic16_sameRegs (AOP(right), AOP(result))) {
+    pic16_emitpcode (POC_MOVFW, pic16_popCopyReg (&pic16_pc_fsr0l));
+  } else {
+    pic16_mov2w (AOP(right), 0);
+  } // if
+
   pic16_emitpcode (POC_BZ, pic16_popGetLabel (label_complete->key));
   if (signedCount) pic16_emitpcode (POC_BN, pic16_popGetLabel (label_negative->key));
 
@@ -8098,7 +8117,7 @@ static void genUnpackBits (operand *result, operand *left, char *rname, int ptyp
   }
 
   fprintf(stderr, "SDCC pic16 port error: the port currently does not support *reading*\n");
-  fprintf(stderr, "bitfields of size >=8. Instead of generating wrong code, bailling out...\n");
+  fprintf(stderr, "bitfields of size >=8. Instead of generating wrong code, bailing out...\n");
   exit(EXIT_FAILURE);
 
   return ;
@@ -8199,7 +8218,7 @@ static void genNearPointerGet (operand *left,
 
 #if 1
     if(IS_BITFIELD( retype )
-      && (SPEC_BLEN(operandType(result))==1)
+      && (SPEC_BLEN(retype)==1)
     ) {
       iCode *nextic;
       pCodeOp *jop;
@@ -8224,8 +8243,8 @@ static void genNearPointerGet (operand *left,
             /* everything is ok then */
             /* find a way to optimize the genIfx iCode */
 
-            bytestrt = SPEC_BSTR(operandType(result))/8;
-            bitstrt = SPEC_BSTR(operandType(result))%8;
+            bytestrt = SPEC_BSTR(retype)/8;
+            bitstrt = SPEC_BSTR(retype)%8;
 
             jop = pic16_popCopyGPR2Bit(pic16_popGet(AOP(left), 0), bitstrt);
 
@@ -8625,7 +8644,7 @@ static void genPackBits (sym_link    *etype , operand *result,
 
 #if 0
   fprintf(stderr, "SDCC pic16 port error: the port currently does not support\n");
-  fprintf(stderr, "bitfields of size >=8. Instead of generating wrong code, bailling out...\n");
+  fprintf(stderr, "bitfields of size >=8. Instead of generating wrong code, bailing out...\n");
   exit(EXIT_FAILURE);
 #endif
 
@@ -9677,6 +9696,15 @@ static void genCast (iCode *ic)
                         pic16_emitpcode(POC_CLRF,   pic16_popGet(AOP(result),offset++));
 
                 goto release;
+        }
+        
+        if (IS_BOOL(operandType(result)))
+        {
+          pic16_toBoolean (right);
+          emitSKPNZ;
+          pic16_emitpcode(POC_MOVLW, pic16_popGetLit(1));
+          pic16_emitpcode(POC_MOVWF,pic16_popGet(AOP(result),0));
+          goto release;
         }
 
         if(IS_BITFIELD(getSpec(restype))

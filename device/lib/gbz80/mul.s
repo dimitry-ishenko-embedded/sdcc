@@ -1,6 +1,56 @@
+;--------------------------------------------------------------------------
+;  mul.s
+;
+;  Copyright (C) 2000, Michael Hope
+;
+;  This library is free software; you can redistribute it and/or modify it
+;  under the terms of the GNU General Public License as published by the
+;  Free Software Foundation; either version 2.1, or (at your option) any
+;  later version.
+;
+;  This library is distributed in the hope that it will be useful,
+;  but WITHOUT ANY WARRANTY; without even the implied warranty of
+;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;  GNU General Public License for more details.
+;
+;  You should have received a copy of the GNU General Public License 
+;  along with this library; see the file COPYING. If not, write to the
+;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+;   MA 02110-1301, USA.
+;
+;  As a special exception, if you link this library with other files,
+;  some of which are compiled with SDCC, to produce an executable,
+;  this library does not by itself cause the resulting executable to
+;  be covered by the GNU General Public License. This exception does
+;  not however invalidate any other reasons why the executable file
+;   might be covered by the GNU General Public License.
+;--------------------------------------------------------------------------
+
         ;; Originally from GBDK by Pascal Felber.
 
         .area   _CODE
+
+; operands have different sign
+
+__mulsuchar_rrx_s::
+        ld      hl,#2+1
+        ld      b, h
+        add     hl,sp
+
+        ld      e,(hl)
+        dec     hl
+        ld      c,(hl)
+        jr      signexte
+
+__muluschar_rrx_s::
+        ld      hl,#2
+        ld      b, h
+        add     hl,sp
+
+        ld      e,(hl)
+        inc     hl
+        ld      c,(hl)
+        jr      signexte
 
 __mulschar_rrx_s::
         ld      hl,#2
@@ -19,7 +69,7 @@ __mulschar_rrx_hds::
         rla
         sbc     a,a
         ld      b,a
-
+signexte:
         ld      a,e
         rla
         sbc     a,a
@@ -94,7 +144,7 @@ __mulint_rrx_hds::
         add     hl,hl
         rl      c
         rla                     ;DLE 27/11/98
-        jr      NZ,2$
+        jp      NC,2$
         add     hl,de
 2$:
         dec     b
@@ -105,3 +155,4 @@ __mulint_rrx_hds::
         ld      d,h
 
         ret
+

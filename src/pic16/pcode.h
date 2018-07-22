@@ -21,7 +21,7 @@
 -------------------------------------------------------------------------*/
 
 //#include "ralloc.h"
-struct regs;
+struct reg_info;
 
 /*
    Post code generation
@@ -450,7 +450,7 @@ typedef struct pCodeOpImmd
   unsigned _const:1;    /* is in code space    */
 
   int rIdx;             /* If this immd points to a register */
-  struct regs *r;       /* then this is the reg. */
+  struct reg_info *r;       /* then this is the reg. */
 
 } pCodeOpImmd;
 
@@ -464,7 +464,7 @@ typedef struct pCodeOpReg
 {
   pCodeOp pcop;    // Can be either GPR or SFR
   int rIdx;        // Index into the register table
-  struct regs *r;
+  struct reg_info *r;
   int instance;    // byte # of Multi-byte registers
   struct pBlock *pb;
 } pCodeOpReg;
@@ -1006,7 +1006,7 @@ typedef struct peepCommand {
 pCode *pic16_newpCode (PIC_OPCODE op, pCodeOp *pcop); // Create a new pCode given an operand
 pCode *pic16_newpCodeCharP(char *cP);              // Create a new pCode given a char *
 pCode *pic16_newpCodeInlineP(char *cP);            // Create a new pCode given a char *
-pCode *pic16_newpCodeFunction(char *g, char *f);   // Create a new function
+pCode *pic16_newpCodeFunction(const char *g, const char *f); // Create a new function
 pCode *pic16_newpCodeLabel(char *name,int key);    // Create a new label given a key
 pCode *pic16_newpCodeLabelFORCE(char *name, int key); // Same as newpCodeLabel but label cannot be optimized out
 pCode *pic16_newpCodeCSource(int ln, const char *f, const char *l); // Create a new symbol line
@@ -1052,8 +1052,8 @@ pCodeOp *pic16_newpCodeOpReg(int rIdx);
 pCode * pic16_findNextInstruction(pCode *pci);
 pCode * pic16_findNextpCode(pCode *pc, PC_TYPE pct);
 int pic16_isPCinFlow(pCode *pc, pCode *pcflow);
-struct regs * pic16_getRegFromInstruction(pCode *pc);
-struct regs * pic16_getRegFromInstruction2(pCode *pc);
+struct reg_info * pic16_getRegFromInstruction(pCode *pc);
+struct reg_info * pic16_getRegFromInstruction2(pCode *pc);
 char *pic16_get_op(pCodeOp *pcop,char *buffer, size_t size);
 char *pic16_get_op2(pCodeOp *pcop,char *buffer, size_t size);
 char *dumpPicOptype(PIC_OPTYPE type);

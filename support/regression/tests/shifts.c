@@ -29,10 +29,13 @@ test1ShiftClasses(void)
     ASSERT(result == 120);
 }
 
+/* This tests for implementation-defined behaviour (right-shifting negative values).
+   For sdcc the implementation defined behaviour is that right shift for arithmetic
+   types is arithmetic. */
 void
 test2ShiftRight(void)
 {
-    {attr} {storage} {type} i, result;
+    {attr} {storage} signed {type} i, result;
 
     i = -120;
     ASSERT(i>>1 == -60);

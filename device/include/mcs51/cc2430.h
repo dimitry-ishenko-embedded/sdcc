@@ -1,26 +1,30 @@
 /*-------------------------------------------------------------------------
-   Register Declarations for Chipcon CC2430
-
-   Written By -  Jesus Calvino-Fraga / jesusc at ece.ubc.ca (December 2006)
+   cc2430.h - Register Declarations for Chipcon CC2430
    (Based on CC2430 PRELIMINARY Data Sheet (rev. 1.03) SWRS036A)
 
-   This library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option) any later version.
+   Copyright (C) 2006, Jesus Calvino-Fraga / jesusc at ece.ubc.ca
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
    This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details.
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
 
-   You should have received a copy of the GNU Lesser General Public
-   License along with this library; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+   You should have received a copy of the GNU General Public License
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
 
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
 #ifndef REG_CC2430_H
@@ -105,6 +109,7 @@ SFR(S1CON,    0x9B); // Interrupt Flags 3
 SFR(T2PEROF0, 0x9C); // Timer 2 Overflow Capture/Compare 0
 SFR(T2PEROF1, 0x9D); // Timer 2 Overflow Capture/Compare 1
 SFR(T2PEROF2, 0x9E); // Timer 2 Overflow Capture/Compare 2
+SFR(FMAP    , 0x9F); // Flash Bank Map
 SFR(P2,       0xA0); // Port 2
    SBIT(P2_0,     0xA0, 0); // Port 2 bit 0
    SBIT(P2_1,     0xA0, 1); // Port 2 bit 1

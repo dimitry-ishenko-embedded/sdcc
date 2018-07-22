@@ -1,20 +1,30 @@
-/* Floating point library in optimized assembly for 8051
- * Copyright (c) 2004, Paul Stoffregen, paul@pjrc.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- */
+/*-------------------------------------------------------------------------
+   _fsmul.c - Floating point library in optimized assembly for 8051
+
+   Copyright (c) 2004, Paul Stoffregen, paul@pjrc.com
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 
 #define SDCC_FLOAT_LIB
@@ -253,16 +263,17 @@ float __fsmul (float a1, float a2) {
   result += ((fl1.l & (unsigned long) 0xFF) * (fl2.l >> 8)) >> 8;
   result += ((fl2.l & (unsigned long) 0xFF) * (fl1.l >> 8)) >> 8;
 
+  /* round, phase 1 */
+  result += 0x40;
+
   if (result & SIGNBIT)
     {
-      /* round */
-      result += 0x80;
+      /* round, phase 2 */
+      result += 0x40;
       result >>= 8;
     }
   else
     {
-      /* round */
-      result += 0x40;
       result >>= 7;
       exp--;
     }

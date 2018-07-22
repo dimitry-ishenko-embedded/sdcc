@@ -22,8 +22,8 @@
    what you give them.   Help stamp out software-hoarding!
 -------------------------------------------------------------------------*/
 
-#ifndef SDCCEXPR_H
-#define SDCCEXPR_H
+#ifndef SDCCAST_H
+#define SDCCAST_H
 
 #include "SDCCglobl.h"
 #include "SDCCsymt.h"
@@ -31,8 +31,9 @@
 #include "SDCCset.h"
 #include "SDCCmem.h"
 
-typedef enum {
-  EX_OP=0,
+typedef enum
+{
+  EX_OP = 0,
   EX_VALUE,
   EX_LINK,
   EX_OPERAND
@@ -40,78 +41,78 @@ typedef enum {
 
 /* expression tree   */
 typedef struct ast
+{
+  ASTTYPE type;
+  unsigned decorated:1;
+  unsigned isError:1;
+  unsigned funcName:1;
+  unsigned rvalue:1;
+  unsigned lvalue:1;
+  unsigned initMode:1;
+  unsigned reversed:1;
+  int level;                    /* level for expr */
+  int block;                    /* block number   */
+  int seqPoint;                 /* sequence point */
+  /* union of values expression can have */
+  union
   {
+    value *val;                 /* value if type = EX_VALUE */
+    sym_link *lnk;              /* sym_link * if type= EX_LINK  */
+    struct operand *oprnd;      /* used only for side effecting function calls */
+    unsigned op;                /* operator if type= EX_OP  */
+  }
+  opval;
 
-    ASTTYPE type;
-    unsigned decorated:1;
-    unsigned isError:1;
-    unsigned funcName:1;
-    unsigned rvalue:1;
-    unsigned lvalue:1;
-    unsigned initMode:1;
-    unsigned reversed:1;
-    int level;                  /* level for expr */
-    int block;                  /* block number   */
-    int seqPoint;               /* sequence point */
-    /* union of values expression can have */
-    union
-      {
-        value *val;             /* value if type = EX_VALUE */
-        sym_link *lnk;          /* sym_link * if type= EX_LINK  */
-        struct operand *oprnd;  /* used only for side effecting function calls */
-        unsigned op;            /* operator if type= EX_OP  */
-      }
-    opval;
-
-    /* union for special processing */
-    union
-      {
-        char *inlineasm;        /* pointer to inline assembler code */
-        literalList *constlist; /* init list for array initializer. */
-        symbol *sym;            /* if block then -> symbols */
-        value *args;            /* if function then args    */
-        /* if switch then switch values */
-        struct
-          {
-            value *swVals;      /* switch comparison values */
-            int swDefault;      /* default if present       */
-            int swNum;          /* switch number            */
-          }
-        switchVals;
-        /* if for then for values */
-        struct
-          {
-            struct ast *initExpr;       /* init portion */
-            struct ast *condExpr;       /* conditional portion */
-            struct ast *loopExpr;       /* iteration portion   */
-            symbol *trueLabel;          /* entry point into body */
-            symbol *falseLabel;         /* exit point */
-            symbol *continueLabel;      /* conditional check   */
-            symbol *condLabel;          /* conditional label   */
-          }
-        forVals;
-        struct
-          {
-            unsigned literalFromCast:1; /* true if this is an EX_VALUE of LITERAL
+  /* union for special processing */
+  union
+  {
+    char *inlineasm;            /* pointer to inline assembler code */
+    literalList *constlist;     /* init list for array initializer. */
+    symbol *sym;                /* if block then -> symbols */
+    value *args;                /* if function then args    */
+    /* if switch then switch values */
+    struct
+    {
+      value *swVals;            /* switch comparison values */
+      int swDefault;            /* default if present       */
+      int swNum;                /* switch number            */
+      char *swSuffix;
+    }
+    switchVals;
+    /* if for then for values */
+    struct
+    {
+      struct ast *initExpr;     /* init portion          */
+      struct ast *condExpr;     /* conditional portion   */
+      struct ast *loopExpr;     /* iteration portion     */
+      symbol *trueLabel;        /* entry point into body */
+      symbol *falseLabel;       /* exit point            */
+      symbol *continueLabel;    /* conditional check     */
+      symbol *condLabel;        /* conditional label     */
+    }
+    forVals;
+    struct
+    {
+      unsigned literalFromCast:1;       /* true if this is an EX_VALUE of LITERAL
                                          * type resulting from a typecast.
                                          */
-            unsigned removedCast:1;     /* true if the explicit cast has been removed */
-          };
-        int argreg;                     /* argreg number when operand type == EX_OPERAND */
-      }
-    values;
-
-    int lineno;                 /* source file line number     */
-    char *filename;             /* filename of the source file */
-
-    sym_link *ftype;            /* start of type chain for this subtree */
-    sym_link *etype;            /* end of type chain for this subtree   */
-
-    struct ast *left;           /* pointer to left tree        */
-    struct ast *right;          /* pointer to right tree       */
-    symbol *trueLabel;          /* if statement trueLabel */
-    symbol *falseLabel;         /* if statement falseLabel */
+      unsigned removedCast:1;   /* true if the explicit cast has been removed */
+    } cast;
+    int argreg;                 /* argreg number when operand type == EX_OPERAND */
   }
+  values;
+
+  int lineno;                   /* source file line number     */
+  char *filename;               /* filename of the source file */
+
+  sym_link *ftype;              /* start of type chain for this subtree */
+  sym_link *etype;              /* end of type chain for this subtree   */
+
+  struct ast *left;             /* pointer to left tree    */
+  struct ast *right;            /* pointer to right tree   */
+  symbol *trueLabel;            /* if statement trueLabel  */
+  symbol *falseLabel;           /* if statement falseLabel */
+}
 ast;
 
 
@@ -154,7 +155,7 @@ ast;
 
 #define IS_AST_PARAM(x)         (IS_AST_OP(x) && (x)->opval.op == PARAM)
 
-#define  CAN_EVAL(x)    (      (x) == '['     || (x) == '.'      || (x) == PTR_OP || \
+#define CAN_EVAL(x)     (      (x) == '['     || (x) == '.'      || (x) == PTR_OP || \
               (x) ==  '&'   || (x) == '|'     || (x) == '^'      || (x) == '*'    || \
               (x) ==  '-'   || (x) == '+'     || (x) == '~'      ||                  \
               (x) ==  '!'   || (x) == LEFT_OP || (x) == RIGHT_OP ||                  \
@@ -162,19 +163,21 @@ ast;
               (x) == LE_OP  || (x) == GE_OP   || (x) == EQ_OP    || (x) == NE_OP  || \
               (x) == AND_OP || (x) == OR_OP   || (x) == '='  )
 
-#define  LEFT_FIRST(x) ( x  ==  AND_OP  ||      x       ==      OR_OP   )
+#define LEFT_FIRST(x) ( x == AND_OP || x == OR_OP )
 
 #define SIDE_EFFECTS_CHECK(op,rVal)  if (!sideEffects)  {               \
                                          werror(W_NO_SIDE_EFFECTS,op);  \
                                          return rVal    ;               \
                                      }
-#define IS_MODIFYING_OP(x) ( (x) == INC_OP || (x) == DEC_OP || (x) == '=' ||  \
-                        (x) == AND_ASSIGN || x== OR_ASSIGN || (x) == XOR_ASSIGN )
+#define IS_MODIFYING_OP(x) ( (x) == INC_OP     || (x) == DEC_OP    || (x) == '='        || \
+                             (x) == AND_ASSIGN || (x) == OR_ASSIGN || (x) == XOR_ASSIGN )
 
-#define IS_ASSIGN_OP(x) ( (x) == '=' || (x) == ADD_ASSIGN || (x) == SUB_ASSIGN ||\
-                          (x) == MUL_ASSIGN || (x) == DIV_ASSIGN || (x) == XOR_ASSIGN ||\
-                          (x) == AND_ASSIGN || (x) == OR_ASSIGN || (x) == INC_OP || (x) == DEC_OP)
-#define IS_DEREF_OP(x) (( (x)->opval.op == '*' && (x)->right == NULL) || (x)->opval.op == '.')
+#define IS_ASSIGN_OP(x) ( (x) == '='        || (x) == ADD_ASSIGN || (x) == SUB_ASSIGN || \
+                          (x) == MUL_ASSIGN || (x) == DIV_ASSIGN || (x) == XOR_ASSIGN || \
+                          (x) == AND_ASSIGN || (x) == OR_ASSIGN  || (x) == INC_OP     || (x) == DEC_OP)
+#define IS_DEREF_OP(x) ( ( (x)->opval.op == '*' && (x)->right == NULL) || \
+                         (x)->opval.op == '.' || \
+                         (x)->opval.op == PTR_OP )
 
 /* forward declarations for global variables */
 extern ast *staticAutos;
@@ -193,6 +196,7 @@ ast *removeIncDecOps (ast *);
 ast *removePreIncDecOps (ast *);
 ast *removePostIncDecOps (ast *);
 value *sizeofOp (sym_link *);
+ast *offsetofOp (sym_link * type, ast * snd);
 value *evalStmnt (ast *);
 ast *createRMW (ast *, unsigned, ast *);
 ast *createFunction (symbol *, ast *);
@@ -203,6 +207,8 @@ ast *createDefault (ast *, ast *, ast *);
 ast *forLoopOptForm (ast *);
 ast *argAst (ast *);
 ast *resolveSymbols (ast *);
+void CodePtrPointsToConst (sym_link * t);
+void checkPtrCast (sym_link * newType, sym_link * orgType, bool implicit);
 ast *decorateType (ast *, RESULT_TYPE);
 ast *createWhile (symbol *, symbol *, symbol *, ast *, ast *);
 ast *createIf (ast *, ast *, ast *);
@@ -212,14 +218,14 @@ void eval2icode (ast *);
 value *constExprValue (ast *, int);
 bool constExprTree (ast *);
 int setAstFileLine (ast *, char *, int);
-symbol *funcOfType (char *, sym_link *, sym_link *, int, int);
-symbol * funcOfTypeVarg (char *, char * , int , char **);
+symbol *funcOfType (const char *, sym_link *, sym_link *, int, int);
+symbol *funcOfTypeVarg (char *, char *, int, char **);
 ast *initAggregates (symbol *, initList *, ast *);
 bool hasSEFcalls (ast *);
 void addSymToBlock (symbol *, ast *);
-void freeStringSymbol(symbol *);
-DEFSETFUNC(resetParmKey);
-int astErrors(ast *);
+void freeStringSymbol (symbol *);
+DEFSETFUNC (resetParmKey);
+int astErrors (ast *);
 RESULT_TYPE getResultTypeFromType (sym_link *);
 
 // exported variables

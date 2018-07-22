@@ -170,7 +170,7 @@ pic16emitRegularMap (memmap * map, bool addPublics, bool arFlag)
                         /* new version */
                         if(IS_STATIC(sym->etype)
                                 && !sym->ival) /* && !sym->level*/ {
-                          regs *reg;
+                          reg_info *reg;
                           sectSym *ssym;
                           int found=0;
 
@@ -222,7 +222,7 @@ pic16emitRegularMap (memmap * map, bool addPublics, bool arFlag)
 
                         /* emit only if it is global */
                         if(sym->level == 0) {
-                          regs *reg;
+                          reg_info *reg;
 
                                 reg = pic16_dirregWithName( sym->name );
                                 if(!reg) {
@@ -250,7 +250,7 @@ pic16emitRegularMap (memmap * map, bool addPublics, bool arFlag)
                         }
                 } else {
                         if(!sym->used && (sym->level == 0)) {
-                          regs *reg;
+                          reg_info *reg;
 
                                 /* symbol not used, just declared probably, but its in
                                  * level 0, so we must declare it fine as global */
@@ -424,7 +424,7 @@ pic16_initPointer (initList * ilist, sym_link *toType)
       val->type = newLink (DECLARATOR);
       if(SPEC_SCLS (expr->left->etype) == S_CODE) {
         DCL_TYPE (val->type) = CPOINTER;
-        DCL_PTR_CONST (val->type) = port->mem.code_ro;
+        CodePtrPointsToConst (val->type);
       }
       else if (SPEC_SCLS (expr->left->etype) == S_XDATA)
         DCL_TYPE (val->type) = FPOINTER;
@@ -484,7 +484,7 @@ pic16_initPointer (initList * ilist, sym_link *toType)
     val->type = newLink (DECLARATOR);
     if (SPEC_SCLS (expr->right->etype) == S_CODE) {
       DCL_TYPE (val->type) = CPOINTER;
-      DCL_PTR_CONST (val->type) = port->mem.code_ro;
+      CodePtrPointsToConst (val->type);
     }
     else if (SPEC_SCLS (expr->right->etype) == S_XDATA)
       DCL_TYPE (val->type) = FPOINTER;
@@ -715,7 +715,8 @@ pic16_printIvalArray (symbol * sym, sym_link * type, initList * ilist,
   /* take care of the special   case  */
   /* array of characters can be init  */
   /* by a string                      */
-  if (IS_CHAR (type->next) && ilist) {
+  if (IS_CHAR (type->next) &&
+      ilist && ilist->type == INIT_NODE) {
     if (!IS_LITERAL(list2val(ilist)->etype)) {
       werror (W_INIT_WRONG);
       return;
@@ -779,6 +780,7 @@ pic16_printIvalBitFields (symbol **sym, initList **ilist, char ptype, void *p)
   initList *lilist = *ilist;
   unsigned long ival = 0;
   int size = 0;
+  int bit_start = 0;
   unsigned long i;
 
 
@@ -787,9 +789,10 @@ pic16_printIvalBitFields (symbol **sym, initList **ilist, char ptype, void *p)
 #endif
 
 
-  while (lsym)
+  while (lsym && IS_BITFIELD (lsym->type))
     {
-      if (0 == SPEC_BLEN (lsym->etype))
+      int bit_length = SPEC_BLEN (lsym->etype);
+      if (0 == bit_length)
         {
           /* bit-field structure member with a width of 0 */
           lsym = lsym->next;
@@ -799,7 +802,6 @@ pic16_printIvalBitFields (symbol **sym, initList **ilist, char ptype, void *p)
         {
           /* not an unnamed bit-field structure member */
           value *val = list2val (lilist);
-          int bit_length = SPEC_BLEN (lsym->etype);
 
           if (size)
             {
@@ -809,10 +811,16 @@ pic16_printIvalBitFields (symbol **sym, initList **ilist, char ptype, void *p)
           else
             size = (bit_length + 7) / 8;
 
-          ival |= (ulFromVal (val) & ((1ul << bit_length) - 1ul)) << SPEC_BSTR (lsym->etype);
+          ival |= (ulFromVal (val) & ((1ul << bit_length) - 1ul)) << bit_start;
           lilist = (lilist ? lilist->next : NULL);
         }
+      bit_start += bit_length;
       lsym = lsym->next;
+      if (lsym && IS_BITFIELD (lsym->type) && (0 == SPEC_BSTR (lsym->etype))) 
+        {
+          /* a new integer */
+          break;
+        }
     }
 
   for (i = 0; i < size; i++)
@@ -900,6 +908,13 @@ pic16_printIvalUnion (symbol * sym, sym_link * type,
 
   size = SPEC_STRUCT(type)->size;
   sflds = SPEC_STRUCT(type)->fields;
+
+  /* skip past holes, print value */
+  while (iloop && iloop->type == INIT_HOLE)
+    {
+      iloop = iloop->next;
+      sflds = sflds->next;
+    }
   pic16_printIval (sym, sflds->type, iloop, ptype, p);
 
   /* if the first field is not the longest, fill with 0s */
@@ -1136,6 +1151,25 @@ void pic16_printIval (symbol * sym, sym_link * type, initList * ilist, char ptyp
                 IS_STRUCT(type), IS_ARRAY(type), IS_PTR(type), IS_SPEC(type));
 #endif
 
+  /* Handle designated initializers */
+  if (ilist)
+    ilist = reorderIlist (type, ilist);
+
+  /* If this is a hole, substitute an appropriate initializer. */
+  if (ilist && ilist->type == INIT_HOLE)
+    {
+      if (IS_AGGREGATE (type))
+        {
+          ilist = newiList(INIT_DEEP, NULL); /* init w/ {} */
+        }
+      else
+        {
+          ast *ast = newAst_VALUE (constVal("0"));
+          ast = decorateType (ast, RESULT_TYPE_NONE);
+          ilist = newiList(INIT_NODE, ast);
+        }
+    }
+
   /* if structure then */
   if (IS_STRUCT (type))
     {
@@ -1237,6 +1271,7 @@ pic16emitStaticSeg (memmap * map)
   /* for all variables in this segment do */
   for (sym = setFirstItem (map->syms); sym; sym = setNextItem (map->syms))
     {
+      int size = getSize (sym->type);
 
 #if 0
       fprintf (stderr, "%s\t%s: sym: %s\tused: %d\tSPEC_ABSA: %d\tSPEC_AGGREGATE: %d\tCODE: %d\n\
@@ -1248,14 +1283,12 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__, map->sn
       if (SPEC_ABSA (sym->etype) && PIC16_IS_CONFIG_ADDRESS (SPEC_ADDR (sym->etype)))
         {
           pic16_assignConfigWordValue (SPEC_ADDR (sym->etype), (int) ulFromVal (list2val (sym->ival)));
-
           continue;
         }
 
       if (SPEC_ABSA (sym->etype) && PIC16_IS_IDLOC_ADDRESS (SPEC_ADDR (sym->etype)))
         {
           pic16_assignIdByteValue (SPEC_ADDR (sym->etype), (char) ulFromVal (list2val (sym->ival)));
-
           continue;
         }
 
@@ -1264,6 +1297,12 @@ CODESPACE: %d\tCONST: %d\tPTRCONST: %d\tSPEC_CONST: %d\n", __FUNCTION__, map->sn
         {
           checkAddSym (&externs, sym);
           continue;
+        }
+
+      /* bail out on incomplete types */
+      if (0 == size)
+        {
+          werrorfl (sym->fileDef, sym->lineDef, E_UNKNOWN_SIZE, sym->name);
         }
 
       /* if it is not static add it to the public
@@ -1399,9 +1438,9 @@ void pic16_emitConfigRegs(FILE *of)
 
         for(i=0;i<=(pic16->cwInfo.confAddrEnd-pic16->cwInfo.confAddrStart);i++)
                 if(pic16->cwInfo.crInfo[i].emit)        //mask != -1)
-                        fprintf (of, "\t__config 0x%x, 0x%hhx\n",
+                        fprintf (of, "\t__config 0x%x, 0x%02x\n",
                                 pic16->cwInfo.confAddrStart+i,
-                                pic16->cwInfo.crInfo[i].value);
+                                (unsigned char) pic16->cwInfo.crInfo[i].value);
 }
 
 void pic16_emitIDRegs(FILE *of)
@@ -1410,9 +1449,9 @@ void pic16_emitIDRegs(FILE *of)
 
         for(i=0;i<=(pic16->idInfo.idAddrEnd-pic16->idInfo.idAddrStart);i++)
                 if(pic16->idInfo.irInfo[i].emit)
-                        fprintf (of, "\t__idlocs 0x%06x, 0x%hhx\n",
+                        fprintf (of, "\t__idlocs 0x%06x, 0x%02x\n",
                                 pic16->idInfo.idAddrStart+i,
-                                pic16->idInfo.irInfo[i].value);
+                                (unsigned char) pic16->idInfo.irInfo[i].value);
 }
 
 

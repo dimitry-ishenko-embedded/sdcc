@@ -1,20 +1,30 @@
-/*  logf.c: Computes the natural log of a 32 bit float as outlined in [1].
+/*-------------------------------------------------------------------------
+   logf.c - Computes the natural log of a 32 bit float as outlined in [1].
 
-    Copyright (C) 2001, 2002  Jesus Calvino-Fraga, jesusc@ieee.org 
+   Copyright (C) 2001, 2002, Jesus Calvino-Fraga, jesusc@ieee.org 
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA */
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 /* [1] William James Cody and W.  M.  Waite.  _Software manual for the
    elementary functions_, Englewood Cliffs, N.J.:Prentice-Hall, 1980. */
@@ -48,13 +58,15 @@ float logf(float x)
 logf_neg_check:
 	jnb	sign_a, logf_zero_check
 	// TODO: set errno to EDOM (negative numbers not allowed)
-	ljmp	fs_return_nan
+	lcall	fs_return_nan
+	ljmp	logf_exit
 
 logf_zero_check:
 	cjne	r4, #0, logf_ok
 	// TODO: set errno to ERANGE (zero not allowed)
 	setb	sign_a
-	ljmp	fs_return_inf
+	lcall	fs_return_inf
+	ljmp	logf_exit
 
 logf_ok:
 	push	exp_a
@@ -136,8 +148,9 @@ logf_cordic_skip:
 	// anything and we can just return the with we have already
 
 	// TODO: which of these gives best accuracy???
-	ljmp	fs_zerocheck_return
-	//ljmp	fs_round_and_return
+	lcall	fs_zerocheck_return
+	//lcall	fs_round_and_return
+	sjmp	logf_exit
 logf_exponent:
 	jc	logf_exp_neg
 	// the input exponent was greater than 126
@@ -182,7 +195,8 @@ logf_exp_scale:
 	mov	exp_a, #134
 	lcall	fs_normalize_a
 	// now just add log(fractional) +/- log(2) * abs(exp - 126)
-	ljmp	fsadd_direct_entry
+	lcall	fsadd_direct_entry
+logf_exit:
 	__endasm;
 #pragma less_pedantic
 }

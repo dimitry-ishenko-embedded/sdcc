@@ -1,25 +1,40 @@
-/* Floating point library in optimized assembly for 8051
- * Copyright (c) 2004, Paul Stoffregen, paul@pjrc.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
- */
+/*-------------------------------------------------------------------------
+   _fsadd.c - Floating point library in optimized assembly for 8051
+
+   Copyright (c) 2004, Paul Stoffregen, paul@pjrc.com
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 
 #define SDCC_FLOAT_LIB
 #include <float.h>
+#include <stdbool.h>
+#include <sdcc-lib.h>
 
+#ifndef BOOL
+#define BOOL _Bool
+#endif
 
 #ifdef FLOAT_ASM_MCS51
 
@@ -65,7 +80,7 @@ fsadd_direct_entry:
 00011$:
 	// decide if we need to add or subtract
 	// sign_a and sign_b are stored in the flag bits of psw,
-	// so this little trick checks if the arguements ave the
+	// so this little trick checks if the arguements have the
 	// same sign.
 	mov	a, psw
 	swap	a
@@ -133,7 +148,6 @@ fsadd_direct_entry:
 
 #else
 
-
 /*
 ** libgcc support for software floating point.
 ** Copyright (C) 1991 by Pipeline Associates, Inc.  All rights reserved.
@@ -159,63 +173,67 @@ union float_long
 /* add two floats */
 float __fsadd (float a1, float a2)
 {
-  volatile long mant1, mant2;
-  volatile union float_long fl1, fl2;
-  volatile int exp1, exp2;
-  char sign = 0;
+  long mant1, mant2;
+  long _AUTOMEM *pfl1;
+  long _AUTOMEM *pfl2;
+  int exp1, exp2, expd;
+  BOOL sign = false;
 
-  fl1.f = a1;
-  fl2.f = a2;
-
-  /* check for zero args */
-  if (!fl1.l)
-    return (fl2.f);
-  if (!fl2.l)
-    return (fl1.f);
-
-  exp1 = EXP (fl1.l);
-  exp2 = EXP (fl2.l);
-
-  if (exp1 > exp2 + 25)
-    return (fl1.f);
-  if (exp2 > exp1 + 25)
-    return (fl2.f);
-
-  mant1 = MANT (fl1.l);
-  mant2 = MANT (fl2.l);
-
-  if (SIGN (fl1.l))
-    mant1 = -mant1;
-  if (SIGN (fl2.l))
+  pfl2 = (long _AUTOMEM *)&a2;
+  exp2 = EXP (*pfl2);
+  mant2 = MANT (*pfl2) << 4;
+  if (SIGN (*pfl2))
     mant2 = -mant2;
+  /* check for zero args */
+  if (!*pfl2)
+    return (a1);
 
-  if (exp1 > exp2)
+  pfl1 = (long _AUTOMEM *)&a1;
+  exp1 = EXP (*pfl1);
+  mant1 = MANT (*pfl1) << 4;
+  if (SIGN(*pfl1))
+  if (*pfl1 & 0x80000000)
+    mant1 = -mant1;
+  /* check for zero args */
+  if (!*pfl1)
+    return (a2);
+
+  expd = exp1 - exp2;
+  if (expd > 25)
+    return (a1);
+  if (expd < -25)
+    return (a2);
+
+  if (expd < 0)
     {
-      mant2 >>= exp1 - exp2;
+      expd = -expd;
+      exp1 += expd;
+      mant1 >>= expd;
     }
   else
     {
-      mant1 >>= exp2 - exp1;
-      exp1 = exp2;
+      mant2 >>= expd;
     }
   mant1 += mant2;
+
+  sign = false;
 
   if (mant1 < 0)
     {
       mant1 = -mant1;
-      sign = 1;
+      sign = true;
     }
   else if (!mant1)
     return (0);
 
   /* normalize */
-  while (mant1<HIDDEN) {
+  while (mant1 < (HIDDEN<<4)) {
     mant1 <<= 1;
     exp1--;
   }
 
   /* round off */
-  while (mant1 & 0xff000000) {
+  while (mant1 & 0xf0000000) {
     if (mant1&1)
       mant1 += 2;
     mant1 >>= 1;
@@ -223,16 +241,16 @@ float __fsadd (float a1, float a2)
   }
 
   /* turn off hidden bit */
-  mant1 &= ~HIDDEN;
+  mant1 &= ~(HIDDEN<<4);
 
   /* pack up and go home */
   if (exp1 >= 0x100)
-    fl1.l = (sign ? SIGNBIT : 0) | __INFINITY;
+    *pfl1 = (sign ? (SIGNBIT | __INFINITY) : __INFINITY);
   else if (exp1 < 0)
-    fl1.l = 0;
+    *pfl1 = 0;
   else
-    fl1.l = PACK (sign ? SIGNBIT : 0 , exp1, mant1);
-  return (fl1.f);
+    *pfl1 = PACK (sign ? SIGNBIT : 0 , exp1, mant1>>4);
+  return (a1);
 }
 
 #endif

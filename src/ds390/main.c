@@ -8,11 +8,10 @@
 #include "main.h"
 #include "ralloc.h"
 #include "gen.h"
-#include "BuildCmd.h"
-#include "MySystem.h"
 #include "dbuf_string.h"
 #include "../SDCCutil.h"
 #include "../SDCCglobl.h"
+#include "../SDCCsystem.h"
 static char _defaultRules[] =
 {
 #include "peeph.rul"
@@ -28,7 +27,7 @@ static OPTION _ds390_options[] =
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds390 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
     { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Tells the linker not to pack variables in internal ram"},
+    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds390 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds390 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -79,7 +78,7 @@ static builtins __ds390_builtins[] = {
     { "__builtin_swapw","us",1,{"us"}},                /* unsigned short __builtin_swapw (unsigned short) */
     { "__builtin_memcmp_x2x","c",3,{"cx*","cx*","i"}}, /* void __builtin_memcmp_x2x (xdata char *,xdata char *,int) */
     { "__builtin_memcmp_c2x","c",3,{"cx*","cp*","i"}}, /* void __builtin_memcmp_c2x (xdata char *,code  char *,int) */
-    { NULL , NULL,0, {NULL}}                       /* mark end of table */
+    { NULL , NULL,0, {NULL}}                           /* mark end of table */
 };
 void ds390_assignRegisters (ebbIndex * ebbi);
 
@@ -221,7 +220,7 @@ _ds390_setDefaultOptions (void)
 }
 
 static const char *
-_ds390_getRegName (struct regs *reg)
+_ds390_getRegName (const struct reg_info *reg)
 {
   if (reg)
     return reg->name;
@@ -290,7 +289,9 @@ _ds390_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
       return TRUE;
     }
 
-  dbuf_printf (oBuf, "\tajmp\t__reset_vect\n");
+  dbuf_printf (oBuf, ".flat24 off\t\t; 16 bit addressing\n");
+  dbuf_printf (oBuf, "\tljmp\t__reset_vect\n");
+  dbuf_printf (oBuf, ".flat24 on\t\t; 24 bit flat addressing\n");
 
   /* now for the other interrupts */
   for (i = 0; i < maxInterrupts; i++)
@@ -305,7 +306,9 @@ _ds390_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
         }
     }
 
+  dbuf_printf (oBuf, ".flat24 off\t\t; 16 bit addressing\n");
   dbuf_printf (oBuf, "__reset_vect:\n\tljmp\t__sdcc_gsinit_startup\n");
+  dbuf_printf (oBuf, ".flat24 on\t\t; 24 bit flat addressing\n");
 
   return TRUE;
 }
@@ -331,11 +334,20 @@ _ds390_genInitStartup (FILE *of)
   // (see '400 data sheet pg. 85 (TINI400 ROM Initialization code)
   if (!TARGET_IS_DS400)
     {
-      /* initialise the stack pointer.  JCF: aslink takes care of the location */
+      /* initialise the stack pointer.  JCF: sdld takes care of the location */
       fprintf (of, "\tmov\tsp,#__start__stack - 1\n");     /* MOF */
     }
 
-  fprintf (of, "\tlcall\t__sdcc_external_startup\n");
+  if ((options.model == MODEL_FLAT24) && TARGET_IS_DS390)
+    {
+      fputs (".flat24 off\t\t; 16 bit addressing\n", of);
+      fprintf (of, "\tlcall\t__sdcc_external_startup\n");
+      fputs (".flat24 on\t\t; 24 bit flat addressing\n", of);
+    }
+  else
+    {
+      fprintf (of, "\tlcall\t__sdcc_external_startup\n");
+    }
   fprintf (of, "\tmov\ta,dpl\n");
   fprintf (of, "\tjz\t__sdcc_init_data\n");
   fprintf (of, "\tljmp\t__sdcc_program_startup\n");
@@ -350,31 +362,31 @@ _ds390_genInitStartup (FILE *of)
 
 /* Generate code to copy XINIT to XISEG */
 static void _ds390_genXINIT (FILE * of) {
-  fprintf (of, ";	_ds390_genXINIT() start\n");
-  fprintf (of, "	mov	a,#l_XINIT\n");
-  fprintf (of, "	orl	a,#l_XINIT>>8\n");
-  fprintf (of, "	jz	00003$\n");
-  fprintf (of, "	mov	a,#s_XINIT\n");
-  fprintf (of, "	add	a,#l_XINIT\n");
-  fprintf (of, "	mov	r1,a\n");
-  fprintf (of, "	mov	a,#s_XINIT>>8\n");
-  fprintf (of, "	addc	a,#l_XINIT>>8\n");
-  fprintf (of, "	mov	r2,a\n");
-  fprintf (of, "	mov	dptr,#s_XINIT\n");
-  fprintf (of, "	mov	dps,#0x21\n");
-  fprintf (of, "	mov	dptr,#s_XISEG\n");
-  fprintf (of, "00001$:	clr	a\n");
-  fprintf (of, "	movc	a,@a+dptr\n");
-  fprintf (of, "	movx	@dptr,a\n");
-  fprintf (of, "	inc	dptr\n");
-  fprintf (of, "	inc	dptr\n");
-  fprintf (of, "00002$:	mov	a,dpl\n");
-  fprintf (of, "	cjne	a,ar1,00001$\n");
-  fprintf (of, "	mov	a,dph\n");
-  fprintf (of, "	cjne	a,ar2,00001$\n");
-  fprintf (of, "	mov	dps,#0\n");
+  fprintf (of, ";       _ds390_genXINIT() start\n");
+  fprintf (of, "        mov     a,#l_XINIT\n");
+  fprintf (of, "        orl     a,#l_XINIT>>8\n");
+  fprintf (of, "        jz      00003$\n");
+  fprintf (of, "        mov     a,#s_XINIT\n");
+  fprintf (of, "        add     a,#l_XINIT\n");
+  fprintf (of, "        mov     r1,a\n");
+  fprintf (of, "        mov     a,#s_XINIT>>8\n");
+  fprintf (of, "        addc    a,#l_XINIT>>8\n");
+  fprintf (of, "        mov     r2,a\n");
+  fprintf (of, "        mov     dptr,#s_XINIT\n");
+  fprintf (of, "        mov     dps,#0x21\n");
+  fprintf (of, "        mov     dptr,#s_XISEG\n");
+  fprintf (of, "00001$: clr     a\n");
+  fprintf (of, "        movc    a,@a+dptr\n");
+  fprintf (of, "        movx    @dptr,a\n");
+  fprintf (of, "        inc     dptr\n");
+  fprintf (of, "        inc     dptr\n");
+  fprintf (of, "00002$: mov     a,dpl\n");
+  fprintf (of, "        cjne    a,ar1,00001$\n");
+  fprintf (of, "        mov     a,dph\n");
+  fprintf (of, "        cjne    a,ar2,00001$\n");
+  fprintf (of, "        mov     dps,#0\n");
   fprintf (of, "00003$:\n");
-  fprintf (of, ";	_ds390_genXINIT() end\n");
+  fprintf (of, ";       _ds390_genXINIT() end\n");
 }
 
 /* Do CSE estimation */
@@ -872,6 +884,31 @@ getRegsWritten (lineNode *line)
   return line->aln->regsWritten;
 }
 
+static const char *
+get_model (void)
+{
+  switch (options.model)
+    {
+    case MODEL_SMALL:
+      if (options.stackAuto)
+        return "small-stack-auto";
+      else
+        return "small";
+
+    case MODEL_LARGE:
+      if (options.stackAuto)
+        return "large-stack-auto";
+      else
+        return "large";
+
+    case MODEL_FLAT24:
+        return port->target;
+
+    default:
+      werror (W_UNKNOWN_MODEL, __FILE__, __LINE__);
+      return "unknown";
+    }
+}
 
 /** $1 is always the basename.
     $2 is always the output file.
@@ -881,14 +918,16 @@ getRegsWritten (lineNode *line)
 */
 static const char *_linkCmd[] =
 {
-  "aslink", "-nf", "\"$1\"", NULL
+  "sdld", "-nf", "\"$1\"", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
 static const char *_asmCmd[] =
 {
-  "asx8051", "$l", "$3", "\"$1.asm\"", NULL
+  "sdas8051", "$l", "$3", "\"$2\"", "\"$1.asm\"", NULL
 };
+
+static const char * const _libs_ds390[] = { STD_DS390_LIB, NULL, };
 
 /* Globals */
 PORT ds390_port =
@@ -901,23 +940,26 @@ PORT ds390_port =
     glue,
     TRUE,                       /* Emit glue around main */
     MODEL_SMALL | MODEL_LARGE | MODEL_FLAT24,
-    MODEL_SMALL
+    MODEL_SMALL,
+    get_model,
   },
   {
     _asmCmd,
     NULL,
-    "-plosgffc",                /* Options with debug */
-    "-plosgff",                 /* Options without debug */
+    "-plosgffwzc",              /* Options with debug */
+    "-plosgffwz",               /* Options without debug */
     0,
     ".asm",
     NULL                        /* no do_assemble function */
   },
-  {
+  {                             /* Linker */
     _linkCmd,
     NULL,
     NULL,
     ".rel",
-    1
+    1,
+    NULL,                       /* crt */
+    _libs_ds390,                /* libs */
   },
   {
     _defaultRules,
@@ -926,10 +968,10 @@ PORT ds390_port =
     getRegsWritten
   },
   {
-        /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-    1, 2, 2, 4, 1, 2, 3, 1, 4, 4
+        /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+    1, 2, 2, 4, 8, 1, 2, 3, 1, 4, 4
   },
-  
+
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },           /* far, near, xstack, code */
 
@@ -1027,7 +1069,7 @@ static OPTION _tininative_options[] =
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds390 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
     { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Tells the linker not to pack variables in internal ram"},
+    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds390 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds390 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -1129,22 +1171,26 @@ static void _tininative_genAssemblerEnd (FILE * of)
 /* tininative assembler , calls "macro", if it succeeds calls "a390" */
 static void _tininative_do_assemble (set *asmOptions)
 {
+    char *buf;
     static const char *macroCmd[] = {
         "macro","$1.a51",NULL
     };
     static const char *a390Cmd[] = {
         "a390","$1.mpp",NULL
     };
-    char buffer[100];
 
-    buildCmdLine(buffer,macroCmd,dstFileName,NULL,NULL,NULL);
-    if (my_system(buffer)) {
+    buf = buildCmdLine(macroCmd, dstFileName, NULL, NULL, NULL);
+    if (sdcc_system(buf)) {
+        Safe_free (buf);
         exit(1);
     }
-    buildCmdLine(buffer,a390Cmd,dstFileName,NULL,NULL,asmOptions);
-    if (my_system(buffer)) {
+    Safe_free (buf);
+    buf = buildCmdLine(a390Cmd, dstFileName, NULL, NULL, asmOptions);
+    if (sdcc_system(buf)) {
+        Safe_free (buf);
         exit(1);
     }
+    Safe_free (buf);
 }
 
 /* list of key words used by TININative */
@@ -1231,12 +1277,13 @@ PORT tininative_port =
   TARGET_ID_DS390,
   "TININative",
   "DS80C390",                   /* Target name */
-        NULL,                   /* processor */
+  NULL,                         /* processor */
   {
     glue,
     FALSE,                      /* Emit glue around main */
     MODEL_FLAT24,
-    MODEL_FLAT24
+    MODEL_FLAT24,
+    get_model,
   },
   {
     _a390Cmd,
@@ -1247,12 +1294,14 @@ PORT tininative_port =
     ".a51",
     _tininative_do_assemble
   },
-  {
+  {                             /* Linker */
     NULL,
     NULL,
     NULL,
     ".tlib",
-    1
+    1,
+    NULL,                       /* crt */
+    _libs_ds390,                /* libs */
   },
   {
     _defaultRules,
@@ -1261,8 +1310,8 @@ PORT tininative_port =
     getRegsWritten
   },
   {
-        /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-    1, 2, 2, 4, 1, 3, 3, 1, 4, 4
+        /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+    1, 2, 2, 4, 8, 1, 3, 3, 1, 4, 4
   },
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },           /* far, near, xstack, code */
@@ -1377,7 +1426,7 @@ static OPTION _ds400_options[] =
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds400 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
     { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Tells the linker not to pack variables in internal ram"},
+    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds400 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds400 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -1477,6 +1526,7 @@ static void _ds400_linkRomDataArea(FILE *fp)
     fprintf(fp, "-b ROMSEG = 0x0068\n");
 }
 
+static const char * const _libs_ds400[] = { STD_DS400_LIB, NULL, };
 
 PORT ds400_port =
 {
@@ -1488,33 +1538,39 @@ PORT ds400_port =
     glue,
     TRUE,                       /* Emit glue around main */
     MODEL_SMALL | MODEL_LARGE | MODEL_FLAT24,
-    MODEL_SMALL
+    MODEL_SMALL,
+    get_model,
   },
   {
     _asmCmd,
     NULL,
-    "-plosgffc",                /* Options with debug */
-    "-plosgff",                 /* Options without debug */
+    "-plosgffwzc",              /* Options with debug */
+    "-plosgffwz",               /* Options without debug */
     0,
     ".asm",
     NULL                        /* no do_assemble function */
   },
-  {
+  {                             /* Linker */
     _linkCmd,
     NULL,
     NULL,
     ".rel",
-    1
+    1,
+    NULL,                       /* crt */
+    _libs_ds400,                /* libs */
   },
-  {
+  {                             /* Peephole optimizer */
     _defaultRules,
     getInstructionSize,
     getRegsRead,
-    getRegsWritten
+    getRegsWritten,
+    0,
+    0,
+    0,
   },
   {
-        /* Sizes: char, short, int, long, ptr, fptr, gptr, bit, float, max */
-    1, 2, 2, 4, 1, 2, 3, 1, 4, 4
+        /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+    1, 2, 2, 4, 8, 1, 2, 3, 1, 4, 4
   },
 
   /* tags for generic pointers */

@@ -58,7 +58,10 @@ void GetNameFromPath(char * path, char * name)
     int i, j;
 
     for(i=0; path[i]!=0; i++);
-    for(; (path[i]!='\\')&&(path[i]!='/')&&(i>=0); i--);
+    for(; i>=0; i--)
+    {
+    	if((path[i]=='\\') || (path[i]=='/')) break;
+    }
     for(j=0, i++; (path[i]!='.')&&(path[i]!=0); i++, j++) name[j]=path[i];
     name[j]=0;
 }
@@ -68,15 +71,26 @@ void ChangeExtension(char * path, char * ext)
     int i;
 
     for(i=0; path[i]!=0; i++);
-    for(; (path[i]!='.')&&(path[i]!='\\')&&(path[i]!='/')&&(i>=0); i--);
-    if(path[i]=='.')
+    for(; i>=0; i--)
     {
-        path[i+1]=0;
-        strcat(path, ext);
+    	if( (path[i]=='.') || (path[i]=='\\') || (path[i]=='/') ) break;
+    }
+    if(i>=0)
+    {
+	    if(path[i]=='.')
+	    {
+	        path[i+1]=0;
+	        strcat(path, ext);
+	    }
+	    else
+	    {
+	        printf("ERROR: Filename '%s' must have an extension\n", path);
+	        exit(1);
+	    }
     }
     else
     {
-        printf("ERROR: Filename '%s' must have an extension\n", path);
+        printf("ERROR: Empty filename\n");
         exit(1);
     }
 }
@@ -183,13 +197,13 @@ void ProcLineOptions (int argc, char **argv)
                         RelName = (char **) calloc (1, sizeof (char *));
                         if(RelName==NULL)
                         {
-                            printf("ERROR: Insuficient memory.\n");
+                            printf("ERROR: Insufficient memory.\n");
                             exit(2);
                         }
                         RelName[0]=(char *)malloc(PATH_MAX);
                         if(RelName[0]==NULL)
                         {
-                            printf("ERROR: Insuficient memory.\n");
+                            printf("ERROR: Insufficient memory.\n");
                             exit(2);
                         }
                         strcpy(RelName[0], argv[j]);
@@ -202,13 +216,13 @@ void ProcLineOptions (int argc, char **argv)
                     RelName = (char **) realloc (RelName, NumRelFiles * sizeof (char *));
                     if(RelName==NULL)
                     {
-                        printf("ERROR: Insuficient memory.\n");
+                        printf("ERROR: Insufficient memory.\n");
                         exit(2);
                     }
                     RelName[NumRelFiles-1]=(char *)malloc(PATH_MAX);
                     if(RelName[NumRelFiles-1]==NULL)
                     {
-                        printf("ERROR: Insuficient memory.\n");
+                        printf("ERROR: Insufficient memory.\n");
                         exit(2);
                     }
                     strcpy(RelName[NumRelFiles-1], argv[j]);
@@ -284,7 +298,8 @@ void AddRel(char * RelName)
     if(lib!=NULL) while(!feof(lib))
     {
         FLine[0]=0;
-        fgets(FLine, MAXLINE, lib);
+        if (fgets(FLine, MAXLINE, lib) == NULL)
+          break;
         CleanLine(FLine);
 
         switch(state)
@@ -293,7 +308,8 @@ void AddRel(char * RelName)
                 if(EQ(FLine, "<FILE>"))
                 {
                     FLine[0]=0;
-                    fgets(FLine, MAXLINE, lib);
+                    if (fgets(FLine, MAXLINE, lib) == NULL)
+                      break;
                     CleanLine(FLine);
                     if(NEQ(FLine, ModName))
                     {
@@ -335,7 +351,8 @@ void AddRel(char * RelName)
         while(!feof(rel))
         {
             FLine[0]=0;
-            fgets(FLine, MAXLINE, rel);
+            if (fgets(FLine, MAXLINE, rel) == NULL)
+              break;
             CleanLine(FLine);
             if(strlen(FLine)>0)
             {
@@ -357,7 +374,8 @@ void AddRel(char * RelName)
             while(!feof(rel))
             {
                 FLine[0]=0;
-                fgets(FLine, MAXLINE, adb);
+                if (fgets(FLine, MAXLINE, adb) == NULL)
+                  break;
                 CleanLine(FLine);
                 if(strlen(FLine)>0)
                 {
@@ -397,7 +415,8 @@ void AddRel(char * RelName)
     while(!feof(libindex))
     {
         FLine[0]=0;
-        fgets(FLine, MAXLINE, libindex);
+        if (fgets(FLine, MAXLINE, libindex) == NULL)
+          break;
         fprintf(lib, "%s", FLine);
     }
     fprintf(lib, "\n</INDEX>\n\n");
@@ -405,7 +424,8 @@ void AddRel(char * RelName)
     while(!feof(newlib))
     {
         FLine[0]=0;
-        fgets(FLine, MAXLINE, newlib);
+        if (fgets(FLine, MAXLINE, newlib) == NULL)
+          break;
         fprintf(lib, "%s", FLine);
     }
     fprintf(lib, "\n</FILES>\n\n");
@@ -455,7 +475,8 @@ void ExtractRel(char * RelName)
     {
         if(state==5) break;
         FLine[0]=0;
-        fgets(FLine, MAXLINE, lib);
+        if (fgets(FLine, MAXLINE, lib) == NULL)
+          break;
         CleanLine(FLine);
 
         switch(state)
@@ -464,7 +485,8 @@ void ExtractRel(char * RelName)
                 if(EQ(FLine, "<FILE>"))
                 {
                     FLine[0]=0;
-                    fgets(FLine, MAXLINE, lib);
+                    if (fgets(FLine, MAXLINE, lib) == NULL)
+                      break;
                     CleanLine(FLine);
                     if(EQ(FLine, ModName)) state=1;
                 }
@@ -507,7 +529,8 @@ void DumpSymbols(void)
     }
 
     FLine[0]=0;
-    fgets(FLine, MAXLINE, lib);
+    if (fgets(FLine, MAXLINE, lib) == NULL)
+      return;
     CleanLine(FLine);
     if(NEQ(FLine, "<SDCCLIB>"))
     {
@@ -519,7 +542,8 @@ void DumpSymbols(void)
     {
         if(state==3) break;
         FLine[0]=0;
-        fgets(FLine, MAXLINE, lib);
+        if (fgets(FLine, MAXLINE, lib) == NULL)
+          break;
         CleanLine(FLine);
 
         switch(state)
@@ -531,7 +555,8 @@ void DumpSymbols(void)
                 if(EQ(FLine, "<MODULE>"))
                 {
                     FLine[0]=0;
-                    fgets(FLine, MAXLINE, lib);
+                    if (fgets(FLine, MAXLINE, lib) == NULL)
+                      break;
                     sscanf(FLine, "%s", ModName);
                     if(action==OPT_DUMP_SYM)
                     {
@@ -596,7 +621,8 @@ void AddList(void)
     while(!feof(list))
     {
         RelName[0]=0;
-        fgets(RelName, PATH_MAX, list);
+        if (fgets(RelName, PATH_MAX, list) == NULL)
+          break;
         CleanLine(RelName);
         if(strlen(RelName)>0) //Skip empty lines
         {
@@ -614,7 +640,8 @@ void AddList(void)
                 {
                     sprintf(CmdLine, "%s %s", cc, SrcName);
                     printf("%s\n", CmdLine);
-                    system(CmdLine);
+                    if (system(CmdLine))
+                      continue;
                 }
             }
             else if(as!=NULL)
@@ -624,7 +651,8 @@ void AddList(void)
                 {
                     sprintf(CmdLine, "%s %s", as, SrcName);
                     printf("%s\n", CmdLine);
-                    system(CmdLine);
+                    if (system(CmdLine))
+                      continue;
                 }
             }
 

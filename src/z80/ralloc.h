@@ -30,51 +30,55 @@
 #define DEBUG_FAKE_EXTRA_REGS 	0
 
 enum
-  {
-    C_IDX = 0,
-    B_IDX,
-    E_IDX,
-    D_IDX,
-    L_IDX,
-    H_IDX,
+{
+  C_IDX = 0,
+  B_IDX,
+  E_IDX,
+  D_IDX,
+  L_IDX,
+  H_IDX,
+  IYL_IDX,
+  IYH_IDX,
 #if DEBUG_FAKE_EXTRA_REGS
-    M_IDX,
-    N_IDX,
-    O_IDX,
-    P_IDX,
-    Q_IDX,
-    R_IDX,
-    S_IDX,
-    T_IDX,
+  M_IDX,
+  N_IDX,
+  O_IDX,
+  P_IDX,
+  Q_IDX,
+  R_IDX,
+  S_IDX,
+  T_IDX,
 #endif
-    CND_IDX
-  };
+  CND_IDX
+};
 
 enum
-  {
-    REG_PTR = 1,
-    REG_GPR = 2,
-    REG_CND = 4,
-    REG_PAIR = 8
-  };
+{
+  REG_PTR = 1,
+  REG_GPR = 2,
+  REG_CND = 4,
+  REG_PAIR = 8
+};
 
 /* definition for the registers */
-typedef struct regs
-  {
-    short type;			/* can have value 
-				   REG_GPR, REG_PTR or REG_CND */
-    short rIdx;			/* index into register table */
-    char *name;			/* name */
-    unsigned isFree:1;		/* is currently unassigned  */
-  }
-regs;
+typedef struct reg_info
+{
+  short type;                   /* can have value 
+                                   REG_GPR, REG_PTR or REG_CND */
+  short rIdx;                   /* index into register table */
+  char *name;                   /* name */
+  unsigned isFree:1;            /* is currently unassigned  */
+} reg_info;
 
-extern regs *regsZ80;
+extern reg_info *regsZ80;
 
 void assignRegisters (eBBlock **, int);
-regs *regWithIdx (int);
+reg_info *regWithIdx (int);
 
 void z80_assignRegisters (ebbIndex *);
-bitVect *z80_rUmaskForOp (operand * op);
+bitVect *z80_rUmaskForOp (const operand * op);
+
+void spillThis (symbol *);
+iCode *z80_ralloc2_cc(ebbIndex *ebbi);
 
 #endif

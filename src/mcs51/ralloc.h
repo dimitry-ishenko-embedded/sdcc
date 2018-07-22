@@ -28,16 +28,16 @@
 #define SDCCRALLOC_H 1
 
 enum
-  {
-    R2_IDX = 0, R3_IDX, R4_IDX, R5_IDX,
-    R6_IDX, R7_IDX, R0_IDX,  R1_IDX,
-    B0_IDX, B1_IDX, B2_IDX,  B3_IDX,
-    B4_IDX, B5_IDX, B6_IDX,  B7_IDX,
-    X8_IDX, X9_IDX, X10_IDX, X11_IDX,
-    X12_IDX, CND_IDX,
-    DPL_IDX, DPH_IDX, B_IDX, A_IDX,
-    END_IDX
-  };
+{
+  R7_IDX = 0, R6_IDX, R5_IDX, R4_IDX,
+  R3_IDX, R2_IDX, R1_IDX, R0_IDX,
+  B0_IDX, B1_IDX, B2_IDX, B3_IDX,
+  B4_IDX, B5_IDX, B6_IDX, B7_IDX,
+  X8_IDX, X9_IDX, X10_IDX, X11_IDX,
+  X12_IDX, CND_IDX,
+  DPL_IDX, DPH_IDX, B_IDX, A_IDX,
+  END_IDX
+};
 
 
 #define REG_PTR 0x01
@@ -45,28 +45,35 @@ enum
 #define REG_CND 0x04
 #define REG_BIT 0x08
 /* definition for the registers */
-typedef struct regs
+typedef struct reg_info
+{
+  short type;                   /* can have value
+                                   REG_GPR, REG_PTR or REG_CND */
+  short rIdx;                   /* index into register table */
+  short otype;
+  char *name;                   /* name */
+  char *dname;                  /* name when direct access needed */
+  char *base;                   /* base address */
+  short offset;                 /* offset from the base */
+  unsigned isFree:1;            /* is currently unassigned  */
+
+  struct
   {
-    short type;             /* can have value
-                               REG_GPR, REG_PTR or REG_CND */
-    short rIdx;             /* index into register table */
-    short otype;
-    char *name;             /* name */
-    char *dname;            /* name when direct access needed */
-    char *base;             /* base address */
-    short offset;           /* offset from the base */
-    unsigned isFree:1;      /* is currently unassigned  */
-    unsigned valueKnown:1;  /* from rtrack.c */
-    unsigned char value;    /* from rtrack.c only valid when valueKnown is set */
-
+    unsigned valueKnown:1;
+    unsigned char value;        /* only valid when valueKnown is set */
+    char *symbol;               /* holds symbol if value is known by symbol */
   }
-regs;
-extern regs regs8051[];
+  rtrack;
+}
+reg_info;
 
-regs *mcs51_regWithIdx (int);
+extern reg_info regs8051[];
+
+reg_info *mcs51_regWithIdx (int);
 
 bitVect *mcs51_rUmaskForOp (operand * op);
 bitVect *mcs51_allBitregs (void);
+bitVect *mcs51_allBankregs (void);
 
 extern int mcs51_ptrRegReq;
 extern int mcs51_nRegs;

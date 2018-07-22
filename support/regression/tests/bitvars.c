@@ -4,6 +4,11 @@
 */
 
 #include <testfwk.h>
+
+#ifdef SDCC
+#pragma std_sdcc99
+#endif
+
 #include <stdbool.h>
 
 #ifndef PORT_HOST
@@ -38,15 +43,19 @@ testBits(void)
   ASSERT (complement (~_0, 1));
   ASSERT (complement (~_1, 1));
 
-#if defined TYPE_char
+#if !(defined(__SUNPRO_C) && defined(__i386))
+/* this test fails on Solaris i386 SunPro C compiler with -xO2 option;
+   it pass without -xO2 option !? */
+#if defined TYPE_char && !defined SDCC_CHAR_UNSIGNED
   ASSERT (complement (~_ff, 0));
 #else
   ASSERT (complement (~_ff, 1));
 #endif
+#endif
 
 #if defined TYPE_bool
   ASSERT (complement (~_ffff, 1));
-#elif defined TYPE_char
+#elif defined TYPE_char && !defined SDCC_CHAR_UNSIGNED
   ASSERT (complement (~_ffff, 0));
 #else
   if (sizeof({type}) < sizeof(int))

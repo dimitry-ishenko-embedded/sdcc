@@ -1,30 +1,36 @@
 /*-------------------------------------------------------------------------
-  setjmp.c - source file for ANSI routines setjmp & longjmp
+   setjmp.c - source file for ANSI routines setjmp & longjmp
 
-             Written By -  Sandeep Dutta . sandeep.dutta@usa.net (1998)
+   Copyright (C) 1999, Sandeep Dutta . sandeep.dutta@usa.net
 
    This library is free software; you can redistribute it and/or modify it
-   under the terms of the GNU Library General Public License as published by the
-   Free Software Foundation; either version 2, or (at your option) any
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
    later version.
 
    This library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Library General Public License for more details.
+   GNU General Public License for more details.
 
-   You should have received a copy of the GNU Library General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
 
-   In other words, you are welcome to use, share and improve this program.
-   You are forbidden to forbid anyone else to use, share and improve
-   what you give them.   Help stamp out software-hoarding!
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
+
 #include <8051.h>
+#include <sdcc-lib.h>
 #include <setjmp.h>
 
-#if defined(SDCC_USE_XSTACK)
+#if defined(SDCC_STACK_AUTO) && defined(SDCC_USE_XSTACK)
 
 static void dummy (void) __naked
 {
@@ -39,8 +45,8 @@ static void dummy (void) __naked
 ;	-----------------------------------------
 ;	 function setjmp
 ;	-----------------------------------------
-	.globl _setjmp
-_setjmp:
+	.globl ___setjmp
+___setjmp:
 	ar2 = 0x02
 	ar3 = 0x03
 	ar4 = 0x04
@@ -95,10 +101,25 @@ _setjmp:
 ;     genPointerSet
 ;     genGenPointerSet
 	lcall	__gptrput
-;../../device/lib/_setjmp.c:189:return 0;
+#ifdef SDCC_MODEL_HUGE
+	inc	dptr
+;../../device/lib/_setjmp.c:189:*buf   = *((unsigned char __data *)SP - 2);
+;     genCast
+;     genMinus
+;     genMinusDec
+;	peephole 177.g	optimized mov sequence
+	dec	r0
+;     genPointerGet
+;     genNearPointerGet
+	mov	a,@r0
+;     genPointerSet
+;     genGenPointerSet
+	lcall	__gptrput
+#endif
+;../../device/lib/_setjmp.c:190:return 0;
 ;     genRet
 	mov	dptr,#0x0000
-	ret
+	_RETURN
 
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'longjmp'
@@ -166,15 +187,33 @@ _longjmp:
 ;     genPointerSet
 ;     genNearPointerSet
 	mov	@r0,a
-;../../device/lib/_setjmp.c:199:SP = lsp;
+#ifdef SDCC_MODEL_HUGE
+	inc	dptr
+;../../device/lib/_setjmp.c:199:*((unsigned char __data *) lsp - 1) = *buf;
+;     genMinus
+;     genMinusDec
+	dec	r0
+;     genPointerGet
+;     genGenPointerGet
+	lcall	__gptrget
+;     genPointerSet
+;     genNearPointerSet
+	mov	@r0,a
+#endif
+;../../device/lib/_setjmp.c:200:SP = lsp;
 ;     genAssign
 	mov	sp,r5
-;../../device/lib/_setjmp.c:200:return rv;
+;../../device/lib/_setjmp.c:201:return rv ? rv : 1;
 ;     genAssign
 	mov	dph,r2
 	mov	dpl,r3
+	mov	a,r2
+	orl	a,r3
+	jnz	00001$
+	mov	dpl,#0x01
 ;     genRet
-	ret
+00001$:
+	_RETURN
 
 	__endasm;
 }
@@ -194,8 +233,8 @@ static void dummy (void) __naked
 ;	-----------------------------------------
 ;	 function setjmp
 ;	-----------------------------------------
-	.globl _setjmp
-_setjmp:
+	.globl ___setjmp
+___setjmp:
 	ar2 = 0x02
 	ar3 = 0x03
 	ar4 = 0x04
@@ -238,10 +277,24 @@ _setjmp:
 ;     genPointerSet
 ;     genGenPointerSet
 	lcall	__gptrput
-;../../device/lib/_setjmp.c:129:return 0;
+#ifdef SDCC_MODEL_HUGE
+	inc	dptr
+;../../device/lib/_setjmp.c:129:*buf++ = *((unsigned char __data *)SP - 2);
+;     genCast
+;     genMinus
+;     genMinusDec
+	dec	r0
+;     genPointerGet
+;     genNearPointerGet
+	mov	a,@r0
+;     genPointerSet
+;     genGenPointerSet
+	lcall	__gptrput
+#endif
+;../../device/lib/_setjmp.c:130:return 0;
 ;     genRet
 	mov	dptr,#0x0000
-	ret
+	_RETURN
 
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'longjmp'
@@ -268,6 +321,9 @@ _longjmp:
 	mov	r0,sp
 	dec	r0
 	dec	r0
+#ifdef SDCC_MODEL_HUGE
+	dec	r0
+#endif
 	mov	ar2,@r0
 	dec	r0
 	mov	ar3,@r0
@@ -306,14 +362,34 @@ _longjmp:
 ;     genPointerSet
 ;     genNearPointerSet
 	mov	@r0,a
-;../../device/lib/_setjmp.c:34:SP = lsp;
+#ifdef SDCC_MODEL_HUGE
+	inc	dptr
+;../../device/lib/_setjmp.c:34:*((unsigned char __data *) lsp - 2) = *buf;
+;     genCast
+;     genMinus
+;     genMinusDec
+	dec	r0
+;     genPointerGet
+;     genGenPointerGet
+	lcall	__gptrget
+;     genPointerSet
+;     genNearPointerSet
+	mov	@r0,a
+#endif
+;../../device/lib/_setjmp.c:35:SP = lsp;
 ;     genAssign
 	mov	sp,r5
-;../../device/lib/_setjmp.c:35:return rv;
-;     genRet
+;../../device/lib/_setjmp.c:36:return rv ? rv : 1;
+;     genAssign
 	mov	dph,r2
 	mov	dpl,r3
-	ret
+	mov	a,r2
+	orl	a,r3
+	jnz	00001$
+	mov	dpl,#0x01
+;     genRet
+00001$:
+	_RETURN
 
 	__endasm;
 }
@@ -321,28 +397,45 @@ _longjmp:
 #else
 
 //extern unsigned char __data bp;
+extern unsigned char __data spx;
+extern unsigned char __data bpx;
 
-int setjmp (jmp_buf buf)
+int __setjmp (jmp_buf buf)
 {
     /* registers would have been saved on the
        stack anyway so we need to save SP
        and the return address */
-//    *buf++ = bp;
+#ifdef SDCC_USE_XSTACK
+    *buf++ = spx;
+    *buf++ = bpx;
+#endif
     *buf++ = SP;
-    *buf++ = *((unsigned char __data *) SP  );
-    *buf   = *((unsigned char __data *)SP - 1);
+//    *buf++ = bp;
+    *buf++ = *((unsigned char __data *) SP - 0);
+    *buf++ = *((unsigned char __data *) SP - 1);
+#ifdef SDCC_MODEL_HUGE
+    *buf++ = *((unsigned char __data *) SP - 2);
+#endif
     return 0;
 }
 
 int longjmp (jmp_buf buf, int rv)
 {
     unsigned char lsp;
-//    bp = *buf++;
+
+#ifdef SDCC_USE_XSTACK
+    spx = *buf++;
+    bpx = *buf++;
+#endif
     lsp = *buf++;
-    *((unsigned char __data *) lsp) = *buf++;
-    *((unsigned char __data *) lsp - 1) = *buf;
+//    bp = *buf++;
+    *((unsigned char __data *) lsp - 0) = *buf++;
+    *((unsigned char __data *) lsp - 1) = *buf++;
+#ifdef SDCC_MODEL_HUGE
+    *((unsigned char __data *) lsp - 2) = *buf++;
+#endif
     SP = lsp;
-    return rv;
+    return rv ? rv : 1;
 }
 
 #endif

@@ -1,22 +1,31 @@
-/* p89lpc938.h
- * This header defines register addresses for the Philips P89LPC938
- * microcontroller for use with the SDCC compiler.
- *
- * Copyright © 2007 Kyle Guinn <elyk03@gmail.com>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>. */
+/*-------------------------------------------------------------------------
+   p89lpc938.h - This header defines register addresses for the Philips
+   P89LPC938 microcontroller for use with the SDCC compiler.
+
+   Copyright (C) 2007, Kyle Guinn <elyk03@gmail.com>
+
+   This library is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 2.1, or (at your option) any
+   later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License 
+   along with this library; see the file COPYING. If not, write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
+   MA 02110-1301, USA.
+
+   As a special exception, if you link this library with other files,
+   some of which are compiled with SDCC, to produce an executable,
+   this library does not by itself cause the resulting executable to
+   be covered by the GNU General Public License. This exception does
+   not however invalidate any other reasons why the executable file
+   might be covered by the GNU General Public License.
+-------------------------------------------------------------------------*/
 
 #ifndef P89LPC938_H
 #define P89LPC938_H
@@ -184,7 +193,7 @@ __sbit __at (0x84) P0_4;
 __sbit __at (0x85) P0_5;
 __sbit __at (0x86) P0_6;
 __sbit __at (0x87) P0_7;
-/*#define CMP2   P0_0*/ /* Removed:  Name conflicts with SFR 0xAD */
+#define CMP_2  P0_0 /* Renamed:  Name conflicts with SFR 0xAD */
 #define KB0    P0_0
 #define CIN2B  P0_1
 #define KB1    P0_1
@@ -196,7 +205,7 @@ __sbit __at (0x87) P0_7;
 #define KB4    P0_4
 #define CMPREF P0_5
 #define KB5    P0_5
-/*#define CMP1   P0_6*/ /* Removed:  Name conflicts with SFR 0xAC */
+#define CMP_1  P0_6 /* Renamed:  Name conflicts with SFR 0xAC */
 #define KB6    P0_6
 #define T1     P0_7
 #define KB7    P0_7

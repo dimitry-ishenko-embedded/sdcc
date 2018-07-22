@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
   support.c - startup for PIC16 regression tests with gpsim
   
-  Copyright (c) 2006 Borut Razem
+  Copyright (c) 2006-2010 Borut Razem
     
   This program is free software; you can redistribute it and/or modify it
   under the terms of the GNU General Public License as published by the
@@ -41,7 +41,7 @@ void
 _initEmu(void)
 {
   /* load and configure the libgpsim_modules module */
-  _asm
+  __asm
     ;; Set frequency to 20MHz
     .direct "e", ".frequency=20e6"
     
@@ -60,7 +60,7 @@ _initEmu(void)
 
     ;; Display the received character on terminal
     .direct "e", "U1.console = true"
-  _endasm;
+  __endasm;
 
   /* USART initialization */
   PORTCbits.TX = 1;     // Set TX pin to 1
@@ -101,7 +101,7 @@ _exitEmu(void)
     ;
 
   /* set the breakpoint */
-  _asm
+  __asm
    .direct "a", "\"\""
-  _endasm;
+  __endasm;
 }
