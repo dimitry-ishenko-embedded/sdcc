@@ -5,7 +5,7 @@
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2.1, or (at your option) any
+   Free Software Foundation; either version 2, or (at your option) any
    later version.
 
    This library is distributed in the hope that it will be useful,
@@ -53,7 +53,7 @@ union float_long
     long l;
 };
 
-#if defined(SDCC_MATH_LIB) && defined(SDCC_mcs51) && !defined(SDCC_USE_XSTACK) && !defined(SDCC_STACK_AUTO) && !defined(_SDCC_NO_ASM_LIB_FUNCS)
+#if defined(__SDCC_MATH_LIB) && defined(__SDCC_mcs51) && !defined(__SDCC_USE_XSTACK) && !defined(__SDCC_STACK_AUTO) && !defined(_SDCC_NO_ASM_LIB_FUNCS)
 /* Compile the mcs51 assembly version only when all these
    conditions are met.  Since not all the functions are
    reentrant, do not compile with --stack-auto is used. */
@@ -63,7 +63,7 @@ union float_long
 
 /* Functions on the z80 & gbz80 are always reentrant and so the "reentrant" */
 /* keyword is not defined. */
-#if defined(SDCC_z80) || defined(SDCC_z180) || defined(SDCC_r2k) || defined(SDCC_gbz80)
+#if defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r3ka) || defined(__SDCC_r4k) || defined(__SDCC_gbz80)
 #define _FLOAT_FUNC_REENTRANT
 #else
 #define _FLOAT_FUNC_REENTRANT __reentrant

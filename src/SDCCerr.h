@@ -234,6 +234,15 @@ enum {
   W_UNIVERSAL_C99               = 205, /* universal character names are only valid in C99 */
   E_SHORTLONG                   = 206, /* Invalid combination of short / long */
   E_INTEGERSUFFIX               = 207, /* Invalid integer suffix */
+  E_AUTO_ADDRSPACE              = 208, /* named address space for auto var */
+  W_NORETURNRETURN              = 209, /* return in _noreturn function */
+  E_STRUCT_REDEF                = 210, /* struct or union tag redefined */
+  W_STRING_CANNOT_BE_TERMINATED = 211, /* string cannot be terminated within array */
+  W_LONGLONG_LITERAL            = 212, /* long long literal */
+  S_SYNTAX_ERROR                = 213, /* syntax error */
+  E_MIXING_CONFIG               = 214, /* mixing __CONFIG and CONFIG directives */
+  W_STATIC_ASSERTION            = 215, /* static assertion failed */
+  E_ALIGNAS                     = 216, /* invalid alignment specified */
 
   /* don't touch this! */
   NUMBER_OF_ERROR_MESSAGES             /* Number of error messages */
@@ -265,7 +274,9 @@ enum _ERROR_LOG_LEVEL {
   /** Most warnings. */
   ERROR_LEVEL_WARNING,
   /** Errors only. */
-  ERROR_LEVEL_ERROR
+  ERROR_LEVEL_ERROR,
+  /** Syntax error only. */
+  ERROR_LEVEL_SYNTAX_ERROR
 };
 
 typedef enum _ERROR_LOG_LEVEL ERROR_LOG_LEVEL;

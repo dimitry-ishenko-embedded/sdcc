@@ -1,17 +1,33 @@
-/** @file main.c
-    ds390 specific general functions.
+/*-------------------------------------------------------------------------
+  main.h - ds390 specific general functions
 
-    Note that mlh prepended _ds390_ on the static functions.  Makes
-    it easier to set a breakpoint using the debugger.
+  Copyright (C) 2000, Kevin Vigor
+
+  This program is free software; you can redistribute it and/or modify it
+  under the terms of the GNU General Public License as published by the
+  Free Software Foundation; either version 2, or (at your option) any
+  later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+-------------------------------------------------------------------------*/
+/*
+  Note that mlh prepended _ds390_ on the static functions.  Makes
+  it easier to set a breakpoint using the debugger.
 */
+
 #include "common.h"
 #include "main.h"
 #include "ralloc.h"
 #include "gen.h"
 #include "dbuf_string.h"
-#include "../SDCCutil.h"
-#include "../SDCCglobl.h"
-#include "../SDCCsystem.h"
+
 static char _defaultRules[] =
 {
 #include "peeph.rul"
@@ -150,66 +166,68 @@ _ds390_parseOptions (int *pargc, char **argv, int *i)
 static void
 _ds390_finaliseOptions (void)
 {
-  if (options.noXinitOpt) {
-    port->genXINIT=0;
-  }
+  if (options.noXinitOpt)
+    {
+      port->genXINIT=0;
+    }
 
   /* Hack-o-matic: if we are using the flat24 model,
    * adjust pointer sizes.
    */
-  if (options.model != MODEL_FLAT24)  {
+  if (options.model != MODEL_FLAT24)
+    {
       fprintf (stderr,
                "*** warning: ds390 port small and large model experimental.\n");
       if (options.model == MODEL_LARGE)
-      {
-        port->mem.default_local_map = xdata;
-        port->mem.default_globl_map = xdata;
-      }
+        {
+          port->mem.default_local_map = xdata;
+          port->mem.default_globl_map = xdata;
+        }
       else
-      {
-        port->mem.default_local_map = data;
-        port->mem.default_globl_map = data;
-      }
-  }
-  else {
-    port->s.fptr_size = 3;
-    port->s.gptr_size = 4;
-
-    port->stack.isr_overhead += 2;      /* Will save dpx on ISR entry. */
-
-    port->stack.call_overhead += 2;     /* This acounts for the extra byte
-                                 * of return addres on the stack.
-                                 * but is ugly. There must be a
-                                 * better way.
-                                 */
-
-    port->mem.default_local_map = xdata;
-    port->mem.default_globl_map = xdata;
-
-    if (!options.stack10bit)
+        {
+          port->mem.default_local_map = data;
+          port->mem.default_globl_map = data;
+        }
+    }
+  else
     {
-    fprintf (stderr,
-             "*** error: ds390 port only supports the 10 bit stack mode.\n");
-    } else {
-        if (!options.stack_loc) options.stack_loc = 0x400008;
-    }
+      port->s.fptr_size = 3;
+      port->s.gptr_size = 4;
 
-    /* generate native code 16*16 mul/div */
-    if (options.useAccelerator)
-            port->support.muldiv=2;
-    else
-            port->support.muldiv=1;
+      port->stack.isr_overhead += 2;      /* Will save dpx on ISR entry. */
 
-     /* Fixup the memory map for the stack; it is now in
-     * far space and requires a FPOINTER to access it.
-     */
-    istack->fmap = 1;
-    istack->ptrType = FPOINTER;
+      port->stack.call_overhead += 2;     /* This acounts for the extra byte
+                                           * of return addres on the stack.
+                                           * but is ugly. There must be a
+                                           * better way.
+                                           */
 
-    if (options.parms_in_bank1) {
-        addSet(&preArgvSet, Safe_strdup("-DSDCC_PARMS_IN_BANK1"));
-    }
-  }  /* MODEL_FLAT24 */
+      port->mem.default_local_map = xdata;
+      port->mem.default_globl_map = xdata;
+
+      if (!options.stack10bit)
+        {
+          fprintf (stderr,
+                   "*** error: ds390 port only supports the 10 bit stack mode.\n");
+        }
+      else
+        {
+          if (!options.stack_loc) options.stack_loc = 0x400008;
+        }
+
+      /* generate native code 16*16 mul/div */
+      if (options.useAccelerator)
+        port->support.muldiv=2;
+      else
+        port->support.muldiv=1;
+
+      /* Fixup the memory map for the stack; it is now in
+       * far space and requires an FPOINTER to access it.
+       */
+      istack->fmap = 1;
+      istack->ptrType = FPOINTER;
+
+    }  /* MODEL_FLAT24 */
 }
 
 static void
@@ -236,8 +254,10 @@ _ds390_genAssemblerPreamble (FILE * of)
       fputs ("; CPU specific extensions\n",of);
       fputs (iComments2, of);
 
+      fputs ("\t.DS80C390\n", of);
+
       if (options.model == MODEL_FLAT24)
-        fputs (".flat24 on\t\t; 24 bit flat addressing\n", of);
+        fputs ("\t.amode\t2\t; 24 bit flat addressing\n", of);
 
       fputs ("dpl1\t=\t0x84\n", of);
       fputs ("dph1\t=\t0x85\n", of);
@@ -289,9 +309,9 @@ _ds390_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
       return TRUE;
     }
 
-  dbuf_printf (oBuf, ".flat24 off\t\t; 16 bit addressing\n");
+  dbuf_printf (oBuf, "\t.amode\t0\t; 16 bit addressing\n");
   dbuf_printf (oBuf, "\tljmp\t__reset_vect\n");
-  dbuf_printf (oBuf, ".flat24 on\t\t; 24 bit flat addressing\n");
+  dbuf_printf (oBuf, "\t.amode\t2\t; 24 bit flat addressing\n");
 
   /* now for the other interrupts */
   for (i = 0; i < maxInterrupts; i++)
@@ -306,9 +326,9 @@ _ds390_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
         }
     }
 
-  dbuf_printf (oBuf, ".flat24 off\t\t; 16 bit addressing\n");
+  dbuf_printf (oBuf, "\t.amode\t0\t; 16 bit addressing\n");
   dbuf_printf (oBuf, "__reset_vect:\n\tljmp\t__sdcc_gsinit_startup\n");
-  dbuf_printf (oBuf, ".flat24 on\t\t; 24 bit flat addressing\n");
+  dbuf_printf (oBuf, "\t.amode\t2\t; 24 bit flat addressing\n");
 
   return TRUE;
 }
@@ -340,9 +360,9 @@ _ds390_genInitStartup (FILE *of)
 
   if ((options.model == MODEL_FLAT24) && TARGET_IS_DS390)
     {
-      fputs (".flat24 off\t\t; 16 bit addressing\n", of);
+      fputs ("\t.amode\t0\t; 16 bit addressing\n", of);
       fprintf (of, "\tlcall\t__sdcc_external_startup\n");
-      fputs (".flat24 on\t\t; 24 bit flat addressing\n", of);
+      fputs ("\t.amode\t2\t; 24 bit flat addressing\n", of);
     }
   else
     {
@@ -854,12 +874,12 @@ static void
 initializeAsmLineNode (lineNode *line)
 {
   if (!line->aln)
-    line->aln = asmLineNodeFromLineNode (line, 0);
-  else if (line->aln && !line->aln->initialized)
+    line->aln = (asmLineNodeBase *) asmLineNodeFromLineNode (line, 0);
+  else if (line->aln && !((asmLineNode *)line->aln)->initialized)
     {
-      int currentDPS = line->aln->currentDPS;
+      int currentDPS = ((asmLineNode *)line->aln)->currentDPS;
       free(line->aln);
-      line->aln = asmLineNodeFromLineNode (line, currentDPS);
+      line->aln = (asmLineNodeBase *) asmLineNodeFromLineNode (line, currentDPS);
     }
 }
 
@@ -918,13 +938,13 @@ get_model (void)
 */
 static const char *_linkCmd[] =
 {
-  "sdld", "-nf", "\"$1\"", NULL
+  "sdld", "-nf", "$1", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
 static const char *_asmCmd[] =
 {
-  "sdas8051", "$l", "$3", "\"$2\"", "\"$1.asm\"", NULL
+  "sdas390", "$l", "$3", "$2", "$1.asm", NULL
 };
 
 static const char * const _libs_ds390[] = { STD_DS390_LIB, NULL, };
@@ -946,8 +966,8 @@ PORT ds390_port =
   {
     _asmCmd,
     NULL,
-    "-plosgffwzc",              /* Options with debug */
-    "-plosgffwz",               /* Options without debug */
+    "-plosgffwy",              /* Options with debug */
+    "-plosgffw",                /* Options without debug */
     0,
     ".asm",
     NULL                        /* no do_assemble function */
@@ -995,9 +1015,12 @@ PORT ds390_port =
     "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
     "XABS    (ABS,XDATA)",      // xabs_name - absolute xdata/pdata
     "IABS    (ABS,DATA)",       // iabs_name - absolute idata/data
+    NULL,                       // name of segment for initialized variables
+    NULL,                       // name of segment for copies of initialized variables in code space
     NULL,
     NULL,
-    1
+    1,
+    1                           // No fancy alignments supported.
   },
   { NULL, NULL },
   {
@@ -1054,6 +1077,7 @@ PORT ds390_port =
   GPOINTER,                     /* treat unqualified pointers as "generic" pointers */
   1,                            /* reset labelKey to 1 */
   1,                            /* globals & local static allowed */
+  0,                            /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
   PORT_MAGIC
 };
 
@@ -1336,9 +1360,12 @@ PORT tininative_port =
     "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
     "XABS    (ABS,XDATA)",      // xabs_name - absolute xdata/pdata
     "IABS    (ABS,DATA)",       // iabs_name - absolute idata/data
+    NULL,                       // name of segment for initialized variables
+    NULL,                       // name of segment for copies of initialized variables in code space
     NULL,
     NULL,
-    1
+    1,
+    1                           // No fancy alignments supported.
   },
   { NULL, NULL },
   {
@@ -1395,6 +1422,7 @@ PORT tininative_port =
   FPOINTER,                     /* treat unqualified pointers as far pointers */
   0,                            /* DONOT reset labelKey */
   0,                            /* globals & local static NOT allowed */
+  0,                            /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
   PORT_MAGIC
 };
 
@@ -1437,9 +1465,10 @@ static OPTION _ds400_options[] =
 static void
 _ds400_finaliseOptions (void)
 {
-  if (options.noXinitOpt) {
-    port->genXINIT=0;
-  }
+  if (options.noXinitOpt)
+    {
+      port->genXINIT=0;
+    }
 
   // hackhack: we're a superset of the 390.
   addSet(&preArgvSet, Safe_strdup("-DSDCC_ds390"));
@@ -1448,64 +1477,65 @@ _ds400_finaliseOptions (void)
   /* Hack-o-matic: if we are using the flat24 model,
    * adjust pointer sizes.
    */
-  if (options.model != MODEL_FLAT24)  {
+  if (options.model != MODEL_FLAT24)
+    {
       fprintf (stderr,
                "*** warning: ds400 port small and large model experimental.\n");
       if (options.model == MODEL_LARGE)
-      {
-        port->mem.default_local_map = xdata;
-        port->mem.default_globl_map = xdata;
-      }
+        {
+          port->mem.default_local_map = xdata;
+          port->mem.default_globl_map = xdata;
+        }
       else
-      {
-        port->mem.default_local_map = data;
-        port->mem.default_globl_map = data;
-      }
-  }
-  else {
-    port->s.fptr_size = 3;
-    port->s.gptr_size = 4;
-
-    port->stack.isr_overhead += 2;      /* Will save dpx on ISR entry. */
-
-    port->stack.call_overhead += 2;     /* This acounts for the extra byte
-                                 * of return addres on the stack.
-                                 * but is ugly. There must be a
-                                 * better way.
-                                 */
-
-    port->mem.default_local_map = xdata;
-    port->mem.default_globl_map = xdata;
-
-    if (!options.stack10bit)
+        {
+          port->mem.default_local_map = data;
+          port->mem.default_globl_map = data;
+        }
+    }
+  else
     {
-    fprintf (stderr,
-             "*** error: ds400 port only supports the 10 bit stack mode.\n");
-    } else {
-        if (!options.stack_loc) options.stack_loc = 0xffdc00;
-        // assumes IDM1:0 = 1:0, CMA = 1.
-    }
+      port->s.fptr_size = 3;
+      port->s.gptr_size = 4;
 
-    /* generate native code 16*16 mul/div */
-    if (options.useAccelerator)
-            port->support.muldiv=2;
-    else
-            port->support.muldiv=1;
+      port->stack.isr_overhead += 2;      /* Will save dpx on ISR entry. */
 
-     /* Fixup the memory map for the stack; it is now in
-     * far space and requires a FPOINTER to access it.
-     */
-    istack->fmap = 1;
-    istack->ptrType = FPOINTER;
+      port->stack.call_overhead += 2;     /* This acounts for the extra byte
+                                           * of return addres on the stack.
+                                           * but is ugly. There must be a
+                                           * better way.
+                                           */
 
-    if (options.parms_in_bank1) {
-        addSet(&preArgvSet, Safe_strdup("-DSDCC_PARMS_IN_BANK1"));
-    }
+      port->mem.default_local_map = xdata;
+      port->mem.default_globl_map = xdata;
 
-    // the DS400 rom calling interface uses register bank 3.
-    RegBankUsed[3] = 1;
+      if (!options.stack10bit)
+        {
+          fprintf (stderr,
+                   "*** error: ds400 port only supports the 10 bit stack mode.\n");
+        }
+      else
+        {
+          if (!options.stack_loc)
+            options.stack_loc = 0xffdc00;
+          // assumes IDM1:0 = 1:0, CMA = 1.
+        }
 
-  }  /* MODEL_FLAT24 */
+      /* generate native code 16*16 mul/div */
+      if (options.useAccelerator)
+        port->support.muldiv=2;
+      else
+        port->support.muldiv=1;
+
+      /* Fixup the memory map for the stack; it is now in
+       * far space and requires a FPOINTER to access it.
+       */
+      istack->fmap = 1;
+      istack->ptrType = FPOINTER;
+
+      // the DS400 rom calling interface uses register bank 3.
+      RegBankUsed[3] = 1;
+
+    }  /* MODEL_FLAT24 */
 }
 
 static void _ds400_generateRomDataArea(FILE *fp, bool isMain)
@@ -1544,8 +1574,8 @@ PORT ds400_port =
   {
     _asmCmd,
     NULL,
-    "-plosgffwzc",              /* Options with debug */
-    "-plosgffwz",               /* Options without debug */
+    "-plosgffwy",               /* Options with debug */
+    "-plosgffw",                /* Options without debug */
     0,
     ".asm",
     NULL                        /* no do_assemble function */
@@ -1596,6 +1626,8 @@ PORT ds400_port =
     "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
     "XABS    (ABS,XDATA)",      // xabs_name - absolute xdata/pdata
     "IABS    (ABS,DATA)",       // iabs_name - absolute idata/data
+    NULL,                       // name of segment for initialized variables
+    NULL,                       // name of segment for copies of initialized variables in code space
     NULL,
     NULL,
     1
@@ -1655,5 +1687,6 @@ PORT ds400_port =
   GPOINTER,                     /* treat unqualified pointers as "generic" pointers */
   1,                            /* reset labelKey to 1 */
   1,                            /* globals & local static allowed */
+  0,                            /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
   PORT_MAGIC
 };

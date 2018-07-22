@@ -5,7 +5,7 @@
 ;
 ;  This library is free software; you can redistribute it and/or modify it
 ;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2.1, or (at your option) any
+;  Free Software Foundation; either version 2, or (at your option) any
 ;  later version.
 ;
 ;  This library is distributed in the hope that it will be useful,
@@ -53,10 +53,6 @@
         .globl  __moduschar_rrx_s
         .globl  __moduint_rrx_s
         .globl  __modsint_rrx_s
-        .globl	__rrulong_rrx_s
-        .globl	__rrslong_rrx_s
-        .globl	__rlulong_rrx_s
-        .globl	__rlslong_rrx_s
 
 __mullong_rrx_s::
 __mullong_rrf_s::
@@ -163,22 +159,4 @@ __moduint_rrf_s::
         rst     0x08
         jp	__moduint_rrx_s
 
-__rrulong_rrf_s::
-        ld      a,#5
-        rst     0x08
-        jp	__rrulong_rrx_s
 
-__rrslong_rrf_s::
-        ld      a,#5
-        rst     0x08
-        jp	__rrslong_rrx_s
-
-__rlulong_rrf_s::
-        ld      a,#5
-        rst     0x08
-        jp	__rlulong_rrx_s
-
-__rlslong_rrf_s::
-        ld      a,#5
-        rst     0x08
-        jp	__rlslong_rrx_s

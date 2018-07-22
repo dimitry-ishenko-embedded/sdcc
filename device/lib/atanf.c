@@ -5,7 +5,7 @@
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2,1, or (at your option) any
+   Free Software Foundation; either version 2, or (at your option) any
    later version.
 
    This library is distributed in the hope that it will be useful,
@@ -46,7 +46,7 @@
 #define K2  0.7320508076 /* sqrt(3)-1 */
 #define K3  1.7320508076 /* sqrt(3)   */
 
-#ifdef SDCC_mcs51
+#ifdef __SDCC_mcs51
    #define myconst __code
 #else
    #define myconst const

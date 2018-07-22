@@ -5,7 +5,7 @@
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
-   Free Software Foundation; either version 2.1, or (at your option) any
+   Free Software Foundation; either version 2, or (at your option) any
    later version.
 
    This library is distributed in the hope that it will be useful,
@@ -216,7 +216,7 @@ _gptrget (char *gptr) __naked
 
 #endif
 
-#ifdef SDCC_ds390
+#ifdef __SDCC_ds390
 /* the  return value is expected to be in acc/_ap, and not in the standard
  * location dpl/dph. Therefore we choose return type void here: */
 

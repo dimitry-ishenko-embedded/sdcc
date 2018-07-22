@@ -11,11 +11,11 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     /*{ "ldahli", "ldi\ta,(hl)" }, use when assembler update is complete*/
     {"ldahli", "ld\ta,(hl)\ninc\thl"},
     { "ldahlsp", "ldhl\tsp,#%d" },
-    { "ldaspsp", "lda sp,%d(sp)" },
+    { "ldaspsp", "add sp, #%d" },
     { "*pair", "(%s)" },
     { "enter", "" },
     { "enterx", 
-      "lda sp,-%d(sp)" },
+      "add sp, #-%d" },
     { "enterxl",
                 "ld hl,#-%d\n"
                 "add\thl,sp\n"
@@ -23,7 +23,7 @@ static const ASM_MAPPING _asxxxx_gb_mapping[] = {
     },
     { "leave", ""
     },
-    { "leavex", "lda sp,%d(sp)"
+    { "leavex", "add\tsp,#%d"
     },
     { "leavexl",
                 "ld hl,#%d\n"
@@ -412,7 +412,7 @@ static const ASM_MAPPING _z80asm_mapping[] = {
     { "immedword", "$%04X" },
     { "immedbyte", "$%02X" },
     { "hashedstr", "%s" },
-    { "lsbimmeds", "%s & $FF" },
+    { "lsbimmeds", "%s ~ $FF" },
     { "msbimmeds", "%s / 256" },
 
     { "bankimmeds", "BANK(%s)" },
