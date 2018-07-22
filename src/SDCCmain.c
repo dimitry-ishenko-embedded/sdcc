@@ -93,63 +93,64 @@ char buffer[PATH_MAX * 2];
 
 #define LENGTH(_a)      (sizeof (_a) / sizeof (*(_a)))
 
-#define OPTION_HELP             "--help"
-#define OPTION_OUT_FMT_IHX      "--out-fmt-ihx"
-#define OPTION_OUT_FMT_S19      "--out-fmt-s19"
-#define OPTION_HUGE_MODEL       "--model-huge"
-#define OPTION_LARGE_MODEL      "--model-large"
-#define OPTION_MEDIUM_MODEL     "--model-medium"
-#define OPTION_SMALL_MODEL      "--model-small"
-#define OPTION_DUMP_ALL         "--dumpall"
-#define OPTION_PEEP_FILE        "--peep-file"
-#define OPTION_LIB_PATH         "--lib-path"
-#define OPTION_CALLEE_SAVES     "--callee-saves"
-#define OPTION_STACK_LOC        "--stack-loc"
-#define OPTION_XSTACK_LOC       "--xstack-loc"
-#define OPTION_DATA_LOC         "--data-loc"
-#define OPTION_IDATA_LOC        "--idata-loc"
-#define OPTION_XRAM_LOC         "--xram-loc"
-#define OPTION_CODE_LOC         "--code-loc"
-#define OPTION_IRAM_SIZE        "--iram-size"
-#define OPTION_XRAM_SIZE        "--xram-size"
-#define OPTION_CODE_SIZE        "--code-size"
-#define OPTION_VERSION          "--version"
-#define OPTION_NO_LABEL_OPT     "--nolabelopt"
-#define OPTION_NO_LOOP_INV      "--noinvariant"
-#define OPTION_NO_LOOP_IND      "--noinduction"
-#define OPTION_LESS_PEDANTIC    "--less-pedantic"
-#define OPTION_DISABLE_WARNING  "--disable-warning"
-#define OPTION_WERROR           "--Werror"
-#define OPTION_DEBUG            "--debug"
-#define OPTION_NO_GCSE          "--nogcse"
-#define OPTION_SHORT_IS_8BITS   "--short-is-8bits"
-#define OPTION_NO_XINIT_OPT     "--no-xinit-opt"
-#define OPTION_NO_CCODE_IN_ASM  "--no-c-code-in-asm"
-#define OPTION_ICODE_IN_ASM     "--i-code-in-asm"
-#define OPTION_PRINT_SEARCH_DIRS "--print-search-dirs"
-#define OPTION_MSVC_ERROR_STYLE "--vc"
-#define OPTION_USE_STDOUT       "--use-stdout"
-#define OPTION_NO_PEEP_COMMENTS "--no-peep-comments"
-#define OPTION_VERBOSE_ASM      "--fverbose-asm"
-#define OPTION_OPT_CODE_SPEED   "--opt-code-speed"
-#define OPTION_OPT_CODE_SIZE    "--opt-code-size"
-#define OPTION_STD_C89          "--std-c89"
-#define OPTION_STD_C99          "--std-c99"
-#define OPTION_STD_C11          "--std-c11"
-#define OPTION_STD_SDCC89       "--std-sdcc89"
-#define OPTION_STD_SDCC99       "--std-sdcc99"
-#define OPTION_CODE_SEG         "--codeseg"
-#define OPTION_CONST_SEG        "--constseg"
-#define OPTION_DOLLARS_IN_IDENT "--fdollars-in-identifiers"
-#define OPTION_UNSIGNED_CHAR    "--funsigned-char"
-#define OPTION_USE_NON_FREE     "--use-non-free"
-#define OPTION_PEEP_RETURN      "--peep-return"
-#define OPTION_NO_PEEP_RETURN   "--no-peep-return"
-#define OPTION_NO_OPTSDCC_IN_ASM "--no-optsdcc-in-asm"
-#define OPTION_DUMP_GRAPHS      "--dump-graphs"
+#define OPTION_HELP                 "--help"
+#define OPTION_OUT_FMT_IHX          "--out-fmt-ihx"
+#define OPTION_OUT_FMT_S19          "--out-fmt-s19"
+#define OPTION_HUGE_MODEL           "--model-huge"
+#define OPTION_LARGE_MODEL          "--model-large"
+#define OPTION_MEDIUM_MODEL         "--model-medium"
+#define OPTION_SMALL_MODEL          "--model-small"
+#define OPTION_PEEP_FILE            "--peep-file"
+#define OPTION_LIB_PATH             "--lib-path"
+#define OPTION_CALLEE_SAVES         "--callee-saves"
+#define OPTION_STACK_LOC            "--stack-loc"
+#define OPTION_XSTACK_LOC           "--xstack-loc"
+#define OPTION_DATA_LOC             "--data-loc"
+#define OPTION_IDATA_LOC            "--idata-loc"
+#define OPTION_XRAM_LOC             "--xram-loc"
+#define OPTION_CODE_LOC             "--code-loc"
+#define OPTION_IRAM_SIZE            "--iram-size"
+#define OPTION_XRAM_SIZE            "--xram-size"
+#define OPTION_CODE_SIZE            "--code-size"
+#define OPTION_VERSION              "--version"
+#define OPTION_NO_LABEL_OPT         "--nolabelopt"
+#define OPTION_NO_LOOP_INV          "--noinvariant"
+#define OPTION_NO_LOOP_IND          "--noinduction"
+#define OPTION_LESS_PEDANTIC        "--less-pedantic"
+#define OPTION_DISABLE_WARNING      "--disable-warning"
+#define OPTION_WERROR               "--Werror"
+#define OPTION_DEBUG                "--debug"
+#define OPTION_NO_GCSE              "--nogcse"
+#define OPTION_SHORT_IS_8BITS       "--short-is-8bits"
+#define OPTION_NO_XINIT_OPT         "--no-xinit-opt"
+#define OPTION_NO_CCODE_IN_ASM      "--no-c-code-in-asm"
+#define OPTION_ICODE_IN_ASM         "--i-code-in-asm"
+#define OPTION_PRINT_SEARCH_DIRS    "--print-search-dirs"
+#define OPTION_MSVC_ERROR_STYLE     "--vc"
+#define OPTION_USE_STDOUT           "--use-stdout"
+#define OPTION_NO_PEEP_COMMENTS     "--no-peep-comments"
+#define OPTION_VERBOSE_ASM          "--fverbose-asm"
+#define OPTION_OPT_CODE_SPEED       "--opt-code-speed"
+#define OPTION_OPT_CODE_SIZE        "--opt-code-size"
+#define OPTION_STD_C89              "--std-c89"
+#define OPTION_STD_C99              "--std-c99"
+#define OPTION_STD_C11              "--std-c11"
+#define OPTION_STD_SDCC89           "--std-sdcc89"
+#define OPTION_STD_SDCC99           "--std-sdcc99"
+#define OPTION_CODE_SEG             "--codeseg"
+#define OPTION_CONST_SEG            "--constseg"
+#define OPTION_DOLLARS_IN_IDENT     "--fdollars-in-identifiers"
+#define OPTION_UNSIGNED_CHAR        "--funsigned-char"
+#define OPTION_USE_NON_FREE         "--use-non-free"
+#define OPTION_PEEP_RETURN          "--peep-return"
+#define OPTION_NO_PEEP_RETURN       "--no-peep-return"
+#define OPTION_NO_OPTSDCC_IN_ASM    "--no-optsdcc-in-asm"
 #define OPTION_MAX_ALLOCS_PER_NODE  "--max-allocs-per-node"
-#define OPTION_NO_LOSPRE        "--nolospre"
-#define OPTION_LOSPRE_UNSAFE_READ "--lospre-unsafe-read"
+#define OPTION_NO_LOSPRE            "--nolospre"
+#define OPTION_LOSPRE_UNSAFE_READ   "--lospre-unsafe-read"
+#define OPTION_DUMP_AST             "--dump-ast"
+#define OPTION_DUMP_I_CODE          "--dump-i-code"
+#define OPTION_DUMP_GRAPHS          "--dump-graphs"
 
 static const OPTION optionsTable[] = {
   {0,   NULL, NULL, "General options"},
@@ -208,7 +209,6 @@ static const OPTION optionsTable[] = {
   {0,   OPTION_NO_XINIT_OPT, &options.noXinitOpt, "don't memcpy initialized xram from code"},
   {0,   OPTION_NO_CCODE_IN_ASM, &options.noCcodeInAsm, "don't include c-code as comments in the asm file"},
   {0,   OPTION_NO_PEEP_COMMENTS, &options.noPeepComments, "don't include peephole optimizer comments"},
-  {0,   OPTION_VERBOSE_ASM, &options.verboseAsm, "include code generator comments"},
   {0,   OPTION_SHORT_IS_8BITS, NULL, "Make short 8 bits (for old times sake)"},
   {0,   OPTION_CODE_SEG, NULL, "<name> use this name for the code segment"},
   {0,   OPTION_CONST_SEG, NULL, "<name> use this name for the const segment"},
@@ -234,17 +234,11 @@ static const OPTION optionsTable[] = {
   {0,   OPTION_LOSPRE_UNSAFE_READ, NULL, "Allow unsafe reads in lospre"},
 
   {0,   NULL, NULL, "Internal debugging options"},
-  {0,   "--dumpraw", &options.dump_raw, "Dump the internal structure after the initial parse"},
-  {0,   "--dumpgcse", &options.dump_gcse, NULL},
-  {0,   "--dumploop", &options.dump_loop, NULL},
-  {0,   "--dumpdeadcode", &options.dump_kill, NULL},
-  {0,   "--dumpliverange", &options.dump_range, NULL},
-  {0,   "--dumpregpack", &options.dump_pack, NULL},
-  {0,   "--dumpregassign", &options.dump_rassgn, NULL},
-  {0,   "--dumptree", &options.dump_tree, "dump front-end AST before generating iCode"},
-  {0,   OPTION_DUMP_ALL, NULL, "Dump the internal structure at all stages"},
-  {0,   OPTION_ICODE_IN_ASM, &options.iCodeInAsm, "include i-code as comments in the asm file"},
+  {0,   OPTION_DUMP_AST, &options.dump_ast, "Dump front-end AST before generating i-code"},
+  {0,   OPTION_DUMP_I_CODE, &options.dump_i_code, "Dump the i-code structure at all stages"},
   {0,   OPTION_DUMP_GRAPHS, &options.dump_graphs, "Dump graphs (control-flow, conflict, etc)"},
+  {0,   OPTION_ICODE_IN_ASM, &options.iCodeInAsm, "Include i-code as comments in the asm file"},
+  {0,   OPTION_VERBOSE_ASM, &options.verboseAsm, "Include code generator comments in the asm output"},
 
   {0,   NULL, NULL, "Linker options"},
   {'l', NULL, NULL, "Include the given library in the link"},
@@ -252,7 +246,7 @@ static const OPTION optionsTable[] = {
   {0,   OPTION_LIB_PATH, &libPathsSet, "<path> use this path to search for libraries", CLAT_ADD_SET},
   {0,   OPTION_OUT_FMT_IHX, NULL, "Output in Intel hex format"},
   {0,   OPTION_OUT_FMT_S19, NULL, "Output in S19 hex format"},
-  {0,   OPTION_XRAM_LOC, &options.xdata_loc, "<nnnn> External Ram start location", CLAT_INTEGER},
+  {0,   OPTION_XRAM_LOC, NULL, "<nnnn> External Ram start location", CLAT_INTEGER},
   {0,   OPTION_XRAM_SIZE, NULL, "<nnnn> External Ram size"},
   {0,   OPTION_IRAM_SIZE, &options.iram_size, "<nnnn> Internal Ram size", CLAT_INTEGER},
   {0,   OPTION_XSTACK_LOC, &options.xstack_loc, "<nnnn> External Stack start location", CLAT_INTEGER},
@@ -309,9 +303,6 @@ static PORT *_ports[] = {
 #if !OPT_DISABLE_MCS51
   &mcs51_port,
 #endif
-#if !OPT_DISABLE_GBZ80
-  &gbz80_port,
-#endif
 #if !OPT_DISABLE_Z80
   &z80_port,
 #endif
@@ -323,6 +314,12 @@ static PORT *_ports[] = {
 #endif
 #if !OPT_DISABLE_R3KA
   &r3ka_port,
+#endif
+#if !OPT_DISABLE_GBZ80
+  &gbz80_port,
+#endif
+#if !OPT_DISABLE_TLCS90
+  &tlcs90_port,
 #endif
 #if !OPT_DISABLE_AVR
   &avr_port,
@@ -350,6 +347,9 @@ static PORT *_ports[] = {
 #endif
 #if !OPT_DISABLE_S08
   &s08_port,
+#endif
+#if !OPT_DISABLE_STM8
+  &stm8_port,
 #endif
 };
 
@@ -493,6 +493,7 @@ printVersionInfo (FILE * stream)
            "/" SDCC_SUB_VERSION_STR
 #endif
            " #%s (%s) (%s)\n", getBuildNumber (), getBuildDate (), getBuildEnvironment ());
+  fprintf (stream, "published under GNU General Public License (GPL)\n");
 }
 
 static void
@@ -583,10 +584,10 @@ setDefaultOptions (void)
 {
   /* first the options part */
   options.stack_loc = 0;        /* stack pointer initialised to 0 */
-  options.xstack_loc = 0;       /* xternal stack starts at 0 */
+  options.xstack_loc = 1;       /* xternal stack starts at 1 */
   options.code_loc = 0;         /* code starts at 0 */
   options.data_loc = 0;         /* JCF: By default let the linker locate data */
-  options.xdata_loc = 0;
+  options.xdata_loc = 1;        /* MB: Do not use address 0 by default as it equals NULL */
   options.idata_loc = 0;        /* MB: No need to limit idata to 0x80-0xFF */
   options.nopeep = 0;
   options.model = port->general.default_model;
@@ -1023,22 +1024,19 @@ parseCmdLine (int argc, char **argv)
               continue;
             }
 
-          if (strcmp (argv[i], OPTION_DUMP_ALL) == 0)
-            {
-              options.dump_rassgn =
-              options.dump_pack =
-              options.dump_range =
-              options.dump_kill =
-              options.dump_loop =
-              options.dump_gcse =
-              options.dump_raw = 1;
-              continue;
-            }
-
           if (strcmp (argv[i], OPTION_VERSION) == 0)
             {
               printVersionInfo (stdout);
               exit (EXIT_SUCCESS);
+              continue;
+            }
+
+          if (strcmp (argv[i], OPTION_XRAM_LOC) == 0)
+            {
+              int val = getIntArg (OPTION_XRAM_LOC, argv, &i, argc);
+              if (options.xdata_loc == options.xstack_loc)
+                options.xstack_loc = val;
+              options.xdata_loc = val;
               continue;
             }
 
@@ -2028,12 +2026,6 @@ preProcess (char **envp)
             addSet (&preArgvSet, Safe_strdup ("-DSDCC_MODEL_FLAT24"));
           break;
 
-        case MODEL_PAGE0:
-          addSet (&preArgvSet, Safe_strdup ("-D__SDCC_MODEL_PAGE0"));
-          if (options.std_sdcc)
-            addSet (&preArgvSet, Safe_strdup ("-DSDCC_MODEL_PAGE0"));
-          break;
-
         case NO_MODEL:
           break;
 
@@ -2053,6 +2045,9 @@ preProcess (char **envp)
         addSet (&preArgvSet, Safe_strdup ("-D__SDCC_FLOAT_REENT"));
       if (options.std_sdcc && options.float_rent)
         addSet (&preArgvSet, Safe_strdup ("-DSDCC_FLOAT_REENT"));
+
+      if (options.all_callee_saves)
+        addSet(&preArgvSet, Safe_strdup("-D__SDCC_ALL_CALLEE_SAVES"));
 
       /* add SDCC version number */
       {

@@ -41,8 +41,24 @@
 #endif
 
 void
+testBug2233(void)
+{
+#ifndef __SDCC_pic16
+	bool result;
+	volatile char test = 0;
+
+	result = ret_true();
+
+	if (result == 1)
+		test = 1;
+	ASSERT(test);
+#endif
+}
+
+void
 testBool(void)
 {
+#ifndef __SDCC_pic16
 	volatile unsigned char z = 2;
 
 	const char *BOOL = "George Boole";
@@ -80,5 +96,5 @@ testBool(void)
 	E--;     ASSERT(E);  // sets E to 1-E
 	E = true;
 	E--;     ASSERT(!E); // sets E to 1-E
+#endif
 }
-

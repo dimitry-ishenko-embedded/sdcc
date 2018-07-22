@@ -92,13 +92,13 @@ error:
 /*-----------------------------------------------------------------*/
 
 static int
-pcDistance (lineNode * cpos, char *lbl, bool back)
+pcDistance (lineNode *cpos, char *lbl, bool back)
 {
   lineNode *pl = cpos;
   char buff[MAX_PATTERN_LEN];
   int dist = 0;
 
-  SNPRINTF (buff, sizeof(buff), "%s:", lbl);
+  SNPRINTF (buff, sizeof(buff) - 1, "%s:", lbl);
   while (pl)
     {
       if (pl->line &&
@@ -109,11 +109,13 @@ pcDistance (lineNode * cpos, char *lbl, bool back)
           if (port->peep.getSize)
             {
               dist += port->peep.getSize(pl);
-/* printf("Line: %s, dist: %i, total: %i\n", pl->line, port->peep.getSize(pl), dist); */
+#if 0
+              fprintf(stderr, "Line: %s, dist: %i, total: %i\n", pl->line, port->peep.getSize(pl), dist);
+#endif
             }
           else
             {
-              dist += 3;
+              dist += 4;    // maximum instruction size
             }
         }
 
@@ -172,6 +174,10 @@ FBYNAME (labelInRange)
 
   if (!lbl)
     {
+      fprintf (stderr,
+             "*** internal error: labelInRange peephole restriction"
+             " malformed: %s\n", cmdLine);
+
       /* If no parameters given, assume that %5 pattern variable
          has the label name for backward compatibility */
       lbl = hTabItemWithKey (vars, 5);
@@ -262,7 +268,7 @@ FBYNAME (optimizeReturn)
 }
 
 /*-----------------------------------------------------------------*/
-/* labelIsReturnOnly - Check if label %5 is followed by RET        */
+/* labelIsReturnOnly - Check if label is followed by ret           */
 /*-----------------------------------------------------------------*/
 FBYNAME (labelIsReturnOnly)
 {
@@ -276,7 +282,17 @@ FBYNAME (labelIsReturnOnly)
   if (currPl->ic && currPl->ic->op == JUMPTABLE)
     return FALSE;
 
-  label = hTabItemWithKey (vars, 5);
+  if (!(label = getPatternVar (vars, &cmdLine)))
+    {
+      fprintf (stderr,
+             "*** internal error: labelIsReturnOnly peephole restriction"
+             " malformed: %s\n", cmdLine);
+
+      /* If no parameters given, assume that %5 pattern variable
+         has the label name for backward compatibility */
+      label = hTabItemWithKey (vars, 5);
+    }
+
   if (!label)
     return FALSE;
   len = strlen(label);
@@ -363,19 +379,28 @@ FBYNAME (labelIsUncondJump)
 
   if (TARGET_MCS51_LIKE)
     jpInst = "ljmp";
-  if (TARGET_HC08_LIKE)
+  else if (TARGET_HC08_LIKE)
     {
       jpInst = "jmp";
       jpInst2 = "bra";
     }
-  if (TARGET_Z80_LIKE)
+  else if (TARGET_Z80_LIKE)
     {
       jpInst = "jp";
       jpInst2 = "jr";
     }
+  else if (TARGET_IS_STM8)
+    {
+      jpInst = "jp";
+      jpInst2 = "jra";
+    }
   len = strlen(jpInst);
-  if (strncmp(p, jpInst, len)  && (!jpInst2 || strncmp(p, jpInst2, len)))
-    return FALSE; /* next line is no jump */
+  if (strncmp(p, jpInst, len))
+    {
+      len = jpInst2 ? strlen(jpInst2) : 0;
+      if(!jpInst2 || strncmp(p, jpInst2, len))
+        return FALSE; /* next line is no jump */
+    }
 
   p += len;
   while (*p && ISCHARSPACE(*p))
@@ -400,6 +425,7 @@ FBYNAME (labelIsUncondJump)
 
   /* now put the destination in %6 */
   bindVar (6, &p, &vars);
+
   return TRUE;
 }
 
@@ -637,15 +663,31 @@ notVolatileVariable(char *var, lineNode *currPl, lineNode *endPl)
     }
   if (TARGET_Z80_LIKE)
     {
-      if (strstr(var,"(bc)"))
+      if (strstr (var, "(bc)"))
         return FALSE;
-      if (strstr(var,"(de)"))
+      if (strstr (var, "(de)"))
         return FALSE;
-      if (strstr(var,"(hl)"))
+      if (strstr (var, "(hl)"))
         return FALSE;
-      if (strstr(var,"(ix"))
+      if (strstr (var, "(ix"))
         return FALSE;
-      if (strstr(var,"(iy"))
+      if (strstr (var, "(iy"))
+        return FALSE;
+    }
+
+  if (TARGET_IS_STM8)
+    {
+      if (strstr (var, "(x)"))
+        return FALSE;
+      if (strstr (var, "(y)"))
+        return FALSE;
+      if (strstr (var, ", x)"))
+        return FALSE;
+      if (strstr (var, ", y)"))
+        return FALSE;
+      if (strstr (var, ", sp)"))
+        return FALSE;
+      if (strchr (var, '[') && strchr (var, ']'))
         return FALSE;
     }
 
@@ -829,7 +871,7 @@ error:
 /* setFromConditionArgs - parse a peephole condition's arguments    */
 /* to produce a set of strings, one per argument. Variables %x will */
 /* be replaced with their values. String literals (in single quotes)*/
-/* are accepted and return in unquoted form.                         */
+/* are accepted and return in unquoted form.                        */
 /*------------------------------------------------------------------*/
 static set *
 setFromConditionArgs (char *cmdLine, hTab * vars)
@@ -955,7 +997,8 @@ FBYNAME (notUsed)
 }
 
 /*-----------------------------------------------------------------*/
-/* notUsed - Check, if value in register is not read again starting from label */
+/* notUsed - Check, if value in register is not read again         */
+/*           starting from label                                   */
 /*-----------------------------------------------------------------*/
 FBYNAME (notUsedFrom)
 {
@@ -1024,11 +1067,11 @@ FBYNAME (canAssign)
   return FALSE;
 }
 
-/*-------------------------------------------------------------------*/
-/* operandsNotRelated - returns true if the condition's operands are */
-/* not related (taking into account register name aliases). N-way    */
-/* comparison performed between all operands.                        */
-/*-------------------------------------------------------------------*/
+/*-----------------------------------------------------------------*/
+/* operandsNotRelated - returns true if the condition's operands   */
+/* are not related (taking into account register name aliases).    */
+/* N-way comparison performed between all operands.                */
+/*-----------------------------------------------------------------*/
 FBYNAME (operandsNotRelated)
 {
   set *operands;
@@ -1100,10 +1143,10 @@ FBYNAME (notSame)
   return TRUE;
 }
 
-/*-------------------------------------------------------------------*/
-/* operandsLiteral - returns true of the condition's operands are    */
-/* literals.                                                         */
-/*-------------------------------------------------------------------*/
+/*-----------------------------------------------------------------*/
+/* operandsLiteral - returns true if the condition's operands are  */
+/* literals.                                                       */
+/*-----------------------------------------------------------------*/
 FBYNAME (operandsLiteral)
 {
   set *operands;
@@ -1206,10 +1249,10 @@ ftab[] =                                            // sorted on the number of t
 /*-----------------------------------------------------------------*/
 static int
 callFuncByName (char *fname,
-                hTab * vars,
-                lineNode * currPl, /* first source line matched */
-                lineNode * endPl,  /* last source line matched */
-                lineNode * head)
+                hTab *vars,
+                lineNode *currPl, /* first source line matched */
+                lineNode *endPl,  /* last source line matched */
+                lineNode *head)
 {
   int   i;
   char  *cmdCopy, *funcName, *funcArgs, *cmdTerm;
@@ -2047,8 +2090,7 @@ replaceRule (lineNode ** shead, lineNode * stail, peepRule * pr)
  * and len will be it's length.
  */
 bool
-isLabelDefinition (const char *line, const char **start, int *len,
-                   bool isPeepRule)
+isLabelDefinition (const char *line, const char **start, int *len, bool isPeepRule)
 {
   const char *cp = line;
 
@@ -2090,7 +2132,7 @@ bool
 isLabelReference (const char *line, const char **start, int *len)
 {
   const char *s, *e;
-  if (!TARGET_Z80_LIKE)
+  if (!TARGET_Z80_LIKE && !TARGET_IS_STM8)
     return FALSE;
 
   s = line;
@@ -2159,7 +2201,7 @@ buildLabelRefCountHash (lineNode * head)
          - look for labels in inline assembler
          - calculate labelLen
       */ 
-      if ((line->isLabel  || line->isInline) && isLabelDefinition (line->line, &label, &labelLen, FALSE) ||
+      if ((line->isLabel || line->isInline) && isLabelDefinition (line->line, &label, &labelLen, FALSE) ||
         (ref = TRUE) && isLabelReference (line->line, &label, &labelLen))
         {
           labelHashEntry *entry, *e;
@@ -2171,7 +2213,7 @@ buildLabelRefCountHash (lineNode * head)
           memcpy (entry->name, label, labelLen);
           entry->name[labelLen] = 0;
           entry->refCount = -1;
-          
+     
           for (e = hTabFirstItemWK (labelHash, hashSymbolName (entry->name)); e; e = hTabNextItemWK (labelHash))
             if (!strcmp (entry->name, e->name))
               goto c;
@@ -2434,4 +2476,33 @@ initPeepHole (void)
     pic16_peepRules2pCode (rootRules);
 
 #endif
+}
+
+/*-----------------------------------------------------------------*/
+/* StrStr - case-insensitive strstr implementation                 */
+/*-----------------------------------------------------------------*/
+const char * StrStr (const char * str1, const char * str2)
+{
+	const char * cp = str1;
+	const char * s1;
+	const char * s2;
+
+	if ( !*str2 )
+	    return str1;
+
+	while (*cp)
+	{
+		s1 = cp;
+		s2 = str2;
+
+		while ( *s1 && *s2 && !(tolower(*s1)-tolower(*s2)) )
+			s1++, s2++;
+
+		if (!*s2)
+			return( cp );
+
+		cp++;
+	}
+
+	return (NULL) ;
 }

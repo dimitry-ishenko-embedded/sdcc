@@ -36,7 +36,9 @@
 #     define FALSE  false
 #   endif
 # else
-typedef unsigned char bool;
+    typedef unsigned char bool;
+#   define true     1
+#   define false    0
 #   ifndef TRUE
 #     define TRUE   1
 #   endif
@@ -250,7 +252,7 @@ enum
     MODEL_MEDIUM = 4,
     MODEL_LARGE = 8,
     MODEL_FLAT24 = 16,
-    MODEL_PAGE0 = 32, /* for the xa51 port */
+//  MODEL_PAGE0 = 32, /* disabled, was for the xa51 port */
     MODEL_HUGE = 64   /* for banked support */
   };
 
@@ -273,14 +275,8 @@ struct options
     int stackAuto;              /* Stack Automatic  */
     int useXstack;              /* use Xternal Stack */
     int stack10bit;             /* use 10 bit stack (flat24 model only) */
-    int dump_raw;               /* dump after intermediate code generation */
-    int dump_gcse;              /* dump after gcse */
-    int dump_loop;              /* dump after loop optimizations */
-    int dump_kill;              /* dump after dead code elimination */
-    int dump_range;             /* dump after live range analysis */
-    int dump_pack;              /* dump after register packing */
-    int dump_rassgn;            /* dump after register assignment */
-    int dump_tree;              /* dump front-end tree before lowering to iCode */
+    int dump_ast;               /* dump front-end tree before lowering to iCode */
+    int dump_i_code;            /* dump iCode at various stages */
     int dump_graphs;            /* Dump graphs in .dot format (control-flow, conflict, etc) */
     int cc_only;                /* compile only flag              */
     int intlong_rent;           /* integer & long support routines reentrant */
@@ -415,7 +411,8 @@ enum {
   DUMP_RANGE,
   DUMP_PACK,
   DUMP_RASSGN,
-  DUMP_LRANGE
+  DUMP_LRANGE,
+  DUMP_LOSPRE
 };
 
 struct _dumpFiles {

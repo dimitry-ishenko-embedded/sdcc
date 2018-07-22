@@ -28,6 +28,7 @@
 #include "ralloc.h"
 #include "gen.h"
 #include "peep.h"
+#include "rtrack.h"
 #include "dbuf_string.h"
 #include "../SDCCutil.h"
 
@@ -216,7 +217,7 @@ _mcs51_genAssemblerPreamble (FILE * of)
     {
       int i;
       for (i=0; i < 8 ; i++ )
-        fprintf (of,"b1_%d = 0x%x \n",i,8+i);
+        fprintf (of, "\tb1_%d = 0x%x \n", i, 8+i);
     }
 }
 
@@ -326,7 +327,6 @@ hasExtBitOp (int op, int size)
 {
   if (op == RRC
       || op == RLC
-      || op == GETHBIT
       || op == GETABIT
       || op == GETBYTE
       || op == GETWORD
@@ -844,7 +844,7 @@ PORT mcs51_port =
     "OSEG    (OVR,DATA)",       // overlay_name
     "GSFINAL (CODE)",           // post_static_name
     "HOME    (CODE)",           // home_name
-    "XISEG   (XDATA)",          // xidata_name - initialized xdata   initialized xdata
+    "XISEG   (XDATA)",          // xidata_name - initialized xdata
     "XINIT   (CODE)",           // xinit_name - a code copy of xiseg
     "CONST   (CODE)",           // const_name - const data (code or not)
     "CABS    (ABS,CODE)",       // cabs_name - const absolute data (code or not)
@@ -890,6 +890,7 @@ PORT mcs51_port =
   _mcs51_setDefaultOptions,
   mcs51_assignRegisters,
   _mcs51_getRegName,
+  _mcs51_rtrackUpdate,
   _mcs51_keywords,
   _mcs51_genAssemblerPreamble,
   NULL,                         /* no genAssemblerEnd */

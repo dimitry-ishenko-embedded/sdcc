@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
 //#define DEBUG_RALLOC_DEC // Uncomment to get debug messages while doing register allocation on the tree decomposition.
 //#define DEBUG_RALLOC_DEC_ASS // Uncomment to get debug messages about assignments while doing register allocation on the tree decomposition (much more verbose than the one above).
 
@@ -206,7 +207,6 @@ static bool XAinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     ic->op == '^' ||
     ic->op == '|' ||
     ic->op == BITWISEAND ||
-    ic->op == GETHBIT ||
     ic->op == GETABIT ||
     ic->op == GETBYTE ||
     ic->op == GETWORD ||
@@ -303,7 +303,6 @@ static bool AXinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     ic->op == '^' ||
     ic->op == '|' ||
     ic->op == BITWISEAND ||
-    ic->op == GETHBIT ||
     ic->op == GETABIT ||
     ic->op == GETBYTE ||
     ic->op == GETWORD ||
@@ -352,13 +351,19 @@ static void set_surviving_regs(const assignment &a, unsigned short int i, const 
 {
   iCode *ic = G[i].ic;
   
+  ic->rMask = newBitVect(port->num_regs);
   ic->rSurv = newBitVect(port->num_regs);
   
   std::set<var_t>::const_iterator v, v_end;
   for (v = G[i].alive.begin(), v_end = G[i].alive.end(); v != v_end; ++v)
-    if(a.global[*v] >= 0 && G[i].dying.find(*v) == G[i].dying.end())
-      if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
-        ic->rSurv = bitVectSetBit(ic->rSurv, a.global[*v]);
+    {
+      if(a.global[*v] < 0)
+        continue;
+      ic->rMask = bitVectSetBit(ic->rMask, a.global[*v]);
+      if(G[i].dying.find(*v) == G[i].dying.end())
+        if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
+          ic->rSurv = bitVectSetBit(ic->rSurv, a.global[*v]);
+    }
 }
 
 template<class G_t>
@@ -367,10 +372,11 @@ static void unset_surviving_regs(unsigned short int i, const G_t &G)
   iCode *ic = G[i].ic;
   
   freeBitVect(ic->rSurv);
+  freeBitVect(ic->rMask);
 }
 
 template <class G_t, class I_t>
-void assign_operand_for_cost(operand *o, const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
+static void assign_operand_for_cost(operand *o, const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
 {
   if(!o || !IS_SYMOP(o))
     return;
@@ -483,7 +489,6 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
     case NE_OP:
     case AND_OP:
     case OR_OP:
-    case GETHBIT:
     case GETABIT:
     case GETBYTE:
     case GETWORD:
@@ -543,19 +548,27 @@ static void extra_ic_generated(iCode *ic)
     {
       iCode *ifx;
       if (ifx = ifxForOp (IC_RESULT (ic), ic))
-      ifx->generated = 1;
+        {
+          OP_SYMBOL (IC_RESULT (ic))->for_newralloc = false;
+          OP_SYMBOL (IC_RESULT (ic))->regType = REG_CND;
+          ifx->generated = true;
+        }
     }
   if(ic->op == '-' && IS_VALOP (IC_RIGHT (ic)) && operandLitValue (IC_RIGHT (ic)) == 1 && getSize(operandType(IC_RESULT (ic))) == 1 && !isOperandInFarSpace (IC_RESULT (ic)) && isOperandEqual (IC_RESULT (ic), IC_LEFT (ic)))
     {
       iCode *ifx;
       if (ifx = ifxForOp (IC_RESULT (ic), ic))
-      ifx->generated = 1;
+        {
+          OP_SYMBOL (IC_RESULT (ic))->for_newralloc = false;
+          OP_SYMBOL (IC_RESULT (ic))->regType == REG_CND;
+          ifx->generated = true;
+        }
     }
   if(ic->op == GET_VALUE_AT_ADDRESS)
     {
       iCode *inc;
       if (inc = hasInchc08 (IC_LEFT (ic), ic,  getSize (operandType (IC_RIGHT (ic)))))
-         inc->generated = 1;
+         inc->generated = true;
     }
 }
 
@@ -581,6 +594,7 @@ static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I)
   tree_dec_ralloc_nodes(T, find_root(T), G, I2, ac, &assignment_optimal);
 
   const assignment &winner = *(T[find_root(T)].assignments.begin());
+
 #ifdef DEBUG_RALLOC_DEC
   std::cout << "Winner: ";
   for(unsigned int i = 0; i < boost::num_vertices(I); i++)
@@ -591,6 +605,7 @@ static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I)
   std::cout << "Cost: " << winner.s << "\n";
   std::cout.flush();
 #endif
+
   // Todo: Make this an assertion
   if(winner.global.size() != boost::num_vertices(I))
     {

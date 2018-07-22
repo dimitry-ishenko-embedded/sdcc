@@ -109,6 +109,7 @@ struct tree_dec_lospre_node
 {
   std::set<unsigned int> bag;
   assignment_list_lospre_t assignments;
+  unsigned weight; // The weight is the number of nodes at which intermediate results need to be remembered. In general, to minimize memory consumption, at join nodes the child with maximum weight should be processed first.
 };
 
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, cfg_lospre_node, float> cfg_lospre_t; // The edge property is the cost of subdividing the edge and inserting an instruction (for now we always use 1, optimizing for code size, but relative execution frequency could be used when optimizing for speed or total energy consumption; aggregates thereof can be a good idea as well).
@@ -163,7 +164,7 @@ int tree_dec_lospre_introduce(T_t &T, typename boost::graph_traits<T_t>::vertex_
   std::set<unsigned short> new_inst;
   std::set_difference(T[t].bag.begin(), T[t].bag.end(), T[*c].bag.begin(), T[*c].bag.end(), std::inserter(new_inst, new_inst.end()));
   unsigned short int i = *(new_inst.begin());
-//std::cout << "Introducing " << i << "\n";
+
   for(ai = alist.begin(); ai != alist.end(); ++ai)
     {
       ai->local.insert(i);
@@ -205,11 +206,9 @@ void tree_dec_lospre_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
         n_iter_t n, n_end;
         for (boost::tie(n, n_end) = boost::out_edges(i, G);  n != n_end; ++n)
           {
-//if(i >= 19 && i <= 21)
-//std::cout << "Considering edge from " << i << " to " << boost::target(*n, G) << ":" << ai->global[i] << "," << G[i].invalidates << "," << ai->global[boost::target(*n, G)] << ", " << G[boost::target(*n, G)].uses << "\n";
             if (ai->local.find(boost::target(*n, G)) == ai->local.end() || (ai->global[i] && !G[i].invalidates) >= (ai->global[boost::target(*n, G)] || G[boost::target(*n, G)].uses))
               continue;
-//if(i >= 19 && i <= 21) std::cout << "Adding cost for edge from " << boost::source(*n, G) << " to " << boost::target(*n, G) << "\n";
+
             ai->s.get<0>() += G[*n]; // Add calculation cost.
           }
       }
@@ -220,7 +219,7 @@ void tree_dec_lospre_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
           {
             if (ai->local.find(boost::source(*n, G)) == ai->local.end() || (ai->global[boost::source(*n, G)] && !G[boost::source(*n, G)].invalidates) >= (ai->global[i] || G[i].uses))
               continue;
-//if(i >= 19 && i <= 21) std::cout << "Adding cost for edge from " << boost::source(*n, G) << " to " << boost::target(*n, G) << "\n";
+
             ai->s.get<0>() += G[*n]; // Add calculation cost.
           }
       }
@@ -272,7 +271,7 @@ void tree_dec_lospre_join(T_t &T, typename boost::graph_traits<T_t>::vertex_desc
 
   alist2.sort();
   alist3.sort();
-//std::cout << "Joining\n";
+
   assignment_list_lospre_t::iterator ai2, ai3;
   for (ai2 = alist2.begin(), ai3 = alist3.begin(); ai2 != alist2.end() && ai3 != alist3.end();)
     {
@@ -283,8 +282,7 @@ void tree_dec_lospre_join(T_t &T, typename boost::graph_traits<T_t>::vertex_desc
           for (size_t i = 0; i < ai2->global.size(); i++)
             ai2->global[i] = (ai2->global[i] || ai3->global[i]);
           alist1.push_back(*ai2);
-//std::cout << "Assignment: ";
-//print_assignment(*ai2, G);
+
           ++ai2;
           ++ai3;
         }
@@ -481,6 +479,10 @@ int tree_dec_safety_nodes(T_t &T, typename boost::graph_traits<T_t>::vertex_desc
     case 2:
       c0 = *c++;
       c1 = *c;
+
+      if (T[c0].weight < T[c1].weight) // Minimize memory consumption.
+        std::swap (c0, c1);
+
       if(tree_dec_safety_nodes(T, c0, G) < 0)
         return(-1);
       if(tree_dec_safety_nodes(T, c1, G) < 0)
@@ -510,10 +512,17 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
   G[boost::source(e, G)].ic->next = newic;
   G[boost::target(e, G)].ic->prev = newic;
 
+  //if (ic->op != ADDRESS_OF && IC_LEFT (ic) && IS_ITEMP (IC_LEFT (ic)))
+  //  bitVectSetBit (OP_SYMBOL (IC_LEFT (ic))->uses, ic->key);
+  //if (IC_RIGHT (ic) && IS_ITEMP (IC_RIGHT (ic)))
+  //  bitVectSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
+  //bitVectSetBit (OP_SYMBOL (IC_RESULT (ic))->defs, ic->key);
+
   // Insert node into cfg.
   typename boost::graph_traits<G_t>::vertex_descriptor n = boost::add_vertex(G);
   // TODO: Exact cost.
   G[n].ic = newic;
+  G[n].uses = false;
   boost::add_edge(boost::source(e, G), n, G[e], G);
   boost::add_edge(n, boost::target(e, G), 3.0, G);
 
@@ -546,7 +555,7 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
 
 
 template <class G_t>
-static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>::vertex_descriptor i, const iCode *ic)
+static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>::vertex_descriptor i, const iCode *ic, const assignment_lospre& a)
 {
   typedef typename boost::graph_traits<G_t>::adjacency_iterator adjacency_iter_t;
 
@@ -564,31 +573,33 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
 
       if (isOperandEqual(IC_RESULT(ic), IC_LEFT(nic)) && nic->op != ADDRESS_OF && (!POINTER_GET(nic) || !IS_PTR(operandType(IC_RESULT(nic))) || !IS_BITFIELD(operandType(IC_LEFT(nic))->next) || compareType(operandType(IC_LEFT(nic)), operandType(tmpop)) == 1))
         {
+          bool isaddr = IC_LEFT (nic)->isaddr;
 #ifdef DEBUG_LOSPRE
-          std::cout << "Forward substituted left operand at " << nic->key << "\n";
+          std::cout << "Forward substituted left operand " << OP_SYMBOL_CONST(IC_LEFT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //const operand *const oldop = IC_LEFT(nic);
+          //bitVectUnSetBit (OP_SYMBOL (IC_LEFT (nic))->uses, nic->key);
           IC_LEFT(nic) = operandFromOperand (tmpop);
-          //setOperandType (IC_LEFT(nic), operandType (oldop));
+          //bitVectSetBit (OP_SYMBOL (IC_LEFT (nic))->uses, nic->key);
+          IC_LEFT (nic)->isaddr = isaddr;
         }
       if (isOperandEqual(IC_RESULT(ic), IC_RIGHT(nic)))
         {
 #ifdef DEBUG_LOSPRE
-          std::cout << "Forward substituted right operand at " << nic->key << "\n";
+          std::cout << "Forward substituted right operand " << OP_SYMBOL_CONST(IC_RIGHT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //const operand *const oldop = IC_RIGHT(nic);
+          //bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (nic))->uses, nic->key);
           IC_RIGHT(nic) = operandFromOperand (tmpop);
-          //setOperandType (IC_RIGHT(nic), operandType (oldop));
+          //bitVectSetBit (OP_SYMBOL (IC_RIGHT (nic))->uses, nic->key);
         }
       if (POINTER_SET(nic) && isOperandEqual(IC_RESULT(ic), IC_RESULT(nic)) && (!IS_PTR(operandType(IC_RESULT(nic))) || !IS_BITFIELD(operandType(IC_RESULT(nic))->next) || compareType(operandType(IC_RESULT(nic)), operandType(tmpop)) == 1))
         {
 #ifdef DEBUG_LOSPRE
-          std::cout << "Forward substituted result operand at " << nic->key << "\n";
+          std::cout << "Forward substituted result operand " << OP_SYMBOL_CONST(IC_RESULT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //const operand *const oldop = IC_RESULT(nic);
+          //bitVectUnSetBit (OP_SYMBOL (IC_RESULT (nic))->uses, nic->key);
           IC_RESULT(nic) = operandFromOperand (tmpop);
-          //setOperandType(IC_RESULT(nic), operandType (oldop));
           IC_RESULT(nic)->isaddr = true;
+          //bitVectSetBit (OP_SYMBOL (IC_RESULT (nic))->uses, nic->key);
         }
 
       if (nic->op == LABEL) // Reached label. Continue only if all edges goining here are safe.
@@ -601,8 +612,8 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
           if(e != e_end)
             break;
         }
-      if (isOperandEqual(IC_RESULT (ic), IC_RESULT(nic)) && !POINTER_SET(nic))
-        break;  
+      if (isOperandEqual(IC_RESULT (ic), IC_RESULT(nic)) && !POINTER_SET(nic) /*|| G[i].uses*/)
+        break;
       if ((nic->op == CALL || nic->op == PCALL || POINTER_SET(nic)) && IS_TRUE_SYMOP(IC_RESULT(ic)))
         break;
 
@@ -611,13 +622,19 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
       if (nic->op == GOTO || nic->op == IFX || nic->op == JUMPTABLE)
         {
           adjacency_iter_t c, c_end;
-          for(boost::tie(c, c_end) = boost::adjacent_vertices(i, G); c != c_end; ++c) 
-            forward_lospre_assignment(G, *c, ic);
+          for(boost::tie(c, c_end) = boost::adjacent_vertices(i, G); c != c_end; ++c)
+            {
+              if(!((a.global[i] & true) && !G[i].invalidates) && (a.global[*c] & true)) // Calculation edge
+                continue;
+              forward_lospre_assignment(G, *c, ic, a);
+            }
           break;
         }
 
       boost::tie(c, c_end) = adjacent_vertices(i, G);
-      if (c == c_end)
+      if(c == c_end)
+        break;
+      if(!((a.global[i] & true) && !G[i].invalidates) && (a.global[*c] & true)) // Calculation edge
         break;
       i = *c;
     }
@@ -634,7 +651,7 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
   std::set<edge_desc_t> calculation_edges; // Use descriptor, not iterator due to possible invalidation of iterators when inserting vertices or edges.
   edge_iter_t e, e_end;
   for(boost::tie(e, e_end) = boost::edges(G); e != e_end; ++e)
-    if((a.global[boost::source(*e, G)] && !G[boost::source(*e, G)].invalidates) < a.global[boost::target(*e, G)])
+    if(!((a.global[boost::source(*e, G)] & true) && !G[boost::source(*e, G)].invalidates) && (a.global[boost::target(*e, G)] & true))
       calculation_edges.insert(*e);
 
   if(!calculation_edges.size())
@@ -666,15 +683,20 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
       typename boost::graph_traits<G_t>::in_edge_iterator e = in_edges(*v, G).first;
       if (a.global.size() <= *v)
         continue;
-      if(!(a.global[*v] && !G[*v].invalidates || boost::source(*e, G) < a.global.size() && a.global[boost::source(*e, G)]))
+      if(!((a.global[*v] & true) && !G[*v].invalidates || boost::source(*e, G) < a.global.size() && (a.global[boost::source(*e, G)] & true)))
         continue;
 #ifdef DEBUG_LOSPRE
       std::cout << "Substituting ic " << G[*v].ic->key << "\n";
 #endif
       substituted++;
-      // Todo: split unconnected iTemps.
+
       iCode *ic = G[*v].ic;
+      //if (IC_LEFT (ic) && IS_ITEMP (IC_LEFT (ic)))
+      //  bitVectUnSetBit (OP_SYMBOL (IC_LEFT (ic))->uses, ic->key);
+      //if (IC_RIGHT (ic) && IS_ITEMP (IC_RIGHT (ic)))
+       // bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
       IC_RIGHT(ic) = tmpop;
+      //bitVectSetBit (OP_SYMBOL (IC_RIGHT(ic))->uses, ic->key);
       if (!POINTER_SET (ic))
         {
           IC_LEFT(ic) = 0;
@@ -690,7 +712,7 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
         adjacency_iter_t c, c_end;
         boost::tie(c, c_end) = adjacent_vertices(*v, G);
         if (c != c_end)
-          forward_lospre_assignment(G, *c, ic);
+          forward_lospre_assignment(G, *c, ic, a);
       }
     }
 
@@ -700,10 +722,7 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
       return (-1);
     }
 
-  if(substituted <= 1) // Todo: Remove this warning when optimization for speed instead of code size is implemented!
-    std::cout << "Introduced " << OP_SYMBOL_CONST(tmpop)->name << ", but did not substitute multiple calculations.\n"; std::cout.flush();
-
-  if(substituted <= split) // Todo: Remove this warning when optimization for speed instead of code size is implemented!
+  if(substituted < split) // Todo: Remove this warning when optimization for speed instead of code size is implemented!
     std::cout << "Introduced " << OP_SYMBOL_CONST(tmpop)->name << ", but did substitute only " << substituted << " calculations, while introducing "<< split << ".\n"; std::cout.flush();
 
   return(1);
@@ -751,8 +770,10 @@ static int tree_dec_safety (tree_dec_lospre_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G,
 
   implement_safety(winner, G);
 
-  //std::cout << "Winner (safety): ";
-  //print_assignment(winner, G);
+#ifdef DEBUG_LOSPRE
+  std::cout << "Winner (safety): ";
+  print_assignment(winner, G);
+#endif
 
   T[find_root(T)].assignments.clear();
   return (0);

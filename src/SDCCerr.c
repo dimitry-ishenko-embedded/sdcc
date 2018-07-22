@@ -122,7 +122,7 @@ struct
   { E_LVALUE_CONST, ERROR_LEVEL_ERROR,
      "Lvalue specifies constant object", 0 },
   { E_ILLEGAL_ADDR, ERROR_LEVEL_ERROR,
-     "'&' illegal operand , %s", 0 },
+     "'&' illegal operand, %s", 0 },
   { E_CAST_ILLEGAL, ERROR_LEVEL_ERROR,
      "illegal cast (cast cannot be aggregate)", 0 },
   { E_MULT_INTEGRAL, ERROR_LEVEL_ERROR,
@@ -214,7 +214,7 @@ struct
   { W_NO_SIDE_EFFECTS, ERROR_LEVEL_WARNING,
      "%s expression has NO side effects. Expr eliminated", 0 },
   { W_CONST_TOO_LARGE, ERROR_LEVEL_PEDANTIC,
-     "constant value '%s', out of range.", 0 },
+     "constant value '%ld', out of range.", 0 },
   { W_BAD_COMPARE, ERROR_LEVEL_WARNING,
      "comparison will either, ALWAYs succeed or ALWAYs fail", 0 },
   { E_TERMINATING, ERROR_LEVEL_ERROR,
@@ -488,6 +488,11 @@ struct
     "static assertion failed: %s", 0 },
   { E_ALIGNAS, ERROR_LEVEL_ERROR,
     "invalid alignment specified: %d", 0 },
+  { W_INTERNAL_ERROR, ERROR_LEVEL_WARNING,
+     "Non-fatal Compiler Internal Problem in file '%s' line number '%d' : %s \n"
+     "Contact Author with source code", 0 },
+  { W_UNRECOGNIZED_ASM, ERROR_LEVEL_INFO,
+     "%s() failed to parse line node, assuming %d bytes\n'%s'\n", 0 },
 };
 
 /* -------------------------------------------------------------------------------

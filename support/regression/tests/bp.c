@@ -55,6 +55,5 @@ testBP(void)
 
   ASSERT(verifyBlock(above, ABOVE_MEM_TEST_SIZE, sizeof(above)));
   ASSERT(verifyBlock(below, BELOW_MEM_TEST_SIZE, sizeof(below)));
-
 }
 

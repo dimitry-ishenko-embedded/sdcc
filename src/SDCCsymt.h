@@ -176,7 +176,7 @@ typedef struct specifier
   unsigned b_isenum:1;              /* is an enumerated type      */
   unsigned b_bitUnnamed:1;          /* is an unnamed bit-field    */
   unsigned _bitStart;               /* bit start position         */
-  int _bitLength;                   /* bit length                 */
+  unsigned _bitLength;              /* bit length                 */
   unsigned _addr;                   /* address of symbol          */
   unsigned _stack;                  /* stack offset for stacked v */
   int argreg;                       /* reg no for regparm         */
@@ -201,13 +201,13 @@ specifier;
 /* types of declarators */
 typedef enum
 {
-  POINTER = 0,                      /* pointer to near data */
-  FPOINTER,                         /* pointer to far data  */
-  CPOINTER,                         /* pointer to code space */
-  GPOINTER,                         /* _generic pointer     */
-  PPOINTER,                         /* paged area pointer   */
+  UPOINTER = 0,                     /* unknown pointer used only when parsing */
+  POINTER,                          /* pointer to near data  */
   IPOINTER,                         /* pointer to upper 128 bytes */
-  UPOINTER,                         /* unknown pointer used only when parsing */
+  PPOINTER,                         /* paged area pointer    */
+  FPOINTER,                         /* pointer to far data   */
+  CPOINTER,                         /* pointer to code space */
+  GPOINTER,                         /* generic pointer       */
   EEPPOINTER,                       /* pointer to eeprom     */
   ARRAY,
   FUNCTION

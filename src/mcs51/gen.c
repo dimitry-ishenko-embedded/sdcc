@@ -1478,7 +1478,7 @@ aopGet (operand * oper, int offset, bool bit16, bool dname)
           break;
 
         case AOP_IMMD:
-          if (aop->aopu.aop_immd.from_cast_remat && (offset == (aop->size - 1)))
+          if (aop->aopu.aop_immd.from_cast_remat && opIsGptr (oper) && offset == GPTRSIZE - 1)
             {
               dbuf_printf (&dbuf, "%s", aop->aopu.aop_immd.aop_immd2);
             }
@@ -1946,7 +1946,7 @@ outBitC (operand * result)
   /* if the result is bit */
   if (AOP_TYPE (result) == AOP_CRY)
     {
-      if (!IS_OP_RUONLY (result))
+      if (!IS_OP_RUONLY (result) && !IS_OP_ACCUSE (result))
         aopPut (result, "c", 0);
     }
   else if (AOP_TYPE (result) != AOP_DUMMY)
@@ -3067,8 +3067,7 @@ genSend (set * sendSet)
                 {
                   while (size--)
                     {
-                      const char *l = aopGet (IC_LEFT (sic), offset, FALSE, FALSE);
-                      emitcode ("mov", "a,%s", l);
+                      MOVA (aopGet (IC_LEFT (sic), offset, FALSE, FALSE));
                       emitpush ("acc");
                       offset++;
                     }
@@ -3637,8 +3636,11 @@ genFunction (iCode * ic)
       rsavebits = bitVectIntersect (bitVectCopy (mcs51_allBitregs ()), sym->regsUsed);
       if (IFFUNC_HASFCALL (sym->type) || !bitVectIsZero (rsavebits))
         {
-          emitpush ("bits");
-          BitBankUsed = 1;
+          if (!inExcludeList ("bits"))
+            {
+              emitpush ("bits");
+              BitBankUsed = 1;
+            }
         }
       freeBitVect (rsavebits);
 
@@ -4246,7 +4248,10 @@ genEndFunction (iCode * ic)
 
       rsavebits = bitVectIntersect (bitVectCopy (mcs51_allBitregs ()), sym->regsUsed);
       if (IFFUNC_HASFCALL (sym->type) || !bitVectIsZero (rsavebits))
-        emitpop ("bits");
+        {
+          if (!inExcludeList ("bits"))
+            emitpop ("bits");
+        }
       freeBitVect (rsavebits);
 
       /* if debug then send end of function */
@@ -4324,7 +4329,9 @@ genEndFunction (iCode * ic)
       /* Remove change of register bank if no registers used */
       if (lnp->ic && lnp->ic->op == FUNCTION &&
           !strncmp (lnp->line, "mov", 3) &&
-          bitVectFirstBit (port->peep.getRegsWritten (lnp)) == CND_IDX && !bitVectBitsInCommon (mcs51_allBankregs (), regsUsed))
+          bitVectFirstBit (port->peep.getRegsWritten (lnp)) == CND_IDX &&
+          !bitVectBitsInCommon (mcs51_allBankregs (), regsUsed) &&
+          !IFFUNC_HASFCALL (sym->type))
         {
           emitcode (";", "eliminated unneeded mov psw,# (no regs used in bank)");
           connectLine (lnp->prev, lnp->next);
@@ -8034,39 +8041,6 @@ release:
 }
 
 /*-----------------------------------------------------------------*/
-/* genGetHbit - generates code get highest order bit               */
-/*-----------------------------------------------------------------*/
-static void
-genGetHbit (iCode * ic)
-{
-  operand *left, *result;
-
-  D (emitcode (";", "genGetHbit"));
-
-  left = IC_LEFT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  /* get the highest order byte into a */
-  MOVA (aopGet (left, AOP_SIZE (left) - 1, FALSE, FALSE));
-  if (AOP_TYPE (result) == AOP_CRY)
-    {
-      emitcode ("rlc", "a");
-      outBitC (result);
-    }
-  else
-    {
-      emitcode ("rl", "a");
-      emitcode ("anl", "a,#0x01");
-      outAcc (result);
-    }
-
-  freeAsmop (result, NULL, ic, TRUE);
-  freeAsmop (left, NULL, ic, TRUE);
-}
-
-/*-----------------------------------------------------------------*/
 /* genGetAbit - generates code get a single bit                    */
 /*-----------------------------------------------------------------*/
 static void
@@ -9034,7 +9008,8 @@ genLeftShiftLiteral (operand * left, operand * right, operand * result, iCode * 
 #endif
 
   /* I suppose that the left size >= result size */
-  wassert (getSize (operandType (left)) >= size);
+  // MB: I have no idea why this would be necessary
+//  wassert (getSize (operandType (left)) >= size);
 
   if (shCount == 0)
     {
@@ -9810,8 +9785,8 @@ genUnpackBits (operand * result, const char *rname, int ptype, iCode * ifx)
   int rsize;                    /* result size */
   int rlen = 0;                 /* remaining bitfield length */
   sym_link *etype;              /* bitfield type information */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   static char *const accBits[] = { "acc.0", "acc.1", "acc.2", "acc.3",
                                    "acc.4", "acc.5", "acc.6", "acc.7"
                                  };
@@ -9929,7 +9904,7 @@ genDataPointerGet (operand * left, operand * result, iCode * ic)
       struct dbuf_s dbuf;
 
       dbuf_init (&dbuf, 128);
-      if (offset)
+      if (AOP_SIZE (result) > 1)
         {
           dbuf_printf (&dbuf, "(%s + %d)", l, offset);
         }
@@ -10107,10 +10082,15 @@ genPagedPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iC
      then don't need anything more */
   if (!AOP_INPREG (AOP (left)))
     {
+      const char *l;
       /* otherwise get a free pointer register */
       aop = newAsmop (0);
       preg = getFreePtr (ic, aop, FALSE);
-      emitcode ("mov", "%s,%s", preg->name, aopGet (left, 0, FALSE, TRUE));
+      l = aopGet (left, 0, FALSE, TRUE);
+      if (*l == '@')
+        emitcode ("mov", "a%s,%s", preg->name, l);
+      else
+        emitcode ("mov", "%s,%s", preg->name, l);
       rname = preg->name;
     }
   else
@@ -10127,7 +10107,7 @@ genPagedPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iC
     }
   else
     {
-      /* we have can just get the values */
+      /* we can just get the values */
       int size = AOP_SIZE (result);
       int offset = 0;
 
@@ -10375,7 +10355,7 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
     }
 
   /* special case when cast remat */
-  if (p_type == GPOINTER && IS_SYMOP (left) && OP_SYMBOL (left)->remat && IS_CAST_ICODE (OP_SYMBOL (left)->rematiCode))
+  while (IS_SYMOP (left) && OP_SYMBOL (left)->remat && IS_CAST_ICODE (OP_SYMBOL (left)->rematiCode))
     {
       left = IC_RIGHT (OP_SYMBOL (left)->rematiCode);
       type = operandType (left);
@@ -10417,8 +10397,8 @@ genPackBits (sym_link * etype, operand * right, const char *rname, int p_type)
 {
   int offset = 0;               /* source byte offset */
   int rlen = 0;                 /* remaining bitfield length */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   int litval;                   /* source literal value (if AOP_LIT) */
   unsigned char mask;           /* bitmask within current byte */
 
@@ -11053,7 +11033,7 @@ genPointerSet (iCode * ic, iCode * pi)
     }
 
   /* special case when cast remat */
-  if (p_type == GPOINTER && IS_SYMOP (result) && OP_SYMBOL (result)->remat && IS_CAST_ICODE (OP_SYMBOL (result)->rematiCode))
+  while (IS_SYMOP (result) && OP_SYMBOL (result)->remat && IS_CAST_ICODE (OP_SYMBOL (result)->rematiCode))
     {
       result = IC_RIGHT (OP_SYMBOL (result)->rematiCode);
       type = operandType (result);
@@ -11118,6 +11098,8 @@ genIfx (iCode * ic, iCode * popIc)
   /* if the condition is a bit variable */
   if (isbit && dup)
     genIfxJump (ic, dup, NULL, NULL, NULL, popIc);
+  else if (isbit && IS_OP_ACCUSE (cond))
+    genIfxJump (ic, "c", NULL, NULL, NULL, popIc);
   else if (isbit && IS_ITEMP (cond) && SPIL_LOC (cond))
     genIfxJump (ic, SPIL_LOC (cond)->rname, NULL, NULL, NULL, popIc);
   else if (isbit && !IS_ITEMP (cond))
@@ -12164,7 +12146,7 @@ gen51Code (iCode * lic)
           break;
 
         case GETHBIT:
-          genGetHbit (ic);
+          assert (0);
           break;
 
         case GETABIT:

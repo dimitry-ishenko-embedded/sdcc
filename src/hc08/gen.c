@@ -2810,7 +2810,7 @@ aopOpExtToIdx(asmop * result, asmop *left, asmop *right)
 /*-----------------------------------------------------------------*/
 /* aopAdrStr - for referencing the address of the aop              */
 /*-----------------------------------------------------------------*/
-/* loffset seems to have a weird meaning here. It seems to be nonzero in some places where one would expect an offset ot be zero */
+/* loffset seems to have a weird meaning here. It seems to be nonzero in some places where one would expect an offset to be zero */
 static char *
 aopAdrStr (asmop * aop, int loffset, bool bit16)
 {
@@ -6947,38 +6947,6 @@ genRLC (iCode * ic)
 }
 
 /*-----------------------------------------------------------------*/
-/* genGetHbit - generates code get highest order bit               */
-/*-----------------------------------------------------------------*/
-static void
-genGetHbit (iCode * ic)
-{
-  operand *left, *result;
-  bool needpulla;
-
-  D (emitcode (";     genGetHbit", ""));
-
-  left = IC_LEFT (ic);
-  result = IC_RESULT (ic);
-  aopOp (left, ic, FALSE);
-  aopOp (result, ic, FALSE);
-
-  /* get the highest order byte into a */
-  needpulla = pushRegIfSurv (hc08_reg_a);
-  loadRegFromAop (hc08_reg_a, AOP (left), AOP_SIZE (left) - 1);
-  emitcode ("rola", "");
-  emitcode ("clra", "");
-  emitcode ("rola", "");
-  regalloc_dry_run_cost += 3;
-  hc08_dirtyReg (hc08_reg_a, FALSE);
-  storeRegToFullAop (hc08_reg_a, AOP (result), FALSE);
-  pullOrFreeReg (hc08_reg_a, needpulla);
-
-  freeAsmop (left, NULL, ic, TRUE);
-  freeAsmop (result, NULL, ic, TRUE);
-}
-
-
-/*-----------------------------------------------------------------*/
 /* genGetAbit - generates code get a single bit                    */
 /*-----------------------------------------------------------------*/
 static void
@@ -7964,7 +7932,7 @@ genLeftShift (iCode * ic)
   aopOp (left, ic, FALSE);
   aopResult = AOP (result);
 
-  if (sameRegs (AOP (right), AOP (result)) || IS_AOP_XA (AOP (result)) || isOperandVolatile (result, FALSE))
+  if (sameRegs (AOP (right), AOP (result)) || regsInCommon (right, result) || IS_AOP_XA (AOP (result)) || isOperandVolatile (result, FALSE))
     aopResult = forceStackedAop (AOP (result), sameRegs (AOP (left), AOP (result)));
 
   /* now move the left to the result if they are not the
@@ -8369,7 +8337,7 @@ genRightShift (iCode * ic)
   aopOp (left, ic, FALSE);
   aopResult = AOP (result);
 
-  if (sameRegs (AOP (right), AOP (result)) || IS_AOP_XA (AOP (result)) || isOperandVolatile (result, FALSE))
+  if (sameRegs (AOP (right), AOP (result)) || regsInCommon (right, result) || IS_AOP_XA (AOP (result)) || isOperandVolatile (result, FALSE))
     aopResult = forceStackedAop (AOP (result), sameRegs (AOP (left), AOP (result)));
 
   /* now move the left to the result if they are not the
@@ -8495,8 +8463,8 @@ genUnpackBits (operand * result, operand * left, operand * right, iCode * ifx)
   int rsize;                    /* result size */
   int rlen = 0;                 /* remaining bitfield length */
   sym_link *etype;              /* bitfield type information */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   bool needpulla = FALSE;
   bool needpullh = FALSE;
   bool needpullx = FALSE;
@@ -8646,8 +8614,8 @@ genUnpackBitsImmed (operand * left, operand *right, operand * result, iCode * ic
   int rsize;                    /* result size */
   int rlen = 0;                 /* remaining bitfield length */
   sym_link *etype;              /* bitfield type information */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   asmop *derefaop;
   bool delayed_a = FALSE;
   bool assigned_a = FALSE;
@@ -9119,8 +9087,8 @@ genPackBits (operand * result, operand * left, sym_link * etype, operand * right
 {
   int offset = 0;               /* source byte offset */
   int rlen = 0;                 /* remaining bitfield length */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   int litval;                   /* source literal value (if AOP_LIT) */
   unsigned char mask;           /* bitmask within current byte */
   int litOffset = 0;
@@ -9284,8 +9252,8 @@ genPackBitsImmed (operand * result, operand * left, sym_link * etype, operand * 
   int size;
   int offset = 0;               /* source byte offset */
   int rlen = 0;                 /* remaining bitfield length */
-  int blen;                     /* bitfield length */
-  int bstr;                     /* bitfield starting bit within byte */
+  unsigned blen;                /* bitfield length */
+  unsigned bstr;                /* bitfield starting bit within byte */
   int litval;                   /* source literal value (if AOP_LIT) */
   unsigned char mask;           /* bitmask within current byte */
   bool needpulla;
@@ -10055,7 +10023,7 @@ genCast (iCode * ic)
       goto release;
     }
 
-  signExtend = AOP_SIZE (result) > AOP_SIZE (right) && IS_SPEC (rtype) && !SPEC_USIGN (rtype);
+  signExtend = AOP_SIZE (result) > AOP_SIZE (right) && !IS_BOOL (rtype) && IS_SPEC (rtype) && !SPEC_USIGN (rtype);
 
   /* If the result is 2 bytes and in registers, we have to be careful */
   /* to make sure the registers are not overwritten prematurely. */
@@ -10585,7 +10553,7 @@ genhc08iCode (iCode *ic)
       break;
 
     case GETHBIT:
-      genGetHbit (ic);
+      wassertl (0, "Unimplemented iCode");
       break;
 
     case GETABIT:

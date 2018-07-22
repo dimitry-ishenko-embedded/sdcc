@@ -783,12 +783,9 @@ newiTempOperand (sym_link * type, char throwType)
   /* copy the type information */
   if (type)
     itmp->etype = getSpec (itmp->type = (throwType ? type : copyLinkChain (type)));
-  if (IS_LITERAL (itmp->etype))
-    {
-      SPEC_SCLS (itmp->etype) = S_REGISTER;
-      SPEC_OCLS (itmp->etype) = reg;
-    }
-    
+
+  SPEC_SCLS (itmp->etype) = S_FIXED;
+
   /* iTemps always live in the default address space */
   if (IS_DECL (itmp->type))
     DCL_PTR_ADDRSPACE (itmp->type) = 0;
@@ -1621,6 +1618,7 @@ operandFromSymbol (symbol * sym)
       !sym->reqv &&                     /* does not already have a reg equivalence */
       !IS_VOLATILE (sym->etype) &&      /* not declared as volatile */
       !sym->islbl &&                    /* not a label */
+      !(TARGET_HC08_LIKE && (getSize (sym->type) > 2)) && /* will fit in regs */
       ok                                /* farspace check */
     )
     {
@@ -1653,7 +1651,7 @@ operandFromSymbol (symbol * sym)
   /* create :-                     */
   /*    itemp = &[_symbol]         */
 
-  ic = newiCode (ADDRESS_OF, newOperand (), NULL);
+  ic = newiCode (ADDRESS_OF, newOperand (), operandFromLit (0));
   IC_LEFT (ic)->type = SYMBOL;
   IC_LEFT (ic)->svt.symOperand = sym;
   IC_LEFT (ic)->key = sym->key;
@@ -2108,13 +2106,11 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType)
 {
   iCode *ic;
   int p2 = 0;
-  sym_link *resType;
+  sym_link *resType = usualBinaryConversions (&left, &right, resultType, '/');
   sym_link *rtype = operandType (right);
   sym_link *retype = getSpec (rtype);
   sym_link *ltype = operandType (left);
   sym_link *letype = getSpec (ltype);
-
-  resType = usualBinaryConversions (&left, &right, resultType, '/');
 
   /* if the right is a literal & power of 2
      and left is signed then make it a conditional addition
@@ -2748,7 +2744,7 @@ geniCodeAddressOf (operand * op)
     }
 
   /* otherwise make this of the type coming in */
-  ic = newiCode (ADDRESS_OF, op, NULL);
+  ic = newiCode (ADDRESS_OF, op, operandFromLit (0));
   IC_RESULT (ic) = newiTempOperand (p, 1);
   IC_RESULT (ic)->isaddr = 0;
   ADDTOCHAIN (ic);

@@ -19,7 +19,7 @@
 //
 // Lifetime-optimal speculative partial redundancy elimination.
 
-//#define DEBUG_LOSPRE // Uncomment to get debug messages while doing lospre.
+// #define DEBUG_LOSPRE // Uncomment to get debug messages while doing lospre.
 
 #include "SDCClospre.hpp"
 
@@ -108,6 +108,9 @@ candidate_expression (const iCode *const ic, int lkey)
   if(IS_OP_VOLATILE (left) || IS_OP_VOLATILE (right))
     return (false);
 
+  if(POINTER_GET (ic) && IS_VOLATILE (operandType (IC_LEFT (ic))->next))
+    return (false);
+
   // Todo: Allow more operands!
   if (ic->op != CAST && left && !(IS_SYMOP (left) || IS_OP_LITERAL (left)) ||
     right && !(IS_SYMOP (right) || IS_OP_LITERAL (right)) ||
@@ -175,8 +178,8 @@ setup_cfg_for_expression (cfg_lospre_t *const cfg, const iCode *const eic)
   // safety, since reading from an unknown location could result in making the device do something or in a SIGSEGV. 
   // On the other hand, addition is something that typically does not require safety, since adding two undefined
   // operands gives just another undefined (the C standard allows trap representations, which, could result
-  // in addition requiring safety though; AFAIK no of the targets currently supported by sdcc have trap representations).
-  // Philipp, 2012-7-6.
+  // in addition requiring safety though; AFAIK none of the targets currently supported by sdcc have trap representations).
+  // Philipp, 2012-07-06.
   //
   // For now we just always require safety for "dangerous" operations.
   //
@@ -191,9 +194,9 @@ setup_cfg_for_expression (cfg_lospre_t *const cfg, const iCode *const eic)
   if (eic->op == GET_VALUE_AT_ADDRESS && !optimize.lospre_unsafe_read)
     safety_required = true;
 
-  // The division routines for z80-like ports and the hc08's hardware division just give an undefined result
+  // The division routines for z80-like ports and the hc08/s08's and stm8's hardware division just give an undefined result
   // for division by zero, but there are no harmful side effects. I don't know about the other ports.
-  if ((eic->op == '/' || eic->op == '%') && !TARGET_Z80_LIKE && !TARGET_HC08_LIKE)
+  if ((eic->op == '/' || eic->op == '%') && !TARGET_Z80_LIKE && !TARGET_HC08_LIKE && !TARGET_IS_STM8)
     safety_required = true;
 
   // TODO: Relax this! There are cases where allowing unsafe optimizations will improve speed.
@@ -209,7 +212,7 @@ setup_cfg_for_expression (cfg_lospre_t *const cfg, const iCode *const eic)
        if (IC_RESULT (ic) && !IS_OP_LITERAL (IC_RESULT (ic)) && !POINTER_SET(ic) &&
          (eleft && isOperandEqual (eleft, IC_RESULT (ic)) || eright && isOperandEqual (eright, IC_RESULT (ic))))
          (*cfg)[i].invalidates = true;
-       if (ic->op == FUNCTION || ic->op == ENDFUNCTION)
+       if (ic->op == FUNCTION || ic->op == ENDFUNCTION || ic->op == RECEIVE)
          (*cfg)[i].invalidates = true;
        if(uses_global && (ic->op == CALL || ic->op == PCALL))
          (*cfg)[i].invalidates = true;

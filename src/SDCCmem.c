@@ -370,7 +370,10 @@ allocIntoSeg (symbol *sym)
           nm = Safe_alloc (sizeof (namedspacemap));
           nm->name = Safe_alloc (strlen(SPEC_ADDRSPACE (sym->etype)->name) + 1);
           strcpy (nm->name, SPEC_ADDRSPACE (sym->etype)->name);
-          nm->map = allocMap (0, 0, 0, 1, 0, 0, options.data_loc, SPEC_ADDRSPACE (sym->etype)->name, 'E', POINTER);
+          nm->is_const = (SPEC_ADDRSPACE (sym->etype)->type && SPEC_CONST (SPEC_ADDRSPACE (sym->etype)->type));
+          nm->map = nm->is_const ?
+            allocMap (0, 1, 0, 0, 0, 1, options.code_loc, SPEC_ADDRSPACE (sym->etype)->name, 'C', CPOINTER) :
+            allocMap (0, 0, 0, 1, 0, 0, options.data_loc, SPEC_ADDRSPACE (sym->etype)->name, 'E', POINTER);
           nm->next = namedspacemaps;
           namedspacemaps = nm;
         }
@@ -967,7 +970,7 @@ allocVariables (symbol * symChain)
         csym = sym;
 
       /* check the declaration */
-      checkDecl (csym,0);
+      checkDecl (csym, 0);
 
       /* if this is a function or a pointer to a */
       /* function then do args processing        */
@@ -976,8 +979,8 @@ allocVariables (symbol * symChain)
           processFuncArgs (csym);
         }
 
-      /* if this is a extern variable then change the */
-      /* level to zero temporarily                    */
+      /* if this is an extern variable then change */
+      /* the level to zero temporarily             */
       if (IS_EXTERN (csym->etype) || IS_FUNC (csym->type))
         {
           saveLevel = csym->level;
@@ -1073,6 +1076,9 @@ redoStackOffsets (void)
     }
 
   /* do the same for the external stack */
+
+  if (!xstack)
+    return;
 
   for (sym = setFirstItem (xstack->syms); sym; sym = setNextItem (xstack->syms))
     {

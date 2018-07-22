@@ -181,7 +181,8 @@ bool RenderBox_isTableCell (RenderBox *this)
 void
 testTortureExecute (void)
 {
-#if !(defined (__GNUC__) && defined (__GNUC_MINOR__) && (__GNUC__ < 5))
+#ifndef __SDCC_pic16
+#if !(defined (__GNUC__) && defined (__GNUC_MINOR__) && (__GNUC__ < 5)) && !defined (__SDCC_stm8) // Disabled on stm8 due to linker bug #2198
   g_this.m_relPositioned = false;
   g_this.m_positioned = false;
   g_this.m_floating = false;
@@ -200,6 +201,7 @@ testTortureExecute (void)
     ASSERT (0);
 
   return;
+#endif
 #endif
 }
 

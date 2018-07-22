@@ -351,7 +351,6 @@ hasExtBitOp (int op, int size)
 {
   if (op == RRC
       || op == RLC
-      || op == GETHBIT
       || (op == SWAP && size <= 2)
       || op == GETABIT
       || op == GETBYTE
@@ -812,7 +811,7 @@ PORT hc08_port =
     "GSFINAL (CODE)",
     "HOME    (CODE)",
     "XISEG",              // initialized xdata
-    "XINIT",              // a code copy of xiseg
+    "XINIT   (CODE)",     // a code copy of xiseg
     "CONST   (CODE)",     // const_name - const data (code or not)
     "CABS    (ABS,CODE)", // cabs_name - const absolute data (code or not)
     "XABS    (ABS)",      // xabs_name - absolute xdata
@@ -868,6 +867,7 @@ PORT hc08_port =
   _hc08_setDefaultOptions,
   hc08_assignRegisters,
   _hc08_getRegName,
+  NULL,
   _hc08_keywords,
   _hc08_genAssemblerPreamble,
   _hc08_genAssemblerEnd,        /* no genAssemblerEnd */
@@ -955,7 +955,7 @@ PORT s08_port =
     "GSFINAL (CODE)",
     "HOME    (CODE)",
     "XISEG",              // initialized xdata
-    "XINIT",              // a code copy of xiseg
+    "XINIT   (CODE)",     // a code copy of xiseg
     "CONST   (CODE)",     // const_name - const data (code or not)
     "CABS    (ABS,CODE)", // cabs_name - const absolute data (code or not)
     "XABS    (ABS)",      // xabs_name - absolute xdata
@@ -1011,6 +1011,7 @@ PORT s08_port =
   _hc08_setDefaultOptions,
   hc08_assignRegisters,
   _hc08_getRegName,
+  NULL,
   _hc08_keywords,
   _hc08_genAssemblerPreamble,
   _hc08_genAssemblerEnd,        /* no genAssemblerEnd */

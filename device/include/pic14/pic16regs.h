@@ -258,6 +258,9 @@
 #elif defined(__SDCC_PIC16F747)
   #include <pic16f747.h>
 
+#elif defined(__SDCC_PIC16F753)
+  #include <pic16f753.h>
+
 #elif defined(__SDCC_PIC16F767)
   #include <pic16f767.h>
 
@@ -339,6 +342,9 @@
 #elif defined(__SDCC_PIC16HV616)
   #include <pic16hv616.h>
 
+#elif defined(__SDCC_PIC16HV753)
+  #include <pic16hv753.h>
+
 #elif defined(__SDCC_PIC12F1501)
   #include <pic12f1501.h>
 
@@ -398,6 +404,12 @@
 
 #elif defined(__SDCC_PIC16F1527)
   #include <pic16f1527.h>
+
+#elif defined(__SDCC_PIC16F1704)
+  #include <pic16f1704.h>
+
+#elif defined(__SDCC_PIC16F1708)
+  #include <pic16f1708.h>
 
 #elif defined(__SDCC_PIC16F1782)
   #include <pic16f1782.h>
@@ -467,6 +479,12 @@
 
 #elif defined(__SDCC_PIC16F1947)
   #include <pic16f1947.h>
+
+#elif defined(__SDCC_PIC16LF1704)
+  #include <pic16lf1704.h>
+
+#elif defined(__SDCC_PIC16LF1708)
+  #include <pic16lf1708.h>
 
 #elif defined(__SDCC_PIC16LF1902)
   #include <pic16lf1902.h>

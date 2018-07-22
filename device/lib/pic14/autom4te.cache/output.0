@@ -567,6 +567,10 @@ PACKAGE_URL=''
 ac_unique_file="libsdcc/idata.c"
 ac_subst_vars='LTLIBOBJS
 LIB@&t@OBJS
+ENABLE_EXTENDED_INSTRUCTIONS_FALSE
+ENABLE_EXTENDED_INSTRUCTIONS_TRUE
+ENABLE_ENHANCED_PICS_FALSE
+ENABLE_ENHANCED_PICS_TRUE
 am__fastdepCCAS_FALSE
 am__fastdepCCAS_TRUE
 CCASDEPMODE
@@ -592,8 +596,6 @@ CCAS
 CC
 EARCH
 ARCH
-HAVE_NEW_PICS_FALSE
-HAVE_NEW_PICS_TRUE
 am__untar
 am__tar
 AMTAR
@@ -658,7 +660,6 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
-enable_new_pics
 enable_dependency_tracking
 '
       ac_precious_vars='build_alias
@@ -1280,9 +1281,6 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
-  --enable-new-pics       Enable use of PIC devices added to gputils after the
-                          0.14.1 release. Requires custom-built gputils
-                          obtained from their SVN repository!
   --disable-dependency-tracking  speeds up one-time build
   --enable-dependency-tracking   do not reject slow dependency extractors
 
@@ -2225,32 +2223,6 @@ am__tar='$${TAR-tar} chof - "$$tardir"' am__untar='$${TAR-tar} xf -'
 ac_config_headers="$ac_config_headers config.h"
 
 
-
-NEWPICS=no;
-@%:@ Check whether --enable-new-pics was given.
-if test "${enable_new_pics+set}" = set; then :
-  enableval=$enable_new_pics;  case "x$enableval" in
-      xyes) NEWPICS=yes;
-            { $as_echo "$as_me:${as_lineno-$LINENO}: Enabling support for PICs from unreleased gputils -- make sure you have up-to-date gputils from SVN." >&5
-$as_echo "$as_me: Enabling support for PICs from unreleased gputils -- make sure you have up-to-date gputils from SVN." >&6;};;
-      xno) NEWPICS=no;;
-      *) as_fn_error $? "bad value \"${enableval}\" for --enable-new-pics" "$LINENO" 5;;
-      esac
-else
-   NEWPICS=no 
-
-fi
-
-
- if  test x$NEWPICS = xyes ; then
-  HAVE_NEW_PICS_TRUE=
-  HAVE_NEW_PICS_FALSE='#'
-else
-  HAVE_NEW_PICS_TRUE='#'
-  HAVE_NEW_PICS_FALSE=
-fi
-
-
 # SDCC setup
 case $srcdir in
     \\/*|?:\\/*) abs_srcdir="$srcdir";
@@ -2411,6 +2383,8 @@ Either install gputils or reconfigure with --disable-pic14-port and --disable-pi
         ;;
 esac;
 
+mCCAS="$CCAS"
+mLD="$LD"
 CFLAGS=""
 
 CCASFLAGS=""
@@ -2752,6 +2726,45 @@ fi
 
 
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether gputils support enhanced cores" >&5
+$as_echo_n "checking whether gputils support enhanced cores... " >&6; }
+# Check support for enhanced pic cores.
+ENABLE_ENHANCED_PICS="no"
+CHECK=".checksupport/check"
+mkdir -p .checksupport
+printf '  include "p%s.inc"\n  END\n' "${EARCH}" > "${CHECK}.asm"
+if "$mCCAS" -p${EARCH} -o "${CHECK}.o" -c "${CHECK}.asm" >/dev/null 2>&1 && "$mLD" "${CHECK}.o" >/dev/null 2>&1; then
+  ENABLE_ENHANCED_PICS="yes"
+fi;
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ENABLE_ENHANCED_PICS" >&5
+$as_echo "$ENABLE_ENHANCED_PICS" >&6; }
+ if  test x$ENABLE_ENHANCED_PICS = xyes ; then
+  ENABLE_ENHANCED_PICS_TRUE=
+  ENABLE_ENHANCED_PICS_FALSE='#'
+else
+  ENABLE_ENHANCED_PICS_TRUE='#'
+  ENABLE_ENHANCED_PICS_FALSE=
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking wheter gputils support the extended instruction set" >&5
+$as_echo_n "checking wheter gputils support the extended instruction set... " >&6; }
+ENABLE_EXTENDED_INSTRUCTIONS="no"
+printf '  include "p%s.inc"\n  CODE\n  ADDFSR FSR0, 4\n  MOVIW FSR0++\n  END\n' "${EARCH}" > "${CHECK}.asm"
+if "$mCCAS" -p${EARCH} -o "${CHECK}.o" -c "${CHECK}.asm" >/dev/null 2>&1 && "$mLD" "${CHECK}.o" >/dev/null 2>&1; then
+  ENABLE_EXTENDED_INSTRUCTIONS="yes"
+fi;
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ENABLE_EXTENDED_INSTRUCTIONS" >&5
+$as_echo "$ENABLE_EXTENDED_INSTRUCTIONS" >&6; }
+ if  test x$ENABLE_EXTENDED_INSTRUCTIONS = xyes ; then
+  ENABLE_EXTENDED_INSTRUCTIONS_TRUE=
+  ENABLE_EXTENDED_INSTRUCTIONS_FALSE='#'
+else
+  ENABLE_EXTENDED_INSTRUCTIONS_TRUE='#'
+  ENABLE_EXTENDED_INSTRUCTIONS_FALSE=
+fi
+
+
 # Checks for libraries.
 
 # Checks for header files.
@@ -2760,7 +2773,7 @@ fi
 
 # Checks for library functions.
 
-ac_config_files="$ac_config_files Makefile libsdcc/enhanced/Makefile libsdcc/regular/Makefile libm/Makefile"
+ac_config_files="$ac_config_files Makefile libsdcc/enhanced/Makefile libsdcc/enhanced-no-xinst/Makefile libsdcc/regular/Makefile libm/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -2872,10 +2885,6 @@ LTLIBOBJS=$ac_ltlibobjs
 
 
 
-if test -z "${HAVE_NEW_PICS_TRUE}" && test -z "${HAVE_NEW_PICS_FALSE}"; then
-  as_fn_error $? "conditional \"HAVE_NEW_PICS\" was never defined.
-Usually this means the macro was only invoked conditionally." "$LINENO" 5
-fi
 if test -z "${AMDEP_TRUE}" && test -z "${AMDEP_FALSE}"; then
   as_fn_error $? "conditional \"AMDEP\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
@@ -2886,6 +2895,14 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${am__fastdepCCAS_TRUE}" && test -z "${am__fastdepCCAS_FALSE}"; then
   as_fn_error $? "conditional \"am__fastdepCCAS\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${ENABLE_ENHANCED_PICS_TRUE}" && test -z "${ENABLE_ENHANCED_PICS_FALSE}"; then
+  as_fn_error $? "conditional \"ENABLE_ENHANCED_PICS\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${ENABLE_EXTENDED_INSTRUCTIONS_TRUE}" && test -z "${ENABLE_EXTENDED_INSTRUCTIONS_FALSE}"; then
+  as_fn_error $? "conditional \"ENABLE_EXTENDED_INSTRUCTIONS\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 
@@ -3496,6 +3513,7 @@ do
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "libsdcc/enhanced/Makefile") CONFIG_FILES="$CONFIG_FILES libsdcc/enhanced/Makefile" ;;
+    "libsdcc/enhanced-no-xinst/Makefile") CONFIG_FILES="$CONFIG_FILES libsdcc/enhanced-no-xinst/Makefile" ;;
     "libsdcc/regular/Makefile") CONFIG_FILES="$CONFIG_FILES libsdcc/regular/Makefile" ;;
     "libm/Makefile") CONFIG_FILES="$CONFIG_FILES libm/Makefile" ;;
 
