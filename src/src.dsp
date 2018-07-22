@@ -88,10 +88,6 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\asm.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\support\Util\BuildCmd.c
 # End Source File
 # Begin Source File
@@ -149,6 +145,10 @@ InputPath=.\SDCC.lex
 # End Source File
 # Begin Source File
 
+SOURCE=.\SDCCasm.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\SDCCast.c
 # End Source File
 # Begin Source File
@@ -181,7 +181,7 @@ SOURCE=.\SDCCdwarf2.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\support\Util\SDCCerr.c
+SOURCE=.\SDCCerr.c
 # End Source File
 # Begin Source File
 
@@ -261,10 +261,6 @@ SOURCE=.\sdccy.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\asm.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\common.h
 # End Source File
 # Begin Source File
@@ -290,6 +286,10 @@ SOURCE=.\port.h
 # Begin Source File
 
 SOURCE=..\sdcc_vc.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\SDCCasm.h
 # End Source File
 # Begin Source File
 
@@ -321,7 +321,7 @@ SOURCE=.\SDCCdwarf2.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\support\Util\SDCCerr.h
+SOURCE=.\SDCCerr.h
 # End Source File
 # Begin Source File
 

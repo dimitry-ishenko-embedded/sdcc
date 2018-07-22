@@ -527,12 +527,16 @@ createStackSpil (symbol * sym)
     {
       SPEC_SCLS (sloc->etype) = S_DATA;
     }
+  else if (SPEC_SCLS (sloc->etype) == S_SBIT)
+    {
+      SPEC_SCLS (sloc->etype) = S_BIT;
+    }
   SPEC_EXTR (sloc->etype) = 0;
   SPEC_STAT (sloc->etype) = 0;
   SPEC_VOLATILE(sloc->etype) = 0;
   SPEC_ABSA(sloc->etype) = 0;
 
-  /* we don't allow it to be allocated`
+  /* we don't allow it to be allocated
      onto the external stack since : so we
      temporarily turn it off ; we also
      turn off memory model to prevent
@@ -574,6 +578,7 @@ createStackSpil (symbol * sym)
 
 /*-----------------------------------------------------------------*/
 /* isSpiltOnStack - returns true if the spil location is on stack  */
+/*                  or otherwise needs a pointer register          */
 /*-----------------------------------------------------------------*/
 static bool
 isSpiltOnStack (symbol * sym)
@@ -591,6 +596,9 @@ isSpiltOnStack (symbol * sym)
 
   if (!sym->usl.spillLoc)
     return FALSE;
+
+  if (sym->usl.spillLoc->onStack || sym->usl.spillLoc->iaccess)
+    return TRUE;
 
   etype = getSpec (sym->usl.spillLoc->type);
   if (IN_STACK (etype))
@@ -660,7 +668,7 @@ selectSpil (iCode * ic, eBBlock * ebp, symbol * forSym)
       selectS = liveRangesWith (lrcs, bitType, ebp, ic);
       
       for (sym = setFirstItem (selectS); sym; sym = setNextItem (selectS))
-    {
+        {
           bitVectUnSetBit (lrcs, sym->key);
         }
     }
@@ -1502,6 +1510,10 @@ static void fillGaps()
 
         if (!sym->spillA || !sym->clashes || sym->remat) continue ;
 
+        /* if spilt in direct space the original rname is lost */
+        if (sym->usl.spillLoc && (IN_DIRSPACE (SPEC_OCLS (sym->usl.spillLoc->etype))))
+            continue;
+
         /* find the liveRanges this one clashes with, that are
            still assigned to registers & mark the registers as used*/
         for ( i = 0 ; i < sym->clashes->size ; i ++) {
@@ -2114,10 +2126,10 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
 
       /* Don't move an assignment out of a critical block */
       if (dic->op == CRITICAL)
-	{
-	  dic = NULL;
-	  break;
-	}
+        {
+          dic = NULL;
+          break;
+        }
 
       if (SKIP_IC2 (dic))
         continue;
@@ -2442,8 +2454,6 @@ packRegsForSupport (iCode * ic, eBBlock * ebp)
   return 0;
 }
 
-#define IS_OP_RUONLY(x) (x && IS_SYMOP(x) && OP_SYMBOL(x)->ruonly)
-
 
 /*-----------------------------------------------------------------*/
 /* packRegsForOneuse : - will reduce some registers for single Use */
@@ -2521,25 +2531,25 @@ packRegsForOneuse (iCode * ic, operand * op, eBBlock * ebp)
     }
   else
     {
-  /* otherwise check that the definition does
-     not contain any symbols in far space */
-  if (isOperandInFarSpace (IC_LEFT (dic)) ||
-      isOperandInFarSpace (IC_RIGHT (dic)) ||
-      IS_OP_RUONLY (IC_LEFT (ic)) ||
-      IS_OP_RUONLY (IC_RIGHT (ic)))
-    {
-      return NULL;
-    }
+      /* otherwise check that the definition does
+         not contain any symbols in far space */
+      if (isOperandInFarSpace (IC_LEFT (dic)) ||
+          isOperandInFarSpace (IC_RIGHT (dic)) ||
+          IS_OP_RUONLY (IC_LEFT (ic)) ||
+          IS_OP_RUONLY (IC_RIGHT (ic)))
+        {
+          return NULL;
+        }
 
-  /* if pointer set then make sure the pointer
-     is one byte */
-  if (POINTER_SET (dic) &&
-      !IS_DATA_PTR (aggrToPtr (operandType (IC_RESULT (dic)), FALSE)))
-    return NULL;
+      /* if pointer set then make sure the pointer
+         is one byte */
+      if (POINTER_SET (dic) &&
+          !IS_DATA_PTR (aggrToPtr (operandType (IC_RESULT (dic)), FALSE)))
+        return NULL;
 
-  if (POINTER_GET (dic) &&
-      !IS_DATA_PTR (aggrToPtr (operandType (IC_LEFT (dic)), FALSE)))
-    return NULL;
+      if (POINTER_GET (dic) &&
+          !IS_DATA_PTR (aggrToPtr (operandType (IC_LEFT (dic)), FALSE)))
+        return NULL;
     }
 
   /* Make sure no overlapping liverange is already assigned to DPTR */
@@ -2658,7 +2668,7 @@ bool isCommutativeOp(unsigned int op)
 /* operandUsesAcc - determines whether the code generated for this */
 /*                  operand will have to use the accumulator       */
 /*-----------------------------------------------------------------*/
-bool operandUsesAcc(operand *op)
+bool operandUsesAcc(operand *op, bool allowBitspace)
 {
   if (!op)
     return FALSE;
@@ -2688,7 +2698,7 @@ bool operandUsesAcc(operand *op)
     if (sym->iaccess && symspace->paged)
       return TRUE;  /* must fetch paged indirect sym via accumulator */
 
-    if (IN_BITSPACE(symspace))
+    if (!allowBitspace && IN_BITSPACE(symspace))
       return TRUE;  /* fetching bit vars uses the accumulator */
 
     if (IN_FARSPACE(symspace) || IN_CODESPACE(symspace))
@@ -2742,7 +2752,6 @@ packRegsForAccUse (iCode * ic)
       getSize (operandType (IC_RESULT (ic))) > 1)
     return;
 
-
   /* has only one definition */
   if (bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) > 1)
     return;
@@ -2770,7 +2779,7 @@ packRegsForAccUse (iCode * ic)
       getSize (aggrToPtr (operandType (IC_RESULT (uic)), FALSE)) > 1)
     return;
 
-  /* if the usage is not is an assignment
+  /* if the usage is not an assignment
      or an arithmetic / bitwise / shift operation then not */
   if (uic->op != '=' &&
       !IS_ARITHMETIC_OP (uic) &&
@@ -2812,10 +2821,10 @@ packRegsForAccUse (iCode * ic)
     goto accuse;
 
   /* if the other operand uses the accumulator then we cannot */
-  if ( (IC_LEFT(uic)->key == IC_RESULT(ic)->key &&
-        operandUsesAcc(IC_RIGHT(uic))) ||
+  if ( (IC_LEFT (uic)->key == IC_RESULT (ic)->key &&
+        operandUsesAcc (IC_RIGHT (uic), IS_BIT (operandType (IC_LEFT (uic))))) ||
        (IC_RIGHT(uic)->key == IC_RESULT(ic)->key &&
-        operandUsesAcc(IC_LEFT(uic))) )
+        operandUsesAcc (IC_LEFT (uic), IS_BIT (operandType (IC_RIGHT (uic))))) )
     return;
 
   /* make sure this is on the left side if not commutative */
@@ -3006,6 +3015,7 @@ packRegisters (eBBlock ** ebpp, int blockno)
           IS_SYMOP (IC_RIGHT (ic)) &&
           OP_SYMBOL (IC_RIGHT (ic))->remat &&
           !IS_CAST_ICODE(OP_SYMBOL (IC_RIGHT (ic))->rematiCode) &&
+          !isOperandGlobal(IC_RESULT(ic)) &&          /* due to bug 1618050 */
           bitVectnBitsOn (OP_SYMBOL (IC_RESULT (ic))->defs) <= 1)
         {
           OP_SYMBOL (IC_RESULT (ic))->remat =
@@ -3047,11 +3057,10 @@ packRegisters (eBBlock ** ebpp, int blockno)
         }
 
       /* mark the pointer usages */
-      if (POINTER_SET (ic))
+      if (POINTER_SET (ic) && IS_SYMOP (IC_RESULT (ic)))
         OP_SYMBOL (IC_RESULT (ic))->uptr = 1;
 
-      if (POINTER_GET (ic) &&
-          IS_SYMOP(IC_LEFT (ic)))
+      if (POINTER_GET (ic) && IS_SYMOP (IC_LEFT (ic)))
         OP_SYMBOL (IC_LEFT (ic))->uptr = 1;
 
       if (!SKIP_IC2 (ic))
@@ -3136,6 +3145,7 @@ packRegisters (eBBlock ** ebpp, int blockno)
       /* if pointer set & left has a size more than
          one and right is not in far space */
       if (POINTER_SET (ic) &&
+          IS_SYMOP (IC_RESULT (ic)) &&
           !isOperandInFarSpace (IC_RIGHT (ic)) &&
           !OP_SYMBOL (IC_RESULT (ic))->remat &&
           !IS_OP_RUONLY (IC_RIGHT (ic)) &&
@@ -3220,7 +3230,7 @@ packRegisters (eBBlock ** ebpp, int blockno)
       /* pack registers for accumulator use, when the
          result of an arithmetic or bit wise operation
          has only one use, that use is immediately following
-         the defintion and the using iCode has only one
+         the definition and the using iCode has only one
          operand or has two operands but one is literal &
          the result of that operation is not on stack then
          we can leave the result of this operation in acc:b
@@ -3259,7 +3269,7 @@ mcs51_assignRegisters (ebbIndex * ebbi)
     }
   else
     {
-  mcs51_nRegs = 8;
+      mcs51_nRegs = 8;
     }
   _G.allBitregs = findAllBitregs ();
 

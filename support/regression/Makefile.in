@@ -16,7 +16,7 @@
 
 # Dependancies:
 #   * The sdcc-extra package, available from svn.
-#       o svn co https://svn.sourceforge.net/svnroot/sdcc/trunk/sdcc-extra
+#       o svn co https://sdcc.svn.sourceforge.net/svnroot/sdcc/trunk/sdcc-extra
 #       o Provides the emulators
 #   * The gbdk-lib package from gbdk.
 #       o cvs -d cvs.gbdk.sourceforge.net:/cvsroot/gbdk co gbdk-lib
@@ -41,6 +41,7 @@
 .SILENT:
 
 CC = @CC@
+CFLAGS = @CFLAGS@
 CPPFLAGS = @CPPFLAGS@ -DNO_VARARGS
 
 # support VPATH:
@@ -69,10 +70,10 @@ GENERATE_CASES = $(srcdir)/generate-cases.py
 # Each directory under ports/ is used as a port name.  Each port is tested.
 # Each port must have a spec.mk which describes how to build the object
 # files and how to run the emulator.
-ALL_PORTS = $(filter-out .svn xa51 z80 gbz80 pic16 pic14,$(notdir $(wildcard $(PORTS_DIR)/*)))
+ALL_PORTS = $(filter-out .svn xa51 z80 gbz80 pic16 pic14 mcs51-common,$(notdir $(wildcard $(PORTS_DIR)/*)))
 
 # These  ports will be cleaned with 'make clean'
-CLEAN_PORTS = $(filter-out .svn,$(notdir $(wildcard $(PORTS_DIR)/*)))
+CLEAN_PORTS = $(filter-out .svn mcs51-common,$(notdir $(wildcard $(PORTS_DIR)/*)))
 
 MAKE_LIBRARY =
 
@@ -91,8 +92,10 @@ test-gbz80:
 	$(MAKE) test-port PORT=gbz80
 
 # Helper rule for testing the mcs51 port only
-test-mcs51:
-	$(MAKE) test-port PORT=mcs51
+test-mcs51: test-mcs51-small test-mcs51-medium test-mcs51-large test-mcs51-stack-auto test-mcs51-xstack-auto
+
+test-mcs51-small:
+	$(MAKE) test-port PORT=mcs51-small
 
 test-mcs51-medium:
 	$(MAKE) test-port PORT=mcs51-medium

@@ -11,6 +11,13 @@ void __printf(const char *szFormat, ...);
 #define LOG(_a)     /* hollow log */
 #endif
 
+#ifdef SDCC
+ #include <sdcc-lib.h>
+#else
+ #define _AUTOMEM
+ #define _STATMEM
+#endif
+
 #if defined(PORT_HOST) || defined(SDCC_z80) || defined(SDCC_gbz80)
 # define data
 # define idata
@@ -20,6 +27,7 @@ void __printf(const char *szFormat, ...);
 # define near
 # define far
 # define at(x)
+# define reentrant
 #endif
 
 #if defined(SDCC_hc08)
@@ -38,7 +46,8 @@ void __printn(int n);
 code const char *__getSuiteName(void);
 void __runSuite(void);
 
-#define ASSERT(_a)  (__numTests++, (_a) ? (void)0 : __fail("Assertion failed", #_a, __FILE__, __LINE__))
+#define ASSERT(_a)  (++__numTests, (_a) ? (void)0 : __fail("Assertion failed", #_a, __FILE__, __LINE__))
+#define ASSERT_FAILED(_a)  (++__numTests, (_a) ? 0 : (__fail("Assertion failed", #_a, __FILE__, __LINE__), 1))
 #define FAIL()      FAILM("Failure")
 #define FAILM(_a)   __fail(_a, #_a, __FILE__, __LINE__)
 

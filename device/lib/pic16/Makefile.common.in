@@ -13,7 +13,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.common.in 4785 2007-05-05 07:41:17Z borutr $
+### $Id: Makefile.common.in 4916 2007-09-17 18:57:08Z tecodev $
 ###
 
 #################################################
@@ -31,6 +31,7 @@ CFLAGS ?=
 CFLAGS += -mpic16 -p18f$(ARCH)
 CFLAGS += --std-c99
 CFLAGS += -I. -I$(top_srcdir)/../../include/pic16
+CFLAGS += -Wa,-q
 
 #################################################
 ### optimization flags

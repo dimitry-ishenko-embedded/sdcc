@@ -5,6 +5,8 @@
 #include <testfwk.h>
 #include <stdbool.h>
 
+#ifdef __bool_true_false_are_defined
+
 union USUINT {
     unsigned int value;
     struct {
@@ -72,12 +74,22 @@ bool VerifyCRC(void)
 
     for (i=0; i<(rx_index-1); i++)
        	crc = crc_table[rx_buffer[i] ^ crc] ;
-   	return (crc == rx_buffer[rx_index-1]) ;
+    return (crc == rx_buffer[rx_index-1]) ;
 }
+
+bool NotZero(unsigned int t)
+{
+    return (t != 0);
+}
+
+#endif //__bool_true_false_are_defined
 
 void
 testBug(void)
 {
-	rx_index = 1;
-	ASSERT (VerifyCRC());
+#ifdef __bool_true_false_are_defined
+    rx_index = 1;
+    ASSERT (VerifyCRC());
+    ASSERT (NotZero(300));
+#endif //__bool_true_false_are_defined
 }

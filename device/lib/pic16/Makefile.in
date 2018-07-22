@@ -13,7 +13,7 @@
 ### This file may be distributed under the terms of the the
 ### GNU General Public License (GPL). See COPYING for details.
 ###
-### $Id: Makefile.in 4306 2006-07-27 17:32:43Z borutr $
+### $Id: Makefile.in 4914 2007-09-16 18:24:27Z tecodev $
 ###
 
 top_builddir = @top_builddir@
@@ -49,8 +49,8 @@ all : install
 
 install : recurse
 
-clean : recurse
-	$(Q)-$(RMDIR) "$(top_pic16builddir)/$(builddir)"
+clean : 
+	$(Q)$(RMDIR) $(top_pic16builddir)/bin/ $(top_pic16builddir)/build/
 
 distclean: clean
 	$(Q)-$(RM) config.cache config.log config.status Makefile Makefile.common pics.build

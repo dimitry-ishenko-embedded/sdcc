@@ -1,3 +1,1320 @@
+2008-03-23 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic/gen.h: Q&D solution for the bug, found by Jim Paris
+	  and reverted it, since it was already fixed by Raphael ;-)
+	* doc/knownbugs.html: updated for RC2
+
+2008-03-22 Raphael Neider <rneider AT web.de>
+
+	* src/SDCCicode.c (getPtrType): avoid unnecessary extra assignments
+	  for PIC16 targets
+
+2008-03-22 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (adjustArithmeticResult): fixed bug 1839299
+	* support/regression/tests/bug1839277.c: added related testBug1839299
+
+2008-03-21 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/ds390/gen.c (opIsGptr, adjustArithmeticResult, genAddrOf, genAssign),
+	* src/mcs51/gen.c (opIsGptr, adjustArithmeticResult, genAddrOf, genAssign):
+	  fixed bug 1839277
+	* src/mcs51/gen.c: throughout only output hex constants
+	* src/SDCCicode.c (getPtrType, geniCodeCast): fixed code size regression
+	* support/regression/tests/bug1839277.c: new, added
+
+2008-03-21 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/ralloc.c (callFuncByName):
+	  Used // instead of /**/ to fix compilation warning about nested comments.
+
+2008-03-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCsymt.c (comparePtrType): fixed bug 1921073
+	* support/regression/tests/bug1921073.c: new, added
+
+2008-03-17 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/SDCCpeeph.c.c (callFuncByName):
+	  Commented function parameters.
+
+2008-03-17 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/ralloc.c (packRegsForAccUse2):
+	  disabled a broken accumulator packing optimization (fixed #1292721).
+	* support/regression/tests/bug-1292721: Regression test for #1292721.
+
+2008-03-16 Raphael Neider <rneider AT web.de>
+
+	* src/pic/gen.c (SetIrp,genNearPointerGet,genNearPointerSet):
+	  fixed code bloat regression using a variant of patch #1915618
+
+2008-03-16 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: added section debugging macros, added SDCC
+	  icon, changed startup menu for release distribution, code cleaning,
+	  create url files instead links in startup menu
+
+2008-03-16 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCcse.c (algebraicOpts): fixed bug 1579949
+	* support/regression/tests/bug1579949.c: new, added
+
+2008-03-14 Paul Stoffregen <paul AT pjrc.com>
+
+	* device/lib/printf_fast.c: fixed bug 1255403
+
+2008-03-14 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* doc/sdccman.lyx: enhanced paragraph about bankswitching for mcs51
+	* src/cdbFile.c (cdbWriteBasicSymbol): fixed bug 1909409 for locals
+
+2008-03-14 Borut Razem <borut.razem AT siol.net>
+
+	* as/doc/asmlnk.doc, as/doc/asxhtm.html: updated link-xx and aslink
+	  command line options
+	* as/link/hc08/lkmain.c: converted tabs to spaces so that the usage
+	  is correctly displayed
+	* as/link/z80/lkmain.c: usage line commented out
+
+2008-03-13 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: corrected to be able to convert to PDF,
+	  updated the list pf supported pic14 devices
+
+2008-03-12 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* doc/sdccman.lyx: added paragraph about bankswitching for mcs51
+
+2008-03-12 Borut Razem <borut.razem AT siol.net>
+
+	* as/doc/asmlnk.doc, as/doc/asxhtm.html: updated command line options,
+	  fixed documentation request #1718191
+	* as/hc80/asmain.c, as/mcs51/asmain.c: added option -c to usage
+	* doc/sdccman.lyx: added description of --no-std-crt0 gbz80
+	  command line option
+
+2008-03-10 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (isConformingBody): fixed bug 1505811, thanks Robert Larice
+	* support/regression/tests/bug1505811.c: new, added
+
+2008-03-09 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f2620.h,
+	* device/include/pic16/pic18f4620.h,
+	* device/lib/pic16/libdev/pic18f2620.c,
+	* device/lib/pic16/libdev/pic18f4525.c,
+	* device/lib/pic16/libdev/pic18f4620.c: merged 18f2525/2620/4525/4620
+	  family to consistently use pic18f4620.[ch], fixes #1832562
+
+2008-03-09 Borut Razem <borut.razem AT siol.net>
+
+	* .version, sdcc.spec, doc/sdccman.lyx, doc/INSTALL.txt:
+	  changed sdcc version to 2.8.0
+	* knownbugs.html: regenerated
+	* support/scripts/gen_known_bugs.pl: added number of open bugs
+
+2008-03-09 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (pic16_mov2w_volatile): NEW, read volatile operands,
+	  (genOr): read volatile operand even if the result is known,
+	  closes #1511838
+	  (genOr,genXor): removed unused legacy code,
+	  (genDummyRead): use pic16_mov2w_volatile()
+
+2008-03-08 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCglue.c: fixed bug #1864582: multiple definition of char
+	  cons w. --model-large
+	* support/regression/staticinit.c: added regression test for bug
+	  #1864582
+
+2008-03-08 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/ds390/gen.c (pushSide, genPcall),
+	* src/hc08/gen.c (pushSide, genPcall): synchronized with mcs51
+	* src/mcs51/gen.c: cosmetic changes
+	* support/regression/fwk/include/testfwk.h: added macro reentrant
+	* support/regression/tests/bug1908493.c: new, added
+
+2008-03-08 Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
+
+	* src/SDCCdebug.c:, as/link/lkaomf51.c: Fixed bug 1909409: Pdata in OMF file
+
+2008-03-08 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (pushSide, genPcall): fixed bug 1908493
+	* src/SDCCmain.c (preProcess): removed -DSDCC_PARMS_IN_BANK1 because it is
+	  already set in ds390/main.c and mcs51/main.c
+
+2008-03-07 Raphael Neider <rneider AT web.de>
+
+	* src/regression/init0.c: new test for initialized arrays of function
+	  pointers
+	* src/regression/Makefile: made a bit more flexible, added init0.c
+	* src/pic/glue.c (emitIvals): hacky fix for initializing from function
+	  pointers, closes #1427663
+
+2008-03-05 Borut Razem <borut.razem AT siol.net>
+
+	* dos/sdccman.lyx: docummented predefined macros SDCC_REVISION,
+	  SDCC_PARMS_IN_BANK1, SDCC_FLOAT_REENT and SDCC_INT_LONG_REENT
+
+2008-03-05 Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
+
+	* support/librarian/sdcclib.c:Added feature request 1908061:
+	  Synchronise sdcclib commands with ar.
+
+2008-03-04 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* src/SDCCmain.c: added predefined macros SDCC_REVISION (RFE #1907229),
+	  and (depending on corresponding compiler option) SDCC_PARMS_IN_BANK1,
+	  SDCC_FLOAT_REENT, SDCC_INT_LONG_REENT
+	* device/include/mcs51/compiler.h: removed umlauts, added double
+	  underscore
+
+2008-03-04 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCptropt.c (ptrPseudoSymConvert): fixed bug 1536762
+	* support/regression/tests/bug1536762.c: new, added
+	* src/SDCCutil.c,
+	* src/SDCCutil.h: added getBuildDate()
+	* src/SDCCmain.c (printVersionInfo),
+	* src/SDCCglue.c (initialComments): use getBuildDate() instead of
+	  __DATE__
+	* src/*/ralloc.c: removed IS_OP_RUONLY macro
+	* src/ds390/ralloc.c (packRegisters),
+	* src/mcs51/ralloc.c (packRegisters),
+	* src/z80/ralloc.c (packRegisters): applied fix for bug 1618050, thanks
+	  Robert Larice
+	* support/regression/tests/bug1618050.c: new, added
+	* src/SDCCsymt.h: fixed typo in DECLSPEC2TXT
+	* support/regression/fwk/include/testfwk.h,
+	* support/regression/tests/bug1838000.c: moved _AUTOMEM and _STATMEM to
+	  testfwk.h
+
+2008-03-04 Raphael Neider <rneider AT web.de>
+
+	* src/pic/gen.c: removed unused prototypes, prevent internal errors
+	  on accessing OP_SYM_TYPE(op)
+	* src/pic/gen.h: removed unused prototype of genMinusDec()
+	* src/pic/genarith.c (genMinus): cosmetic changes, rewritten to
+	  fix #1876953 (invalid subtraction code), removed unused code
+
+2008-03-03 Raphael Neider <rneider AT web.de>
+
+	* src/pic/gen.c,
+	* src/pic/gen.h,
+	* src/pic/genarith.c,
+	* src/pic/ralloc.c,
+	* src/pic/ralloc.h: removed AOP_R0, AOP_R1, AOP_DPTR, AOP_DPTR2,
+	  AOP_ACC, and *_IDX and adjusted code, removed unused legacy code
+
+2008-03-03 Raphael Neider <rneider AT web.de>
+
+	* src/pic/device.c (find_device): search user-specified paths first
+	  for pic14devices.txt, fixes #1900827
+
+2008-03-02 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: fixed bug in IsNT, LogicLib-isation of
+	  AddToPath and RemoveFromPath
+
+2008-03-01 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: reverted MULTIUSER page since it didn't
+	  work correctly, added debugging support if -DSDCC.DEBUG command line
+	  option is defined
+
+2008-02-28 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: cosmetic changes
+
+2008-02-28 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/ralloc.c (fillGaps): fixed bug 1839671
+	* doc/sdccman.lyx: fixed unmeant removal of spaces
+
+2008-02-27 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: corrected installation directory for
+	  current user installation mode
+	* doc/README.txt: added Philipp Klaus Krause to the developers list
+
+2008-02-27 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (genUnpackBits): don't generate ifxJump, instead
+	  return ifx condition
+	  (genNearPointerGet, genPagedPointerGet, genFarPointerGet,
+	  genCodePointerGet, genGenPointerGet): cleanup aop before generating
+	    ifxJump to fix bug 1838000
+	* src/SDCCsymt.c (aggregateToPointer): fix problem for xstack
+	* support/regression/tests/bug1838000.c: new, added
+	* device/include/mcs51/cc1110.h: new, added, thanks to Pravin Angolkar
+
+2008-02-26 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCast.c, doc/sdccman.lyx: fixed RFE #1901171: inerger promotion
+	  of casted varargs
+	* support/scripts/sdcc.nsi: added MULTIUSER page,
+	  NSIS upgraded to version 2.35
+
+2008-02-25 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/ralloc.c (isSpiltOnStack): fixed bug 1565152
+	* support/regression/tests/bug1565152.c: new, added
+
+2008-02-25 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (genPagedPointerSet): fixed bug 1670148
+	* support/regression/ports/mcs51-xstack-auto/spec.mk: added expf.c
+	* support/regression/tests/bug1670148.c: new, added
+
+2008-02-25 Jesus Calvino-Fraga <jesusc AT ece.ubc.ca>
+
+	* device/include/mcs51/at89c51ed2.h: fixed bug 1901469.
+
+2008-02-24 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCast.c, src/SDCCast.h: fixed bug #1874922: explicit typecast
+	  is ineffective for unsigned char parameter
+
+2008-02-24 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (expandInlineFuncs): fixed bug 1875869
+	* src/SDCCglue.c (printIvalBitFields): fixed bug 1806631
+	* support/regression/tests/bitopcse.c: removed hc08 exception, see testfwk.h
+	* support/Util/MySystem.c (my_system): output errorcode when verbose
+
+2008-02-22 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c (genMult): Rewrote 8-bit multiplication by constant,
+	  implements #1898231
+
+2008-02-22 Philipp Klaus Krause <pkk AT spth.de>
+
+	* device/lib/z80/mul.s: Rewrote __muluchar_rrx_s, to improve 8-bit mult.,
+	  implements #1896290
+
+2008-02-22 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (createIvalStruct): fixed bug 1466761
+
+2008-02-21 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/Makefile.in,
+	  support/regression/ports/ds390/spec.mk,
+	  support/regression/ports/hc08/spec.mk,
+	  support/regression/ports/mcs51-common/spec.mk,
+	  support/regression/ports/pic14/spec.mk,
+	  support/regression/ports/pic16/spec.mk,
+	  support/regression/ports/ucz80/spec.mk,
+	  support/regression/ports/xa51/spec.mk:
+	  added CFLAGS when compiling timeout
+
+2008-02-20 Philipp Klaus Krause <pkk AT spth.de>
+
+	* support/regression/tests/bugs-1596270-1736867.c: Regression test for
+	  #1596270, #1736867
+
+2008-02-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCClrange.c (findPrevUse): fixed bug 1888147
+	* support/regression/tests/bug1888147.c: new, added
+
+2008-02-20 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c: fixed bugs #1596270, #1736867
+
+2008-02-20 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/gen.c: fixed bug in register pair loading when swapping register
+	  contents, mostly fixes #1596270
+
+2008-02-20 Philipp Klaus Krause <pkk AT spth.de>
+
+	* src/z80/peeph.def,
+	* src/z80/peeph-z80.def: moved peephole that breaks gbz80 to z80-specific
+	  peepholes, fixes #1806565
+
+2008-02-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCpeeph.c (operandBaseName): added check for @Ri
+	* src/mcs51/peeph.def (rule 177.c): added operandsNotRelated(%1 %3)
+	  fixes bug 1739475, thanks Robert Larice
+	  (rule 271): new, added
+
+2008-02-18 Borut Razem <borut.razem AT siol.net>
+
+	* sim/ucsim/s51.src/Makefile.in: fixed error made in previous commit
+
+2008-02-17 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCmain.c (linkEdit): emit -z when using --debug for z80
+
+2008-02-17 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/genarith.c,
+	* src/pic16/gen.c,
+	* src/pic16/gen.h,
+	* src/pic16/genutils.c: removed unused legacy code,
+	  removed unused fields from struct asmop and struct _G
+
+2008-02-17 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (AccRsh): cosmetic changes,
+	  (shiftR1Left2ResultSigned,shiftR1Left2Result,shiftL1Left2Result,
+	  genRightShiftLiteral): fixed to work with SFRs as result by
+	  assigning only once to result,
+	  removed a lot of unused/excluded code fragments
+
+2008-02-17 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic16f88.h,
+	* device/include/pic/pic16f886.h,
+	* device/include/pic/pic16f887.h: added TRISA6 and TRISA7
+
+2008-02-17 Borut Razem <borut.razem AT siol.net>
+
+	* src/z80/peeph.def: applied patch
+	  #1893626: Optimize tail calls on Z80, thanks to Philipp Krause
+	* src/z80/gen.c, src/z80/peeph.def: applied patch
+	  #1893510: Improve logical left shift on Z80, thanks to Philipp Krause
+	* sim/ucsim/avr.src/Makefile.in, sim/ucsim/hc08.src/Makefile.in,
+	  sim/ucsim/s51.src/Makefile.in, sim/ucsim/sim.src/Makefile.in,
+	  sim/ucsim/xa.src/Makefile.in, sim/ucsim/z80.src/Makefile.in,
+	  sim/ucsim/main_in.mk: renamed libutil.a to libucsimutil.a in order to
+	  enable compilation on Mac OS X 10.5 (Leopard) and XCode v3.0
+
+2008-02-16 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/link/mcs51/aslink.dsp: removed SDK define
+	* as/link/z80/clean.mk: brought in sync with other ports
+	* as/link/z80/lklibr.c (SdccLib, fndsym): handle the dflag here too
+	* as/hc08/Makefile.bcc,
+	* as/mcs51/Makefile.bcc,
+	* as/z80/Makefile.bcc: noice.c was moved to as/asxxsrc/
+	* src/z80/main.c (_setValues): use the now capitalized -Z,
+	  (z80_port, gbz80_port): generate debug information when asked
+
+2008-02-16 Borut Razem <borut.razem AT siol.net>
+
+	* as/z80/asmain.c, as/z80/asm.h, as/z80/asdata.c,
+	  as/link/z80/lkmain.c, as/z80/as_gbz80.dsp, as/z80/as_z80.dsp,
+	  as/z80/Makefile.in. as/z80/Makefile.bcc:
+	  applied patch #1893393: patch for as-z80 and link-z80 to generate
+	  cdb, thanks to Armin Diehl
+	* as/*/asnoice.c, as/hc08/as_hc08.dsp, as/hc08/Makefile.in,
+	  as/mcs51/asx8051.dsp, as/mcs51/Makefile.in:
+	  asnoice.c moved to as/asxxsrc/asnoice.c
+	* src/z80/peeph-gbz80.def: applied patch
+	  #1880235: Z80 return peephole, thanks to Philipp Krause
+
+2008-02-14 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* .version,
+	* doc/sdccman.lyx: bumped version to 2.7.5
+	* src/SDCCsymt.c (compareType, comparePtrType): fixed bug 1281583
+
+2008-02-13 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/pic16/stdlib.h,
+	* device/lib/pic16/libc/stdlib/ltoa.c,
+	* device/lib/pic16/libc/stdio/vfprintf.c: ascii strings are char*
+
+2008-02-13 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCmain.c, src/SDCCglue.c: fixed --c1mode
+	* src/pic16/glue.c, src/SDCCast.c, src/SDCCast.h, src/SDCCBBlock.c,
+	  src/SDCCcse.c, src/SDCCglue.c, src/SDCCicode.c, src/SDCCloop.c,
+	  src/SDCCopt.c,  src/SDCCval.c:
+	  fixed bug #1890273: SDCC Warning 154 shows wrong filename
+
+2008-02-12 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCsymt.c (compareType): fixed bug 1309013
+
+2008-02-09 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCval.c, src/SDCCval.h:
+	  code cleaning, added function constChrVal()
+	* src/SDCCglue.c, src/pic/glue.c, src/pic16/glue.c, src/SDCCast.c, src/SDCC.y:
+	  call constChrVal() instead constVal()
+
+2008-02-01 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (resolveSymbols): added reentrancy check for parameters
+	  of function pointer
+	* src/SDCCerr.h,
+	* src/SDCCerr.c: changed warning W_NONRENT_ARGS to error E_NONRENT_ARGS
+	* support/regression/tests/absolute.c: added TestStruct TestVar (see also
+	  bug 1859853)
+
+2008-02-01 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic16f886.h,
+	* device/include/pic/pic16f887.h: added RA6 and RA7
+
+2008-01-24 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic/pic16f88.h: added RA6 and RA7
+	* device/lib/pic/libdev/disabled_pic16f886.c,
+	* device/lib/pic/libdev/disabled_pic16f887.c: renamed and enabled
+
+	* src/pic16/devices.inc,
+	* device/include/pic16/pic18f2423.h,
+	* device/include/pic16/pic18f2523.h,
+	* device/include/pic16/pic18fregs.h,
+	* device/lib/pic16/pics.all
+	* device/lib/pic16/libdev/pic18f2423.c,
+	* device/lib/pic16/libdev/pic18f2523.c: added 18f2423 and 18f2523
+	* device/lib/pic16/libio/i2c.ignore,
+	* device/lib/pic16/libio/usart.ignore,
+	* device/lib/pic16/libio/adc.ignore: ignore new devices
+
+2008-01-23 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (createRMW): fixed bug 1582651
+
+2008-01-20 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCcse.c: partially fixed enhancement request
+	  #1793872 - multiply by -1 not collapsed
+	* support/regression/tests/arithcsi.c: added regression test
+
+2008-01-19 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/mcs51/asx8051.dsp: removed define SDK
+	* as/mcs51/i51mch.c (machine): fixed bug 1865114
+	* device/include/asm/ds390/features.h: fixed bug with ds390 & stack-auto
+	* as/link/lklex.c,
+	* as/link/mcs51/lkmain.c: used LKDIRSEP, LKDIRSEPSTR and LKOBJEXT,
+	  cosmetic changes, brought more in sync, changed old K&R to ANSI
+
+2008-01-13 Borut Razem <borut.razem AT siol.net>
+
+	* support/scripts/sdcc.nsi: added Uninstall/reinstall page, ...
+	* src/SDCCicode.c: fixed bug #1870216 - Error 122: dividing by zero
+
+2007-12-30 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/gen.c: fixed implementation of bitwise operations for
+	  pic16 target
+	* support/regression/tests/bitwise.c: added test cases
+
+2007-12-29 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCasm.[ch]: renamed from asm[ch], use dbuf_getline(), ...
+	* src/src.dsp, src/Makefile.bcc, src/Makefile.in, src/common.h,
+	  src/SDCCglue.c, src/xa51/main.c: asm.[ch] renamed to SDCCasm.[ch]
+	* support/Util/dbuf_string.[ch]: added function dbuf_getline()
+	* src/ds390/gen.c, src/hc08/gen.c, src/mcs51/gen.c, src/pic16/gen.c,
+	  src/pic/gen.c, src/z80/gen.c, src/xa51/gen.c, src/pic16/ralloc.c,
+	  src/pic16/pcode.[ch]: added const qualifier
+	* as/hc08/Makefile.bcc, as/hc08/Makefile.in, as/hc08/as_hc08.dsp,
+	  as/mcs51/Makefile.bcc, as/mcs51/Makefile.in, as/mcs51/asx8051.dsp,
+	  as/z80/Makefile.bcc, as/z80/Makefile.in, as/z80/as_gbz80.dsp,
+	  as/z80/as_z80.dsp: added dbuf.[ch] and dbuf_string[ch] to project
+	* as/asxxsrc/aslex.c: use dbuf_getline()
+	* as/hc08/asdata.c, as/hc08/asexpr.c, as/hc08/asm.h, as/hc08/m08adr.c,
+	  as/mcs51/asdata.c, as/mcs51/asexpr.c, as/mcs51/asm.h,
+	  as/mcs51/i51adr.c, as/z80/asdata.c, as/z80/asexpr.c, as/z80/aslist.c,
+	  as/z80/asm.h, as/z80/z80adr.c:
+	  changed type of ib and ip to const char *
+
+2007-12-28 Borut Razem <borut.razem AT siol.net>
+
+	* as/asxxsrc/aslex.c: moved from as/mcs51/aslex.c;
+	  introduced (readlin) - long lines are turuncated
+	* as/hc08/as_hc08.dsp, as/mcs51/asx8051.dsp, as/z80/as_gbz80.dsp,
+	  as/z80/as_z80.dsp, as/hc08/Makefile.in, as/mcs51/Makefile.in,
+	  as/z80/Makefile.in: moved aslex.c to asxxsrc
+	* as/hc08/aslex.c, as/z80/aslex.c: deleted
+	* as/hc08/asmain.c, as/mcs51/asmain.c:
+	  added missing initialization of a_addr field
+	* support/regression/tests/long_asm_line.c: added regtest for long
+	  assembler line
+
+2007-12-22 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCC.lex: fixed bug #1852894: # character hangs the compiler
+
+2007-12-20 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCsymt.c (computeType): fixed bug, thanks Fan Weiguang
+
+2007-12-16 Borut Razem <borut.razem AT siol.net>
+
+	* device/include/pic16/stdbool.h: removed, since already exists in
+	 device/include/; this also fixes bitopcse.c regression test for pic16
+	 target
+	* support/regression/fwk/inclusw/testfwk.h: added macro ASSERT_FAILED
+	* src/pic16/glue.c: fixed bug #1851855: generic static pointer
+	  dereference doesn't work; covered by regression test bug1399290
+
+2007-12-05 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: fixed bug #1844509 - Correction to Manual 4.6.9
+	  Adding new PIC16
+
+2007-12-01 Borut Razem <borut.razem AT siol.net>
+
+	* sim/ucsim/cmd.src/cmdmem.cc, sim/ucsim/cmd.src/mem.cc:
+	  corrected handling of the highest_valid_address
+
+2007-11-17 Raphael Neider <rneider AT web.de>
+
+	* src/pic/main.c (_asmCmd): include debug arguments (-g as $3)
+	* src/pic/glue.c (picglue): emit .file if --debug is given
+
+2007-11-17 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/genarith.c (pic16_genPlus, pic16_genMinus): take special
+	care when left or right operand resides in result, fixes #1830220
+
+2007-11-17 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCglue.c, src/pic16/glue.c: reverted fix for bug
+	  #983491 - "Merge duplicate strings function is ineffective"
+	* support/regression/tests/bug-983491.c: regtest disabled
+	* as/asxxsrc: created
+	  as/asxxsrc/assym.c, as/asxxsrc/strcmpi.c: moved
+	  as/hc08/assym.c, as/mcs51/assym.c, as/strcmpi.c,
+	  as/z80/assym.c, as/hc08/asstore.c, as/mcs51/asstore.c: deleted
+	  as/hc08/Makefile.bcc, as/hc08/Makefile.in, as/hc08/as_hc08.dsp,
+	  as/hc08/asm.h, as/link/hc08/Makefile.bcc, as/link/hc08/Makefile.in,
+	  as/link/hc08/link_hc08.dsp, as/link/mcs51/Makefile.bcc,
+	  as/link/mcs51/Makefile.in, as/link/mcs51/aslink.dsp,
+	  as/link/z80/Makefile.in, as/link/z80/linkgbz80.dsp,
+	  as/link/z80/linkz80.dsp, as/mcs51/Makefile.bcc, as/mcs51/Makefile.in,
+	  as/mcs51/asm.h, as/mcs51/asx8051.dsp, as/z80/Makefile.bcc,
+	  as/z80/Makefile.in, as/z80/as_gbz80.dsp, as/z80/as_z80.dsp,
+	  as/z80/Makefile.as_hc08, as/mcs51/Makefile.asx8051: modified
+	  created as/asxxsrc directory, assym.c and strcpi.c moved into it
+
+2007-11-15 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/stdarg.h: added and removed some casts
+	* src/SDCCsymt.c (compareType): Fully check types between generic and
+	  non-generic pointers, also accept ptr-ptr to void-ptr assignments
+
+2007-11-13 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/tests/bug-1817005.c:
+	  added regtest for bug #1817005 - as-z80 chokes on long labels
+
+2007-11-12 Borut Razem <borut.razem AT siol.net>
+
+	* as\z80\asmain.c, as\z80\asm.h, as\z80\assym.c, as\z80\asdata.c,
+	  as\z80\asout.c, as\z80\aslist.c:
+	  fixed bug #1817005 - as-z80 chokes on long labels
+
+2007-11-11 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/hc08/asmain.c,
+	* as/z80/asmain.c: cosmetic changes
+	* as/hc08/alloc.h,
+	* as/mcs51/alloc.h,
+	* as/z80/alloc.h: removed
+	* as/hc08/assym.c,
+	* as/mcs51/assym.c: replaced alloc.h with stdlib.h
+	* as/link/aslink.h: added LKDIRSEP and, LKDIRSEPSTR
+	* as/link/hc08/Makefile.in,
+	* as/link/mcs51/Makefile.in,
+	* as/link/z80/Makefile.in: added -DUNIX to CFLAGS
+	* as/link/lklex.c,
+	* as/link/mcs51/lkarea.c,
+	* as/link/mcs51/lkmain.c: cosmetic changes
+	* as/link/hc08/lklibr.c,
+	* as/link/z80/lklibr.c,
+	* as/link/mcs51/lklibr.c: used LKDIRSEP, LKDIRSEPSTR and LKOBJEXT,
+	  used cygwin_conv_to_full_posix_path,
+	  added warnings, cosmetic changes, brought more in sync
+	  changed old K&R into ANSI function declarations
+	* as/link/z80/lklibr.c (loadAdb): added
+	* as/link/z80/lkmain.c: removed -- option from usage text
+
+2007-11-03 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (outBitC): optimized for no result
+
+2007-10-31 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCsymt.c: fixed (hopeful properly) bug
+	  #1805702 - order of extern matters
+	* support/regression/tests/bug-1805702.c: enabled regtest for bug
+	  #1805702
+
+2007-10-29 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCsymt.c: reverted bad fixed of bug #1805702
+	  - order of extern matters
+	* support/regression/tests/bug-1805702.c: disabled regtest for bug
+	  #1805702
+
+2007-10-29 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/ds390/peeph.def: replaced 24bitModeAndPortDS390 by
+	  24bitMode, portIsDS390
+	* src/mcs51/gen.c (genOr): optimized for RFE 1750727
+	* src/SDCCpeeph.c (flat24bitModeAndPortDS390): removed
+	  (notVolatileVariable): also check sloc names,
+	  (callFuncByName): moved ftab[] out of function and sorted it by use
+
+2007-10-28 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/stdarg.h: fixed bug in va_start macro for --xstack
+	* src/hc08/gen.c (aopForRemat): aop->aopu.aop_immd.from_cast_remat not set,
+	  aop->aopu.aop_immd.aop_immd2 not filled with (generic) pointer type
+	* src/SDCCicode.c (geniCodeCast): fixed bug 880197
+	* support/regression/tests/bug-880197.c: new, added
+
+2007-10-28 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/Makefile.in,
+	  support/regression/ports/mcs51-large/spec.mk,
+	  support/regression/ports/mcs51-xstack-auto/spec.mk,
+	  support/regression/ports/mcs51-stack-auto/spec.mk,
+	  support/regression/ports/mcs51-medium/spec.mk,
+	  support/regression/ports/mcs51-common/spec.mk,
+	  support/regression/ports/mcs51-common/*,
+	  support/regression/ports/mcs51-small/*:
+	  mcs51 renamed to mcs51-common, created mcs51-small
+	* src/SDCCsymt.c: fixed bug #1805702 - order of extern matters
+	* support/regression/tests/bug-1805702.c: added regtest for bug
+	  #1805702
+
+2007-10-26 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/peeph.def: moved rules 257.x to 253.x and re-enabled 253.b,
+	  added new rules 265 - 270
+	* support/regression/tests/bug1721024.c:new, added
+	* support/regression/Makefile.in: renamed test-mcs51 to test-mcs51-small,
+	  introduced new test-mcs51 to run all mcs51 tests
+
+2007-10-25 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* support/regression/tests/bug1816470.c: new, added
+
+2007-10-21 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (resultTypePropagate): do propagate for LEFT_OP, do not
+	  propagate for *,+,- with float, fixed bug 1816470
+	  (decorateType): cast to resultTypeProp instead of resultType
+
+2007-10-19 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/glue.c: fixed bug #983491 - "Merge duplicate strings
+	  function is ineffective" for pic16 tareget
+	* support/scripts/listerr.c: corrected include path
+	* device/lib/_itoa.c: fixed bug #1806402 - _itoa and _uitoa leak to
+	  adjacent memory
+
+2007-10-18 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* support/regression/tests/using.c: new, added
+	* support/regression/tests/vaargs.c: fixed and enabled test
+
+2007-10-18 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCglue.c: fixed bug #983491 - Merge duplicate strings function
+	  is ineffective
+	* support/regression/tests/bug-983491.c: added regtest for bug #983491
+
+2007-10-18 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* doc/sdccman.lyx: documented option --Werror
+	* src/SDCCsymt.c (checkFunction): fixed bug 1815418 by setting
+	  RegBankUsed[] earlier
+
+2007-10-14 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/mcs51/p89lpc938.h: new, added, thanks Kyle Guinn
+	* src/pic/glue.c,
+	* src/SDCCval.c,
+	* src/SDCCast.c,
+	* src/SDCCast.h: replaced AST_LIT_VALUE with AST_FLOAT_VALUE and
+	  AST_ULONG_VALUE
+	* src/SDCCast.c (decorateType): improved optimization of tri-op
+	* src/SDCCerr.c (vwerror, setWError),
+	* src/SDCCerr.h,
+	* src/SDCCmain.c (parseCmdLine): added option --Werror to treat all
+	  warnings as errors, thanks Stas Sergeev for PATCH 1813211
+
+2007-10-13 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (leftRightUseAcc): use macro IS_OP_ACCUSE
+	* src/SDCCast.c (decorateType): optimize bit=cond?1:0, RFE 1738430
+	* support/regression/tests/bug-223113.c,
+	* support/regression/tests/bug-426632.c,
+	* support/regression/tests/bug-468811.c,
+	* support/regression/tests/bug-477835.c,
+	* support/regression/tests/bug-478094.c,
+	* support/regression/tests/bug-499644.c,
+	* support/regression/tests/bug-524209.c,
+	* support/regression/tests/bug-524211.c,
+	* support/regression/tests/packcast.c,
+	* support/regression/tests/structidx.c: added empty tests
+	* support/regression/tests/bug-607243.c: enabled test
+
+2007-10-06 Borut Razem <borut.razem AT siol.net>
+
+	* .version, doc/sdccman.lyx: bumped version to 2.7.4 to indicate the full
+	   support of universal binaries on Mac OS X
+
+2007-10-02 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCval.h: unified double2ul macro for all platforms
+	* src/SDCCval.c: fixed bug #1777758 - applied Maarten's patch
+	* support/regression/tests/bitwise.c: added regtest for bug #1777758
+
+2007-09-30 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCval.h: fixed bug #1739860 - sdcc does not work correctly on some
+	  platforms
+	* sdcc_vc_in.h: enabled warnings
+	* src/hc08/gen.c: fixed MSVC warning C4146: unary minus operator applied to
+	  unsigned type, result still unsigned
+	* src/mcs51/peep.c: fixed gcc warning: suggest parentheses around && within ||
+
+2007-09-28 Raphael Neider <rneider AT web.de>
+
+	* src/pic/device.c (find_device): prevent buffer underflow error
+	* src/pic/pcoderegs.c (OptimizeRegUsage): avoid dereferencing
+	  the just destroyed list entry
+
+2007-09-18 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* doc/sdccman.lyx: there's a dedicated wiki page for cmake and sdcc, thanks
+	  Alexander Neundorf
+
+2007-09-18 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCval.c: fixed MSVC warning C4146: unary minus operator
+	 applied to unsigned type, result still unsigned
+
+2007-09-17 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCC.y, src/SDCCast.c, src/SDCCcse.c, src/SDCCglue.c,
+	  src/SDCCicode.c, src/SDCCopt.c, src/SDCCsymt.c, src/SDCCval.c,
+	  src/SDCCval.h, src/hc08/gen.c, src/avr/gen.c, src/ds390/gen.c,
+	  src/mcs51/gen.c, src/pic/gen.c, src/pic/genarith.c, src/pic/glue.c,
+	  src/pic/ralloc.c, src/pic16/gen.c, src/pic16/genarith.c,
+	  src/pic16/genutils.c, src/pic16/glue.c, src/pic16/main.c,
+	  src/z80/gen.c, src/z80/ralloc.c:
+	  fixed bug #1739860 - sdcc does not work correctly on some platforms
+	  (not finished)
+	  introduced and used ulFromVal(), double2ul(), used strtod() instead sscanf()
+
+2007-09-17 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/device.c: reverted to previous version
+	* device/lib/pic16/Makefile.common.in: quieten gpasm via -Wa,-q
+
+2007-09-16 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/device.c (pic16_dump_usection): do not reserve 0 bytes,
+	  as this raises a ton of gpasm warnings, just emit a second label
+	* src/pic16/devices.inc,
+	* device/lib/pic16/pics.all,
+	* device/lib/pic16/libdev/pic18f2585.c,
+	* device/lib/pic16/libdev/pic18f2680.c,
+	* device/lib/pic16/libdev/pic18f2682.c,
+	* device/lib/pic16/libdev/pic18f2685.c,
+	* device/lib/pic16/libdev/pic18f4585.c,
+	* device/lib/pic16/libdev/pic18f4680.c,
+	* device/lib/pic16/libdev/pic18f4682.c,
+	* device/lib/pic16/libdev/pic18f4685.c,
+	* device/include/pic16/pic18f2585.h,
+	* device/include/pic16/pic18f2680.h,
+	* device/include/pic16/pic18f2682.h,
+	* device/include/pic16/pic18f2685.h,
+	* device/include/pic16/pic18f4585.h,
+	* device/include/pic16/pic18f4680.h,
+	* device/include/pic16/pic18f4682.h,
+	* device/include/pic16/pic18f4685.h,
+	* device/include/pic16/pic18fregs.h: added 18f2585, 18f2680,
+	  18f2682, 18f2685, 18f4585, 18f4680, 18f4682, 18f4685,
+	  patch contributed by Anton Strobl, applied with changes
+
+2007-09-16 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f2431.h,
+	* device/include/pic16/pic18f25j10.h,
+	* device/include/pic16/pic18f4431.h,
+	* device/include/pic16/pic18f45j10.h: adopted common include style
+	* device/include/pic16/pic18f1320.h,
+	* device/include/pic16/pic18f2320.h,
+	* device/include/pic16/pic18f2525.h,
+	* device/include/pic16/pic18f4320.h,
+	* device/include/pic16/pic18f4525.h: NEW, just include proper .h file
+	* device/include/pic16/pic18fregs.h: prepared for automatic include
+	  file selection by having DEVICE.h for every DEVICE
+	* device/lib/pic16/libdev/pic18f2320.c,
+	* device/lib/pic16/libdev/pic18f4320.c: just include proper .c file
+
+	* device/lib/pic16/configure.in,
+	* device/lib/pic16/configure: use rm -rf instead of rmdir
+	* device/lib/pic16/Makefile.in: use RMDIR to remove build directories
+	* device/lib/pic16/libc/stdlib/free.c: avoid warning on pointer cast
+
+2007-09-09 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCmain.c, src/SDCCutil.c: print newline after printVersionInfo(),
+	  distingush between i386 and ppc Mac OS X versions
+
+2007-09-05 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (genReceive): fixed bug 1788177
+	* support/regression/tests/bug1788177.c: new, added
+
+2007-09-04 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* doc/sdccman.lyx: mentioned d52 and cmake, customizing startup code
+	* device/include/mcs51/lint.h added keyword __naked
+
+2007-09-04 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/pic16/glue.c,
+	* src/pic/glue.c,
+	* src/SDCCmem.h: removed maxRegBank
+	* src/SDCCmem.c (allocVariables): removed maxRegBank and moved setting
+	  RegBankUsed[] to checkFunction() in SDCCsymt.c to fix bug 1759839
+	* src/SDCCsymt.c (checkFunction): set RegBankUsed[] here
+	* src/mcs51/peep.c (isCallerSaveFunc, termScanAtFunc): changed function
+	  name and behaviour to handle banked functions
+	  (scan4op): and use it to fix bug 1786213
+
+2007-09-03 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f248.h,
+	* device/include/pic16/pic18f258.h,
+	* device/include/pic16/pic18f448.h,
+	* device/lib/pic16/libdev/pic18f248.c,
+	* device/lib/pic16/libdev/pic18f258.c,
+	* device/lib/pic16/libdev/pic18f448.c: fixed TRISEbits,
+	  added T0CONbits, fixes #1786891
+
+2007-08-29 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/ds390/gen.c (genFarPointerSet),
+	* src/hc08/ralloc.c (packRegisters),
+	* src/mcs51/ralloc.c (packRegisters),
+	* src/SDCCcse.c (cseBBlock): check if result is a symbol first to fix
+	  bug 1750318
+	* src/SDCCicode.h: POINTER_SET can be true for literals too
+	* support/regression/tests/bug1750318.c: new, added
+
+2007-08-23 Borut Razem <borut.razem AT siol.net>
+
+	* debugger/mcs51/sdcdb.c: fixed compilation with older readline
+	  library versions without the completition functionality
+
+2007-08-22 Raphael Neider <rneider AT web.de>
+
+	* device/include/pic16/pic18f1220.h,
+	* device/lib/pic16/libdev/pic18f1220.c: applied patch #1776191
+
+2007-08-12 Borut Razem <borut.razem AT siol.net>
+
+	* debugger/mcs51/Makefile.in: support/Util/SDCCerr.[ch] moved to src
+
+2007-08-11 Borut Razem <borut.razem AT siol.net>
+
+	* support/Util/SDCCerr.c, support/Util/SDCCerr.h, src/src.dsp,
+	  src/Makefile.in, src/Makefile.bcc, support/scripts/listerr.c:
+	  support/Util/SDCCerr.[ch] moved to src
+	* as/hc08/as_hc08.dsp, as/link/hc08/link_hc08.dsp,
+	  as/link/z80/linkgbz80.dsp, as/link/z80/linkz80.dsp,
+	  device/examples/ds390/tinitalk/tinitalk.dsp,
+	  device/examples/serialcomm/windows/serialcomm.dsp,
+	  support/librarian/librarian.dsp:
+	  removed linking of unused odbc32.lib and odbccp32.lib
+	* support/scripts/winres.h:
+	  added for compilation with Visual C++ 2005 Express Edition
+
+2007-08-09 Jesus Calvino-Fraga <jesusc at ece.ubc.ca>
+
+	* device/include/mcs51/at89c51ed.h: Fixed typo in declarations of CKCON0
+	  and CKCON1.
+
+2007-08-07 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
+
+	* sdccconf_in.h: update the endian test so that SPARC Solaris
+	  does not throw syntax errors
+
+2007-08-06 Borut Razem <borut.razem AT siol.net>
+
+	* doc/sdccman.lyx: removed two index entries which prevented the
+	  generation of sdcc doc archive
+
+2007-08-05 Jesus Calvino-Fraga <jesusc at ece.ubc.ca>
+
+	* doc/sdccman.lyx: Same changes made 2007-07-28 but using lyx 1.4.4
+	  instead of lyx 1.5.0.
+
+2007-07-31 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
+
+	* device/include/hc08/mc68hc908apxx.h: new header contributed by
+	  Lucas Loizaga, with minor modifications. Thanks!
+
+2007-07-28 Jesus Calvino-Fraga <jesusc at ece.ubc.ca>
+
+	* doc/sdccman.lyx: Documented --acall-ajmp and described new features
+	  in sdcclib.
+
+2007-07-28 Jesus Calvino-Fraga <jesusc at ece.ubc.ca>
+
+	* src/SDCCglobl.h, src/SDCCpeeph.c, src/SDCCglue.c, src/mcs51/main.c,
+	  src/mcs51/peeph.def: Added option --acall-ajmp: replaces lcall/ljmp
+	  with acall/ajmp.
+
+2007-07-22 Borut Razem <borut.razem AT siol.net>
+
+	* configure.in, configure: re-introduced .version
+	* sdcc.spec, doc/INSTALL.txt: they are used only for releases;
+	  the version reverted to 2.7.0
+
+2007-07-18 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* configure.in,
+	* doc/sdccman.lyx: bumped version to 2.7.3
+	* device/include/mcs51/compiler.h: fixed elif->else
+	* src/mcs51/gen.c (genAnd, genOr): handle accuse for pure bit operands
+	* src/mcs51/ralloc.c (createStackSpil): fixed SCLS bug with sloc for sbit,
+	  (operandUsesAcc, packRegsForAccUse): added parameter allowBitspace to
+	   enable accuse for bit operands
+	* src/SDCCmain.c (printVersionInfo),
+	* src/SDCCutil.c (getBuildEnvironment): factored out creation of build
+	  environment descriptor
+	* src/SDCCutil.h: added getBuildEnvironment
+	* src/SDCCglue.c (initialComments): use getBuildEnvironment
+	* support/regression/tests/bug1464657.c: enabled test test_Peephole251
+	* support/regression/tests/bug-408972.c: enabled test leftShiftLong
+	* support/regression/tests/bug1348008.c,
+	* support/regression/tests/bug1496419.c,
+	* support/regression/tests/bug1503067.c,
+	* support/regression/tests/preproc.c: added empty tests
+
+2007-07-15 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* support/regression/tests/bug1678803.c: new, added
+
+2007-07-14 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* as/link/aslink.h,
+	* as/link/hc08/lkihx.c,
+	* as/link/hc08/lkrloc.c,
+	* as/link/mcs51/lkihx.c,
+	* as/link/mcs51/lkrloc.c: renamed ihxEntendedLinearAddress to
+	  ihxExtendedLinearAddress
+	* as/link/mcs51/lkrloc.c (relr),
+	* as/mcs51/asout.c (outr11, outr19): handle absolute destination for
+	  acall/ajmp, see bug 830513
+
+2007-07-13 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCcse.c (replaceAllSymBySym): renamed siaddr to isaddr,
+	  (cseBBlock): remember aggr2ptr has been used
+	* src/SDCCicode.c (operandSize): added function to handle aggr2ptr,
+	  (geniCodeAssign): fixed bug 868103
+	* src/SDCCicode.h: made operand.aggr2ptr 2 bits wide,
+	  added operandSize prototype
+	* src/mcs51/gen.c (aopOp): use operandSize to fix bug 868103,
+	  (genDataPointerSet): use max of size of right and result,
+	  (gencjne): added parameter useCarry for optimization,
+	  (genCmpEq): use carry if appropriate,
+	  (genXor): check if operand already in carry
+	* support/regression/tests/bug-868103.c: enabled test
+
+2007-07-12 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/gen.c (genNearPointerSet): fixed handling of literals
+
+2007-07-11 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCsymt.c (compareType): fixed bugs 1738367 and 1745717 with patch
+	  from Robert Larice, thanks
+	* support/regression/tests/bitopcse.c,
+	* support/regression/tests/bitvars.c,
+	* support/regression/tests/bug-908454.c: use <stdbool.h> for the bit types
+	* support/regression/tests/bug-927659.c: enabled test for z80
+	* support/regression/tests/bug1738367.c: added extra tests by Frieder
+	* support/regression/tests/bug1745717.c: new, added
+	* support/regression/tests/literalop.c,
+	* support/regression/tests/nullstring.c: removed storage definitions that
+	  are now in testfwk.h
+
+2007-07-10 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/stdbool.h: do not define __bool_true_false_are_defined
+	  and bool for targets that do not fully support it.
+	* support/regression/tests/bug1546986.c,
+	* support/regression/tests/bug1723128.c,
+	* support/regression/tests/bug1734654.c,
+	* support/regression/tests/bug1738367.c,
+	* support/regression/tests/constantRange.c: only use bool if allowed
+
+2007-07-09 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/peep.c (isCallerSaveFunc): fixed bug 1749275, thanks Robert
+	  Larice, also handle function pointers
+	* support/regression/tests/bug1749275.c: new, added
+
+2007-07-03 Borut Razem <borut.razem AT siol.net>
+
+	* src/mcs51/gen.c, src/avr/gen.c, src/pic/gen.c, src/z80/gen.c,
+	  src/pic16/gen.c, src/hc08/gen.c, src/ds390/gen.c: fixed RFE
+	  #1746528: SDCC should ignore ':' in inline assembler comments
+	* device/include/typeof.h: fixed bug #1747142: typeof.h needs fixing
+
+2007-07-02 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* device/include/mcs51/C8051F360.h: fixed bug #1746410, thanks Chris Jones
+	* device/lib/mcs51/crtxclear.asm: do not set __XPAGE unconditionally
+
+2007-06-29 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCmain.c: fixed bug
+	  #1744746: SDCC #4867: broken option --xram-size
+
+2007-06-28 Borut Razem <borut.razem AT siol.net>
+
+	* sim/ucsim/configure.in, sim/ucsim/configure, sim/ucsim/ddconfig_in.h:
+	  find out the endianess of host machine for ucsim
+
+2007-06-27 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/generate-cases.py: corrected the file name
+	  in warning
+	* configure.in, configure, sdccconf_in.h: find out the endianess of
+	  host machine
+	* src/SDCC.y: fixed bug #1744146: Crash when compiling array of
+	  negative size
+
+2007-06-27 Gudjon I. Gudjonsson <gudjon AT gudjon.org>
+
+	* device/include/mcs51/p89c66x.h: NXP header file, OK to change licence
+
+2007-06-26 Borut Razem <borut.razem AT siol.net>
+
+	* support/regression/generate-cases.py: display warning if function
+	  list is empty; implemented more flexible rule for detection of
+	  testing functions, allowing return type 'void' in the same line as
+	  the function name in the function definition
+	* support/regression/tests/bug-1654060.c: corrected test
+	* support/librarian/sdcclib.c: fixed warning:
+	  format '%s' expects type 'char *', but argument 2 has type 'int'
+
+2007-06-25 Jesus Calvino-Fraga <jesusc at ece.ubc.ca>
+
+	* support/librarian/sdcclib.c: Added feature Requests [1510635]
+	  Multiple infiles for sdcclib.
+
+2007-06-20 Erik Petrich <epetrich AT ivorytower.norman.ok.us>
+
+	* src/SDCCast.c (inlineFindMaxBlockno, createFunction): fixed
+	  bug 1731741
+
+2007-06-18 Borut Razem <borut.razem AT siol.net>
+
+	* src/SDCCmain.c: removed option -C since SDCC compiler doesn't know
+	  how to handle comments, so they have to be removed by the
+	  preprocessor; fixed bug #1738926:SDCC #4852: broken option -V
+	* src/SDCCmain.c, src/SDCCargs.h, src/ds390/main.c, src/mcs15/main.c,
+	  src/pic16/main.c, src/pic/main.c, src/z80/main.c,
+	  support/Util/SDCCerr.c, support/Util/SDCCerr.h:
+	  table driven option hadling
+
+2007-06-16 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (decorateType),
+	* src/SDCCicode.c (geniCodeConditional): moved optimization for '?' from
+	  iCode to ast level to fix bug 1738367
+	* support/regression/tests/bug1738367.c: new, added
+
+2007-06-15 Raphael Neider <rneider AT web.de>
+
+	* src/pic16/devices.inc,
+	* device/lib/pic16/pics.all,
+	* device/include/pic16/pic18fregs.h,
+	* device/include/pic16/pic18f[24][45]20.h,
+	* device/lib/pic16/libdev/pic18f[24][45]20.c: added support for
+	  18f2420, 18f2520, and 18f4420 devices, updated 18f4520 definitions
+	* device/lib/pic16/Makefile.in: faster cleanup
+
+2007-06-13 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* src/mcs51/peeph.def: added 177.i (mov from a is slightly cheaper)
+
+2007-06-13 Raphael Neider <rneider AT web.de>
+
+	* src/SDCCmain.c: prevent NULL pointer dereference, avoid warning
+
+2007-06-12 Raphael Neider <rneider AT web.de>
+
+	* support/scripts/inc2h.pl: conditionally emit defines for SFR bits,
+	  suppress bit defines if NO_BIT_DEFINES is #define'd
+	* device/include/pic/pic*.h: recreated all headers to include
+	  conditional bit defines
+	* device/include/pic/pic16f886.h,
+	* device/include/pic/pic16f887.h: fixed based on newer .inc file
+	* device/include/pic/recreate.sh: script to recreate the complete
+	  device library files based on the currently supported devices
+
+2007-06-12 Borut Razem <borut.razem AT siol.net>
+
+	* src/pic16/main.c, src/SDCCargs.h, SDCCmain.c,
+	  support/regression/Makefile.in, support/scripts/build.mak,
+	  support/scripts/Makefile.snapshot:
+	  use new svn URL scheme
+	* doc/sdccman.lyx: SDCC Wiki moved to
+	  http://sdcc.wiki.sourceforge.net/
+
+2007-06-10 Frieder Ferlemann <Frieder.Ferlemann AT web.de>
+
+	* src/mcs51/peeph.def: disabled rule 132.d to fix #1734654
+	* support/regression/tests/bug1734654.c: added
+
+2007-06-10 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c (decorateType): optimized '?' for equal operands
+	* src/SDCCicode.c (geniCodeConditional): optimization for bit result
+	  with literal operands
+
+2007-06-10 Borut Razem <borut.razem AT siol.net>
+
+	* as/link/z80/lklibr.c: fixed mingw build warning
+	  lklibr.c:575: warning: implicit declaration of function 'tolower'
+	* src/SDCCmain.c, src/ds390/main.c, src/mcs51/main.c, src/pic/main.c,
+	  src/z80/main.c: move target specific options from src/SDCCmain.c
+	  to src/<target>/main.c
+
+2007-06-09 Borut Razem <borut.razem AT siol.net>
+
+	* src/z80/gen.c: fixed bug #1294691: nested ifs make compiler crash;
+	  removed unused swap_sense; removed outBitCLong, replaced with outBitC
+	* support/regression/tests/bug-1294691.c: added
+
+2007-06-09 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCmem.c (allocDefault): removed check sym->level==0 for SPEC_ABSA,
+	  can also be static, fixes bug 1733438
+	* src/SDCCsymt.c (checkSClass): static local vars in reentrant funcs can
+	  have absolute address too
+	  (computeType): added optimization for 'cond ? true : false'
+	* support/regression/tests/absolute.c: added test for static absolute var
+
+2007-06-08 Raphael Neider <rneider AT web.de>
+
+	* src/regression/Makefile: suppress parallel builds, allow easy
+	  switching between pic14/pic16 ports
+	* src/regression/picregs.h: added pic14/16 header file switch
+	* src/regression/{compare7.c,compare8.c,compare9.c,compare10.c,
+	  inline.c,nestfor.c,string1.c}: include "picregs.h"
+
+2007-06-07 Borut Razem <borut.razem AT siol.net>
+
+	* sim/ucsim/*.[ch], sim/ucsim/configure, sim/ucsim/configure.in:
+	  permanent solution to suppress GCC 4.2.0 c++ warning:
+	  deprecated conversion from string constant to `char *'
+	  use 'const char *' where ever required
+	* support/regression/generate-cases.py: implemented more flexible rule
+	  for detection of testing functions, allowing white-spaces surrounding
+	  the function name and the 'void' parameter.
+	* support/regression/tests/constantRange.c,
+	  support/regression/tests/scott-compare3.c: fixed failing regression
+	  tests, uncovered by implementation of more flexible rule for detection
+	  of testing functions
+
+2007-06-04 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/SDCCast.c(decorateType): better optimize '!!' and comparisons
+
+2007-06-04 Borut Razem <borut.razem AT siol.net>
+
+	* configure.in, configure, config_vc.awk: sdcc version number is now
+	  stored in configure.in; removed .version
+	* configure.in, configure, sdcc.spec, doc/sdccman.lyx, doc/sdccman.lyx,
+	  doc/INSTALL.txt: version bumped to 2.7.2
+	* sim/ucsim/configure.in, sim/ucsim/configure:
+	  use "read" to read from .version
+
+2007-06-03 Borut Razem <borut.razem AT siol.net>
+
+	* */Makefile.in: removed annoying warning:
+	  Makefile:xx: Makefile.dep: No such file or directory
+
+2007-06-02 Maarten Brock <sourceforge.brock AT dse.nl>
+
+	* src/mcs51/gen.c (outBitC, genRet): used IS_OP_RUONLY,
+	  (genNot, genXor): used toCarry, also fixes a bug for c = bit ^ val
+	* src/mcs51/ralloc.c: removed IS_OP_RUONLY + some cosmetic changes
+	* src/SDCCast.c (resultTypePropagate): propagate for '!',
+	  (decorateType): also optimize comparisons with RESULT_TYPE_BIT,
+	  bugfix: only use newBoolLink for bit result type
+	* src/SDCCicode.c (geniCodeLogic): added param tree,
+	  bugfix: use newBoolLink if tree is bit type, bug appears when ruonly,
+	  (geniCodeLogicAndOr): use IS_BIT,
+	  (geniCodeJumpTable, geniCodeSwitch): added NULL param to geniCodeLogic,
+	  (ast2iCode): added tree param to geniCodeLogic for comparisons
+	* src/SDCCsymt.h: added IS_OP_RUONLY and IS_OP_ACCUSE
+	* support/regression/tests/bug1723128.c: added test NotZero
+
+2007-06-01 Borut Razem <borut.razem AT siol.net>
+
+	* SDCPP synchronized with GCC CPP release version 4.2.0,
+	  currently the latest release:
+	* support/cpp2/c-incpath.c, support/cpp2/c-incpath.h,
+	  support/cpp2/c-ppoutput.c, support/cpp2/cppdefault.c,
+	  support/cpp2/cppdefault.h, support/cpp2/except.h,
+	  support/cpp2/libcpp/directives.c, support/cpp2/libcpp/expr.c,
+	  support/cpp2/libcpp/files.c, support/cpp2/libcpp/include/cpplib.h,
+	  support/cpp2/libcpp/init.c, support/cpp2/libcpp/internal.h,
+	  support/cpp2/libcpp/lex.c, support/cpp2/libcpp/macro.c,
+	  support/cpp2/libcpp/mkdeps.c, support/cpp2/libiberty/getpwd.c,
+	  support/cpp2/libiberty/hashtab.c, support/cpp2/optc-gen.awk,
+	  support/cpp2/opth-gen.awk, support/cpp2/opts.c,
+	  support/cpp2/opts.h, support/cpp2/output.h,
+	  support/cpp2/prefix.c, support/cpp2/sdcpp-opts.c,
+	  support/cpp2/sdcpp.dsp, support/cpp2/sdcpp.opt,
+	  support/cpp2/system.h, support/cpp2/version.c,
+	  support/cpp2/Makefile.in: modified
+	* support/cpp2/opts-common.c: added
+	* device/lib/pic16/libdev/pic18f[24][45]j10.c: fixed svn atrributes
+	* device/lib/pic16/libdev/pic18f[24]5j10.c:
+	  search for included source file in local directory
+	* sim/ucsim/configure, sim/ucsim/configure.in:
+	  temporary solution to suppress GCC 4.2.0 c++ warning:
+	  deprecated conversion from string constant to `char *'
+
+2007-06-01 Raphael Neider <rneider AT web.de>
+
+	* device/lib/pic/libdev/pic12f683.c,
+	* device/include/pic/pic12f683.h: added GPIO bits
+
+2007-06-01 Raphael Neider <rneider AT web.de>
+
+	* doc/sdccman.lyx: added --disable-pic16-port, fixed some `--' and
+	  quotation marks, clarified role of PIC14 vs. PIC16 ports
+	* src/pic16/devices.inc,
+	* device/include/pic16/pic18fregs.h,
+	* device/include/pic16/pic18f[24][45]j10.h,
+	* device/lib/pic16/pics.all,
+	* device/lib/pic16/libdev/pic18f[24][45]j10.c: added support for
+	  18f24j10, 18f25j10, 18f44j10, and 18f45j10
+	* device/lib/pic16/libio/{i2c,adc,usart}.ignore: do not build IO libs
+	  for new devices as they are not yet supported by gputils
+
+2007-05-31 Borut Razem <borut.razem AT siol.net>
+
+	* Small Device C Compiler 2.7.0 released
+	* .version, sdcc.spec, doc/sdccman.lyx, doc/INSTALL.txt:
+	  changed sdcc version to 2.7.1
+	* support/scripts/sdcc.nsi: added How to create WIN32 release
+	  setup.exe package
+
 2007-05-29 Maarten Brock <sourceforge.brock AT dse.nl>
 
 	* doc/sdccman.lyx: documented initialization and allocation of absolute
@@ -45,7 +1362,7 @@
 	* src/regression/Makefile,
 	* src/regression/pcodeopt.c: regression test for the above fix
 
-2007-05-08 Maarten Brock <sourceforge.brock AT dse.nl>
+2007-05-11 Maarten Brock <sourceforge.brock AT dse.nl>
 
 	* src/SDCCpeeph.c (labelIsUncondJump): ignore identical labels for
 	  jumps to self, fixed bug 1717281
@@ -14718,4 +16035,4 @@
   * as/mcs51/lklex.c:  accept everything as symbol name in rel-files, bug fix ID 452601
   * as/mcs51/lksym.c:  accept everything as symbol name in rel-files, bug fix ID 452601
 
-$Revision: 4818 $
+$Revision: 5117 $

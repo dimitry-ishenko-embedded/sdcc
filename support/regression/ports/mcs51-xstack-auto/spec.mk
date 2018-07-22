@@ -1,8 +1,8 @@
-# Port specification for the mcs51 port running with uCsim
+# Port specification for the mcs51-xstack-auto port running with uCsim
 #
 # model small xstack-auto
 
-include $(PORTS_DIR)/mcs51/spec.mk
+include $(PORTS_DIR)/mcs51-common/spec.mk
 
 LIBSRCDIR   = $(top_srcdir)/device/lib
 LIBBUILDDIR = $(top_builddir)/device/lib
@@ -11,10 +11,6 @@ LIBDIR      = $(PORT_CASES_DIR)/lib
 LIBSDCCFLAGS+= --stack-auto --xstack --std-c99
 SDCCFLAGS   += --stack-auto --xstack --std-sdcc99
 
-# use C sources from mcs51
-$(PORT_CASES_DIR)/%$(OBJEXT): $(PORTS_DIR)/mcs51/%.c
-	$(SDCC) $(SDCCFLAGS) -c $< -o $@
-
 SOURCES = _atoi.c _atol.c _autobaud.c _bp.c _schar2fs.c \
           _decdptr.c _divsint.c _divslong.c _divuint.c \
           _divulong.c _fs2schar.c _fs2sint.c _fs2slong.c \
@@ -22,7 +18,7 @@ SOURCES = _atoi.c _atol.c _autobaud.c _bp.c _schar2fs.c \
           _fsadd.c _fssub.c _fsdiv.c _fsmul.c \
           _fseq.c _fsneq.c _fsgt.c _fslt.c _fscmp.c \
           fabsf.c sqrtf.c logf.c log10f.c powf.c tanf.c \
-          errno.c frexpf.c ldexpf.c tancotf.c \
+          errno.c frexpf.c ldexpf.c expf.c tancotf.c \
           _fsget1arg.c _fsget2args.c _fsnormalize.c \
           _fsreturnval.c _fsrshift.c _fsswapargs.c \
           _gptrget.c _gptrput.c \

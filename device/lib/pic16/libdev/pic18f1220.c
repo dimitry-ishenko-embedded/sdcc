@@ -8,7 +8,7 @@
  * The GNU PIC Library is maintained by,
  * 	Vangelis Rokas <vrokas@otenet.gr>
  *
- * $Id: pic18f1220.c 3895 2005-09-21 11:26:13Z tecodev $
+ * $Id: pic18f1220.c 4903 2007-08-22 09:06:05Z tecodev $
  *
  */
 
@@ -114,6 +114,8 @@ __sfr __at (0xfd3) OSCCON;
 volatile __OSCCONbits_t __at (0xfd3) OSCCONbits;
 
 __sfr __at (0xfd5) T0CON;
+volatile __T0CONbits_t __at (0xfd5) T0CONbits;
+
 __sfr __at (0xfd6) TMR0L;
 __sfr __at (0xfd7) TMR0H;
 __sfr __at (0xfd8) STATUS;

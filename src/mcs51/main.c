@@ -16,6 +16,18 @@ static char _defaultRules[] =
 #include "peeph.rul"
 };
 
+#define OPTION_STACK_SIZE       "--stack-size"
+
+static OPTION _mcs51_options[] =
+  {
+    { 0, OPTION_STACK_SIZE,  &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
+    { 0, "--parms-in-bank1", &options.parms_in_bank1, "use Bank1 for parameter passing"},
+    { 0, "--pack-iram",      NULL, "Tells the linker to pack variables in internal ram (default)"},
+    { 0, "--no-pack-iram",   &options.no_pack_iram, "Tells the linker not to pack variables in internal ram"},
+    { 0, "--acall-ajmp",     &options.acall_ajmp, "Use acall/ajmp instead of lcall/ljmp" },
+    { 0, NULL }
+  };
+
 /* list of key words used by msc51 */
 static char *_mcs51_keywords[] =
 {
@@ -180,16 +192,17 @@ _mcs51_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
   int i;
 
-  dbuf_printf (oBuf, "\tljmp\t__sdcc_gsinit_startup\n");
+  dbuf_printf (oBuf, "\t%cjmp\t__sdcc_gsinit_startup\n", options.acall_ajmp?'a':'l');
+  if((options.acall_ajmp)&&(maxInterrupts)) dbuf_printf (oBuf, "\t.ds\t1\n");
 
   /* now for the other interrupts */
   for (i = 0; i < maxInterrupts; i++)
     {
       if (interrupts[i])
         {
-          dbuf_printf (oBuf, "\tljmp\t%s\n", interrupts[i]->rname);
+          dbuf_printf (oBuf, "\t%cjmp\t%s\n", options.acall_ajmp?'a':'l', interrupts[i]->rname);
           if ( i != maxInterrupts - 1 )
-            dbuf_printf (oBuf, "\t.ds\t5\n");
+            dbuf_printf (oBuf, "\t.ds\t%d\n", options.acall_ajmp?6:5);
         }
       else
         {
@@ -790,7 +803,7 @@ PORT mcs51_port =
   "_",
   _mcs51_init,
   _mcs51_parseOptions,
-  NULL,
+  _mcs51_options,
   NULL,
   _mcs51_finaliseOptions,
   _mcs51_setDefaultOptions,
