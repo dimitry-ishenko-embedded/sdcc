@@ -9,6 +9,7 @@ sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
   * New upstream release (Closes: #892869)
     + Removed patches as all now applied upstream
     + Enable building of PDF manual
+    + Fix ucsim docs to include SVGs instead of GIFs
 
  -- Geert Stappers <stappers@debian.org>  Sun, 22 Jul 2018 17:32:23 +0200
 
