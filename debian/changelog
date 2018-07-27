@@ -7,6 +7,7 @@ sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
 
   [ Jonathan McDowell ]
   * New upstream release (Closes: #892869)
+    + Removed patches as all now applied upstream
 
  -- Geert Stappers <stappers@debian.org>  Sun, 22 Jul 2018 17:32:23 +0200
 
