@@ -27,11 +27,11 @@ extern "C"
 {
   #include "ralloc.h"
   #include "gen.h"
-  unsigned int drySTM8iCode (iCode *ic);
+  float drySTM8iCode (iCode *ic);
   bool stm8_assignment_optimal;
   long int stm8_call_stack_size;
   bool stm8_extend_stack;
-};
+}
 
 #define REG_A 0
 #define REG_XL 1
@@ -48,7 +48,7 @@ static void add_operand_conflicts_in_node(const cfg_node &n, I_t &I)
   const operand *result = IC_RESULT(ic);
   const operand *left = IC_LEFT(ic);
   const operand *right = IC_RIGHT(ic);
-	
+
   if(!result || !IS_SYMOP(result))
     return;
 
@@ -113,12 +113,12 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
   const i_assignment_t &ia = a.i_assignment;
 
   if(ia.registers[REG_A][1] < 0)
-    return(true);	// Register a not in use.
+    return(true);       // Register a not in use.
 
   if(ic->op == IPUSH)
     {
       if (ia.registers[REG_XL][1] < 0 || ia.registers[REG_YL][1] < 0 && !stm8_extend_stack)
-        return(true);	// Register xl or yl free; code generation can use them when a is not available.
+        return(true);   // Register xl or yl free; code generation can use them when a is not available.
 
       // push a does not disturb a.
       if (getSize(operandType(IC_LEFT(ic))) <= 1 && operand_in_reg(left, REG_A, ia, i, G))
@@ -169,7 +169,7 @@ static bool Yinst_ok(const assignment &a, unsigned short int i, const G_t &G, co
     return(true);   // Only an extended stack can make Y unavailable.
 
   if(ia.registers[REG_YL][1] < 0 && ia.registers[REG_YH][1] < 0)
-    return(true);	// Register Y not in use.
+    return(true);   // Register Y not in use.
 
   return(false);
 }
@@ -178,30 +178,21 @@ template <class G_t, class I_t>
 static void set_surviving_regs(const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
 {
   iCode *ic = G[i].ic;
-  
-  ic->rMask = newBitVect(port->num_regs);
-  ic->rSurv = newBitVect(port->num_regs);
-  
-  std::set<var_t>::const_iterator v, v_end;
+
+  bitVectClear(ic->rMask);
+  bitVectClear(ic->rSurv);
+
+  cfg_alive_t::const_iterator v, v_end;
   for (v = G[i].alive.begin(), v_end = G[i].alive.end(); v != v_end; ++v)
     {
       if(a.global[*v] < 0)
         continue;
       ic->rMask = bitVectSetBit(ic->rMask, a.global[*v]);
 
-      if(G[i].dying.find(*v) == G[i].dying.end())
-        if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
+      if(!((IC_RESULT(ic) && !POINTER_SET(ic)) && IS_SYMOP(IC_RESULT(ic)) && OP_SYMBOL_CONST(IC_RESULT(ic))->key == I[*v].v))
+        if(G[i].dying.find(*v) == G[i].dying.end())
           ic->rSurv = bitVectSetBit(ic->rSurv, a.global[*v]);
     }
-}
-
-template<class G_t>
-static void unset_surviving_regs(unsigned short int i, const G_t &G)
-{
-  iCode *ic = G[i].ic;
-  
-  freeBitVect(ic->rSurv);
-  freeBitVect(ic->rMask);
 }
 
 template <class G_t, class I_t>
@@ -244,14 +235,14 @@ static void assign_operands_for_cost(const assignment &a, unsigned short int i, 
     }
     
   if(ic->op == SEND && ic->builtinSEND)
-    assign_operands_for_cost(a, *(adjacent_vertices(i, G).first), G, I);
+    assign_operands_for_cost(a, (unsigned short)*(adjacent_vertices(i, G).first), G, I);
 }
 
 template <class G_t, class I_t>
 static bool operand_sane(const operand *o, const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
 {
 #if 0
-  int v, byteregs[8];	// Todo: Change this when sdcc supports variables larger than 8 bytes.
+  int v, byteregs[8];   // Todo: Change this when sdcc supports variables larger than 8 bytes.
   unsigned short int size;
 
   if(!o || !IS_SYMOP(o))
@@ -318,7 +309,8 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
   iCode *ic = G[i].ic;
   float c;
 
-  wassert (TARGET_IS_STM8);
+  wassert(TARGET_IS_STM8);
+  wassert(ic);
 
   if(!inst_sane(a, i, G, I))
     return(std::numeric_limits<float>::infinity());
@@ -399,8 +391,7 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
     case SWAP:
       assign_operands_for_cost(a, i, G, I);
       set_surviving_regs(a, i, G, I);
-      c = (float)drySTM8iCode(ic);
-      unset_surviving_regs(i, G);
+      c = drySTM8iCode(ic);
       ic->generated = false;
 #if 0
       std::cout << "Got cost " << c << "\n";
@@ -425,8 +416,9 @@ static void get_best_local_assignment_biased(assignment &a, typename boost::grap
   a = *T[t].assignments.begin();
 
   std::set<var_t>::const_iterator vi, vi_end;
-  for(vi = T[t].alive.begin(), vi_end = T[t].alive.end(); vi != vi_end; ++vi)
-    a.local.insert(*vi);
+  varset_t newlocal;
+  std::set_union(T[t].alive.begin(), T[t].alive.end(), a.local.begin(), a.local.end(), std::inserter(newlocal, newlocal.end()));
+  a.local = newlocal;
 }
 
 // Suggest to honor register keyword and to not reverse bytes and prefer use of a. Prefer x over y.
@@ -447,9 +439,9 @@ static float rough_cost_estimate(const assignment &a, unsigned short int i, cons
         c += 0.1f;
       if(a.global[*v] < 0 && IS_REGISTER(sym->type)) // Try to honour register keyword.
         c += 4.0f;
-      if((I[*v].byte % 2) && (a.global[*v] == REG_XL || a.global[*v] == REG_YL)) // Try not to reverse bytes.
-        c += 0.1f;
-      if(!(I[*v].byte % 2) && (a.global[*v] == REG_XH || a.global[*v] == REG_YH)) // Try not to reverse bytes.
+      if((I[*v].byte % 2) ? // Try not to reverse bytes.
+        (a.global[*v] == REG_XL || a.global[*v] == REG_YL) :
+        (a.global[*v] == REG_XH || a.global[*v] == REG_YH))
         c += 0.1f;
     }
 
@@ -459,8 +451,6 @@ static float rough_cost_estimate(const assignment &a, unsigned short int i, cons
 // Code for another ic is generated when generating this one. Mark the other as generated.
 static void extra_ic_generated(iCode *ic)
 {
-  int i;
-
   if(ic->op == '>' || ic->op == '<' || ic->op == LE_OP || ic->op == GE_OP || ic->op == EQ_OP || ic->op == NE_OP ||
     ic->op == BITWISEAND && (IS_OP_LITERAL (IC_LEFT (ic)) || IS_OP_LITERAL (IC_RIGHT (ic))))
     {
@@ -472,7 +462,7 @@ static void extra_ic_generated(iCode *ic)
           int nonzero = 0;
           operand *const litop = IS_OP_LITERAL (IC_LEFT (ic)) ? IC_LEFT (ic) : IC_RIGHT (ic);
 
-          for(int i = 0; i < getSize(operandType(IC_LEFT (ic))) && i < getSize(operandType(IC_RIGHT (ic))) && i < getSize(operandType(IC_RESULT(ic))); i++)
+          for(unsigned int i = 0; i < getSize(operandType(IC_LEFT (ic))) && i < getSize(operandType(IC_RIGHT (ic))) && i < getSize(operandType(IC_RESULT(ic))); i++)
             if(byteOfVal (OP_VALUE (litop), i))
               nonzero++;
 
@@ -515,9 +505,9 @@ static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I)
 #ifdef DEBUG_RALLOC_DEC
   std::cout << "Winner: ";
   for(unsigned int i = 0; i < boost::num_vertices(I); i++)
-  {
-  	std::cout << "(" << i << ", " << int(winner.global[i]) << ") ";
-  }
+    {
+      std::cout << "(" << i << ", " << int(winner.global[i]) << ") ";
+    }
   std::cout << "\n";
   std::cout << "Cost: " << winner.s << "\n";
   std::cout.flush();
@@ -543,7 +533,7 @@ static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I)
     }
 
   for(unsigned int i = 0; i < boost::num_vertices(G); i++)
-    set_surviving_regs(winner, i, G, I);	// Never freed. Memory leak?
+    set_surviving_regs(winner, i, G, I);
 
   return(!assignment_optimal);
 }
@@ -570,9 +560,7 @@ iCode *stm8_ralloc2_cc(ebbIndex *ebbi)
 
   tree_dec_t tree_decomposition;
 
-  thorup_tree_decomposition(tree_decomposition, control_flow_graph);
-
-  nicify(tree_decomposition);
+  get_nice_tree_decomposition(tree_decomposition, control_flow_graph);
 
   alive_tree_dec(tree_decomposition, control_flow_graph);
 
@@ -582,6 +570,8 @@ iCode *stm8_ralloc2_cc(ebbIndex *ebbi)
 
   if(options.dump_graphs)
     dump_tree_decomposition(tree_decomposition);
+
+  guessCounts (ic, ebbi);
 
   stm8_assignment_optimal = !tree_dec_ralloc(tree_decomposition, control_flow_graph, conflict_graph);
 

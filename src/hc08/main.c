@@ -397,6 +397,12 @@ hc08_dwarfRegNum (const struct reg_info *reg)
   return -1;
 }
 
+static bool
+_hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
+{
+  return getSize (left) == 1 && getSize (right) == 1;
+}
+
 typedef struct asmLineNode
   {
     int size;
@@ -831,11 +837,11 @@ PORT hc08_port =
     4,          /* isr_overhead */
     2,          /* call_overhead */
     0,          /* reent_overhead */
-    0           /* banked_overhead (switch between code banks) */
+    0,          /* banked_overhead (switch between code banks) */
+    1           /* sp is offset by 1 from last item pushed */
   },
-    /* hc08 has an 8 bit mul */
   {
-    1, 5
+    5, FALSE
   },
   {
     hc08_emitDebuggerSymbol,
@@ -867,6 +873,7 @@ PORT hc08_port =
   _hc08_setDefaultOptions,
   hc08_assignRegisters,
   _hc08_getRegName,
+  0,
   NULL,
   _hc08_keywords,
   _hc08_genAssemblerPreamble,
@@ -878,7 +885,7 @@ PORT hc08_port =
   _hc08_regparm,
   NULL,                         /* process_pragma */
   NULL,                         /* getMangledFunctionName */
-  NULL,                         /* hasNativeMulFor */
+  _hasNativeMulFor,             /* hasNativeMulFor */
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   TRUE,                         /* use_dw_for_init */
@@ -975,11 +982,11 @@ PORT s08_port =
     4,          /* isr_overhead */
     2,          /* call_overhead */
     0,          /* reent_overhead */
-    0           /* banked_overhead (switch between code banks) */
+    0,          /* banked_overhead (switch between code banks) */
+    1           /* sp is offset by 1 from last item pushed */
   },
-    /* hc08 has an 8 bit mul */
   {
-    1, 5
+    5, FALSE
   },
   {
     hc08_emitDebuggerSymbol,
@@ -1011,6 +1018,7 @@ PORT s08_port =
   _hc08_setDefaultOptions,
   hc08_assignRegisters,
   _hc08_getRegName,
+  0,
   NULL,
   _hc08_keywords,
   _hc08_genAssemblerPreamble,
@@ -1022,7 +1030,7 @@ PORT s08_port =
   _hc08_regparm,
   NULL,                         /* process_pragma */
   NULL,                         /* getMangledFunctionName */
-  NULL,                         /* hasNativeMulFor */
+  _hasNativeMulFor,             /* hasNativeMulFor */
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   TRUE,                         /* use_dw_for_init */

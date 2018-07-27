@@ -1918,21 +1918,12 @@ packPointerOp (iCode * ic, eBBlock ** ebpp)
     }
 
   /* Put the remaining operand on the right and convert to assignment     */
-  /* or cast (Sometimes the operands to the addition are different sizes, */
-  /* so there is an implicit cast. If so, need to make it explicit so     */
-  /* that all the bytes of the pointer are defined. */
   if (IS_SYMOP (offsetOp))
     bitVectUnSetBit (OP_USES (offsetOp), dic->key);
   IC_RIGHT (dic) = nonOffsetOp;
   IC_LEFT (dic) = NULL;
   SET_ISADDR (IC_RESULT (dic), 0);
-  if (getSize (operandType (pointer)) == getSize (operandType (nonOffsetOp)))
-    dic->op = '=';
-  else
-    {
-      dic->op = CAST;
-      IC_LEFT (dic) = operandFromLink (operandType (pointer));
-    }
+  dic->op = '=';
 }
 
 /*-----------------------------------------------------------------*/
@@ -1993,7 +1984,8 @@ packRegisters (eBBlock ** ebpp, int blockno)
           !POINTER_SET (ic) &&
           IS_SYMOP (IC_RIGHT (ic)) &&
           OP_SYMBOL (IC_RIGHT (ic))->remat &&
-          bitVectnBitsOn (OP_SYMBOL (IC_RESULT (ic))->defs) <= 1)
+          bitVectnBitsOn (OP_SYMBOL (IC_RESULT (ic))->defs) <= 1 &&
+          !OP_SYMBOL (IC_RESULT (ic))->_isparm)
         {
           OP_SYMBOL (IC_RESULT (ic))->remat = OP_SYMBOL (IC_RIGHT (ic))->remat;
           OP_SYMBOL (IC_RESULT (ic))->rematiCode = OP_SYMBOL (IC_RIGHT (ic))->rematiCode;
@@ -2004,7 +1996,8 @@ packRegisters (eBBlock ** ebpp, int blockno)
       if (ic->op == CAST &&
           IS_SYMOP(IC_RIGHT(ic)) &&
           OP_SYMBOL(IC_RIGHT(ic))->remat &&
-          bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1)
+          bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 &&
+          !OP_SYMBOL (IC_RESULT (ic))->_isparm)
         {
           sym_link *to_type = operandType(IC_LEFT(ic));
           sym_link *from_type = operandType(IC_RIGHT(ic));

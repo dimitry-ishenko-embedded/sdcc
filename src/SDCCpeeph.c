@@ -43,7 +43,7 @@ static int hashSymbolName (const char *name);
 static void buildLabelRefCountHash (lineNode * head);
 static void bindVar (int key, char **s, hTab ** vtab);
 
-static bool matchLine (char *, char *, hTab **);
+static bool matchLine (char *, const char *, hTab **);
 
 #define FBYNAME(x) static int x (hTab *vars, lineNode *currPl, lineNode *endPl, \
         lineNode *head, char *cmdLine)
@@ -227,9 +227,6 @@ FBYNAME (labelJTInRange)
   char *lbl;
   int dist, count, i;
 
-  if (TARGET_IS_MCS51 && !getenv("SDCC_SJMP_JUMPTABLE"))
-    return FALSE;
-
   /* Only optimize within a jump table */
   if (currPl->ic && currPl->ic->op != JUMPTABLE)
     return FALSE;
@@ -316,7 +313,7 @@ FBYNAME (labelIsReturnOnly)
   if (!pl)
     return FALSE; /* did not find the label */
   pl = pl->next;
-  while (pl && (pl->isDebug || pl->isComment))
+  while (pl && (pl->isDebug || pl->isComment || pl->isLabel))
     pl = pl->next;
   if (!pl || !pl->line || pl->isDebug)
     return FALSE; /* next line not valid */
@@ -342,6 +339,7 @@ FBYNAME (labelIsUncondJump)
   const char *label;
   char *p, *q;
   const lineNode *pl;
+  bool found = FALSE;
   int len;
   char * jpInst = NULL;
   char * jpInst2 = NULL;
@@ -351,23 +349,48 @@ FBYNAME (labelIsUncondJump)
     return FALSE;
   len = strlen(label);
 
-  for (pl = currPl; pl; pl = pl->next)
+  for (pl = currPl; pl; pl = pl->prev)
     {
       if (pl->line && !pl->isDebug && !pl->isComment && pl->isLabel)
         {
           if (strncmp(pl->line, label, len) == 0)
-            break; /* Found Label */
+            {
+              found = TRUE;
+              break; /* Found Label */
+            }
           if (strlen(pl->line) != 7       || !ISCHARDIGIT(*(pl->line))   ||
               !ISCHARDIGIT(*(pl->line+1)) || !ISCHARDIGIT(*(pl->line+2)) ||
               !ISCHARDIGIT(*(pl->line+3)) || !ISCHARDIGIT(*(pl->line+4)) ||
               *(pl->line+5) != '$')
             {
-              return FALSE; /* non-local label encountered */
+              break; /* non-local label encountered */
             }
         }
     }
 
-  if (!pl)
+  if (!found)
+    {
+      for (pl = currPl; pl; pl = pl->next)
+        {
+          if (pl->line && !pl->isDebug && !pl->isComment && pl->isLabel)
+            {
+              if (strncmp(pl->line, label, len) == 0)
+                {
+                  found = TRUE;
+                  break; /* Found Label */
+                }
+              if (strlen(pl->line) != 7       || !ISCHARDIGIT(*(pl->line))   ||
+                  !ISCHARDIGIT(*(pl->line+1)) || !ISCHARDIGIT(*(pl->line+2)) ||
+                  !ISCHARDIGIT(*(pl->line+3)) || !ISCHARDIGIT(*(pl->line+4)) ||
+                  *(pl->line+5) != '$')
+                {
+                  return FALSE; /* non-local label encountered */
+                }
+            }
+        }
+    }
+
+  if (!pl || !found)
     return FALSE; /* did not find the label */
   pl = pl->next;
   while (pl && (pl->isDebug || pl->isComment))
@@ -379,7 +402,10 @@ FBYNAME (labelIsUncondJump)
     p++;
 
   if (TARGET_MCS51_LIKE)
-    jpInst = "ljmp";
+    {
+      jpInst = "ljmp";
+      jpInst2 = "sjmp";
+    }
   else if (TARGET_HC08_LIKE)
     {
       jpInst = "jmp";
@@ -690,6 +716,8 @@ notVolatileVariable(char *var, lineNode *currPl, lineNode *endPl)
         return FALSE;
       if (strchr (var, '[') && strchr (var, ']'))
         return FALSE;
+      if (strstr(var, "0x") || strstr(var, "0X") || isdigit(var[0]))
+        return FALSE;
     }
 
   /* Extract a symbol name from the variable */
@@ -959,6 +987,8 @@ operandBaseName (const char *op)
         return "iy";
       if (!strcmp (op, "ixh") || !strcmp (op, "ixl") || strstr (op, "ix"))
         return "ix";
+      if (!strcmp (op, "a"))
+        return "af";
     }
 
   return op;
@@ -1121,7 +1151,7 @@ FBYNAME (notSimilar)
   if (!operands)
     {
       fprintf (stderr,
-               "*** internal error: notSame peephole restriction"
+               "*** internal error: notSimilar peephole restriction"
                " malformed: %s\n", cmdLine);
       return FALSE;
     }
@@ -1582,7 +1612,7 @@ newPeepRule (lineNode * match,
   else
     pr->cond = NULL;
 
-  pr->vars = newHashTable (100);
+  pr->vars = newHashTable (16);
 
   /* if root is empty */
   if (!rootRules)
@@ -1605,14 +1635,14 @@ newPeepRule (lineNode * match,
 /* getPeepLine - parses the peep lines                             */
 /*-----------------------------------------------------------------*/
 static void
-getPeepLine (lineNode ** head, char **bpp)
+getPeepLine (lineNode ** head, const char **bpp)
 {
   char lines[MAX_PATTERN_LEN];
   char *lp;
   int isComment;
 
   lineNode *currL = NULL;
-  char *bp = *bpp;
+  const char *bp = *bpp;
   while (1)
     {
 
@@ -1670,12 +1700,13 @@ getPeepLine (lineNode ** head, char **bpp)
 /* readRules - reads the rules from a string buffer                */
 /*-----------------------------------------------------------------*/
 static void
-readRules (char *bp)
+readRules (const char *bp)
 {
   char restart = 0, barrier = 0;
   char lines[MAX_PATTERN_LEN];
   size_t safetycounter;
-  char *lp, *rp;
+  char *lp;
+  const char *rp;
   lineNode *match;
   lineNode *replace;
   lineNode *currL = NULL;
@@ -1750,8 +1781,13 @@ top:
   if (strncmp (bp, "if", 2) == 0)
     {
       bp += 2;
-      while ((ISCHARSPACE (*bp) || *bp == '\n') && *bp)
+      while ((ISCHARSPACE (*bp) || *bp == '\n' || (*bp == '/' && *(bp+1) == '/')) && *bp)
+      {
         bp++;
+        if (*bp == '/')
+          while (*bp && *bp != '\n')
+            bp++;
+      }
       if (!*bp)
         {
           fprintf (stderr, "expected condition name\n");
@@ -1805,7 +1841,7 @@ top:
 /* keyForVar - returns the numeric key for a var                   */
 /*-----------------------------------------------------------------*/
 static int
-keyForVar (char *d)
+keyForVar (const char *d)
 {
   int i = 0;
 
@@ -1869,23 +1905,23 @@ bindVar (int key, char **s, hTab ** vtab)
 /* matchLine - matches one line                                    */
 /*-----------------------------------------------------------------*/
 static bool
-matchLine (char *s, char *d, hTab ** vars)
+matchLine (char *s, const char *d, hTab ** vars)
 {
   if (!s || !(*s))
     return FALSE;
 
+  /* skip leading white spaces */
+  while (ISCHARSPACE (*s))
+    s++;
+  while (ISCHARSPACE (*d))
+    d++;
+
   while (*s && *d)
     {
-      /* skip white space in both */
-      while (ISCHARSPACE (*s))
-        s++;
-      while (ISCHARSPACE (*d))
-        d++;
-
       /* if the destination is a var */
       if (*d == '%' && ISCHARDIGIT (*(d + 1)) && vars)
         {
-          char *v = hTabItemWithKey (*vars, keyForVar (d + 1));
+          const char *v = hTabItemWithKey (*vars, keyForVar (d + 1));
           /* if the variable is already bound
              then it MUST match with dest */
           if (v)
@@ -1902,24 +1938,30 @@ matchLine (char *s, char *d, hTab ** vars)
           d++;
           while (ISCHARDIGIT (*d))
             d++;
-
+        }
+      else if (ISCHARSPACE (*s) && ISCHARSPACE (*d)) /* whitespace sequences match any whitespace sequences */
+        {
           while (ISCHARSPACE (*s))
             s++;
           while (ISCHARSPACE (*d))
             d++;
         }
-
-      /* they should be an exact match other wise */
-      if (*s && *d)
+      else if (*s == ',' && *d == ',') /* Allow comman to match comma followed by whitespace */
+        {
+          s++, d++;
+          while (ISCHARSPACE (*s))
+            s++;
+          while (ISCHARSPACE (*d))
+            d++;
+        }
+      else if (*s && *d) /* they should be an exact match otherwise */
         {
           if (*s++ != *d++)
             return FALSE;
         }
-
     }
 
-  /* get rid of the trailing spaces
-     in both source & destination */
+  /* skip trailing whitespaces */
   if (*s)
     while (ISCHARSPACE (*s))
       s++;

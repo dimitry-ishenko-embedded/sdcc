@@ -3,7 +3,7 @@
 // Some of these peepholes could be potentially moved to peeph.def, but a
 // GBZ80 expert should have a look at them before.
 //
-// (c) Philipp Klaus Krause (pkk@spth.de, philipp@colecovision.eu) 2006 - 2010
+// (c) Philipp Klaus Krause (pkk@spth.de, philipp@colecovision.eu) 2006 - 2015
 // *** modified by Leland Morrison for rabbit 2000 processor 2011
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
 replace restart {
 	ld	%1, %1
 } by {
-	; peephole 0 removed redundant load.
+	; peephole 0 removed redundant load from %1 into %1.
 } if notVolatile(%1)
 
 replace restart {
@@ -117,7 +117,7 @@ replace restart {
 } by {
 	; peephole 12 loaded %2 into %3 (%4) directly instead of going through %1.
 	ld	%3 (%4), %2
-} if canAssign(%3 %4 %2), notVolatile(%1), notUsed(%1)
+} if canAssign(%3 %4 %2), notVolatile(%1), notUsed(%1), notSame(%1 'hl')
 
 replace restart {
 	ld	%1, %2 (%3)
@@ -137,7 +137,7 @@ replace restart {
 	ld	%5 (%6), %4
 	; peephole 14 loaded %7 into %2 (%3) directly instead of going through %1.
 	ld	%2 (%3), %7
-} if canAssign(%2 %3 %7), notVolatile(%1), notUsed(%1), notSame(%1 %4)
+} if canAssign(%2 %3 %7), notVolatile(%1), notUsed(%1), notSame(%1 %4 %1 'hl')
 
 replace restart {
 	ld	%1, %2 (%3)
@@ -147,7 +147,7 @@ replace restart {
 	ld	%7, %2 (%3)
 	; peephole 15 loaded %2 (%3) into %7 directly instead of going through %1.
 	ld	%4, %5
-} if canAssign(%7 %2 %3), notVolatile(%1), notUsed(%1), notSame(%1 %5), notSame(%7 %4), notSame(%7 %5), notSame(%4 '(hl)' '(de)' '(bc)'), notSame(%5 '(hl)' '(de)' '(bc)' '(iy)')
+} if canAssign(%7 %2 %3), notVolatile(%1), notUsed(%1), operandsNotRelated(%1 %5), operandsNotRelated(%7 %4), operandsNotRelated(%7 %5), notSame(%4 '(hl)' '(de)' '(bc)'), notSame(%5 '(hl)' '(de)' '(bc)' '(iy)')
 
 replace restart {
 	ld	%1,#%2
@@ -266,7 +266,7 @@ replace restart {
 	ld	b,h
 	ld	(hl),#%1
 	; peephole 25 loaded #%1 into (hl) instead of (bc).
-}
+} if notUsed('a')
 
 replace restart {
 	ex	de, hl
@@ -351,7 +351,7 @@ replace restart {
 	; peephole 34 loaded %3 from %2 instead of going through %1 (ix).
 	ld	%1 (ix), %2
 	ld	%3, %2
-}
+} if canAssign(%3 %2)
 // Don't need to check for volatile, since ix is used for the stack.
 
 replace restart {
@@ -363,7 +363,7 @@ replace restart {
 	push	de
 	; peephole 34a loaded %2 from a instead of %1 (ix)
 	ld	%2, a
-}	
+} if canAssign(%2 'a')
 
 replace restart {
 	push	af
@@ -1414,6 +1414,28 @@ replace restart {
 } if notUsed('hl')
 
 replace restart {
+	push	bc
+	pop	iy
+	inc	iy
+} by {
+	inc	bc
+	push	bc
+	pop	iy
+	; peephole 111b incremented in bc instead of iy.
+} if notUsed('bc')
+
+replace restart {
+	push	de
+	pop	iy
+	inc	iy
+} by {
+	inc	de
+	push	de
+	pop	iy
+	; peephole 111c incremented in de instead of iy.
+} if notUsed('de')
+
+replace restart {
 	ld	hl,%1
 	add	hl,%2
 	push	hl
@@ -1441,12 +1463,12 @@ replace restart {
 } if notUsed('a')
 
 replace restart {
-	call	%1
+	call    %1
 	ret
 } by {
-	jp	%1
+	jp  %1
 	; peephole 114 replaced call at end of function by jump (tail call optimization).
-}
+} if symmParmStack(%1)
 
 // Callee saves ix.
 replace restart {
@@ -1457,7 +1479,7 @@ replace restart {
 	pop	ix
 	jp	%1
 	; peephole115 replaced call at end of function by jump moving call beyond pop ix (tail call optimization).
-}
+} if symmParmStack(%1)
 
 replace restart {
 	ld	%1,#%2
@@ -1775,6 +1797,15 @@ replace restart {
 	jp	M,%2
 	; peephole 141 used sign flag instead of testing bit 7.
 }
+
+replace restart {
+	dec %1
+	ld	a, %1
+	or	a, a
+} by {
+	dec %1
+	; peephole 141a removed redundant transfer and flag setting in a
+} if notUsed('a')
 
 replace restart {
 	ld	%1,a
@@ -2105,6 +2136,9 @@ replace restart {
 	; peephole 152 replaced jump by return.
 } if labelIsReturnOnly(%5), labelRefCountChange(%5 -1)
 
+// Replace jp by ret before replacing jp by jr outside of jump tables, since using ret can reduce the number of references to jump labels.
+barrier
+
 replace {
 	jp	%5
 } by {
@@ -2139,4 +2173,12 @@ replace {
 	jr	NC,%5
 	; peephole 157 changed absolute to relative conditional jump.
 } if labelInRange(%5)
+
+replace {
+	dec b
+	jr	NZ,	%5	
+} by {
+	djnz	%5
+	; peephole 158 used djnz
+}
 

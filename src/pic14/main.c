@@ -396,11 +396,11 @@ PORT pic_port =
   },
   { NULL, NULL },
   {
-    +1, 1, 4, 1, 1, 0
+    +1, 1, 4, 1, 1, 0, 0
   },
     /* pic14 has an 8 bit mul */
   {
-    1, -1
+    -1, FALSE
   },
   {
     pic14_emitDebuggerSymbol
@@ -424,6 +424,7 @@ PORT pic_port =
   _pic14_setDefaultOptions,
   pic14_assignRegisters,
   _pic14_getRegName,
+  0,
   NULL,
   _pic14_keywords,
   _pic14_genAssemblerPreamble,

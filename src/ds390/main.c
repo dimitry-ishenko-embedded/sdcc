@@ -215,12 +215,6 @@ _ds390_finaliseOptions (void)
           if (!options.stack_loc) options.stack_loc = 0x400008;
         }
 
-      /* generate native code 16*16 mul/div */
-      if (options.useAccelerator)
-        port->support.muldiv=2;
-      else
-        port->support.muldiv=1;
-
       /* Fixup the memory map for the stack; it is now in
        * far space and requires an FPOINTER to access it.
        */
@@ -275,6 +269,7 @@ _ds390_genAssemblerPreamble (FILE * of)
   fputs ("mb\t=\t0xD4\n", of);
   fputs ("mc\t=\t0xD5\n", of);
   fputs ("acon\t=\t0x9D\n", of);
+  fputs ("mcon\t=\t0xC6\n", of);
   fputs ("F1\t=\t0xD1\t; user flag\n", of);
   if (options.parms_in_bank1)
     {
@@ -331,16 +326,21 @@ _ds390_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
         }
 
       dbuf_printf (oBuf, "__reset_vect:\n");
-      dbuf_printf (oBuf, "\tmov _TA,#0xAA\n");
-      dbuf_printf (oBuf, "\tmov _TA,#0x55\n");
       if (options.stack10bit)
         {
-          dbuf_printf (oBuf, "\tmov acon,#0x06\t;24 bit addresses, 10 bit stack at 0x400000\n");
+          dbuf_printf (oBuf, "\tmov _TA,#0xAA\n");
+          dbuf_printf (oBuf, "\tmov _TA,#0x55\n");
+          dbuf_printf (oBuf, "\tmov acon,#0x06\t;24 bit addresses, 10 bit stack\n");
+          dbuf_printf (oBuf, "\tmov _TA,#0xAA\n");
+          dbuf_printf (oBuf, "\tmov _TA,#0x55\n");
+          dbuf_printf (oBuf, "\tmov mcon,#0x90\t;10 bit stack at 0x400000\n");
           dbuf_printf (oBuf, "\tmov _ESP,#0x00\t; reinitialize the stack\n");
           dbuf_printf (oBuf, "\tmov _SP,#0x00\n");
         }
       else
         {
+          dbuf_printf (oBuf, "\tmov _TA,#0xAA\n");
+          dbuf_printf (oBuf, "\tmov _TA,#0x55\n");
           dbuf_printf (oBuf, "\tmov acon,#0x02\t;24 bit addresses, default 8 bit stack\n");
         }
       dbuf_printf (oBuf, "\tljmp\t__sdcc_gsinit_startup\n");
@@ -387,7 +387,8 @@ _ds390_genInitStartup (FILE *of)
 }
 
 /* Generate code to copy XINIT to XISEG */
-static void _ds390_genXINIT (FILE * of) {
+static void _ds390_genXINIT (FILE * of)
+{
   fprintf (of, ";       _ds390_genXINIT() start\n");
   fprintf (of, "        mov     a,#l_XINIT\n");
   fprintf (of, "        orl     a,#l_XINIT>>8\n");
@@ -413,6 +414,31 @@ static void _ds390_genXINIT (FILE * of) {
   fprintf (of, "        mov     dps,#0\n");
   fprintf (of, "00003$:\n");
   fprintf (of, ";       _ds390_genXINIT() end\n");
+
+  fprintf (of, ";       _ds390_genXRAMCLEAR() start\n");
+  fprintf (of, "        mov	r0,#l_PSEG\n");
+  fprintf (of, "        mov	a,r0\n");
+  fprintf (of, "        orl	a,#(l_PSEG >> 8)\n");
+  fprintf (of, "        jz	00006$\n");
+  fprintf (of, "        mov	r1,#s_PSEG\n");
+  fprintf (of, "        mov	_P2,#(s_PSEG >> 8)\n");
+  fprintf (of, "        clr     a\n");
+  fprintf (of, "00005$:	movx	@r1,a\n");
+  fprintf (of, "        inc	r1\n");
+  fprintf (of, "        djnz	r0,00005$\n");
+  fprintf (of, "00006$: mov	r0,#l_XSEG\n");
+  fprintf (of, "        mov	a,r0\n");
+  fprintf (of, "        orl	a,#(l_XSEG >> 8)\n");
+  fprintf (of, "        jz	00008$\n");
+  fprintf (of, "        mov	r1,#((l_XSEG + 255) >> 8)\n");
+  fprintf (of, "        mov	dptr,#s_XSEG\n");
+  fprintf (of, "        clr     a\n");
+  fprintf (of, "00007$:	movx	@dptr,a\n");
+  fprintf (of, "        inc	dptr\n");
+  fprintf (of, "        djnz	r0,00007$\n");
+  fprintf (of, "        djnz	r1,00007$\n");
+  fprintf (of, "00008$:\n");
+  fprintf (of, ";       _ds390_genXRAMCLEAR() end\n");
 }
 
 /* Do CSE estimation */
@@ -443,7 +469,9 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
 
 bool _ds390_nativeMulCheck(iCode *ic, sym_link *left, sym_link *right)
 {
-    return FALSE; // #STUB
+    return
+      getSize (left) == 1 && getSize (right) == 1 ||
+      options.useAccelerator && getSize (left) == 2 && getSize (right) == 2;
 }
 
 /* Indicate which extended bit operations this port supports */
@@ -1032,9 +1060,9 @@ PORT ds390_port =
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
-  { +1, 1, 4, 1, 1, 0 },
+  { +1, 1, 4, 1, 1, 0, 0 },
   /* ds390 has an 16 bit mul & div */
-  { 2, -1 },
+  { -1, FALSE },
   { ds390_emitDebuggerSymbol },
   {
     255/4,      /* maxCount */
@@ -1053,6 +1081,7 @@ PORT ds390_port =
   _ds390_setDefaultOptions,
   ds390_assignRegisters,
   _ds390_getRegName,
+  0,
   NULL,
   _ds390_keywords,
   _ds390_genAssemblerPreamble,
@@ -1147,12 +1176,6 @@ static void _tininative_finaliseOptions (void)
     }
 
     if (!options.stack_loc) options.stack_loc = 0x400008;
-
-    /* generate native code 16*16 mul/div */
-    if (options.useAccelerator)
-        port->support.muldiv=2;
-    else
-        port->support.muldiv=1;
 
     /* Fixup the memory map for the stack; it is now in
      * far space and requires a FPOINTER to access it.
@@ -1375,9 +1398,9 @@ PORT tininative_port =
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
-  { +1, 1, 4, 1, 1, 0 },
+  { +1, 1, 4, 1, 1, 0, 0 },
   /* ds390 has an 16 bit mul & div */
-  { 2, -1 },
+  { -1, FALSE },
   { ds390_emitDebuggerSymbol },
   {
     255/4,      /* maxCount */
@@ -1396,6 +1419,7 @@ PORT tininative_port =
   _tininative_setDefaultOptions,
   ds390_assignRegisters,
   _ds390_getRegName,
+  0,
   NULL,
   _tininative_keywords,
   _tininative_genAssemblerPreamble,
@@ -1407,7 +1431,7 @@ PORT tininative_port =
   _ds390_regparm,
   NULL,
   NULL,
-  NULL,
+  _ds390_nativeMulCheck,
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   FALSE,
@@ -1522,12 +1546,6 @@ _ds400_finaliseOptions (void)
           // assumes IDM1:0 = 1:0, CMA = 1.
         }
 
-      /* generate native code 16*16 mul/div */
-      if (options.useAccelerator)
-        port->support.muldiv=2;
-      else
-        port->support.muldiv=1;
-
       /* Fixup the memory map for the stack; it is now in
        * far space and requires a FPOINTER to access it.
        */
@@ -1635,9 +1653,8 @@ PORT ds400_port =
     1
   },
   { _ds400_generateRomDataArea, _ds400_linkRomDataArea },
-  { +1, 1, 4, 1, 1, 0 },
-  /* ds390 has an 16 bit mul & div */
-  { 2, -1 },
+  { +1, 1, 4, 1, 1, 0, 0 },
+  { -1, FALSE },
   { ds390_emitDebuggerSymbol },
   {
     255/4,      /* maxCount */
@@ -1656,6 +1673,7 @@ PORT ds400_port =
   _ds390_setDefaultOptions,
   ds390_assignRegisters,
   _ds390_getRegName,
+  0,
   NULL,
   _ds390_keywords,
   _ds390_genAssemblerPreamble,
