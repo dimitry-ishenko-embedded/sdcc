@@ -17,7 +17,6 @@
 #define TARGET_ID_DS390    5
 #define TARGET_ID_PIC14    6
 #define TARGET_ID_PIC16    7
-#define TARGET_ID_XA51     9
 #define TARGET_ID_DS400    10
 #define TARGET_ID_HC08     11
 #define TARGET_ID_Z180     12
@@ -36,7 +35,6 @@
 #define TARGET_IS_DS400    (port->id == TARGET_ID_DS400)
 #define TARGET_IS_PIC14    (port->id == TARGET_ID_PIC14)
 #define TARGET_IS_PIC16    (port->id == TARGET_ID_PIC16)
-#define TARGET_IS_XA51     (port->id == TARGET_ID_XA51)
 #define TARGET_IS_Z80      (port->id == TARGET_ID_Z80)
 #define TARGET_IS_Z180     (port->id == TARGET_ID_Z180)
 #define TARGET_IS_R2K      (port->id == TARGET_ID_R2K)
@@ -251,17 +249,19 @@ typedef struct
     /** 'banked' call overhead.
         Mild overlap with bank_overhead */
     int banked_overhead;
+    /** 0 if sp points to last item pushed, 1 if sp points to next location to use */
+    int offset;
+
   }
   stack;
 
   struct
   {
-    /** One more than the smallest
-        mul/div operation the processor can do natively
-        Eg if the processor has an 8 bit mul, native below is 2 */
-    unsigned int muldiv;
     /** Size of the biggest shift the port can handle. -1 if port can handle shifts of arbitrary size. */
     signed int shift;
+
+    /* Has support routines for int x int -> long multiplication and unsigned int x unsigned int -> unsigned long multiplication */
+    bool has_mulint2long;
   }
   support;
 
@@ -321,6 +321,8 @@ typedef struct
       Used so that 'reg_info' can be an incomplete type. */
   const char *(*getRegName) (const struct reg_info *reg);
 
+  int (*getRegByName) (const char *name);
+
   /** Try to keep track of register contents. */
   bool (*rtrackUpdate)(const char* line);
 
@@ -360,7 +362,7 @@ typedef struct
   /** Returns true if the port can multiply the two types nativly
       without using support functions.
    */
-  bool (*hasNativeMulFor) (iCode * ic, sym_link * left, sym_link * right);
+  bool (*hasNativeMulFor) (iCode *ic, sym_link *left, sym_link *right);
 
   /** Returns true if the port has implemented certain bit
       manipulation iCodes (RRC, RLC, SWAP, GETHBIT, GETABIT, GETBYTE, GETWORD)
@@ -399,7 +401,7 @@ typedef struct
   int num_regs;                 /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
 
 #define PORT_MAGIC 0xAC32
-  /** Used at runtime to detect if this structure has been completly filled in. */
+  /** Used at runtime to detect if this structure has been completely filled in. */
   int magic;
 }
 PORT;
@@ -441,9 +443,6 @@ extern PORT pic16_port;
 #endif
 #if !OPT_DISABLE_TININative
 extern PORT tininative_port;
-#endif
-#if !OPT_DISABLE_XA51
-extern PORT xa51_port;
 #endif
 #if !OPT_DISABLE_DS400
 extern PORT ds400_port;

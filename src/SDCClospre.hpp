@@ -19,11 +19,15 @@
 //
 // Lifetime-optimal speculative partial redundancy elimination.
 
+// Workaround for boost bug #11880
+#include <boost/version.hpp>
+#if BOOST_VERSION == 106000
+   #include <boost/type_traits/ice.hpp>
+#endif
+
 #include <boost/graph/graphviz.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/tuple/tuple_comparison.hpp>
-
-#include "SDCCtree_dec.hpp"
 
 extern "C"
 {
@@ -37,15 +41,10 @@ extern "C"
 #include "port.h"
 }
 
-#ifdef HAVE_STX_BTREE_SET_H
-#include <stx/btree_set.h>
-#endif
-
-#if 0 //def HAVE_STX_BTREE_SET_H
-typedef stx::btree_set<unsigned short int> lospreset_t; // Faster than std::set
-#else
 typedef std::set<unsigned short int> lospreset_t;
-#endif
+
+// #define DEBUG_LOSPRE
+// #define DEBUG_LOSPRE_ASS
 
 struct assignment_lospre
 {
@@ -62,6 +61,8 @@ struct assignment_lospre
 
     for (i = local.begin(), ai = a.local.begin();; ++i, ++ai)
       {
+        if (i == i_end && ai == ai_end)
+          return(false);
         if (i == i_end)
           return(true);
         if (ai == ai_end)
@@ -113,9 +114,16 @@ struct tree_dec_lospre_node
 };
 
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, cfg_lospre_node, float> cfg_lospre_t; // The edge property is the cost of subdividing the edge and inserting an instruction (for now we always use 1, optimizing for code size, but relative execution frequency could be used when optimizing for speed or total energy consumption; aggregates thereof can be a good idea as well).
-typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, tree_dec_lospre_node> tree_dec_lospre_t;
+typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, tree_dec_lospre_node> tree_dec_t;
 
-#if 1
+#ifdef HAVE_TREEDEC_COMBINATIONS_HPP
+#include <treedec/treedec_traits.hpp>
+TREEDEC_TREEDEC_BAG_TRAITS(tree_dec_t, bag);
+#endif
+
+#include "SDCCtree_dec.hpp"
+
+#ifdef DEBUG_LOSPRE
 void print_assignment(const assignment_lospre &a, cfg_lospre_t G)
 {
   wassert(a.global.size() == boost::num_vertices (G));
@@ -187,6 +195,10 @@ void tree_dec_lospre_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
   adjacency_iter_t c, c_end;
   boost::tie(c, c_end) = adjacent_vertices(t, T);
 
+#ifdef DEBUG_LOSPRE_ASS
+  std::cout << "Forget (" << t << "):\n"; std::cout.flush();
+#endif
+
   assignment_list_lospre_t &alist = T[t].assignments;
 
   std::swap(alist, T[*c].assignments);
@@ -227,6 +239,14 @@ void tree_dec_lospre_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
 
   alist.sort();
 
+#ifdef DEBUG_LOSPRE_ASS
+  for(ai = alist.begin(); ai != alist.end(); ++ai)
+    {
+      print_assignment(*ai, G);
+      std::cout << "\n";
+    }
+#endif
+
   // Collapse (locally) identical assignments.
   for (ai = alist.begin(); ai != alist.end();)
     {
@@ -251,6 +271,18 @@ void tree_dec_lospre_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
 
   if(!alist.size())
     std::cerr << "No surviving assignments at forget node (lospre).\n";
+
+#ifdef DEBUG_LOSPRE
+  std::cout << "Remaining assignments: " << alist.size() << "\n"; std::cout.flush();
+#endif
+
+#ifdef DEBUG_LOSPRE_ASS
+  for(ai = alist.begin(); ai != alist.end(); ++ai)
+    {
+      print_assignment(*ai, G);
+      std::cout << "\n";
+    }
+#endif
 }
 
 // Handle join nodes in the nice tree decomposition
@@ -509,6 +541,7 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
   newic->lineno = ic->lineno;
   newic->prev = G[boost::source(e, G)].ic;
   newic->next = G[boost::target(e, G)].ic;
+  newic->count = G[boost::source(e, G)].ic->count;
   G[boost::source(e, G)].ic->next = newic;
   G[boost::target(e, G)].ic->prev = newic;
 
@@ -520,11 +553,11 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
 
   // Insert node into cfg.
   typename boost::graph_traits<G_t>::vertex_descriptor n = boost::add_vertex(G);
-  // TODO: Exact cost.
+
   G[n].ic = newic;
   G[n].uses = false;
   boost::add_edge(boost::source(e, G), n, G[e], G);
-  boost::add_edge(n, boost::target(e, G), 3.0, G);
+  boost::add_edge(n, boost::target(e, G), G[e], G);
 
 #ifdef DEBUG_LOSPRE
   std::cout << "Calculating " << OP_SYMBOL_CONST(tmpop)->name << " at ic " << newic->key << "\n";
@@ -571,7 +604,7 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
 
       iCode *nic = G[i].ic;
 
-      if (isOperandEqual(IC_RESULT(ic), IC_LEFT(nic)) && nic->op != ADDRESS_OF && (!POINTER_GET(nic) || !IS_PTR(operandType(IC_RESULT(nic))) || !IS_BITFIELD(operandType(IC_LEFT(nic))->next) || compareType(operandType(IC_LEFT(nic)), operandType(tmpop)) == 1))
+      if (isOperandEqual(IC_RESULT(ic), IC_LEFT(nic)) && nic->op != ADDRESS_OF && nic->op != PCALL && (!POINTER_GET(nic) || !IS_PTR(operandType(IC_LEFT(nic))) || !IS_BITFIELD(operandType(IC_LEFT(nic))->next) || compareType(operandType(IC_LEFT(nic)), operandType(tmpop)) == 1))
         {
           bool isaddr = IC_LEFT (nic)->isaddr;
 #ifdef DEBUG_LOSPRE
@@ -730,7 +763,7 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
 
 /* Using a template here confuses debugging tools such as valgrind. */
 /*template <class T_t, class G_t>*/
-static int tree_dec_lospre (tree_dec_lospre_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G, const iCode *ic)
+static int tree_dec_lospre (tree_dec_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G, const iCode *ic)
 {
   if(tree_dec_lospre_nodes(T, find_root(T), G))
     return(-1);
@@ -738,8 +771,10 @@ static int tree_dec_lospre (tree_dec_lospre_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G,
   wassert(T[find_root(T)].assignments.begin() != T[find_root(T)].assignments.end());
   const assignment_lospre &winner = *(T[find_root(T)].assignments.begin());
 
-  //std::cout << "Winner (lospre): ";
-  //print_assignment(winner, G);
+#ifdef DEBUG_LOSPRE
+  std::cout << "Winner (lospre): ";
+  print_assignment(winner, G);
+#endif
 
   int change;
   if (change = implement_lospre_assignment(winner, T, G, ic))
@@ -760,7 +795,7 @@ static void implement_safety(const assignment_lospre &a, G_t &G)
 
 /* Using a template here confuses debugging tools such as valgrind. */
 /*template <class T_t, class G_t>*/
-static int tree_dec_safety (tree_dec_lospre_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G, const iCode *ic)
+static int tree_dec_safety (tree_dec_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G, const iCode *ic)
 {
   if(tree_dec_safety_nodes(T, find_root(T), G))
     return(-1);

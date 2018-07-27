@@ -108,7 +108,9 @@ CCR_RESULT;
 /* forward definitions for the symbol table related functions */
 value *newValue (void);
 value *constVal (const char *);
-value *constCharVal (unsigned char);
+value *constIntVal (const char *);
+value *constCharacterVal (unsigned long v, char type);
+value *constCharVal (unsigned char v);
 value *constBoolVal (bool v);
 value *reverseVal (value *);
 value *reverseValWithType (value *);
@@ -120,7 +122,7 @@ value *symbolVal (symbol *);
 void printVal (value *);
 double floatFromVal (value *);
 unsigned long ulFromVal (value *);
-TYPE_TARGET_ULONGLONG ullFromVal (value *);
+unsigned long long ullFromVal (value *);
 
 /* convert a fixed16x16 type to double */
 double doubleFromFixed16x16 (TYPE_TARGET_ULONG value);
@@ -167,6 +169,7 @@ bool convertIListToConstList (initList * src, literalList ** lList, int size);
 literalList *copyLiteralList (literalList * src);
 unsigned long double2ul (double val);
 unsigned char byteOfVal (value *, int);
+int csdOfVal (int *topbit, int *nonzero, unsigned long long *csd_add, unsigned long long *csd_sub, value *val);
 int isEqualVal (value *, int);
 TYPE_TARGET_ULONGLONG ullFromLit (sym_link * lit);
 value * valRecastLitVal (sym_link * dtype, value * val);

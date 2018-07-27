@@ -105,6 +105,7 @@ static struct
 } _G;
 
 static reg_info _gbz80_regs[] = {
+  {REG_GPR, A_IDX, "a", 1},
   {REG_GPR, C_IDX, "c", 1},
   {REG_GPR, B_IDX, "b", 1},
   {REG_GPR, E_IDX, "e", 1},
@@ -115,6 +116,7 @@ static reg_info _gbz80_regs[] = {
 };
 
 static reg_info _z80_regs[] = {
+  {REG_GPR, A_IDX, "a", 1},
   {REG_GPR, C_IDX, "c", 1},
   {REG_GPR, B_IDX, "b", 1},
   {REG_GPR, E_IDX, "e", 1},
@@ -145,7 +147,7 @@ allocReg (short type)
 {
   int i;
 
-  for (i = 0; i < _G.nRegs; i++)
+  for (i = C_IDX; i < _G.nRegs; i++)
     {
       /* For now we allocate from any free */
       if (regsZ80[i].isFree)
@@ -171,7 +173,7 @@ regWithIdx (int idx)
 {
   int i;
 
-  for (i = 0; i < _G.nRegs; i++)
+  for (i = C_IDX; i < _G.nRegs; i++)
     {
       if (regsZ80[i].rIdx == idx)
         {
@@ -202,7 +204,7 @@ nFreeRegs (int type)
   int i;
   int nfr = 0;
 
-  for (i = 0; i < _G.nRegs; i++)
+  for (i = C_IDX; i < _G.nRegs; i++)
     {
       /* For now only one reg type */
       if (regsZ80[i].isFree)
@@ -294,7 +296,7 @@ hasSpilLoc (symbol * sym, eBBlock * ebp, iCode * ic)
 
 #ifdef OLDRALLOC
 /** Will return 1 if the remat flag is set.
-    A symbol is rematerialisable if it doesnt need to be allocated
+    A symbol is rematerialisable if it doesn't need to be allocated
     into registers at creation as it can be re-created at any time -
     i.e. it's constant in some way.
 */
@@ -528,7 +530,7 @@ spillThis (symbol * sym)
       createStackSpil (sym);
     }
 
-  /* mark it has spilt & put it in the spilt set */
+  /* mark it as spilt & put it in the spilt set */
   sym->isspilt = sym->spillA = 1;
   _G.spiltSet = bitVectSetBit (_G.spiltSet, sym->key);
 
@@ -1005,7 +1007,7 @@ tryAllocatingRegPair (symbol * sym)
 {
   int i;
   wassert (sym->nRegs == 2);
-  for (i = 0; i < _G.nRegs; i += 2)
+  for (i = C_IDX; i < _G.nRegs; i += 2)
     {
       if ((regsZ80[i].isFree) && (regsZ80[i + 1].isFree))
         {
@@ -1434,7 +1436,7 @@ rUmaskForOp (const operand * op)
 
   for (j = 0; j < sym->nRegs; j++)
     {
-      if (!(sym->regs[j]) || sym->regs[j]->rIdx < C_IDX || sym->regs[j]->rIdx > CND_IDX)
+      if (!(sym->regs[j]) || sym->regs[j]->rIdx < 0 || sym->regs[j]->rIdx > CND_IDX)
         {
           werror (E_INTERNAL_ERROR, __FILE__, __LINE__, "rUmaskForOp: Register not found");
           exit (0);
@@ -1683,7 +1685,7 @@ freeAllRegs ()
 
   D (D_ALLOC, ("freeAllRegs: running.\n"));
 
-  for (i = 0; i < _G.nRegs; i++)
+  for (i = C_IDX; i < _G.nRegs; i++)
     regsZ80[i].isFree = 1;
 }
 
@@ -1720,7 +1722,7 @@ packRegsForAssign (iCode * ic, eBBlock * ebp)
   for (dic = ic->prev; dic; dic = dic->prev)
     {
       /* PENDING: Don't pack across function calls. */
-      if (dic->op == CALL || dic->op == PCALL || dic->op == INLINEASM)
+      if (dic->op == CALL || dic->op == PCALL || dic->op == INLINEASM || dic->op == CRITICAL || dic->op == ENDCRITICAL)
         {
           dic = NULL;
           break;
@@ -2753,12 +2755,6 @@ packRegisters (eBBlock * ebp)
           continue;
         }
 
-#if 0
-      /* reduce for support function calls */
-      if (ic->supportRtn || ic->op == '+' || ic->op == '-')
-        packRegsForSupport (ic, ebp);
-#endif
-
       /* some cases the redundant moves can
          can be eliminated for return statements */
       if (ic->op == RETURN || ic->op == SEND)
@@ -2852,8 +2848,7 @@ joinPushes (iCode * lic)
       val = constVal (dbuf_c_str (&dbuf));
       dbuf_destroy (&dbuf);
       SPEC_NOUN (val->type) = V_INT;
-      IC_LEFT (ic) = operandFromOperand (IC_LEFT (ic));
-      OP_VALUE (IC_LEFT (ic)) = val;
+      IC_LEFT (ic) = operandFromValue (val);
 
       /* Now remove the second one from the list. */
       ic->next = uic->next;
@@ -3028,12 +3023,12 @@ z80_oldralloc (ebbIndex * ebbi)
   if (IS_GB)
     {
       /* DE is required for the code gen. */
-      _G.nRegs = 2;
+      _G.nRegs = 3;
       regsZ80 = _gbz80_regs;
     }
   else
     {
-      _G.nRegs = 4;
+      _G.nRegs = 5;
       regsZ80 = _z80_regs;
     }
     
@@ -3112,7 +3107,7 @@ z80_oldralloc (ebbIndex * ebbi)
 /* New register allocator                                          */
 /*-----------------------------------------------------------------*/
 void
-z80_ralloc (ebbIndex * ebbi)
+z80_ralloc (ebbIndex *ebbi)
 {
   eBBlock **ebbs = ebbi->bbOrder;
   int count = ebbi->count;
@@ -3158,6 +3153,8 @@ z80_ralloc (ebbIndex * ebbi)
   /* Mark variables for assignment by the new allocator */
   serialRegMark (ebbs, count);
 
+  joinPushes (iCodeLabelOptimize(iCodeFromeBBlock (ebbs, count)));
+
   /* The new register allocator invokes its magic */
   ic = z80_ralloc2_cc (ebbi);
 
@@ -3183,8 +3180,6 @@ z80_ralloc (ebbIndex * ebbi)
       dumpEbbsToFileExt (DUMP_RASSGN, ebbi);
       dumpLiveRanges (DUMP_LRANGE, liveRanges);
     }
-
-  ic = joinPushes (ic);
 
   /* redo that offsets for stacked automatic variables */
   redoStackOffsets ();

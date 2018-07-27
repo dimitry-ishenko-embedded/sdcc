@@ -82,7 +82,7 @@ SOURCES_FLOAT = $(COMMON_FLOAT) \
   _fsreturnval.c \
   _fsrshift.c \
   _fsswapargs.c \
-  _logexpf.c
+  _logexpf.c 
 
 SOURCES_INT = $(COMMON_INT) \
   _divsint.c \
@@ -120,7 +120,9 @@ SOURCES_SDCC = $(COMMON_SDCC) \
   _ltoa.c \
   _spx.c \
   _startup.c \
+  _strcmp.c \
   _strlen.c \
+  _memcpy.c \
   _memmove.c \
   _strcpy.c \
   _heap.c \
@@ -186,7 +188,7 @@ TARGETS        += model-s08
 endif
 
 ifeq ($(OPT_DISABLE_MCS51), 0)
-TARGETS        += models small-mcs51-stack-auto
+TARGETS        += models small-mcs51-stack-auto large-mcs51-stack-auto
 endif
 
 ifeq ($(OPT_DISABLE_PIC14), 0)
@@ -253,6 +255,12 @@ small-mcs51-stack-auto:
 	  $(MAKE) MODELFLAGS="--model-small --stack-auto" PORT=small-stack-auto PORTDIR=$(BUILDDIR)/small-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
 	fi
 
+large-mcs51-stack-auto:
+	if grep '^mcs51$$' $(top_builddir)/ports.build > /dev/null; then \
+	  mkdir -p large-stack-auto; cp small/Makefile large-stack-auto; \
+	  $(MAKE) MODELFLAGS="--model-large --stack-auto" PORT=large-stack-auto PORTDIR=$(BUILDDIR)/large-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects; \
+	fi
+
 model-mcs51-stack-auto:
 	if grep '^mcs51$$' $(top_builddir)/ports.build > /dev/null; then \
 	  for model in $(MODELS); do \
@@ -294,10 +302,10 @@ ifeq ($(LIB_TYPE), SDCCLIB)
 	$(top_builddir)/bin/sdcclib -a $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
 else
   ifeq ($(LIB_TYPE), AR)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
   else
     ifeq ($(LIB_TYPE), RANLIB)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/lib$(PORT).lib $(XA51OBJECTS)
     else
 	rm -f $(PORTDIR)/lib$(PORT).lib
 	for i in $(notdir $(basename $(XA51OBJECTS))); do echo $$i >> $(PORTDIR)/lib$(PORT).lib; done
@@ -437,37 +445,37 @@ else
   ifeq ($(LIB_TYPE), AR)
 
 $(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
 
 $(PORTDIR)/libint.lib: $(OBJECTS_INT)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/libint.lib $(OBJECTS_INT)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/libint.lib $(OBJECTS_INT)
 
 $(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
 
 $(PORTDIR)/liblonglong.lib: $(OBJECTS_LONGLONG)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/liblonglong.lib $(OBJECTS_LONGLONG)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/liblonglong.lib $(OBJECTS_LONGLONG)
 
 $(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
-	$(top_builddir)/bin/sdar -rcS $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
+	$(top_builddir)/bin/sdar -rcSD $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
 
   else
     ifeq ($(LIB_TYPE), RANLIB)
 
 $(PORTDIR)/libfloat.lib: $(OBJECTS_FLOAT)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/libfloat.lib $(OBJECTS_FLOAT)
 
 $(PORTDIR)/libint.lib: $(OBJECTS_INT)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/libint.lib $(OBJECTS_INT)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/libint.lib $(OBJECTS_INT)
 
 $(PORTDIR)/liblong.lib: $(OBJECTS_LONG)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/liblong.lib $(OBJECTS_LONG)
 
 $(PORTDIR)/liblonglong.lib: $(OBJECTS_LONGLONG)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/liblonglong.lib $(OBJECTS_LONGLONG)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/liblonglong.lib $(OBJECTS_LONGLONG)
 
 $(PORTDIR)/libsdcc.lib: $(OBJECTS_SDCC)
-	$(top_builddir)/bin/sdar -rc $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
+	$(top_builddir)/bin/sdar -rcD $(PORTDIR)/libsdcc.lib $(OBJECTS_SDCC)
 
     else
 

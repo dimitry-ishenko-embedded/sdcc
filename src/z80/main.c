@@ -33,6 +33,7 @@
 #define OPTION_BA              "-ba"
 #define OPTION_CODE_SEG        "--codeseg"
 #define OPTION_CONST_SEG       "--constseg"
+#define OPTION_DATA_SEG        "--dataseg"
 #define OPTION_CALLEE_SAVES_BC "--callee-saves-bc"
 #define OPTION_PORTMODE        "--portmode="
 #define OPTION_ASM             "--asm="
@@ -72,6 +73,7 @@ static OPTION _z80_options[] = {
   {0, OPTION_ASM,             NULL, "Define assembler name (rgbds/asxxxx/isas/z80asm)"},
   {0, OPTION_CODE_SEG,        &options.code_seg, "<name> use this name for the code segment", CLAT_STRING},
   {0, OPTION_CONST_SEG,       &options.const_seg, "<name> use this name for the const segment", CLAT_STRING},
+  {0, OPTION_DATA_SEG,        &options.data_seg, "<name> use this name for the data segment", CLAT_STRING},
   {0, OPTION_NO_STD_CRT0,     &options.no_std_crt0, "For the z80/gbz80 do not link default crt0.rel"},
   {0, OPTION_RESERVE_IY,      &z80_opts.reserveIY, "Do not use IY (incompatible with --fomit-frame-pointer)"},
   {0, OPTION_OLDRALLOC,       &options.oldralloc, "Use old register allocator"},
@@ -86,6 +88,7 @@ static OPTION _gbz80_options[] = {
   {0, OPTION_CALLEE_SAVES_BC, &z80_opts.calleeSavesBC, "Force a called function to always save BC"},
   {0, OPTION_CODE_SEG,        &options.code_seg, "<name> use this name for the code segment", CLAT_STRING},
   {0, OPTION_CONST_SEG,       &options.const_seg, "<name> use this name for the const segment", CLAT_STRING},
+  {0, OPTION_DATA_SEG,        &options.data_seg, "<name> use this name for the data segment", CLAT_STRING},
   {0, OPTION_NO_STD_CRT0,     &options.no_std_crt0, "For the z80/gbz80 do not link default crt0.rel"},
   {0, NULL}
 };
@@ -113,12 +116,13 @@ static char *_keywords[] = {
   "sfr",
   "nonbanked",
   "banked",
-  "at",                         //.p.t.20030714 adding support for 'sfr at ADDR' construct
-  "_naked",                     //.p.t.20030714 adding support for '_naked' functions
+  "at",
+  "_naked",
   "critical",
   "interrupt",
   "z88dk_fastcall",
   "z88dk_callee",
+  "smallc",
   NULL
 };
 
@@ -126,11 +130,25 @@ static char *_keywordsgb[] = {
   "sfr",
   "nonbanked",
   "banked",
-  "at",                         //.p.t.20030714 adding support for 'sfr at ADDR' construct
-  "_naked",                     //.p.t.20030714 adding support for '_naked' functions
+  "at",
+  "_naked",
   "critical",
   "interrupt",
   "z88dk_callee",
+  "smallc",
+  NULL
+};
+
+static char *_keywordstlcs90[] = {
+  "nonbanked",
+  "banked",
+  "at",
+  "_naked",
+  "critical",
+  "interrupt",
+  "z88dk_fastcall",
+  "z88dk_callee",
+  "smallc",
   NULL
 };
 
@@ -487,7 +505,8 @@ _parseOptions (int *pargc, char **argv, int *i)
               return TRUE;
             }
         }
-      else if (!strncmp (argv[*i], OPTION_ASM, sizeof (OPTION_ASM) - 1))
+
+      if (!strncmp (argv[*i], OPTION_ASM, sizeof (OPTION_ASM) - 1))
         {
           char *asmblr = getStringArg (OPTION_ASM, argv, i, *pargc);
 
@@ -536,7 +555,7 @@ _parseOptions (int *pargc, char **argv, int *i)
               return TRUE;
             }
         }
-	  else if (!strncmp (argv[*i], OPTION_EMIT_EXTERNS, sizeof (OPTION_EMIT_EXTERNS) - 1))
+      else if (!strncmp (argv[*i], OPTION_EMIT_EXTERNS, sizeof (OPTION_EMIT_EXTERNS) - 1))
         {
           port->assembler.externGlobal = 1;
           return TRUE;
@@ -714,6 +733,30 @@ _getRegName (const struct reg_info *reg)
   return "err";
 }
 
+static int
+_getRegByName (const char *name)
+{
+  if (!strcmp (name, "a"))
+    return 0;
+  if (!strcmp (name, "c"))
+    return 1;
+  if (!strcmp (name, "b"))
+    return 2;
+  if (!strcmp (name, "e"))
+    return 3;
+  if (!strcmp (name, "d"))
+    return 4;
+  if (!strcmp (name, "l"))
+    return 5;
+  if (!strcmp (name, "h"))
+    return 6;
+  if (!strcmp (name, "iyl"))
+    return 7;
+  if (!strcmp (name, "iyh"))
+    return 8;
+  return -1;
+}
+
 static bool
 _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 {
@@ -846,7 +889,7 @@ PORT z80_port =
     NULL,                       //LINKCMD,
     NULL,
     ".rel",
-    1,
+    1,                          /* needLinkerScript */
     _crt,                       /* crt */
     _libs_z80,                  /* libs */
   },
@@ -893,19 +936,16 @@ PORT z80_port =
     1                           /* No fancy alignments supported. */
   },
   { NULL, NULL },
-  { -1, 0, 0, 4, 0, 2 },
-  /* Z80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 4, 0, 2, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _z80_init,
@@ -916,6 +956,7 @@ PORT z80_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
   _keywords,
   0,                            /* no assembler preamble */
@@ -1021,19 +1062,16 @@ PORT z180_port =
     1                           /* No fancy alignments supported. */
   },
   { NULL, NULL },
-  { -1, 0, 0, 4, 0, 2 },
-  /* Z80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 4, 0, 2, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _z180_init,
@@ -1044,6 +1082,7 @@ PORT z180_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
   _keywords,
   0,                            /* no assembler preamble */
@@ -1148,19 +1187,16 @@ PORT r2k_port =
     1                           /* No fancy alignments supported. */
   },
   { NULL, NULL },
-  { -1, 0, 0, 4, 0, 2 },
-  /* Z80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 4, 0, 2, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _r2k_init,
@@ -1171,6 +1207,7 @@ PORT r2k_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
   _keywords,
   0,                            /* no assembler preamble */
@@ -1276,19 +1313,16 @@ PORT r3ka_port =
     1                           /* No fancy alignments supported. */
   },
   { NULL, NULL },
-  { -1, 0, 0, 4, 0, 2 },
-  /* Z80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 4, 0, 2, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _r3ka_init,
@@ -1299,6 +1333,7 @@ PORT r3ka_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
   _keywords,
   0,                            /* no assembler preamble */
@@ -1406,19 +1441,16 @@ PORT gbz80_port =
     1                           /* No fancy alignments supported. */
   },
   { NULL, NULL },
-  { -1, 0, 0, 2, 0, 4 },
-  /* gbZ80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 2, 0, 4, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _gbz80_init,
@@ -1429,6 +1461,7 @@ PORT gbz80_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
   _keywordsgb,
   0,                            /* no assembler preamble */
@@ -1534,19 +1567,16 @@ PORT tlcs90_port =
     1                           /* No fancy alignments supported. */
    },
   { NULL, NULL },
-  { -1, 0, 0, 4, 0, 2 },
-  /* Z80 has no native mul/div commands */
-  { 0, -1 },
+  { -1, 0, 0, 4, 0, 2, 0 },
+  { -1, FALSE },
   { z80_emitDebuggerSymbol },
   {
-    255,                        /* maxCount */
+    256,                        /* maxCount */
     3,                          /* sizeofElement */
-    /* The rest of these costs are bogus. They approximate */
-    /* the behavior of src/SDCCicode.c 1.207 and earlier.  */
-    {4, 4, 4},                  /* sizeofMatchJump[] */
-    {0, 0, 0},                  /* sizeofRangeCompare[] */
-    0,                          /* sizeofSubtract */
-    3,                          /* sizeofDispatch */
+    {6, 7, 8},                  /* sizeofMatchJump[] - Assumes operand allocated to registers */
+    {6, 9, 15},                 /* sizeofRangeCompare[] - Assumes operand allocated to registers*/
+    1,                          /* sizeofSubtract - Assumes use of a singel inc or dec */
+    9,                          /* sizeofDispatch - Assumes operand allocated to register e or c*/
   },
   "_",
   _tlcs90_init,
@@ -1557,8 +1587,9 @@ PORT tlcs90_port =
   _setDefaultOptions,
   z80_assignRegisters,
   _getRegName,
+  _getRegByName,
   NULL,
-  _keywords,
+  _keywordstlcs90,
   0,                            /* no assembler preamble */
   NULL,                         /* no genAssemblerEnd */
   0,                            /* no local IVT generation code */
@@ -1588,3 +1619,4 @@ PORT tlcs90_port =
   9,                            /* Number of registers handled in the tree-decomposition-based register allocator in SDCCralloc.hpp */
   PORT_MAGIC
 };
+

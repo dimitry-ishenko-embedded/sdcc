@@ -7,13 +7,15 @@ extern void genSTM08Code (iCode *);
 
 reg_info stm8_regs[] =
 {
-
   {REG_GPR, A_IDX,   "a"},
   {REG_GPR, XL_IDX,  "xl"},
   {REG_GPR, XH_IDX,  "xh"},
   {REG_GPR, YL_IDX,  "yl"},
   {REG_GPR, YH_IDX,  "yh"},
   {REG_CND, C_IDX,   "c"},
+  {REG_GPR, X_IDX,   "x"},
+  {REG_GPR, Y_IDX,   "y"},
+  {0, SP_IDX,        "sp"},
 };
 
 /* Flags to turn on debugging code.
@@ -178,7 +180,7 @@ spillThis (symbol *sym, bool force_spill)
   if (!(sym->remat || sym->usl.spillLoc) || (sym->usl.spillLoc && !sym->usl.spillLoc->onStack)) // stm8 port currently only supports on-stack spill locations in code generation.
     createStackSpil (sym);
 
-  /* mark it has spilt & put it in the spilt set */
+  /* mark it as spilt */
   sym->isspilt = sym->spillA = 1;
 
   if (force_spill)
@@ -261,7 +263,6 @@ regTypeNum (void)
     }
 }
 
-#if 0
 /** Register reduction for assignment.
  */
 static int
@@ -356,6 +357,14 @@ packRegsForAssign (iCode *ic, eBBlock *ebp)
         }
     }
 
+  /* For now eliminate 8-bit temporary variables only.
+     The STM8 instruction soperating directly on memory
+     operands are 8-bit, so the most benefit is in 8-bit
+     operations. On the other hand, supporting wider
+     operations well in codegen is also more effort. */
+  if (bitsForType (operandType (IC_RESULT (dic))) > 8)
+    return 0;
+
   /* if the result is on stack or iaccess then it must be
      the same atleast one of the operands */
   if (OP_SYMBOL (IC_RESULT (ic))->onStack || OP_SYMBOL (IC_RESULT (ic))->iaccess)
@@ -425,7 +434,6 @@ packRegisters (eBBlock * ebp)
         break;
     }
 }
-#endif
 
 /**
   Mark variables for assignment by the register allocator.
@@ -475,7 +483,7 @@ serialRegMark (eBBlock ** ebbs, int count)
             {
               symbol *sym = OP_SYMBOL (IC_RESULT (ic));
 
-              D (D_ALLOC, ("serialRegAssign: in loop on result %p\n", sym));
+              D (D_ALLOC, ("serialRegMark: in loop on result %p\n", sym));
 
               if (sym->isspilt && sym->usl.spillLoc) // todo: Remove once remat is supported!
                 {
@@ -493,7 +501,7 @@ serialRegMark (eBBlock ** ebbs, int count)
               if (!sym->nRegs ||
                   sym->isspilt || sym->for_newralloc || sym->liveTo <= ic->seq)
                 {
-                  D (D_ALLOC, ("serialRegAssign: won't live long enough.\n"));
+                  D (D_ALLOC, ("serialRegMark: won't live long enough.\n"));
                   continue;
                 }
 
@@ -527,7 +535,7 @@ verifyRegsAssigned (operand * op, iCode * ic)
 {
   symbol *sym;
   int i;
-  bool completly_in_regs;
+  bool completely_in_regs;
 
   if (!op)
     return;
@@ -545,10 +553,10 @@ verifyRegsAssigned (operand * op, iCode * ic)
   if (sym->isspilt)
     return;
 
-  for(i = 0, completly_in_regs = TRUE; i < sym->nRegs; i++)
+  for(i = 0, completely_in_regs = TRUE; i < sym->nRegs; i++)
     if (!sym->regs[i])
-      completly_in_regs = FALSE;
-  if (completly_in_regs)
+      completely_in_regs = FALSE;
+  if (completely_in_regs)
     return;
 
   spillThis (sym, FALSE);
@@ -600,20 +608,15 @@ void
 stm8_assignRegisters (ebbIndex * ebbi)
 {
   eBBlock **ebbs = ebbi->bbOrder;
-  int count = ebbi->count;
+  int i, count = ebbi->count;
   iCode *ic;
-#if 0 // ENABLE WHEN LINKER BUG #2198 IS FIXED
-  int i;
-#endif
 
   stm8_init_asmops();
 
   /* change assignments this will remove some
      live ranges reducing some register pressure */
-#if 0 // ENABLE WHEN LINKER BUG #2198 IS FIXED
   for (i = 0; i < count; i++)
     packRegisters (ebbs[i]);
-#endif
 
   /* liveranges probably changed by register packing
      so we compute them again */
@@ -634,7 +637,7 @@ stm8_assignRegisters (ebbIndex * ebbi)
   /* Invoke optimal register allocator */
   ic = stm8_ralloc2_cc (ebbi);
 
-  /* Get spilllocs for all variables that have not been placed completly in regs */
+  /* Get spilllocs for all variables that have not been placed completely in regs */
   RegFix (ebbs, count);
 
   /* redo the offsets for stacked automatic variables */
@@ -657,7 +660,7 @@ stm8_assignRegisters (ebbIndex * ebbi)
           /* Invoke optimal register allocator */
           ic = stm8_ralloc2_cc (ebbi);
 
-          /* Get spilllocs for all variables that have not been placed completly in regs */
+          /* Get spilllocs for all variables that have not been placed completely in regs */
           RegFix (ebbs, count);
 
           redoStackOffsets ();

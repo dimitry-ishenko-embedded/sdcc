@@ -263,7 +263,7 @@ updateCFA (void)
   if (!currFunc)
     return;
 
-  if (options.debug)
+  if (options.debug && !regalloc_dry_run)
     debugFile->writeFrameAddress (NULL, hc08_reg_sp, 1 + _G.stackOfs + _G.stackPushes);
 }
 
@@ -2230,25 +2230,10 @@ aopForSym (iCode * ic, symbol * sym, bool result)
       return aop;
     }
 
-  /* if it is in far space */
-  if (IN_FARSPACE (space))
-    {
-      sym->aop = aop = newAsmop (AOP_EXT);
-      aop->aopu.aop_dir = sym->rname;
-      aop->size = getSize (sym->type);
-      return aop;
-    }
-
-
-
-  werror (E_INTERNAL_ERROR, __FILE__, __LINE__, "aopForSym should never reach here");
-
-  exit (1);
-
-  /* if it is in code space */
-  if (IN_CODESPACE (space))
-    aop->code = 1;
-
+  /* default to far space */
+  sym->aop = aop = newAsmop (AOP_EXT);
+  aop->aopu.aop_dir = sym->rname;
+  aop->size = getSize (sym->type);
   return aop;
 }
 
@@ -3152,6 +3137,7 @@ static void
 genCopy (operand * result, operand * source)
 {
   int size = AOP_SIZE (result);
+  int srcsize = AOP_SIZE (source);
   int offset = 0;
 
   /* if they are the same and not volatile */
@@ -3159,16 +3145,39 @@ genCopy (operand * result, operand * source)
       !isOperandVolatile (source, FALSE))
     return;
 
+  /* The source and destinations may be different size due to optimizations. */
+  /* This is not a cast, so there is no need to worry about sign extension. */
+  /* When this happens, it is usually just 1 byte source to 2 byte dest, so */
+  /* nothing significant to optimize. */
+  if (srcsize < size)
+    {
+      size -= srcsize;
+      while (srcsize)
+        {
+          transferAopAop (AOP (source), offset, AOP (result), offset);
+          offset++;
+          srcsize--;
+        }
+      while (size)
+        {
+          storeConstToAop (0, AOP (result), offset);
+          offset++;
+          size--;
+        }
+
+      return;
+    }
+
   /* if they are the same registers */
   if (sameRegs (AOP (source), AOP (result)))
     return;
 
-  if (IS_AOP_HX (AOP (result)))
+  if (IS_AOP_HX (AOP (result)) && srcsize == 2)
     {
       loadRegFromAop (hc08_reg_hx, AOP (source), 0);
       return;
     }
-  if (IS_AOP_HX (AOP (source)))
+  if (IS_AOP_HX (AOP (source)) && size == 2)
     {
       storeRegToAop (hc08_reg_hx, AOP (result), 0);
       return;
@@ -4033,7 +4042,7 @@ genFunction (iCode * ic)
 
   _G.stackOfs = 0;
   _G.stackPushes = 0;
-  if (options.debug)
+  if (options.debug && !regalloc_dry_run)
     debugFile->writeFrameAddress (NULL, hc08_reg_sp, 0);
 
   if (IFFUNC_ISNAKED (ftype))
@@ -4137,7 +4146,7 @@ genEndFunction (iCode * ic)
   if (IFFUNC_ISNAKED (sym->type))
     {
       emitcode (";", "naked function: no epilogue.");
-      if (options.debug && currFunc)
+      if (options.debug && currFunc && !regalloc_dry_run)
         debugFile->writeEndFunction (currFunc, ic, 0);
       return;
     }
@@ -4186,7 +4195,7 @@ genEndFunction (iCode * ic)
 
 
       /* if debug then send end of function */
-      if (options.debug && currFunc)
+      if (options.debug && currFunc && !regalloc_dry_run)
         {
           debugFile->writeEndFunction (currFunc, ic, 1);
         }
@@ -4213,7 +4222,7 @@ genEndFunction (iCode * ic)
         }
 
       /* if debug then send end of function */
-      if (options.debug && currFunc)
+      if (options.debug && currFunc && !regalloc_dry_run)
         {
           debugFile->writeEndFunction (currFunc, ic, 1);
         }
@@ -4315,7 +4324,7 @@ genLabel (iCode * ic)
   if (IC_LABEL (ic) == entryLabel)
     return;
 
-  if (options.debug)
+  if (options.debug && !regalloc_dry_run)
     debugFile->writeLabel (IC_LABEL (ic), ic);
 
   emitLabel (IC_LABEL (ic));
@@ -4690,6 +4699,7 @@ genMinus (iCode * ic)
           pushReg (hc08_reg_a, TRUE);
           loadRegFromAop (hc08_reg_a, leftOp, offset);
           emitcode (sub, "1, s");
+          hc08_dirtyReg (hc08_reg_a, FALSE);
           regalloc_dry_run_cost += 3;
           pullNull (1);
         }
@@ -5642,7 +5652,7 @@ genCmp (iCode * ic, iCode * ifx)
   sym_link *letype, *retype;
   int sign, opcode;
   int size, offset = 0;
-  unsigned long lit = 0L;
+  unsigned long long lit = 0ull;
   char *sub;
   symbol *jlbl = NULL;
   bool needpulla = FALSE;
@@ -5735,7 +5745,7 @@ genCmp (iCode * ic, iCode * ifx)
 
           if ((AOP_TYPE (right) == AOP_LIT) && !isOperandVolatile (left, FALSE))
             {
-              lit = ulFromVal (AOP (right)->aopu.aop_lit);
+              lit = ullFromVal (AOP (right)->aopu.aop_lit);
               while ((size > 1) && (((lit >> (8 * offset)) & 0xff) == 0))
                 {
                   offset++;
@@ -6150,8 +6160,8 @@ genAnd (iCode * ic, iCode * ifx)
 {
   operand *left, *right, *result;
   int size, offset = 0;
-  unsigned long lit = 0L;
-  unsigned long litinv;
+  unsigned long long lit = 0ll;
+  unsigned long long litinv;
   int bitpos = -1;
   unsigned char bytemask;
   bool needpulla = FALSE;
@@ -6188,13 +6198,15 @@ genAnd (iCode * ic, iCode * ifx)
 
   if (AOP_TYPE (right) == AOP_LIT)
     {
-      lit = ulFromVal (AOP (right)->aopu.aop_lit);
+      lit = ullFromVal (AOP (right)->aopu.aop_lit);
       if (size == 1)
         lit &= 0xff;
       else if (size == 2)
         lit &= 0xffff;
       else if (size == 4)
         lit &= 0xffffffff;
+      else if (size == 8)
+        lit &= 0xffffffffffffffff;
       bitpos = isLiteralBit (lit) - 1;
     }
 
@@ -6398,7 +6410,7 @@ genOr (iCode * ic, iCode * ifx)
 {
   operand *left, *right, *result;
   int size, offset = 0;
-  unsigned long lit = 0L;
+  unsigned long long lit = 0ull;
   unsigned char bytemask;
   bool needpulla = FALSE;
   bool earlystore = FALSE;
@@ -6431,7 +6443,7 @@ genOr (iCode * ic, iCode * ifx)
     }
 
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = ulFromVal (AOP (right)->aopu.aop_lit);
+    lit = ullFromVal (AOP (right)->aopu.aop_lit);
 
   size = (AOP_SIZE (left) >= AOP_SIZE (right)) ? AOP_SIZE (left) : AOP_SIZE (right);
 
@@ -6512,7 +6524,7 @@ genOr (iCode * ic, iCode * ifx)
     }
 
   if (AOP_TYPE (right) == AOP_LIT)
-    lit = ulFromVal (AOP (right)->aopu.aop_lit);
+    lit = ullFromVal (AOP (right)->aopu.aop_lit);
 
   size = AOP_SIZE (result);
 
@@ -6626,7 +6638,7 @@ genXor (iCode * ic, iCode * ifx)
       while (size--)
         {
           loadRegFromAop (hc08_reg_a, AOP (left), offset);
-          if (AOP_TYPE (right) == AOP_LIT && ((ulFromVal (AOP (right)->aopu.aop_lit) >> (offset * 8)) & 0xff) == 0)
+          if (AOP_TYPE (right) == AOP_LIT && ((ullFromVal (AOP (right)->aopu.aop_lit) >> (offset * 8)) & 0xff) == 0)
             {
               emitcode ("tsta", "");
               regalloc_dry_run_cost++;
@@ -9658,7 +9670,7 @@ genIfx (iCode * ic, iCode * popIc)
   /* branch or no branch */
   if (AOP_TYPE (cond) == AOP_LIT)
     {
-      unsigned long lit = ulFromVal (AOP (cond)->aopu.aop_lit);
+      unsigned long long lit = ullFromVal (AOP (cond)->aopu.aop_lit);
       freeAsmop (cond, NULL, ic, TRUE);
 
       /* if there was something to be popped then do it */
@@ -10746,12 +10758,12 @@ genhc08Code (iCode *lic)
   if (allocInfo && currFunc)
     printAllocInfo (currFunc, codeOutBuf);
   /* if debug information required */
-  if (options.debug && currFunc)
+  if (options.debug && currFunc && !regalloc_dry_run)
     {
       debugFile->writeFunction (currFunc, lic);
     }
 
-  if (options.debug)
+  if (options.debug && !regalloc_dry_run)
     debugFile->writeFrameAddress (NULL, NULL, 0); /* have no idea where frame is now */
 
   init_aop_pass();

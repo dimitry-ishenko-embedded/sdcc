@@ -9,7 +9,7 @@
 #endif
 
 // TODO: Enable when sdcc supports long long in these ports!
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16)
+#if !defined(__SDCC_pic14) && !defined(__SDCC_pic16)
 int errflag;
 
 long long
@@ -37,8 +37,6 @@ f (long long x, long long y)
 void
 testTortureExecute (void)
 {
-// TODO: Enable when sdcc supports long long!
-#if 0
   f (0, 0);
   if (errflag)
     ASSERT (0);
@@ -72,6 +70,5 @@ testTortureExecute (void)
     ASSERT (0);
 
   return;
-#endif
 }
 
