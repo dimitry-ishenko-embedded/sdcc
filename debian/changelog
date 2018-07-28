@@ -7,6 +7,7 @@ sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
 
   [ Jonathan McDowell ]
   * New upstream release (Closes: #892869)
+    + Fixes FTBFS with GCC 8 (Closes: #897856)
     + Removed patches as all now applied upstream
     + Enable building of PDF manual
     + Fix ucsim docs to include SVGs instead of GIFs
