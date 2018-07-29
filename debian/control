@@ -2,7 +2,6 @@ Source: sdcc
 Section: electronics
 Priority: optional
 Maintainer: Gudjon I. Gudjonsson <gudjon@gudjon.org>
-Uploaders: Bdale Garbee <bdale@gag.com>
 Build-Depends: autoconf,
 	       autotools-dev,
                bison,
