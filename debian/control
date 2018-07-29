@@ -11,11 +11,11 @@ Build-Depends: autoconf,
                gputils,
                libboost-dev,
                libncurses5-dev,
-               libtool
+               libtool,
+               texinfo
 Build-Depends-Indep: ghostscript,
                      graphicsmagick-imagemagick-compat,
                      lyx,
-                     texinfo,
                      texlive-fonts-recommended,
                      texlive-font-utils,
                      texlive-generic-recommended,
