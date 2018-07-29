@@ -44,6 +44,7 @@ Description: Small Device C Compiler
 
 Package: sdcc-libraries
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Recommends: gputils
 Description: Small Device C Compiler (libraries)
@@ -65,6 +66,7 @@ Description: Micro-controller simulator for SDCC
 Package: sdcc-doc
 Section: doc
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Suggests: sdcc
 Description: Small Device C Compiler (documentation)

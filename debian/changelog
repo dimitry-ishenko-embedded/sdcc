@@ -11,6 +11,7 @@ sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
     + Removed patches as all now applied upstream
     + Enable building of PDF manual
     + Fix ucsim docs to include SVGs instead of GIFs
+  * Mark sdcc-doc + sdcc-libraries Multi-Arch foreign
 
  -- Geert Stappers <stappers@debian.org>  Sun, 22 Jul 2018 17:32:23 +0200
 
