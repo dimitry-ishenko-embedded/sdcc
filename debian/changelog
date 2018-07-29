@@ -1,4 +1,4 @@
-sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
+sdcc (3.7.0+dfsg-0.1) unstable; urgency=medium
 
   [ Geert Stappers ]
   * Non-maintainer upload.
@@ -14,7 +14,7 @@ sdcc (3.7.0+dfsg-0.1) UNRELEASED; urgency=medium
   * Mark sdcc-doc + sdcc-libraries Multi-Arch foreign
   * Remove Bdale from uploaders, on his request
 
- -- Geert Stappers <stappers@debian.org>  Sun, 22 Jul 2018 17:32:23 +0200
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 29 Jul 2018 15:02:20 +0800
 
 sdcc (3.5.0+dfsg-2.1) unstable; urgency=medium
 
