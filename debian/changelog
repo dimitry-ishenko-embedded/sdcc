@@ -1,4 +1,4 @@
-sdcc (3.7.0+dfsg2-0.1) UNRELEASED; urgency=medium
+sdcc (3.7.0+dfsg2-0.1) unstable; urgency=medium
 
   * Non-maintainer upload.
   * Repack upstream tarball to exclude GFDL documentation with invariant
@@ -6,7 +6,7 @@ sdcc (3.7.0+dfsg2-0.1) UNRELEASED; urgency=medium
   * Fix doc-base file pointer to include .gz extension for manual
   * Add information to README.source about repacking upstream
 
- -- Jonathan McDowell <noodles@earth.li>  Tue, 31 Jul 2018 13:13:12 +0800
+ -- Jonathan McDowell <noodles@earth.li>  Tue, 31 Jul 2018 14:52:21 +0800
 
 sdcc (3.7.0+dfsg-0.2) unstable; urgency=medium
 
