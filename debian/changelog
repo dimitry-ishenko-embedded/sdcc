@@ -4,6 +4,7 @@ sdcc (3.7.0+dfsg2-0.1) UNRELEASED; urgency=medium
   * Repack upstream tarball to exclude GFDL documentation with invariant
     sections
   * Fix doc-base file pointer to include .gz extension for manual
+  * Add information to README.source about repacking upstream
 
  -- Jonathan McDowell <noodles@earth.li>  Tue, 31 Jul 2018 13:13:12 +0800
 
