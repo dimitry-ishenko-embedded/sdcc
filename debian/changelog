@@ -1,3 +1,11 @@
+sdcc (3.7.0+dfsg2-0.1) UNRELEASED; urgency=medium
+
+  * Non-maintainer upload.
+  * Repack upstream tarball to exclude GFDL documentation with invariant
+    sections
+
+ -- Jonathan McDowell <noodles@earth.li>  Tue, 31 Jul 2018 13:13:12 +0800
+
 sdcc (3.7.0+dfsg-0.2) unstable; urgency=medium
 
   * Move texinfo to binary Build-Dep
