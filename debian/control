@@ -1,7 +1,9 @@
 Source: sdcc
 Section: electronics
 Priority: optional
-Maintainer: Gudjon I. Gudjonsson <gudjon@gudjon.org>
+Maintainer: Debian Electronics Packaging Team <pkg-electronics-devel@alioth-lists.debian.net>
+Uploaders: Gudjon I. Gudjonsson <gudjon@gudjon.org>,
+	Jonathan McDowell <noodles@earth.li>
 Build-Depends: autoconf,
 	       autotools-dev,
                bison,

@@ -1,3 +1,9 @@
+sdcc (3.7.0+dfsg2-1) UNRELEASED; urgency=medium
+
+  * Add myself to Uploaders and move under the Electronics Packaging Team.
+
+ -- Jonathan McDowell <noodles@earth.li>  Thu, 04 Oct 2018 22:12:22 +0100
+
 sdcc (3.7.0+dfsg2-0.1) unstable; urgency=medium
 
   * Non-maintainer upload.
