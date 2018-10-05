@@ -35,19 +35,15 @@ clean:
 	rm -f support/sdbinutils/binutils/arlex.c
 	rm -f support/sdbinutils/binutils/arparse.c
 	rm -f support/sdbinutils/binutils/arparse.h
-	rm -f sim/ucsim/config.sub sim/ucsim/config.guess
-	rm -f config.log sim/ucsim/config.log
 	rm -f confdefs.h
 	rm -f install-arch install-indep
-	dh_autotools-dev_restoreconfig
 	dh_clean
 
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	mkdir -p $(CURDIR)/build
-	touch sim/ucsim/config.guess sim/ucsim/config.sub
-	dh_autotools-dev_updateconfig
+	dh_update_autotools_config
 	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure \
 		--host=$(DEB_HOST_GNU_TYPE) \

@@ -4,10 +4,8 @@ Priority: optional
 Maintainer: Debian Electronics Packaging Team <pkg-electronics-devel@alioth-lists.debian.net>
 Uploaders: Gudjon I. Gudjonsson <gudjon@gudjon.org>,
 	Jonathan McDowell <noodles@earth.li>
-Build-Depends: autoconf,
-	       autotools-dev,
-               bison,
-               debhelper (>=9),
+Build-Depends: bison,
+               debhelper (>= 10),
                dpkg-dev (>= 1.16.1~),
                flex,
                gputils,
