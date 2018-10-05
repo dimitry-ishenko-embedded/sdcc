@@ -159,7 +159,7 @@ get-orig-source:
 	uscan --force-download --rename --download-version=$$VER --destdir=. && (\
 	tar -xj --exclude device/non-free --exclude sim/ucsim/libltdl -f sdcc_$$VER.orig.tar.bz2 ; \
 	mv sdcc-$$VER sdcc-$$VER+dfsg;\
-	tar -czf sdcc_$$VER+dfsg.orig.tar.gz sdcc-$$VER+dfsg; \
+	tar -caf sdcc_$$VER+dfsg.orig.tar.xz sdcc-$$VER+dfsg; \
 	rm -rf sdcc-$$VER+dfsg ;\
 	rm -f sdcc_$$VER.orig.tar.bz2);
 
