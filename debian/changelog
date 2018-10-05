@@ -2,6 +2,7 @@ sdcc (3.7.0+dfsg2-1) UNRELEASED; urgency=medium
 
   * Add myself to Uploaders and move under the Electronics Packaging Team.
   * Move to debhelper compat level 10.
+  * Rename git-buildpackage section header to just buildpackage.
 
  -- Jonathan McDowell <noodles@earth.li>  Thu, 04 Oct 2018 22:12:22 +0100
 
