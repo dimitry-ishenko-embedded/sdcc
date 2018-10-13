@@ -43,9 +43,6 @@ extern "C"
 
 typedef std::set<unsigned short int> lospreset_t;
 
-// #define DEBUG_LOSPRE
-// #define DEBUG_LOSPRE_ASS
-
 struct assignment_lospre
 {
   boost::tuple<float, float> s; // First entry: Calculation costs, second entry: Lifetime costs.
@@ -424,7 +421,7 @@ void tree_dec_safety_forget(T_t &T, typename boost::graph_traits<T_t>::vertex_de
         bool ok;
 
         for (ok = false, boost::tie(n, n_end) = boost::out_edges(i, G);  !ok && n != n_end; ++n)
-          if (ai->global[boost::target(*n, G)] || G[boost::target(*n, G)].invalidates)
+          if (ai->global[boost::target(*n, G)] || G[boost::target(*n, G)].invalidates && !G[boost::target(*n, G)].uses)
             ok = true;
 
         if(!ok)
@@ -532,7 +529,7 @@ int tree_dec_safety_nodes(T_t &T, typename boost::graph_traits<T_t>::vertex_desc
 }
 
 template <class T_t, class G_t>
-static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_descriptor e, const iCode *ic, operand *tmpop)
+typename boost::graph_traits<G_t>::vertex_descriptor split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_descriptor e, const iCode *ic, operand *tmpop)
 {
   // Insert new iCode into chain.
   iCode *newic = newiCode (ic->op, IC_LEFT (ic), IC_RIGHT (ic));
@@ -556,6 +553,7 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
 
   G[n].ic = newic;
   G[n].uses = false;
+  G[n].invalidates = false;
   boost::add_edge(boost::source(e, G), n, G[e], G);
   boost::add_edge(n, boost::target(e, G), G[e], G);
 
@@ -584,6 +582,8 @@ static void split_edge(T_t &T, G_t &G, typename boost::graph_traits<G_t>::edge_d
 
   // Remove old edge from cfg.
   boost::remove_edge(e, G);
+
+  return(n);
 }
 
 
@@ -610,7 +610,7 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
 #ifdef DEBUG_LOSPRE
           std::cout << "Forward substituted left operand " << OP_SYMBOL_CONST(IC_LEFT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //bitVectUnSetBit (OP_SYMBOL (IC_LEFT (nic))->uses, nic->key);
+          bitVectUnSetBit (OP_SYMBOL (IC_LEFT (nic))->uses, nic->key);
           IC_LEFT(nic) = operandFromOperand (tmpop);
           //bitVectSetBit (OP_SYMBOL (IC_LEFT (nic))->uses, nic->key);
           IC_LEFT (nic)->isaddr = isaddr;
@@ -620,7 +620,7 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
 #ifdef DEBUG_LOSPRE
           std::cout << "Forward substituted right operand " << OP_SYMBOL_CONST(IC_RIGHT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (nic))->uses, nic->key);
+          bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (nic))->uses, nic->key);
           IC_RIGHT(nic) = operandFromOperand (tmpop);
           //bitVectSetBit (OP_SYMBOL (IC_RIGHT (nic))->uses, nic->key);
         }
@@ -629,7 +629,7 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
 #ifdef DEBUG_LOSPRE
           std::cout << "Forward substituted result operand " << OP_SYMBOL_CONST(IC_RESULT(nic))->name << " at " << nic->key << "\n";
 #endif
-          //bitVectUnSetBit (OP_SYMBOL (IC_RESULT (nic))->uses, nic->key);
+          bitVectUnSetBit (OP_SYMBOL (IC_RESULT (nic))->uses, nic->key);
           IC_RESULT(nic) = operandFromOperand (tmpop);
           IC_RESULT(nic)->isaddr = true;
           //bitVectSetBit (OP_SYMBOL (IC_RESULT (nic))->uses, nic->key);
@@ -657,7 +657,7 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
           adjacency_iter_t c, c_end;
           for(boost::tie(c, c_end) = boost::adjacent_vertices(i, G); c != c_end; ++c)
             {
-              if(!((a.global[i] & true) && !G[i].invalidates) && (a.global[*c] & true)) // Calculation edge
+              if(!(a.global[i] && !G[i].invalidates) && a.global[*c]) // Calculation edge
                 continue;
               forward_lospre_assignment(G, *c, ic, a);
             }
@@ -667,14 +667,14 @@ static void forward_lospre_assignment(G_t &G, typename boost::graph_traits<G_t>:
       boost::tie(c, c_end) = adjacent_vertices(i, G);
       if(c == c_end)
         break;
-      if(!((a.global[i] & true) && !G[i].invalidates) && (a.global[*c] & true)) // Calculation edge
+      if(!(a.global[i] && !G[i].invalidates) && a.global[*c]) // Calculation edge
         break;
       i = *c;
     }
 }
 
 template <class T_t, class G_t>
-static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G, const iCode *ic) // Assignment has to be passed as a copy (not reference), since the transformations on the tree-decomposition will invalidate it otherwise.
+static int implement_lospre_assignment(assignment_lospre a, T_t &T, G_t &G, const iCode *ic) // Assignment has to be passed as a copy (not reference), since the transformations on the tree-decomposition will invalidate it otherwise.
 {
   operand *tmpop;
   unsigned substituted = 0, split = 0;
@@ -702,7 +702,9 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
 
   for(typename std::set<edge_desc_t>::iterator i = calculation_edges.begin(); i != calculation_edges.end(); ++i)
   {
-    split_edge(T, G, *i, ic, tmpop);
+    typename boost::graph_traits<G_t>::vertex_descriptor n = split_edge(T, G, *i, ic, tmpop);
+    a.global.resize(boost::num_vertices(G));
+    a.global[n] = true;
     split++;
   }
 
@@ -719,15 +721,16 @@ static int implement_lospre_assignment(const assignment_lospre a, T_t &T, G_t &G
       if(!((a.global[*v] & true) && !G[*v].invalidates || boost::source(*e, G) < a.global.size() && (a.global[boost::source(*e, G)] & true)))
         continue;
 #ifdef DEBUG_LOSPRE
-      std::cout << "Substituting ic " << G[*v].ic->key << "\n";
+      std::cerr << "Substituting ic " << G[*v].ic->key << "\n";
 #endif
       substituted++;
 
       iCode *ic = G[*v].ic;
-      //if (IC_LEFT (ic) && IS_ITEMP (IC_LEFT (ic)))
-      //  bitVectUnSetBit (OP_SYMBOL (IC_LEFT (ic))->uses, ic->key);
-      //if (IC_RIGHT (ic) && IS_ITEMP (IC_RIGHT (ic)))
-       // bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
+
+      if (IS_SYMOP (IC_LEFT (ic)))
+        bitVectUnSetBit (OP_SYMBOL (IC_LEFT (ic))->uses, ic->key);
+      if (IS_SYMOP (IC_RIGHT (ic)))
+        bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
       IC_RIGHT(ic) = tmpop;
       //bitVectSetBit (OP_SYMBOL (IC_RIGHT(ic))->uses, ic->key);
       if (!POINTER_SET (ic))
@@ -806,7 +809,7 @@ static int tree_dec_safety (tree_dec_t/*T_t*/ &T, cfg_lospre_t/*G_t*/ &G, const 
   implement_safety(winner, G);
 
 #ifdef DEBUG_LOSPRE
-  std::cout << "Winner (safety): ";
+  std::cout << "Winner (safety) (I' \\ I): ";
   print_assignment(winner, G);
 #endif
 

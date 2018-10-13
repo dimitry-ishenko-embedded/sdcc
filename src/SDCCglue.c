@@ -131,14 +131,14 @@ emitDebugSym (struct dbuf_s *oBuf, symbol * sym)
     {
       dbuf_printf (oBuf, "G$");
     }
-  dbuf_printf (oBuf, "%s$%d$%d", sym->name, sym->level, sym->block);
+  dbuf_printf (oBuf, "%s$%ld_%ld$%d", sym->name, sym->level / LEVEL_UNIT, sym->level % LEVEL_UNIT, sym->block);
 }
 
 /*-----------------------------------------------------------------*/
 /* emitRegularMap - emit code for maps with no special cases       */
 /*-----------------------------------------------------------------*/
 static void
-emitRegularMap (memmap * map, bool addPublics, bool arFlag)
+emitRegularMap (memmap *map, bool addPublics, bool arFlag)
 {
   symbol *sym;
   ast *ival = NULL;
@@ -604,17 +604,11 @@ void
 printChar (struct dbuf_s *oBuf, const char *s, int plen)
 {
   int i;
-  int len = plen;
   int pplen = 0;
   char buf[100];
   char *p = buf;
-  int strEnd = plen - 1;
 
-  if (s)
-    while (s[strEnd] != 0)
-      strEnd--;
-
-  while (len && pplen < plen)
+  while (pplen < plen)
     {
       i = 60;
       while (i && pplen < plen)
@@ -624,34 +618,26 @@ printChar (struct dbuf_s *oBuf, const char *s, int plen)
               *p = '\0';
               if (p != buf)
                 dbuf_tprintf (oBuf, "\t!ascii\n", buf);
-              dbuf_tprintf (oBuf, "\t!db !constbyte\n", pplen < strEnd ? ((unsigned char) *s) : 0x00);
+              dbuf_tprintf (oBuf, "\t!db !constbyte\n", (unsigned char) *s);
               p = buf;
+              i = 60;
             }
           else
             {
               *p = *s;
               p++;
+              i--;
             }
           s++;
           pplen++;
-          i--;
         }
       if (p != buf)
         {
           *p = '\0';
           dbuf_tprintf (oBuf, "\t!ascii\n", buf);
           p = buf;
+          i = 60;
         }
-
-      if (len > 60)
-        len -= 60;
-      else
-        len = 0;
-    }
-  while (pplen < plen)
-    {
-      dbuf_tprintf (oBuf, "\t!db !constbyte\n", 0);
-      pplen++;
     }
 }
 
@@ -662,11 +648,6 @@ void
 printChar16 (struct dbuf_s *oBuf, const TYPE_TARGET_UINT *s, int plen)
 {
   int pplen = 0;
-  int strEnd = plen - 1;
-
-  if (s)
-    while (s[strEnd] != 0)
-      strEnd--;
 
   while (pplen < plen)
     {
@@ -692,11 +673,6 @@ void
 printChar32 (struct dbuf_s *oBuf, const TYPE_TARGET_ULONG *s, int plen)
 {
   int pplen = 0;
-  int strEnd = plen - 1;
-
-  if (s)
-    while (s[strEnd] != 0)
-      strEnd--;
 
   while (pplen < plen)
     {
@@ -1025,6 +1001,10 @@ printIvalBitFields (symbol ** sym, initList ** ilist, struct dbuf_s *oBuf)
 
   switch (size)
     {
+    case 0:
+      dbuf_tprintf (oBuf, "\n");
+      break;
+
     case 1:
       dbuf_tprintf (oBuf, "\t!db !constbyte\n", ival);
       bytes_written++;
@@ -1040,6 +1020,8 @@ printIvalBitFields (symbol ** sym, initList ** ilist, struct dbuf_s *oBuf)
                     (ival & 0xff), (ival >> 8) & 0xff, (ival >> 16) & 0xff, (ival >> 24) & 0xff);
       bytes_written += 4;
       break;
+    default:
+      wassert (0);
     }
   *sym = lsym;
   *ilist = lilist;
@@ -1262,7 +1244,7 @@ printIvalChar32 (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s 
     {
       val = list2val (ilist, TRUE);
       /* if the value is a character string  */
-      if (IS_ARRAY (val->type) && IS_INT (val->etype) && IS_UNSIGNED (val->etype) && !IS_LONG (val->etype))
+      if (IS_ARRAY (val->type) && IS_INT (val->etype) && IS_UNSIGNED (val->etype) && IS_LONG (val->etype))
         {
           if (!size)
             {
@@ -1448,9 +1430,14 @@ printIvalFuncPtr (sym_link * type, initList * ilist, struct dbuf_s *oBuf)
 
   size = getSize (type);
 
-  if (size == FPTRSIZE)
+  if (size == FUNCPTRSIZE)
     {
-      if (port->use_dw_for_init)
+      if (TARGET_IS_STM8 && FUNCPTRSIZE == 3)
+        {
+          _printPointerType (oBuf, name, size);
+          dbuf_printf (oBuf, "\n");
+        }
+      else if (port->use_dw_for_init)
         {
           dbuf_tprintf (oBuf, "\t!dws\n", name);
         }
@@ -1459,14 +1446,14 @@ printIvalFuncPtr (sym_link * type, initList * ilist, struct dbuf_s *oBuf)
           printPointerType (oBuf, name);
         }
     }
-  else if (size == GPTRSIZE)
+  else if (size == BFUNCPTRSIZE)
     {
       _printPointerType (oBuf, name, size);
       dbuf_printf (oBuf, "\n");
     }
   else
     {
-      assert (0);
+      wassertl (0, "Invalid function pointer size.");
     }
 
   return;
@@ -1499,7 +1486,7 @@ printIvalCharPtr (symbol * sym, sym_link * type, value * val, struct dbuf_s *oBu
         {
           dbuf_tprintf (oBuf, "\t!dbs\n", val->name);
         }
-      else if (size == FPTRSIZE)
+      else if (size == FARPTRSIZE)
         {
           if (port->use_dw_for_init)
             {
@@ -1550,7 +1537,7 @@ printIvalCharPtr (symbol * sym, sym_link * type, value * val, struct dbuf_s *oBu
             dbuf_tprintf (oBuf, "\t.byte %s,%s\n", aopLiteral (val, 1), aopLiteral (val, 0));
           break;
         case 3:
-          if (IS_GENPTR (type) && GPTRSIZE > FPTRSIZE && floatFromVal (val) != 0)
+          if (IS_GENPTR (type) && GPTRSIZE > FARPTRSIZE && floatFromVal (val) != 0)
             {
               if (!IS_PTR (val->type) && !IS_FUNC (val->type))
                 {
@@ -1571,7 +1558,7 @@ printIvalCharPtr (symbol * sym, sym_link * type, value * val, struct dbuf_s *oBu
             }
           break;
         case 4:
-          if (IS_GENPTR (type) && GPTRSIZE > FPTRSIZE && floatFromVal (val) != 0)
+          if (IS_GENPTR (type) && GPTRSIZE > FARPTRSIZE && floatFromVal (val) != 0)
             {
               if (!IS_PTR (val->type) && !IS_FUNC (val->type))
                 {
@@ -1706,7 +1693,7 @@ printIvalPtr (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *oB
     {
       dbuf_tprintf (oBuf, "\t!dbs\n", val->name);
     }
-  else if (size == FPTRSIZE)
+  else if (size == FARPTRSIZE)
     {
       if (port->use_dw_for_init)
         dbuf_tprintf (oBuf, "\t!dws\n", val->name);
@@ -2560,7 +2547,7 @@ glue (void)
 
       /* put in jump or call to main */
       if(TARGET_IS_STM8)
-        fprintf (asmFile, "\tjp\t_main\n");
+        fprintf (asmFile, options.model == MODEL_LARGE ? "\tjpf\t_main\n" : "\tjp\t_main\n");
       else
         fprintf (asmFile, "\t%cjmp\t_main\n", options.acall_ajmp ? 'a' : 'l');        /* needed? */
       fprintf (asmFile, ";\treturn from main will return to caller\n");
