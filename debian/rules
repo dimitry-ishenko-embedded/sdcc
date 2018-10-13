@@ -37,6 +37,8 @@ clean:
 	rm -f support/sdbinutils/binutils/arparse.h
 	rm -f confdefs.h
 	rm -f install-arch install-indep
+	rm -f doc/sdcc_version
+	rm -f sim/ucsim/cmd.src/cmdlex.cc
 	dh_clean
 
 configure: configure-stamp
