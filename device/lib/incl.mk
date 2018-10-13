@@ -74,6 +74,7 @@ COMMON_SDCC = \
   atoll.c \
   strtol.c \
   strtoul.c \
+  bsearch.c \
   qsort.c \
   abs.c \
   labs.c \
@@ -107,6 +108,8 @@ COMMON_SDCC = \
   c16rtomb.c \
   mbrtoc32.c \
   c32rtomb.c \
+  mbstoc16s.c \
+  c16stombs.c \
   wcscmp.c \
   wcslen.c \
   btowc.c \
@@ -118,7 +121,7 @@ COMMON_SDCC = \
   printf_large.c \
   puts.c \
   gets.c \
-  assert.c \
+  __assert.c \
   time.c
 
 MODELS = small medium large huge

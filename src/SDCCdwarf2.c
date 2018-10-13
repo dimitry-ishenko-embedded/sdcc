@@ -76,7 +76,7 @@ int dwAbbrevNum = 0;
 hTab * dwTypeTagTable;
 int dwRefNum = 0;
 int dwScopeBlock = 0;
-int dwScopeLevel = 0;
+long dwScopeLevel = 0;
 int dwDebugSymbol = 0;
 dwcfins * dwCIEins = NULL;
 dwlocregion * dwFrameLastLoc = NULL;
@@ -2376,9 +2376,9 @@ dwTagFromType (sym_link * type, dwtag * parent)
                                                     ((blen+7) & ~7)
                                                     - (blen+bstr)));
                       if (blen < 8)
-                        type = typeFromStr ("uc");
+                        type = typeFromStr ("Uc");
                       else
-                        type = typeFromStr ("ui");
+                        type = typeFromStr ("Ui");
                       subtp = dwTagFromType (type, tp);
                       dwAddTagAttr (memtp, dwNewAttrTagRef (DW_AT_type, subtp));
                     }
@@ -3133,7 +3133,7 @@ dwWriteFrameAddress(const char *variable, struct reg_info *reg, int offset)
       dwloc * lp;
 
       lrp->loc = dwNewLoc (DW_OP_addr, variable, 0);
-      lrp->loc->next = lp = dwNewLoc (DW_OP_deref_size, NULL, PTRSIZE);
+      lrp->loc->next = lp = dwNewLoc (DW_OP_deref_size, NULL, NEARPTRSIZE);
       if (offset)
         {
           lp->next = dwNewLoc (DW_OP_consts, NULL, offset);

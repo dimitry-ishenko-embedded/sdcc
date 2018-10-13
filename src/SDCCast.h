@@ -50,7 +50,7 @@ typedef struct ast
   unsigned lvalue:1;
   unsigned initMode:1;
   unsigned reversed:1;
-  int level;                    /* level for expr */
+  long level;                   /* level for expr */
   int block;                    /* block number   */
   int seqPoint;                 /* sequence point */
   /* union of values expression can have */
@@ -211,7 +211,7 @@ ast *forLoopOptForm (ast *);
 ast *argAst (ast *);
 ast *resolveSymbols (ast *);
 void CodePtrPointsToConst (sym_link * t);
-void checkPtrCast (sym_link * newType, sym_link * orgType, bool implicit);
+void checkPtrCast (sym_link * newType, sym_link * orgType, bool implicit, bool orgIsNullPtrConstant);
 ast *decorateType (ast *, RESULT_TYPE);
 ast *createWhile (symbol *, symbol *, symbol *, ast *, ast *);
 ast *createIf (ast *, ast *, ast *);
@@ -228,6 +228,7 @@ bool astHasVolatile (ast *tree);
 bool hasSEFcalls (ast *);
 void addSymToBlock (symbol *, ast *);
 void freeStringSymbol (symbol *);
+value *stringToSymbol (value *val);
 DEFSETFUNC (resetParmKey);
 int astErrors (ast *);
 RESULT_TYPE getResultTypeFromType (sym_link *);

@@ -31,7 +31,7 @@
 #include "newalloc.h"
 #include "dbuf_string.h"
 
-int cNestLevel;
+long cNestLevel;
 
 
 /*-----------------------------------------------------------------*/
@@ -1505,7 +1505,7 @@ strVal (const char *s)
   const char *utf_8;
   size_t utf_8_size;
 
-  val = newValue ();            /* get a new one */
+  val = newValue ();
 
   /* get a declarator */
   val->type = newLink (DECLARATOR);
@@ -1554,7 +1554,34 @@ strVal (const char *s)
         wassert (0);
     }
 
-  return val;
+  return (val);
+}
+
+/*------------------------------------------------------------------*/
+/* rawStrVal - converts a string to a value                         */
+/*------------------------------------------------------------------*/
+value *
+rawStrVal (const char *s, size_t size)
+{
+  struct dbuf_s dbuf;
+  value *val = newValue ();
+  
+  dbuf_init (&dbuf, size);
+  wassert (dbuf_append (&dbuf, s, size));
+
+  /* get a declarator */
+  val->type = newLink (DECLARATOR);
+  DCL_TYPE (val->type) = ARRAY;
+  val->type->next = val->etype = newLink (SPECIFIER);
+  SPEC_SCLS (val->etype) = S_LITERAL;
+  SPEC_CONST (val->etype) = 1;
+
+  SPEC_NOUN (val->etype) = V_CHAR;
+  SPEC_USIGN (val->etype) = !options.signed_char;
+  SPEC_CVAL (val->etype).v_char = dbuf_detach (&dbuf);
+  DCL_ELEM (val->type) = size;
+
+  return (val);
 }
 
 /*------------------------------------------------------------------*/
@@ -1709,8 +1736,16 @@ charVal (const char *s)
           return constCharacterVal (*s, type);
         }
     }
-  else                          /* not a backslash */
-    return constCharacterVal (*s, type);
+  else if (type) // Wide character constant
+    {
+      size_t ulen;
+      const TYPE_UDWORD *ustr = utf_32_from_utf_8 (&ulen, s, strlen(s) - 1);
+      value *val = constCharacterVal (*ustr, type);
+      free ((void *)ustr);
+      return (val);
+    }
+  else // Character constant that is not wide - compability with legacy encodings.
+    return constCharacterVal (*s, 0);
 }
 
 /*------------------------------------------------------------------*/
@@ -1801,7 +1836,7 @@ floatFromVal (value * val)
 /* ulFromVal - value to unsigned long conversion                    */
 /*------------------------------------------------------------------*/
 unsigned long
-ulFromVal (value * val)
+ulFromVal (value *val)
 {
   if (!val)
     return 0;
@@ -1880,6 +1915,8 @@ byteOfVal (value * val, int offset)
 {
   unsigned char *p;
   int shift = 8*offset;
+
+  wassert (offset >= 0);
 
   if (!val)
     return 0;

@@ -38,7 +38,7 @@ int iCodeKey = 0;
 char *filename;                 /* current file name */
 int lineno = 1;                 /* current line number */
 int block;
-int scopeLevel;
+long scopeLevel;
 int seqPoint;
 int inCriticalPair = 0;
 
@@ -110,6 +110,7 @@ iCodeTable codeTable[] = {
   {LEFT_OP, "<<", picGeneric, NULL},
   {RIGHT_OP, ">>", picGeneric, NULL},
   {GET_VALUE_AT_ADDRESS, "@", picGetValueAtAddr, NULL},
+  {SET_VALUE_AT_ADDRESS, "@", picSetValueAtAddr, NULL},
   {ADDRESS_OF, "&", picAddrOf, NULL},
   {CAST, "<>", picCast, NULL},
   {'=', ":=", picAssign, NULL},
@@ -1134,22 +1135,22 @@ isiCodeInFunctionCall (iCode * ic)
 /* operandLitValueUll - unsigned long long value of an operand     */
 /*-----------------------------------------------------------------*/
 unsigned long long
-operandLitValueUll (operand * op)
+operandLitValueUll (const operand * op)
 {
   assert (isOperandLiteral (op));
 
-  return ullFromVal (OP_VALUE (op));
+  return ullFromVal (OP_VALUE_CONST (op));
 }
 
 /*-----------------------------------------------------------------*/
 /* operandLitValue - literal value of an operand                   */
 /*-----------------------------------------------------------------*/
 double
-operandLitValue (operand * op)
+operandLitValue (const operand * op)
 {
   assert (isOperandLiteral (op));
 
-  return floatFromVal (OP_VALUE (op));
+  return floatFromVal (OP_VALUE_CONST (op));
 }
 
 extern bool regalloc_dry_run;
@@ -1497,7 +1498,9 @@ isOperandEqual (const operand * left, const operand * right)
       return isSymbolEqual (left->svt.symOperand, right->svt.symOperand);
     case VALUE:
       return (compareType (left->svt.valOperand->type, right->svt.valOperand->type) &&
-              (floatFromVal (left->svt.valOperand) == floatFromVal (right->svt.valOperand)));
+        (!IS_FLOAT (getSpec (left->svt.valOperand->type)) ?
+          (operandLitValueUll (left) == operandLitValueUll (right)) :
+          (operandLitValue (left) == operandLitValue (right))));
     case TYPE:
       if (compareType (left->svt.typeOperand, right->svt.typeOperand) == 1)
         return 1;
@@ -1850,7 +1853,7 @@ getArraySizePtr (operand * op)
   if (IS_PTR (ltype))
     {
       int size = getSize (ltype);
-      return ((IS_GENPTR (ltype) && GPTRSIZE > FPTRSIZE) ? (size - 1) : size);
+      return ((IS_GENPTR (ltype) && GPTRSIZE > FARPTRSIZE) ? (size - 1) : size);
     }
 
   if (IS_ARRAY (ltype))
@@ -1861,23 +1864,23 @@ getArraySizePtr (operand * op)
         case IPOINTER:
         case PPOINTER:
         case POINTER:
-          return (PTRSIZE);
+          return (NEARPTRSIZE);
         case EEPPOINTER:
         case FPOINTER:
         case CPOINTER:
         case FUNCTION:
-          return (FPTRSIZE);
+          return (FARPTRSIZE);
         case GPOINTER:
-          if (GPTRSIZE > FPTRSIZE)
+          if (GPTRSIZE > FARPTRSIZE)
             return (GPTRSIZE - 1);
           else
-            return (FPTRSIZE);
+            return (FARPTRSIZE);
 
         default:
-          return (FPTRSIZE);
+          return (FARPTRSIZE);
         }
     }
-  return (FPTRSIZE);
+  return (FARPTRSIZE);
 }
 
 /*-----------------------------------------------------------------*/
@@ -2044,7 +2047,7 @@ geniCodeCast (sym_link *type, operand *op, bool implicit)
       return operandFromValue (valCastLiteral (type, operandLitValue (op), operandLitValueUll (op)));
     }
 
-  checkPtrCast (type, optype, implicit);
+  checkPtrCast (type, optype, implicit, IS_LITERAL (opetype) && !operandLitValue (op));
 
   ic = newiCode (CAST, operandFromLink (type), geniCodeRValue (op, FALSE));
   IC_RESULT (ic) = newiTempOperand (type, 0);
@@ -2158,7 +2161,7 @@ geniCodeRightShift (operand *left, operand *right);
 /* geniCodeDivision - gen intermediate code for division           */
 /*-----------------------------------------------------------------*/
 static operand *
-geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType)
+geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType, bool ptrdiffdiv)
 {
   iCode *ic;
   int p2 = 0;
@@ -2168,12 +2171,24 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType)
   sym_link *ltype = operandType (left);
   sym_link *letype = getSpec (ltype);
 
+/* if the right is a literal & power of 2 and left is unsigned then
+   make it a right shift.
+   For pointer division, there can be no remainder, so we can make
+   it a right shift, too. */
+   
+  if (IS_LITERAL (retype) &&
+      (!IS_FLOAT (letype) && !IS_FIXED (letype) && IS_UNSIGNED (letype) || ptrdiffdiv) &&
+      ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0))
+    {
+      ic = newiCode (RIGHT_OP, left, operandFromLit (p2));      /* right shift */
+    }
   /* if the right is a literal & power of 2
      and left is signed then make it a conditional addition
      followed by right shift */
-  if (IS_LITERAL (retype) &&
+  else if (IS_LITERAL (retype) &&
       !IS_FLOAT (letype) &&
-      !IS_FIXED (letype) && !IS_UNSIGNED (letype) && ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0) &&
+      !IS_FIXED (letype) && !IS_UNSIGNED (letype) &&
+      ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0) &&
       (TARGET_Z80_LIKE || TARGET_HC08_LIKE))
     {
       operand *tmp;
@@ -2189,16 +2204,7 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType)
       geniCodeLabel (label);
       return (geniCodeCast (resType, geniCodeRightShift (tmp, operandFromLit (p2)), TRUE));
     }
-  /* if the right is a literal & power of 2
-     and left is unsigned then make it a
-     right shift */
-  else
-       if (IS_LITERAL (retype) &&
-      !IS_FLOAT (letype) &&
-      !IS_FIXED (letype) && IS_UNSIGNED (letype) && ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0))
-    {
-      ic = newiCode (RIGHT_OP, left, operandFromLit (p2));      /* right shift */
-    }
+  
   else
     {
       ic = newiCode ('/', left, right); /* normal division */
@@ -2268,8 +2274,7 @@ subtractExit:
       return result;
     }
 
-  // should we really do this? is this ANSI?
-  return geniCodeDivision (result, operandFromLit (getSize (ltype->next)), FALSE);
+  return geniCodeDivision (result, operandFromLit (getSize (ltype->next)), FALSE, true);
 }
 
 /*-----------------------------------------------------------------*/
@@ -3441,6 +3446,8 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
           ic->parmPush = 1;
           /* update the stack adjustment */
           *stack += getSize (IS_AGGREGATE (p) ? aggrToPtr (p, FALSE) : p);
+          if (IFFUNC_ISSMALLC (ftype) && !IS_AGGREGATE (p) && getSize (p) == 1) /* SmallC calling convention passes 8-bit paramters as 16-bit values */
+            (*stack)++;
           ADDTOCHAIN (ic);
         }
     }
@@ -4329,7 +4336,7 @@ ast2iCode (ast * tree, int lvl)
 
     case '/':
       return geniCodeDivision (geniCodeRValue (left, FALSE),
-                               geniCodeRValue (right, FALSE), getResultTypeFromType (tree->ftype));
+                               geniCodeRValue (right, FALSE), getResultTypeFromType (tree->ftype), false);
 
     case '%':
       return geniCodeModulus (geniCodeRValue (left, FALSE), geniCodeRValue (right, FALSE), getResultTypeFromType (tree->ftype));
@@ -4465,9 +4472,8 @@ ast2iCode (ast * tree, int lvl)
     case DIV_ASSIGN:
       return
         geniCodeAssign (left,
-                        geniCodeDivision (geniCodeRValue (operandFromOperand (left),
-                                                          FALSE),
-                                          geniCodeRValue (right, FALSE), getResultTypeFromType (tree->ftype)), 0, 1);
+                        geniCodeDivision (geniCodeRValue (operandFromOperand (left), FALSE),
+                                          geniCodeRValue (right, FALSE), getResultTypeFromType (tree->ftype), false), 0, 1);
     case MOD_ASSIGN:
       return
         geniCodeAssign (left,

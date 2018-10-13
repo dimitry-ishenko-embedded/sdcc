@@ -44,17 +44,6 @@
 
 #include "version.h"
 
-/** C99 isblank implementation for Visual C++ 2010
-*/
-
-#if defined(_MSC_VER) && (_MSC_VER < 1800)
-int
-isblank(int c)
-{
-  return (c == ' ' || c == '\t');
-}
-#endif
-
 /** Given an array of name, value string pairs creates a new hash
     containing all of the pairs.
 */
@@ -933,8 +922,8 @@ octalEscape (const char **str)
 const char *
 copyStr (const char *src, size_t *size)
 {
- const char *begin = NULL;
- struct dbuf_s dbuf;
+  const char *begin = NULL;
+  struct dbuf_s dbuf;
 
   dbuf_init(&dbuf, 128);
 

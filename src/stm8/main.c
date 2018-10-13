@@ -134,7 +134,6 @@ static char *stm8_keywords[] = {
   "interrupt",
   "trap",
   "naked",
-  "smallc",
   NULL
 };
 
@@ -150,7 +149,6 @@ stm8_genAssemblerEnd (FILE *of)
 static void
 stm8_init (void)
 {
-  // fprintf(stderr, "stm8_init\n");
   asm_addTree (&asm_asxxxx_mapping);
 }
 
@@ -183,6 +181,13 @@ stm8_finaliseOptions (void)
 {
   port->mem.default_local_map = data;
   port->mem.default_globl_map = data;
+
+  if (options.model == MODEL_LARGE)
+    {
+      port->s.funcptr_size = 3;
+      port->stack.call_overhead = 3;
+      port->jumptableCost.maxCount = 0;
+    }
 }
 
 static void
@@ -209,8 +214,21 @@ stm8_getRegName (const struct reg_info *reg)
   return "err";
 }
 
-void
-stm8_genInitStartup(FILE * of)
+static void
+stm8_genExtraArea (FILE *of, bool hasMain)
+{
+  fprintf (of, "\n; default segment ordering for linker\n");
+  tfprintf (of, "\t!area\n", HOME_NAME);
+  tfprintf (of, "\t!area\n", STATIC_NAME);
+  tfprintf (of, "\t!area\n", port->mem.post_static_name);
+  tfprintf (of, "\t!area\n", CONST_NAME);
+  tfprintf (of, "\t!area\n", "INITIALIZER");
+  tfprintf (of, "\t!area\n", CODE_NAME);
+  fprintf (of, "\n");
+}
+
+static void
+stm8_genInitStartup (FILE *of)
 {
   fprintf (of, "__sdcc_gs_init_startup:\n");
 
@@ -260,10 +278,10 @@ stm8_genIVT(struct dbuf_s * oBuf, symbol ** intTable, int intCount)
     }
 
   if (interrupts[INTNO_TRAP] || intCount)
-    dbuf_printf (oBuf, "\tint %s ; trap\n", interrupts[INTNO_TRAP] ? interrupts[INTNO_TRAP]->rname : "0x0000");
+    dbuf_printf (oBuf, "\tint %s ; trap\n", interrupts[INTNO_TRAP] ? interrupts[INTNO_TRAP]->rname : "0x000000");
     
   for (i = 0; i < intCount; i++)
-    dbuf_printf (oBuf, "\tint %s ; int%d\n", interrupts[i] ? interrupts[i]->rname : "0x0000", i);
+    dbuf_printf (oBuf, "\tint %s ; int%d\n", interrupts[i] ? interrupts[i]->rname : "0x000000", i);
 
   return TRUE;
 }
@@ -334,6 +352,23 @@ hasExtBitOp (int op, int size)
   return (op == GETABIT);
 }
 
+static const char *
+get_model (void)
+{
+  switch (options.model)
+    {
+    case MODEL_MEDIUM:
+      return ("stm8");
+      break;
+    case MODEL_LARGE:
+      return ("stm8-large");
+      break;
+    default:
+      werror (W_UNKNOWN_MODEL, __FILE__, __LINE__);
+      return "unknown";
+    }
+}
+
 /** $1 is always the basename.
     $2 is always the output file.
     $3 varies
@@ -362,9 +397,9 @@ PORT stm8_port =
   {
     glue,
     TRUE,                       /* We want stm8_genIVT to be triggered */
-    NO_MODEL,
-    NO_MODEL,
-    NULL,                       /* model == target */
+    MODEL_MEDIUM | MODEL_LARGE,
+    MODEL_MEDIUM,
+    &get_model,                 /* model string used as library destination */
   },
   {                             /* Assembler */
     stm8AsmCmd,
@@ -395,26 +430,39 @@ PORT stm8_port =
     NULL,
   },
   /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
-  { 1, 2, 2, 4, 8, 2, 2, 2, 1, 4, 4 },
+  {
+    1,                          /* char */
+    2,                          /* short */
+    2,                          /* int */
+    4,                          /* long */
+    8,                          /* long long */
+    2,                          /* near ptr */
+    2,                          /* far ptr */
+    2,                          /* generic ptr */
+    2,                          /* func ptr */
+    0,                          /* banked func ptr */
+    1,                          /* bit */
+    4,                          /* float */
+  },
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },   /* far, near, xstack, code */
   {
     "XSEG",
     "STACK",
-    "CODE",
-    "DATA",
+    "CODE",                     /* code */
+    "DATA",                     /* data */
     NULL,                       /* idata */
     NULL,                       /* pdata */
     NULL,                       /* xdata */
     NULL,                       /* bit */
-    "RSEG (ABS)",
+    "RSEG (ABS)",               /* reg */
     "GSINIT",                   /* static initialization */
     NULL,                       /* overlay */
-    "GSFINAL",
-    "HOME",
+    "GSFINAL",                  /* gsfinal */
+    "HOME",                     /* home */
     NULL,                       /* xidata */
     NULL,                       /* xinit */
-    NULL,                       /* const_name */
+    "CONST",                    /* const_name */
     "CABS (ABS)",               /* cabs_name */
     "DABS (ABS)",               /* xabs_name */
     NULL,                       /* iabs_name */
@@ -424,8 +472,16 @@ PORT stm8_port =
     NULL,
     1                           /* CODE  is read-only */
   },
-  { NULL, NULL },
-  { -1, 0, 7, 2, 0, 2, 1 },     /* stack information */
+  { stm8_genExtraArea, NULL },
+  {                             /* stack information */
+    -1,                         /* direction */
+     0,
+     7,                         /* isr overhead */
+     2,                         /* call overhead */
+     0,
+     2,
+     1,                         /* sp points to next free stack location */
+  },     
   { -1, TRUE },
   { stm8_emitDebuggerSymbol,
     {
