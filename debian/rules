@@ -39,6 +39,18 @@ clean:
 	rm -f install-arch install-indep
 	rm -f doc/sdcc_version
 	rm -f sim/ucsim/cmd.src/cmdlex.cc
+	rm -f device/lib/stm8-large/Makefile
+	rm -f device/lib/stm8-large/*.asm
+	rm -f device/lib/stm8-large/*.lst
+	rm -f device/lib/stm8-large/*.rel
+	rm -f device/lib/stm8-large/*.sym
+	rm -f support/sdbinutils/binutils/mcparse.[c,h]
+	rm -f support/sdbinutils/binutils/rcparse.[c,h]
+	rm -f support/sdbinutils/binutils/sysinfo.[c,h]
+	rm -f support/sdbinutils/binutils/syslex.[c,h]
+	rm -f support/sdbinutils/binutils/defparse.[c,h]
+	rm -f sim/ucsim/config.log
+	rm -f sim/ucsim/lex.yy.c
 	dh_clean
 
 configure: configure-stamp
@@ -92,7 +104,7 @@ install-indep: build
 	dh_install -i --sourcedir=debian/tmp --list-missing
 
 	# Install examples
-	cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
+	#cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
 	rm -f $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc/examples/mcs51/simple*/go*
 	rm -f debian/sdcc-libraries/usr/share/sdcc/lib/src/pic14/GPL
 	rm -f debian/sdcc-libraries/usr/share/sdcc/lib/src/pic14/LGPL
