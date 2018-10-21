@@ -14,6 +14,8 @@ sdcc (3.8.0+dfsg-1) UNRELEASED; urgency=medium
   * Change watch from http to https
   * Add patch to fix spelling 01_fix_spelling.patch
   * Fix spelling error in ucsim and sdcc manpages
+  * Change version check to DEB_VERSION_UPSTREAM in rules file
+  * Add override file to remove false lintian gfdl positives
 
  -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sat, 13 Oct 2018 08:45:02 +0200
 

@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 
+include /usr/share/dpkg/pkg-info.mk
+
 export DH_VERBOSE=1
 
 export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow
@@ -51,6 +53,8 @@ clean:
 	rm -f support/sdbinutils/binutils/defparse.[c,h]
 	rm -f sim/ucsim/config.log
 	rm -f sim/ucsim/lex.yy.c
+	rm -f support/sdbinutils/bfd/doc/bfd.info
+	rm -f support/sdbinutils/bfd/doc/bfdver.texi
 	dh_clean
 
 configure: configure-stamp
@@ -169,7 +173,8 @@ binary-arch: install-arch
 	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
 
 get-orig-source:
-	VER=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([^-+~]+).*,\1,p'); \
+	set -e;\
+	VER=$(DEB_VERSION_UPSTREAM);\
 	uscan --force-download --rename --download-version=$$VER --destdir=. && (\
 	tar -xj --exclude device/non-free --exclude sim/ucsim/libltdl -f sdcc_$$VER.orig.tar.bz2 ; \
 	mv sdcc-$$VER sdcc-$$VER+dfsg;\
