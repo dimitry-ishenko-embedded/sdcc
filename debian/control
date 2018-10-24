@@ -12,7 +12,8 @@ Build-Depends: bison,
                libboost-dev,
                libncurses5-dev,
                libtool,
-               texinfo
+               texinfo,
+               zlib1g-dev
 Build-Depends-Indep: ghostscript,
                      graphicsmagick-imagemagick-compat,
                      lyx,
@@ -20,7 +21,8 @@ Build-Depends-Indep: ghostscript,
                      texlive-font-utils,
                      texlive-generic-recommended,
                      texlive-latex-recommended,
-                     gsfonts
+                     gsfonts,
+                     inkscape
 Standards-Version: 4.2.1
 Homepage: http://sdcc.sourceforge.net
 Vcs-Git: https://salsa.debian.org/electronics-team/sdcc.git
