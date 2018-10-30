@@ -55,12 +55,15 @@ clean:
 	rm -f sim/ucsim/lex.yy.c
 	rm -f support/sdbinutils/bfd/doc/bfd.info
 	rm -f support/sdbinutils/bfd/doc/bfdver.texi
+	find . -type f -name 'Makefile' -exec rm -vf {} \;
+	find . -type f -name 'config.log' -exec rm -vf {} \;
 	dh_clean
 
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	mkdir -p $(CURDIR)/build
+	chmod a-x device/lib/*.c
 	dh_update_autotools_config
 	CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFLAGS="$(CXXFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure \
