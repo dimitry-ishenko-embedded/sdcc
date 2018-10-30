@@ -1,4 +1,4 @@
-sdcc (3.8.0+dfsg-1) unstable; urgency=medium
+sdcc (3.8.0+dfsg-1) UNRELEASED; urgency=medium
 
   [ Jonathan McDowell ]
   * Add myself to Uploaders and move under the Electronics Packaging Team.
@@ -19,7 +19,7 @@ sdcc (3.8.0+dfsg-1) unstable; urgency=medium
   * Add dependency on zlib1g-dev
   * Add dependency on inkscape (Closes: #911713)
 
- -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Wed, 24 Oct 2018 12:13:29 +0200
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Tue, 30 Oct 2018 09:51:18 +0100
 
 sdcc (3.7.0+dfsg2-0.1) unstable; urgency=medium
 
