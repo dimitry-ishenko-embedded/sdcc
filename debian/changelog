@@ -1,9 +1,9 @@
-sdcc (3.8.0+dfsg-3) UNRELEASED; urgency=medium
+sdcc (3.8.0+dfsg-3) unstable; urgency=medium
 
   * Add build dependency on texlive-latex-extra (Closing #917692)
   * Bump standards version to 4.3.0, no changes needed
 
- -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Tue, 01 Jan 2019 17:49:42 +0100
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Tue, 01 Jan 2019 17:59:22 +0100
 
 sdcc (3.8.0+dfsg-1) unstable; urgency=medium
 
