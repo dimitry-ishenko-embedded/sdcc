@@ -1,6 +1,7 @@
 sdcc (3.8.0+dfsg-3) UNRELEASED; urgency=medium
 
   * Bump standards version to 4.4.1
+  * Change texlive dependency (Closes: #941546)
 
  -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sun, 06 Oct 2019 13:00:12 +0200
 
