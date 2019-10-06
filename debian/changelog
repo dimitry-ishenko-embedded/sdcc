@@ -1,3 +1,9 @@
+sdcc (3.8.0+dfsg-3) UNRELEASED; urgency=medium
+
+  * Bump standards version to 4.4.1
+
+ -- Gudjon I. Gudjonsson <gudjon@gudjon.org>  Sun, 06 Oct 2019 13:00:12 +0200
+
 sdcc (3.8.0+dfsg-2) unstable; urgency=medium
 
   * Add build dependency on texlive-latex-extra (Closing #917692)
