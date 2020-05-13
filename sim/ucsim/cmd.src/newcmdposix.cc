@@ -136,19 +136,28 @@ cl_console::drop_files(void) // do not close, just ignore
 }
 
 void
-cl_console::close_files(void)
+cl_console::close_files(bool close_in, bool close_out)
 {
   if (frout)
     delete frout;
-  if (fout)
+  if (close_out)
     {
-      if (fout->tty)
-	tu_reset();
-      delete fout;
+      if (fout)
+	{
+	  if (fout->tty)
+	    tu_reset();
+	  delete fout;
+	}
+      fout= 0;
     }
-  if (fin)
-    delete fin;
-  drop_files();
+  if (close_in)
+    {
+      if (fin)
+	delete fin;
+      fin= 0;
+      application->get_commander()->update_active();
+    }
+  //drop_files();
 }
 
 void
@@ -158,7 +167,7 @@ cl_console::replace_files(bool close_old, cl_f *new_in, cl_f *new_out)
     delete frout;
   frout= 0;
   if (close_old)
-    close_files();
+    close_files(fin != new_in, fout != new_out);
   fin= new_in;
   fout= new_out;
   application->get_commander()->update_active();
@@ -229,6 +238,8 @@ bool
 cl_console::input_avail(void)
 {
   bool ret= false;
+  if (startup_command.nempty())
+    return true;
   if (input_active())
     {
       ret= fin->input_avail();
@@ -276,7 +287,17 @@ cl_console::read_line(void)
   int b[2]= { 0, 0 };
 
   do {
-    i= fin->read(b, 1);
+    if (startup_command.nempty())
+      {
+	char *s= startup_command;
+	b[0]= s[0];
+	startup_command= &s[1];
+	i= 1;
+      }
+    else
+      {
+	i= fin->read(b, 1);
+      }
     if (i < -1)
       {
 	return -1;
@@ -488,6 +509,10 @@ cl_commander::init(void)
 	  in->interactive(out);
 	  add_console(con= new cl_console(in, out, app));
 	  config_console= exec_on(con, Config);
+	  if (config_console)
+	    config_console->set_startup(app->startup_command);
+	  else
+	    con->set_startup(app->startup_command);
 	  need_config= false;
 	  if (in->tty)
 	    con->set_flag(CONS_INTERACTIVE, true);
@@ -507,21 +532,32 @@ cl_commander::init(void)
       in->interactive(out);
       add_console(con= new cl_console(in, out, app));
       config_console= exec_on(con, Config);
+      if (config_console)
+	config_console->set_startup(app->startup_command);
+      else
+	con->set_startup(app->startup_command);
       need_config= false;
       if (in->tty)
 	con->set_flag(CONS_INTERACTIVE, true);
     }
-  if (need_config &&
-      Config &&
-      *Config)
+  if (
+      need_config &&
+      (
+       (Config && *Config)
+       ||
+       app->startup_command.nempty()
+       )
+      )
     {
-      class cl_f *i, *o;
-      i= mk_io(Config, "r");
+      class cl_f *i= NULL, *o;
+      if (Config && *Config)
+	i= mk_io(Config, "r");
       o= cp_io(fileno(stderr), "w");
       con= new cl_console(/*fc*/i, /*stderr*/o, app);
       con->set_flag(CONS_NOWELCOME|CONS_ECHO, true);
       //exec_on(con, Config);
       config_console= con;
+      con->set_startup(app->startup_command);
       add_console(con);
     }
   return(0);
@@ -584,6 +620,16 @@ cl_commander::input_avail(void)
   bool ret= check_inputs(active_inputs, avail);
   avail->disconn_all();
   delete avail;
+  if (!ret)
+    for (int j = 0; j < cons->count; j++)
+    {
+      class cl_console *c = dynamic_cast<class cl_console*>((class cl_console_base*)(cons->at(j)));
+      chars *s= c->get_startup();
+      if (s->nempty())
+	{
+	  return true;
+	}
+    }
   return ret;
 }
 
@@ -612,9 +658,9 @@ cl_commander::proc_input(void)
       if (config_console &&
 	  (config_console != c))
 	continue;
-      
+
       if (c->input_active() &&
-	  f)
+	  (f || c->has_startup()))
         {
 	  if (c->input_avail())
             {

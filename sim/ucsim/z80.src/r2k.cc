@@ -551,6 +551,7 @@ cl_r2k::exec_inst(void)
   t_mem code;
   
   ins_start = PC;
+  instPC = PC;
   
   if (fetch(&code))
     return(resBREAKPOINT);
@@ -725,7 +726,7 @@ int cl_r2k::exec_code(t_mem code)
     case 0xeb: return(inst_ex(code));
     case 0xec: return(inst_r2k_or (code));
       /* ED escapes out to other oddball opcodes */
-    case 0xed: return(inst_ed());
+    case 0xed: return(inst_ed(0xed));
     case 0xee: return(inst_xor(code));
     case 0xef: return(inst_rst(code));
       

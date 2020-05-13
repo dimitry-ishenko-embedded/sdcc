@@ -1,4 +1,29 @@
-/* $Id: port_hw.cc 652 2017-02-16 13:31:47Z drdani $ */
+/*
+ * Simulator of microcontrollers (sim.src/port_hw.cc)
+ *
+ * Copyright (C) 1999,99 Drotos Daniel, Talker Bt.
+ * 
+ * To contact author send email to drdani@mazsola.iit.uni-miskolc.hu
+ *
+ */
+
+/* This file is part of microcontroller simulator: ucsim.
+
+UCSIM is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+UCSIM is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with UCSIM; see the file COPYING.  If not, write to the Free
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA. */
+/*@1@*/
 
 #include <ctype.h>
 
@@ -7,14 +32,15 @@
 #include "port_hwcl.h"
 
 
-const char *keysets[7]= {
+const char *keysets[8]= {
   "12345678",
   "qwertyui",
   "asdfghjk",
   "zxcvbnm,",
   "QWERTYUI",
   "ASDFGHJK",
-  "ZXCVBNM."
+  "ZXCVBNM,",
+  "9opl.OPL"
 };
 
 
@@ -103,7 +129,7 @@ cl_port_ui::handle_input(int c)
 
   if (i8 < 0)
     {
-      fprintf(stderr, "Port: spec key= %d\n", i8);
+      //fprintf(stderr, "Port: spec key= %d\n", i8);
     }
   else
     {
@@ -134,7 +160,7 @@ cl_port_ui::handle_input(int c)
   if (!ret)
     {
       u8_t u= c;
-      fprintf(stderr, "Unknown command: %c (%d,0x%x)\n", isprint(u)?u:'?', i8, c);
+      //fprintf(stderr, "Unknown command: %c (%d,0x%x)\n", isprint(u)?u:'?', i8, c);
     }
   return ret;
 }

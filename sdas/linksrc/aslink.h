@@ -888,7 +888,7 @@ extern  char    rb[NINPUT];     /*      LST file text line being
                                  *      address relocated
                                  */
 extern  char    ctype[];        /*      array of character types, one per
-                                 *      ASCII character
+                                 *      ASCII/OEM character
                                  */
 
 /*
@@ -1285,6 +1285,7 @@ extern  VOID            relr3(void);
 extern  VOID            relp3(void);
 extern  VOID            relerr3(char *str);
 extern  VOID            relerp3(char *str);
+extern  int             vpdkinst(int inst, int addr, int ver);
 
 /* lklibr.c */
 extern  int             addfile(char *path, char *libfil);

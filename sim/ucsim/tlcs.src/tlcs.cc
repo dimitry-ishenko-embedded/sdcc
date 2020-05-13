@@ -25,8 +25,6 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 02111-1307, USA. */
 /*@1@*/
 
-/* $Id: tlcs.cc 754 2017-06-13 08:26:25Z drdani $ */
-
 #include "ddconfig.h"
 
 #include <stdio.h>
@@ -514,9 +512,10 @@ int
 cl_tlcs::exec_inst(void)
 {
   t_mem c1, c2, c3, c4;//, c5, c6;
-  //t_addr instPC= PC;
   int res= resGO;
-  
+
+  instPC= PC;
+
   if (fetch(&c1))
     return resBREAKPOINT;
   tick(1);

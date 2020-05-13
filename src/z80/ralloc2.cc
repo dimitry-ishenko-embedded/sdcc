@@ -22,6 +22,7 @@
 // #define DEBUG_RALLOC_DEC_ASS // Uncomment to get debug messages about assignments while doing register allocation on the tree decomposition (much more verbose than the one above).
 
 #include "SDCCralloc.hpp"
+#include "SDCCsalloc.hpp"
 
 extern "C"
 {
@@ -181,7 +182,7 @@ assign_cost(const assignment &a, unsigned short int i, const G_t &G, const I_t &
   if(!right || !IS_SYMOP(right) || !result || !IS_SYMOP(result) || POINTER_GET(ic) || POINTER_SET(ic))
     return(default_instruction_cost(a, i, G, I));
 
-  reg_t byteregs[4] = {-1, -1, -1, -1}; // Todo: Change this when sdcc supports variables larger than 4 bytes.
+  reg_t byteregs[4] = {-1, -1, -1, -1}; // Todo: Change this when sdcc supports variables larger than 4 bytes in register allocation for z80.
 
   operand_map_t::const_iterator oi, oi_end;
 
@@ -398,7 +399,7 @@ static void add_operand_conflicts_in_node(const cfg_node &n, I_t &I)
   if(!result || !IS_SYMOP(result))
     return;
     
-  if(!(ic->op == '~' || ic->op == UNARYMINUS || ic->op == '+' || ic->op == '-' || ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND)) 
+  if(!(ic->op == UNARYMINUS || ic->op == '+' || ic->op == '-' || ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND)) 
     return; // Code generation can always handle all other operations. Todo: Handle ^, |, BITWISEAND and float UNARYMINUS there as well.
    
   operand_map_t::const_iterator oir, oir_end, oirs; 
@@ -548,7 +549,7 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
 
   bool exstk = (should_omit_frame_ptr || (currFunc && currFunc->stack > 127) || IS_GB);
 
-  //std::cout << "Ainst_ok: A = (" << ia.registers[REG_A][0] << ", " << ia.registers[REG_A][1] << "), inst " << i << ", " << ic->key << "\n";
+  //std::cout << "Ainst_ok at " << G[i].ic->key << ": A = (" << ia.registers[REG_A][0] << ", " << ia.registers[REG_A][1] << "), inst " << i << ", " << ic->key << "\n";
 
   // Check if the result of this instruction is placed in A.
   bool result_in_A = operand_in_reg(IC_RESULT(ic), REG_A, ia, i, G);
@@ -574,32 +575,16 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
     IS_TRUE_SYMOP (right) && IN_REGSP (SPEC_OCLS (OP_SYMBOL (right)->etype))))
     return(false);
 
-  // bit instructions do not disturb a.
-  if(ic->op == BITWISEAND && ifxForOp (IC_RESULT(ic), ic) &&
-    (IS_OP_LITERAL(left) && (!(IS_GB && IS_TRUE_SYMOP (right) || exstk && operand_on_stack(right, a, i, G)) || operand_in_reg(right, ia, i, G) && !operand_in_reg(right, REG_IYL, ia, i, G) && !operand_in_reg(right, REG_IYH, ia, i, G)) ||
-    IS_OP_LITERAL(right) && (!(IS_GB && IS_TRUE_SYMOP (left) || exstk && operand_on_stack(left, a, i, G)) || operand_in_reg(left, ia, i, G) && !operand_in_reg(left, REG_IYL, ia, i, G) && !operand_in_reg(left, REG_IYH, ia, i, G))))
-    {
-      operand *const litop = IS_OP_LITERAL(left) ? IC_LEFT(ic) : IC_RIGHT(ic);
-      for(unsigned int i = 0; i < getSize(operandType(result)); i++)
-        {
-          unsigned char byte = byteOfVal (OP_VALUE (litop), i);
-          if (byte != 0x00 && byte != 0x01 && byte != 0x02 && byte != 0x04 && byte != 0x08 && byte != 0x10 && byte != 0x20 && byte != 0x40 && byte != 0x80)
-            goto nobit;
-        }
-      return(true);
-    }
-  nobit:
+  if (ic->op == '^' || ic->op == BITWISEAND || ic->op == '|' || ic->op == '~') // Codegen can handle it all.
+    return(true);
+
+  if (ic->op == RIGHT_OP && getSize(operandType(result)) == 1 && IS_OP_LITERAL(right))
+    return(true);
 
   // Can use non-destructive cp on == and < (> might swap operands).
   if((ic->op == EQ_OP || ic->op == '<' && SPEC_USIGN(getSpec(operandType(left))) && SPEC_USIGN(getSpec(operandType(right)))) &&
     getSize(operandType(IC_LEFT(ic))) == 1 && ifxForOp (IC_RESULT(ic), ic) && operand_in_reg(left, REG_A, ia, i, G) &&
     (IS_OP_LITERAL (right) || operand_in_reg(right, REG_C, ia, i, G) || operand_in_reg(right, REG_B, ia, i, G) || operand_in_reg(right, REG_E, ia, i, G) || operand_in_reg(right, REG_D, ia, i, G) || operand_in_reg(right, REG_H, ia, i, G) || operand_in_reg(right, REG_L, ia, i, G)))
-    return(true);
-
-  // The Z180 has a non-destructive testing and.
-  if(IS_Z180 && ic->op == BITWISEAND && ifxForOp (IC_RESULT(ic), ic) &&
-    (getSize(operandType(left)) == 1 && operand_in_reg(left, REG_A, ia, i, G) && (IS_OP_LITERAL(right) /*|| operand_in_reg(right, ia, i, G) && !operand_in_reg(right, REG_IYL, ia, i, G) && !operand_in_reg(right, REG_IYH, ia, i, G)*/) ||
-    getSize(operandType(right)) == 1 && operand_in_reg(right, REG_A, ia, i, G) && (IS_OP_LITERAL(left) /*|| operand_in_reg(left, ia, i, G) && !operand_in_reg(left, REG_IYL, ia, i, G) && !operand_in_reg(left, REG_IYH, ia, i, G)*/)))
     return(true);
 
   const cfg_dying_t &dying = G[i].dying;
@@ -609,7 +594,7 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
     getSize(operandType(IC_RESULT(ic))) == 1 && dying_A)
     return(true);
 
-  if((ic->op == '+' || ic->op == '-' && !operand_in_reg(right, REG_A, ia, i, G) || ic->op == UNARYMINUS && !IS_GB || ic->op == BITWISEAND || ic->op == '|' || ic->op == '^' || ic->op == '~') && // First byte of input and last byte of output may be in A.
+  if((ic->op == '+' || ic->op == '-' && !operand_in_reg(right, REG_A, ia, i, G) || ic->op == UNARYMINUS && !IS_GB || ic->op == '~') && // First byte of input and last byte of output may be in A.
     IS_ITEMP(result) && dying_A &&
     (IS_ITEMP(left) || IS_OP_LITERAL(left) || operand_on_stack(left, a, i, G)) &&
     (!right || IS_ITEMP(right) || IS_OP_LITERAL(right) || operand_on_stack(right, a, i, G)))
@@ -626,13 +611,19 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
     operand_byte_in_reg(left, 0, REG_A, a, i, G) || getSize(operandType(left)) >= 2 && !IS_FLOAT (operandType(left)) && operand_byte_in_reg(left, 1, REG_A, a, i, G)))
     return(true);
 
+  // Plain assignment between registers
+  if(ic->op == CAST && getSize(operandType(IC_RESULT(ic))) == 1 &&
+    (operand_in_reg(result, REG_B, ia, i, G) || operand_in_reg(result, REG_C, ia, i, G) || operand_in_reg(result, REG_D, ia, i, G) || operand_in_reg(result, REG_E, ia, i, G) || operand_in_reg(result, REG_A, ia, i, G)) &&
+    (operand_in_reg(result, REG_B, ia, i, G) || operand_in_reg(result, REG_C, ia, i, G) || operand_in_reg(result, REG_D, ia, i, G) || operand_in_reg(result, REG_E, ia, i, G)))
+    return(true);
+
   // Any input byte in A is ok, when all operands are registers other than iy.
   if(ic->op == CAST && operand_in_reg(right, REG_A, ia, i, G) &&
     !operand_in_reg(result, REG_A, ia, i, G) && (operand_in_reg(result, REG_C, ia, i, G) || operand_in_reg(result, REG_E, ia, i, G) || operand_in_reg(result, REG_L, ia, i, G)))
     return(true);
 
   // Last byte of output may be in A.
-  if((ic->op == GET_VALUE_AT_ADDRESS || (ic->op == CAST) && !operand_in_reg(right, REG_A, ia, i, G)) && IS_ITEMP(result) && operand_byte_in_reg(result, getSize(operandType(IC_RESULT(ic))) - 1, REG_A, a, i, G))
+  if((ic->op == GET_VALUE_AT_ADDRESS || ic->op == CAST && !operand_in_reg(right, REG_A, ia, i, G)) && IS_ITEMP(result) && operand_byte_in_reg(result, getSize(operandType(IC_RESULT(ic))) - 1, REG_A, a, i, G))
     return(true);
 
   if (ic->op == LEFT_OP && getSize(operandType(IC_RESULT(ic))) == 2 && IS_OP_LITERAL(right) && byteOfVal (OP_VALUE (IC_RIGHT(ic)), 0) == 7)
@@ -641,20 +632,33 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
         return(true);
     }
 
+  // Left shift of 1 byte can always handle a.
+  if (ic->op == LEFT_OP && getSize(operandType(IC_RESULT(ic))) == 1 && IS_OP_LITERAL(right))
+    return(true);
+
   // inc / dec does not affect a.
   if ((ic->op == '+' || ic->op == '-') && IS_OP_LITERAL(right) && ulFromVal (OP_VALUE (IC_RIGHT(ic))) <= 2 &&
     (getSize(operandType(IC_RESULT(ic))) == 2 && operand_is_pair(IC_RESULT(ic), a, i, G) || getSize(operandType(IC_RESULT(ic))) == 1 && operand_in_reg(result, ia, i, G) && operand_in_reg(result, ia, i, G)))
     return(true);
 
+  if(ic->op == GET_VALUE_AT_ADDRESS) // Any register can be assigned from (hl) and (iy), so we don't need to go through a then.
+    return(!IS_BITVAR(getSpec(operandType(result))) &&
+    (getSize(operandType(result)) == 1 || operand_is_pair(left, a, i, G) && (operand_in_reg(left, REG_L, ia, i, G) && !ulFromVal (OP_VALUE (IC_RIGHT(ic))) || operand_in_reg(left, REG_IYL, ia, i, G) && ulFromVal (OP_VALUE (IC_RIGHT(ic))) <= 127)));
+
+  if(ic->op == '=' && POINTER_SET (ic) && // Any register can be assigned to (hl) and (iy), so we don't need to go through a then.
+    !(IS_BITVAR(getSpec(operandType (result))) || IS_BITVAR(getSpec(operandType (right)))) &&
+    (getSize(operandType(right)) == 1 || operand_is_pair(result, a, i, G) && (operand_in_reg(result, REG_L, ia, i, G) || operand_in_reg(result, REG_IYL, ia, i, G))))
+    return(true);
+
   // Code generator mostly cannot handle variables that are only partially in A.
-  if(I[ia.registers[REG_A][1]].size > 1 || (ia.registers[REG_A][0] >= 0 && I[ia.registers[REG_A][0]].size > 1))
+  if(operand_in_reg(left, REG_A, ia, i, G) && getSize(operandType(left)) != 1 ||
+    operand_in_reg(right, REG_A, ia, i, G) && getSize(operandType(right)) != 1 ||
+    operand_in_reg(result, REG_A, ia, i, G) && getSize(operandType(result)) != 1)
     return(false);
 
   if(ic->op == '!' && getSize(operandType(left)) <= 2 && dying_A)
     return(true);
 
-  if(ic->op == GET_VALUE_AT_ADDRESS)
-    return(!IS_BITVAR(getSpec(operandType(result))));
   if(ic->op == '=' && POINTER_SET (ic))
     return(dying_A || !(IS_BITVAR(getSpec(operandType (result))) || IS_BITVAR(getSpec(operandType (right)))));
 
@@ -817,6 +821,11 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   if((IS_GB || IY_RESERVED) && IS_TRUE_SYMOP(result) && getSize(operandType(IC_RESULT(ic))) > 2)
     return(false);
 
+  // __z88dk_fastcall passes paramter in hl
+  if(ic->op == PCALL && ic->prev && ic->prev->op == SEND && input_in_HL && IFFUNC_ISZ88DK_FASTCALL(operandType(IC_LEFT(ic))->next))
+    return(false);
+
+  // HL overwritten by result.
   if(result_only_HL && ic->op == PCALL)
     return(true);
 
@@ -845,6 +854,11 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     (ia.registers[REG_C][1] < 0 && ia.registers[REG_B][1] < 0 || ia.registers[REG_E][1] < 0 && ia.registers[REG_D][1] < 0)) // Can use ld rr, (nn) instead of (hl).
     return(true);
 
+  if(ic->op == '+' && getSize(operandType(result)) == 2 && IS_TRUE_SYMOP (left) && !IS_GB &&
+    (IS_OP_LITERAL (right) && ulFromVal (OP_VALUE (IC_RIGHT(ic))) <= 3 || IS_OP_LITERAL (left) && ulFromVal (OP_VALUE (IC_LEFT(ic))) <= 3) &&
+    (operand_in_reg(result, REG_C, ia, i, G) && I[ia.registers[REG_C][1]].byte == 0 && operand_in_reg(result, REG_B, ia, i, G) || operand_in_reg(result, REG_E, ia, i, G) && I[ia.registers[REG_E][1]].byte == 0 && operand_in_reg(result, REG_D, ia, i, G))) // Can use ld rr, (nn) followed by inc rr
+    return(true);
+
   if((ic->op == '+' || ic->op == '-' || ic->op == UNARYMINUS) && getSize(operandType(result)) >= 2 &&
     (IS_TRUE_SYMOP (result) && !operand_on_stack(result, a, i, G) || (operand_on_stack(left, a, i, G) ? exstk : IS_TRUE_SYMOP (left)) || (operand_on_stack(right, a, i, G) ? exstk : IS_TRUE_SYMOP (right)))) // Might use (hl).
     return(false);
@@ -865,6 +879,7 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   if(!exstk && !isOperandInDirSpace(IC_LEFT(ic)) && !isOperandInDirSpace(IC_RIGHT(ic)) && !isOperandInDirSpace(IC_RESULT(ic)) &&
     (ic->op == '-' ||
     ic->op == UNARYMINUS ||
+    ic->op == '~' ||
     ic->op == '<' ||
     ic->op == '>'))
     return(true);
@@ -902,9 +917,14 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     (ia.registers[REG_C][1] < 0 && ia.registers[REG_B][1] < 0 || ia.registers[REG_E][1] < 0 && ia.registers[REG_D][1] < 0)) // Can use pair other than HL.
     return(true);
   if(ic->op == IPUSH && getSize(operandType(left)) <= 2 &&
-    (operand_in_reg(left, REG_C, ia, i, G) && I[ia.registers[REG_C][1]].byte == 0 && (getSize(operandType(left)) < 2 || operand_in_reg(left, REG_B, ia, i, G))||
+    (operand_in_reg(left, REG_C, ia, i, G) && I[ia.registers[REG_C][1]].byte == 0 && (getSize(operandType(left)) < 2 || operand_in_reg(left, REG_B, ia, i, G)) ||
     operand_in_reg(left, REG_E, ia, i, G) && I[ia.registers[REG_E][1]].byte == 0 && (getSize(operandType(left)) < 2 || operand_in_reg(left, REG_D, ia, i, G)) ||
     operand_in_reg(left, REG_IYL, ia, i, G) && I[ia.registers[REG_IYL][1]].byte == 0 && (getSize(operandType(left)) < 2 || operand_in_reg(left, REG_IYH, ia, i, G))))
+    return(true);
+  if (ic->op == IPUSH && getSize(operandType(left)) == 4 &&
+    operand_in_reg(left, REG_L, ia, i, G) && I[ia.registers[REG_L][1]].byte == 0 && operand_in_reg(left, REG_H, ia, i, G) && I[ia.registers[REG_H][1]].byte == 1 &&
+    (operand_in_reg(left, REG_C, ia, i, G) && I[ia.registers[REG_C][1]].byte == 2 && operand_in_reg(left, REG_B, ia, i, G) && I[ia.registers[REG_B][1]].byte == 3 ||
+    operand_in_reg(left, REG_E, ia, i, G) && I[ia.registers[REG_E][1]].byte == 2 && operand_in_reg(left, REG_D, ia, i, G) && I[ia.registers[REG_D][1]].byte == 3))
     return(true);
   if(POINTER_GET(ic) && input_in_L && input_in_H && (getSize(operandType(IC_RESULT(ic))) == 1 || !result_in_HL))
     return(true);
@@ -941,10 +961,6 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     return(true);
 
   if(ic->op == CALL)
-    return(true);
-
-  // HL overwritten by result.
-  if(result_only_HL && ic->op == PCALL)
     return(true);
 
   if(POINTER_GET(ic) && getSize(operandType(IC_RESULT(ic))) == 1 && !IS_BITVAR(getSpec(operandType(result))) &&
@@ -1029,10 +1045,28 @@ static bool IYinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   if(unused_IYL && unused_IYH)
     return(true); // Register IY not in use.
 
+  if(SKIP_IC2(ic))
+    return(true);
+
   if(exstk && (operand_on_stack(result, a, i, G) || operand_on_stack(left, a, i, G) || operand_on_stack(right, a, i, G))) // Todo: Make this more accurate to get better code when using --fomit-frame-pointer
     return(false);
 
-  // Code generator cannot handle variables that are only partially in IY.
+  if(ic->op == CALL)
+    return(true);
+
+  if(!result_in_IY && !input_in_IY &&
+    !(IC_RESULT(ic) && isOperandInDirSpace(IC_RESULT(ic))) &&
+    !(IC_RIGHT(ic) && IS_TRUE_SYMOP(IC_RIGHT(ic))) &&
+    !(IC_LEFT(ic) && IS_TRUE_SYMOP(IC_LEFT(ic))))
+    return(true);
+
+  // variables partially in IY can be pushed.
+  if(ic->op == IPUSH &&
+    operand_in_reg(left, REG_IYL, ia, i, G) && operand_in_reg(left, REG_IYH, ia, i, G) &&
+    (I[ia.registers[REG_IYL][1]].byte == 0 && I[ia.registers[REG_IYH][1]].byte == 1 || I[ia.registers[REG_IYL][1]].byte == 2 && I[ia.registers[REG_IYH][1]].byte == 3))
+    return(true);
+
+  // Code generator mostly cannot handle variables that are only partially in IY.
   if(unused_IYL ^ unused_IYH)
     return(false);
   if(!unused_IYL && I[ia.registers[REG_IYL][1]].size != 2 || !unused_IYH && I[ia.registers[REG_IYH][1]].size != 2 ||
@@ -1084,15 +1118,6 @@ static bool IYinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
       std::cout << "2IYinst_ok: at (" << i << ", " << ic->key << ")\nIYL = (" << ia.registers[REG_IYL][0] << ", " << ia.registers[REG_IYL][1] << "), IYH = (" << ia.registers[REG_IYH][0] << ", " << ia.registers[REG_IYH][1] << ")inst " << i << ", " << ic->key << "\n";
     }
 #endif
-
-  if(SKIP_IC2(ic))
-    return(true);
-
-  if(!result_in_IY && !input_in_IY &&
-    !(IC_RESULT(ic) && isOperandInDirSpace(IC_RESULT(ic))) &&
-    !(IC_RIGHT(ic) && IS_TRUE_SYMOP(IC_RIGHT(ic))) &&
-    !(IC_LEFT(ic) && IS_TRUE_SYMOP(IC_LEFT(ic))))
-    return(true);
 
   if(!result_in_IY && !input_in_IY &&
     (ic->op == '=' || ic->op == CAST && getSize(operandType(IC_RIGHT (ic))) >= 2 && (getSize(operandType(IC_RESULT (ic))) <= getSize(operandType(IC_RIGHT (ic))) || !IS_SPEC(operandType(IC_RIGHT (ic))) || SPEC_USIGN(operandType(IC_RIGHT(ic))))) &&
@@ -1202,20 +1227,10 @@ static void assign_operand_for_cost(operand *o, const assignment &a, unsigned sh
       var_t v = oi->second;
       if(a.global[v] >= 0)
         { 
-          if(a.global[v] != REG_IYL && a.global[v] != REG_IYH || !OPTRALLOC_IY)
-            {
-              sym->regs[I[v].byte] = regsZ80 + a.global[v];
-              sym->accuse = 0;
-              sym->isspilt = false;
-              sym->nRegs = I[v].size;
-            }
-          else
-            {
-              sym->accuse = ACCUSE_IY;
-              sym->isspilt = false;
-              sym->nRegs = 0;
-              sym->regs[I[v].byte] = 0;
-            }
+          sym->regs[I[v].byte] = regsZ80 + a.global[v];
+          sym->accuse = 0;
+          sym->isspilt = false;
+          sym->nRegs = I[v].size;
         }
       else
         {
@@ -1381,14 +1396,6 @@ static bool assignment_hopeless(const assignment &a, unsigned short int i, const
 
   const i_assignment_t &ia = a.i_assignment;
 
-  // Code generator cannot handle variables that are only partially in IY.
-  if(OPTRALLOC_IY &&
-    (ia.registers[REG_IYL][1] >= 0 && (I[ia.registers[REG_IYL][1]].size != 2 || I[ia.registers[REG_IYL][1]].byte != 0) ||
-    ia.registers[REG_IYH][1] >= 0 && (I[ia.registers[REG_IYH][1]].size != 2 || I[ia.registers[REG_IYH][1]].byte != 1) ||
-    ia.registers[REG_IYL][0] >= 0 && (I[ia.registers[REG_IYL][0]].size != 2 || I[ia.registers[REG_IYL][0]].byte != 0) ||
-    ia.registers[REG_IYH][0] >= 0 && (I[ia.registers[REG_IYH][0]].size != 2 || I[ia.registers[REG_IYH][0]].byte != 1)))
-    return(true);
-
   // Can only check for HLinst_ok() in some cases.
   if(OPTRALLOC_HL &&
       (ia.registers[REG_L][1] >= 0 && ia.registers[REG_H][1] >= 0) &&
@@ -1398,8 +1405,7 @@ static bool assignment_hopeless(const assignment &a, unsigned short int i, const
 
   // Can only check for IYinst_ok() in some cases.
   if(OPTRALLOC_IY &&
-      (ia.registers[REG_IYL][1] >= 0 && ia.registers[REG_IYH][1] >= 0) &&
-      !((ia.registers[REG_IYL][0] >= 0) ^ (ia.registers[REG_IYH][0] >= 0)) &&
+      (ia.registers[REG_IYL][1] >= 0 || ia.registers[REG_IYH][1] >= 0) &&
       !IYinst_ok(a, i, G, I))
     return(true);
 
@@ -1534,8 +1540,8 @@ static void extra_ic_generated(iCode *ic)
     }
 }
 
-template <class T_t, class G_t, class I_t>
-static bool tree_dec_ralloc(T_t &T, const G_t &G, const I_t &I)
+template <class T_t, class G_t, class I_t, class SI_t>
+static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I, SI_t &SI)
 {
   bool assignment_optimal;
 
@@ -1580,20 +1586,11 @@ static bool tree_dec_ralloc(T_t &T, const G_t &G, const I_t &I)
       symbol *sym = (symbol *)(hTabItemWithKey(liveRanges, I[v].v));
       if(winner.global[v] >= 0)
         {
-          if(winner.global[v] != REG_IYL && winner.global[v] != REG_IYH || !OPTRALLOC_IY)
-            {
-              sym->regs[I[v].byte] = regsZ80 + winner.global[v];
-              sym->accuse = 0;
-              sym->isspilt = false;
-              sym->nRegs = I[v].size;
-            }
-          else
-            {
-              sym->accuse = ACCUSE_IY;
-              sym->isspilt = false;
-              sym->nRegs = 0;
-              sym->regs[I[v].byte] = 0;
-            }
+         
+          sym->regs[I[v].byte] = regsZ80 + winner.global[v];
+          sym->accuse = 0;
+          sym->isspilt = false;
+          sym->nRegs = I[v].size;
         }
       else
         {
@@ -1601,13 +1598,18 @@ static bool tree_dec_ralloc(T_t &T, const G_t &G, const I_t &I)
             sym->regs[i] = 0;
           sym->accuse = 0;
           sym->nRegs = I[v].size;
-          //spillThis(sym); Leave it to regFix, which can do some spillocation compaction. Todo: Use Thorup instead.
-          sym->isspilt = false;
+          if (USE_OLDSALLOC)
+            sym->isspilt = false; // Leave it to Z80RegFix, which can do some spillocation compaction.
+          else
+            z80SpillThis(sym);
         }
     }
 
   for(unsigned int i = 0; i < boost::num_vertices(G); i++)
     set_surviving_regs(winner, i, G, I);
+
+  if (!USE_OLDSALLOC)
+    set_spilt(G, I, SI);
 
   return(!assignment_optimal);
 }
@@ -1664,7 +1666,8 @@ void move_parms(void)
 
 iCode *z80_ralloc2_cc(ebbIndex *ebbi)
 {
-  iCode *ic;
+  eBBlock **const ebbs = ebbi->bbOrder;
+  const int count = ebbi->count;
 
 #ifdef DEBUG_RALLOC_DEC
   std::cout << "Processing " << currFunc->name << " from " << dstFileName << "\n"; std::cout.flush();
@@ -1674,7 +1677,7 @@ iCode *z80_ralloc2_cc(ebbIndex *ebbi)
 
   con_t conflict_graph;
 
-  ic = create_cfg(control_flow_graph, conflict_graph, ebbi);
+  iCode *ic = create_cfg(control_flow_graph, conflict_graph, ebbi);
 
   should_omit_frame_ptr = omit_frame_ptr(control_flow_graph);
   move_parms();
@@ -1700,7 +1703,19 @@ iCode *z80_ralloc2_cc(ebbIndex *ebbi)
 
   guessCounts (ic, ebbi);
 
-  z80_assignment_optimal = !tree_dec_ralloc(tree_decomposition, control_flow_graph, conflict_graph);
+  scon_t stack_conflict_graph;
+
+  z80_assignment_optimal = !tree_dec_ralloc(tree_decomposition, control_flow_graph, conflict_graph, stack_conflict_graph);
+
+  Z80RegFix (ebbs, count);
+
+  if (USE_OLDSALLOC)
+    redoStackOffsets ();
+  else
+    chaitin_salloc(stack_conflict_graph); // new Chaitin-style stack allocator
+
+  if(options.dump_graphs && !USE_OLDSALLOC)
+    dump_scon(stack_conflict_graph);
 
   return(ic);
 }
