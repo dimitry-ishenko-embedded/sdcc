@@ -108,7 +108,8 @@ install-indep: build
 	#Clean up unnecessary directories
 	rm -rf `find $(CURDIR)/debian/tmp -type d -name .deps`
 
-	dh_install -i --sourcedir=debian/tmp --list-missing
+	dh_install -i
+	dh_missing --list-missing
 
 	# Install examples
 	#cp -a device/examples $(CURDIR)/debian/sdcc-doc/usr/share/doc/sdcc-doc
