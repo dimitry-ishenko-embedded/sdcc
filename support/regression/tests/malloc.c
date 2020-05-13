@@ -14,6 +14,7 @@ __xdata char heap[100];
 
 void mallocfree(void)
 {
+#if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) // Lack of memory
 	char *a, *b, *c;
 	char d[25];
 
@@ -126,11 +127,14 @@ void mallocfree(void)
 	c = calloc(SIZE_MAX / 256, 258);
 	ASSERT(!c);
 #endif
+#endif
 }
 
 void
 testMalloc (void)
 {
+#if !(defined (__SDCC_pdk15) && defined(__SDCC_STACK_AUTO)) // Lack of code memory
+#ifndef __SDCC_pdk14
   void __xdata *p1, *p2, *p3;
   char *p;
   unsigned char i;
@@ -214,5 +218,7 @@ testMalloc (void)
   free (p1);
   free (p3);
   mallocfree();
+#endif
+#endif
 }
 

@@ -1379,6 +1379,15 @@ constCharacterVal (unsigned long v, char type)
       SPEC_LONG (val->etype) = 1;
       SPEC_CVAL (val->type).v_ulong = (TYPE_UDWORD) v;
       break;
+    case '8':
+      if (!options.std_c2x)
+        werror (E_U8_CHAR_C2X);
+      if (v >= 128)
+        werror (E_U8_CHAR_INVALID);
+      SPEC_NOUN (val->type) = V_CHAR;
+      SPEC_USIGN (val->type) = 1;
+      SPEC_CVAL (val->type).v_int = (unsigned char) v;
+      break;
     default:
       wassert (0);
     }
@@ -1521,6 +1530,7 @@ strVal (const char *s)
     {
       SPEC_NOUN (val->etype) = V_CHAR;
       SPEC_USIGN (val->etype) = !options.signed_char;
+      val->etype->select.s.b_implicit_sign = true;
       SPEC_CVAL (val->etype).v_char = utf_8;
       DCL_ELEM (val->type) = utf_8_size;
     }
@@ -1578,6 +1588,7 @@ rawStrVal (const char *s, size_t size)
 
   SPEC_NOUN (val->etype) = V_CHAR;
   SPEC_USIGN (val->etype) = !options.signed_char;
+  val->etype->select.s.b_implicit_sign = true;
   SPEC_CVAL (val->etype).v_char = dbuf_detach (&dbuf);
   DCL_ELEM (val->type) = size;
 
@@ -1678,8 +1689,15 @@ charVal (const char *s)
 {
   char type;
 
-  if (*s == 'L' || *s == 'u' || *s == 'U')
+  if ((s[0] == 'L' || s[0] == 'u' || s[0] == 'U') && s[1] == '\'')
     type = *s++;
+  else if (s[0] == 'u' && s[1] == '8' && s[2] == '\'')
+    {
+      if (s[4] != '\'')
+        werror (E_U8_CHAR_INVALID);
+      type = '8';
+      s += 2;
+    }
   else
     type = 0;
 

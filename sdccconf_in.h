@@ -24,6 +24,9 @@
 /* XXX */
 #undef EXEC_PREFIX
 
+/* Define to 1 if you have the `backtrace_symbols_fd' function. */
+#undef HAVE_BACKTRACE_SYMBOLS_FD
+
 /* Define to 1 if you have the <boost/graph/adjacency_list.hpp> header file.
    */
 #undef HAVE_BOOST_GRAPH_ADJACENCY_LIST_HPP
@@ -60,9 +63,6 @@
 
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
-
-/* Define to 1 if you have the `strerror' function. */
-#undef HAVE_STRERROR
 
 /* Define to 1 if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
@@ -116,6 +116,9 @@
 #undef OPT_DISABLE_DS400
 
 /* XXX */
+#undef OPT_DISABLE_EZ80_Z80
+
+/* XXX */
 #undef OPT_DISABLE_GBZ80
 
 /* XXX */
@@ -129,6 +132,18 @@
 
 /* XXX */
 #undef OPT_DISABLE_PACKIHX
+
+/* XXX */
+#undef OPT_DISABLE_PDK13
+
+/* XXX */
+#undef OPT_DISABLE_PDK14
+
+/* XXX */
+#undef OPT_DISABLE_PDK15
+
+/* XXX */
+#undef OPT_DISABLE_PDK16
 
 /* XXX */
 #undef OPT_DISABLE_PIC14
