@@ -1,6 +1,7 @@
 sdcc (4.0.0+dfsg-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #951898)
+    * Update spelling correction patch
 
  -- Jonathan McDowell <noodles@earth.li>  Wed, 13 May 2020 12:21:45 +0100
 
