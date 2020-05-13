@@ -5,6 +5,7 @@ sdcc (4.0.0+dfsg-1) UNRELEASED; urgency=medium
     * sdcclib is no longer shipped
   * Switch to librsvg2-bin instead of inkscape for SVG to EPS conversion
   * Switch to dh_missing rather than passing flag to dh_install
+  * Install sdas documentation (Closes: #949433)
 
  -- Jonathan McDowell <noodles@earth.li>  Wed, 13 May 2020 12:21:45 +0100
 
