@@ -1,4 +1,4 @@
-sdcc (4.0.0+dfsg-1) UNRELEASED; urgency=medium
+sdcc (4.0.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release (Closes: #951898)
     * Update spelling correction patch
@@ -8,7 +8,7 @@ sdcc (4.0.0+dfsg-1) UNRELEASED; urgency=medium
   * Switch to dh_missing rather than passing flag to dh_install
   * Install sdas documentation (Closes: #949433)
 
- -- Jonathan McDowell <noodles@earth.li>  Wed, 13 May 2020 12:21:45 +0100
+ -- Jonathan McDowell <noodles@earth.li>  Wed, 13 May 2020 19:19:27 +0100
 
 sdcc (3.8.0+dfsg-3) unstable; urgency=medium
 
