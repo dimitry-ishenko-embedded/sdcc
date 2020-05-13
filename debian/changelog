@@ -3,6 +3,7 @@ sdcc (4.0.0+dfsg-1) UNRELEASED; urgency=medium
   * New upstream release (Closes: #951898)
     * Update spelling correction patch
     * sdcclib is no longer shipped
+    * Fixes FTBFS (Closes: #959651)
   * Switch to librsvg2-bin instead of inkscape for SVG to EPS conversion
   * Switch to dh_missing rather than passing flag to dh_install
   * Install sdas documentation (Closes: #949433)
