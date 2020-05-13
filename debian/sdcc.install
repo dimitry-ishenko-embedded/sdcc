@@ -11,7 +11,6 @@ usr/bin/sdasstm8
 usr/bin/sdastlcs90
 usr/bin/sdasz80
 usr/bin/sdcc
-usr/bin/sdcclib
 usr/bin/sdcpp
 usr/bin/sdld
 usr/bin/sdld6808
