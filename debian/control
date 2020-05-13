@@ -23,7 +23,7 @@ Build-Depends-Indep: ghostscript,
                      texlive-latex-recommended,
                      texlive-latex-extra,
                      gsfonts,
-                     inkscape
+                     librsvg2-bin
 Standards-Version: 4.4.1
 Homepage: http://sdcc.sourceforge.net
 Vcs-Git: https://salsa.debian.org/electronics-team/sdcc.git
