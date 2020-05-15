@@ -6,6 +6,9 @@ usr/bin/sdas390
 usr/bin/sdas6808
 usr/bin/sdas8051
 usr/bin/sdasgb
+usr/bin/sdaspdk13
+usr/bin/sdaspdk14
+usr/bin/sdaspdk15
 usr/bin/sdasrab
 usr/bin/sdasstm8
 usr/bin/sdastlcs90
@@ -15,6 +18,7 @@ usr/bin/sdcpp
 usr/bin/sdld
 usr/bin/sdld6808
 usr/bin/sdldgb
+usr/bin/sdldpdk
 usr/bin/sdldstm8
 usr/bin/sdldz80
 usr/bin/sdnm

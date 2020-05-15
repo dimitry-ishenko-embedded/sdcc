@@ -7,6 +7,9 @@ debian/manpages/sdas390.1
 debian/manpages/sdas6808.1
 debian/manpages/sdas8051.1
 debian/manpages/sdasgb.1
+debian/manpages/sdaspdk13.1
+debian/manpages/sdaspdk14.1
+debian/manpages/sdaspdk15.1
 debian/manpages/sdasrab.1
 debian/manpages/sdasstm8.1
 debian/manpages/sdastlcs90.1
@@ -16,6 +19,7 @@ debian/manpages/sdcpp.1
 debian/manpages/sdld.1
 debian/manpages/sdld6808.1
 debian/manpages/sdldgb.1
+debian/manpages/sdldpdk.1
 debian/manpages/sdldstm8.1
 debian/manpages/sdldz80.1
 debian/manpages/sdnm.1

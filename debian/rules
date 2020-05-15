@@ -127,10 +127,14 @@ install-arch: build-arch
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
 	rm -f $(CURDIR)/debian/tmp/usr/bin/sdld6808
 	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdld6808
-	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldz80
-	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldz80
 	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldgb
 	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldgb
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldpdk
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldpdk
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldstm8
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldstm8
+	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldz80
+	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldz80
 
 	# Remove empty dirs:
 	find $(CURDIR)/debian/tmp -type d -empty -delete
