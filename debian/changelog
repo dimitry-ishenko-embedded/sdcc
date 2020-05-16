@@ -1,8 +1,8 @@
-sdcc (4.0.0+dfsg-2) UNRELEASED; urgency=medium
+sdcc (4.0.0+dfsg-2) unstable; urgency=medium
 
   * Add missing Padauk assemblers/linker (Closes: #960596)
 
- -- Jonathan McDowell <noodles@earth.li>  Thu, 14 May 2020 14:29:38 +0100
+ -- Jonathan McDowell <noodles@earth.li>  Sat, 16 May 2020 10:09:37 +0100
 
 sdcc (4.0.0+dfsg-1) unstable; urgency=medium
 
