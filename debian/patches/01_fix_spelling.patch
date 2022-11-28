@@ -1,37 +1,6 @@
 Description: Fix spelling errors in source and binaries
 Author: Gudjon I. Gudjonsson <gudjon@gudjon.org>
 
-diff --git a/sim/ucsim/cmd.src/command.cc b/sim/ucsim/cmd.src/command.cc
-index 99da95e3..26e3a792 100644
---- a/sim/ucsim/cmd.src/command.cc
-+++ b/sim/ucsim/cmd.src/command.cc
-@@ -277,7 +277,7 @@ cl_cmdline::split_out_bit(char *dot, char *param_str)
-   if (*dot == '\0')
-     {
-       bit= 0;
--      con->dd_printf("Uncomplete bit address\n");
-+      con->dd_printf("Incomplete bit address\n");
-       delete sfr;
-     }
-   else
-@@ -318,7 +318,7 @@ cl_cmdline::split_out_array(char *dot, char *param_str)
-   if (*dot == '\0')
-     {
-       aname= 0;
--      con->dd_printf("Uncomplete array\n");
-+      con->dd_printf("Incomplete array\n");
-     }
-   else
-     {
-@@ -334,7 +334,7 @@ cl_cmdline::split_out_array(char *dot, char *param_str)
-        *p= '\0';
-       if (strlen(dot) == 0)
-        {
--         con->dd_printf("Uncomplete array index\n");
-+         con->dd_printf("Incomplete array index\n");
-          delete aname;
-        }
-       else    
 diff --git a/support/sdbinutils/ChangeLog b/support/sdbinutils/ChangeLog
 index 99ce993a..f8836966 100644
 --- a/support/sdbinutils/ChangeLog
