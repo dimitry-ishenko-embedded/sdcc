@@ -40,6 +40,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
 
 extern bool jaj;
+extern int juj;
 
 /* Options */
 /*
@@ -92,6 +93,8 @@ public:
   int going;
   long expr_result;
   chars startup_command;
+  class cl_mc32 cperiod, ccyc;
+  bool quiet;
   
 public:
   cl_app(void);
@@ -110,7 +113,7 @@ public:
   class cl_uc *get_uc(void);
   class cl_commander_base *get_commander(void) { return(commander); }
   //virtual class cl_cmd *get_cmd(class cl_cmdline *cmdline);
-  virtual long eval(chars expr);
+  virtual t_mem eval(chars expr);
   virtual void exec(chars line);
   
 public: // messages to broadcast
@@ -128,6 +131,9 @@ public: // output functions
   virtual int dd_printf(const char *format, ...);
   virtual int dd_cprintf(const char *color_name, const char *format, ...);
   virtual int debug(const char *format, ...);
+
+public:
+  virtual void set_option_s(const char *opt_name, const char *new_value);
 };
 
 

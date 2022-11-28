@@ -13,10 +13,12 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <string.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <termios.h>
 
 #include "utils.h"
 
@@ -28,22 +30,21 @@ cl_f *dd= NULL;
 void deb(const char *format, ...)
 {
   return;
+  /*
   if (dd==NULL)
     {
-      dd= mk_io(/*cchars("/dev/pts/2"),cchars("w")*/"","");
+      dd= mk_io("", "");
       dd->file_id= open("/dev/pts/4", O_WRONLY);
-      //dd->init();
     }
   va_list ap;
   va_start(ap, format);
-  //dd->vprintf(format, ap);
-  //vdprintf(dd->file_id, format, ap);
   {
     char *buf= vformat_string(format, ap);
-    /*dd->*/write(dd->file_id, buf, strlen(buf));
+    write(dd->file_id, buf, strlen(buf));
     free(buf);
   }
   va_end(ap);
+  */
 }
 
 
@@ -71,19 +72,12 @@ cl_io::close(void)
       restore_attributes();
       shutdown(file_id, 2/*SHUT_RDWR*/);
     }
-  /*
-  if (file_f)
-    {
-      restore_attributes();
-      i= fclose(file_f);
-    }
-    else*/ if (file_id >= 0)
+  if (file_id >= 0)
     {
       restore_attributes();
       i= ::close(file_id);
     }
 
-  //file_f= NULL;
   file_id= -1;
   own= false;
   file_name= 0;
@@ -99,7 +93,7 @@ cl_io::~cl_io(void)
   restore_attributes();
   if (echo_of != NULL)
     echo_of->echo(NULL);
-  if (/*file_f*/file_id>=0)
+  if (file_id>=0)
     {
       if (own)
 	close();
@@ -258,7 +252,7 @@ mk_srv_socket(int port)
 
   /* Give the socket a name. */
   i= 1;
-  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&i, sizeof(i)) < 0)
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*)&i, sizeof(i)) < 0)
     {
       perror("setsockopt");
     }
@@ -268,6 +262,7 @@ mk_srv_socket(int port)
   if (bind(sock, (struct sockaddr *)&name, sizeof(name)) < 0)
     {
       perror("bind");
+      close(sock);
       return(0);
     }
 
@@ -276,11 +271,11 @@ mk_srv_socket(int port)
 
 
 class cl_f *
-mk_io(chars fn, chars mode)
+mk_io(const char *fn, const char *mode)
 {
   class cl_io *io;
 
-  if (fn.empty())
+  if (!fn || !*fn)
     {
       io= new cl_io();
       io->init();
@@ -299,13 +294,13 @@ mk_io(chars fn, chars mode)
 }
 
 class cl_f *
-cp_io(/*FILE *f*/int file_id, chars mode)
+cp_io(int file_id, const char *mode)
 {
   class cl_io *io;
 
   io= new cl_io();
-  if (/*f*/file_id>=0)
-    io->use_opened(/*fileno(f)*/file_id, mode);
+  if (file_id>=0)
+    io->use_opened(file_id, mode);
   return io;
 }
 
@@ -326,19 +321,16 @@ srv_accept(class cl_f *listen_io,
 	   class cl_f **fin, class cl_f **fout)
 {
   class cl_io *io;
-  //ACCEPT_SOCKLEN_T size;
-  //struct sockaddr_in sock_addr;
   int new_sock;
 
-  //size= sizeof(struct sockaddr);
-  new_sock= accept(listen_io->file_id, /*(struct sockaddr *)sock_addr*/NULL, /*&size*/NULL);
+  new_sock= accept(listen_io->file_id, NULL, NULL);
   
   if (fin)
     {
       io= new cl_io(listen_io->server_port);
       if (new_sock > 0)
 	{
-	  io->own_opened(new_sock, cchars("r"));
+	  io->own_opened(new_sock, "r");
 	}
       *fin= io;
     }
@@ -348,7 +340,7 @@ srv_accept(class cl_f *listen_io,
       io= new cl_io(listen_io->server_port);
       if (new_sock > 0)
 	{
-	  io->use_opened(new_sock, cchars("w"));
+	  io->use_opened(new_sock, "w");
 	}
       *fout= io;
     }
@@ -381,7 +373,9 @@ check_inputs(class cl_list *active, class cl_list *avail)
 	  ret= true;
 	}
       else
-	;//deb("no dev input on fid=%d\n", fio->file_id);
+        {
+          //deb("no dev input on fid=%d\n", fio->file_id);
+        }
     }
   return ret;
 }

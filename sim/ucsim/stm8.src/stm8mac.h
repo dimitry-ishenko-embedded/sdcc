@@ -18,16 +18,28 @@
 #define BITPOS_I1 5  // 20H
 #define BITPOS_V 7  // 80H
 
-#define store2(addr, val) { ram->write((t_addr) (addr), (val >> 8) & 0xff); \
-                            ram->write((t_addr) (addr+1), val & 0xff); \
-  			    vc.wr+= 2; }
-#define store1(addr, val) { ram->write((t_addr) (addr), val); vc.wr++; }
 //#define get1(addr) ram->read((t_addr) (addr))
 #define get1(addr) get_1(addr)
 #define fetch2() ((fetch() << 8) | fetch() )
 #define fetch1() fetch()
-#define push2(val) {store2(regs.SP-1,(val)); regs.SP-=2; }
-#define push1(val) {store1(regs.SP,(val)); regs.SP-=1; }
+#define push2(val) {							\
+    t_addr sp_before= regs.SP;						\
+    store2(regs.SP-1,(val));						\
+    regs.SP-=2;								\
+    class cl_stack_op *so=						\
+      new cl_stack_push(instPC,val,sp_before,regs.SP);			\
+    so->init();								\
+    stack_write(so);							\
+  }
+#define push1(val) {							\
+    t_addr sp_before= regs.SP;						\
+    store1(regs.SP,(val));						\
+    regs.SP-=1;								\
+    class cl_stack_op *so=						\
+      new cl_stack_push(instPC,val,sp_before,regs.SP);			\
+    so->init();								\
+    stack_write(so);							\
+  }
 #define pop2(var) {var=get2(regs.SP+1); regs.SP+=2;}
 #define pop1(var) {var=get1(regs.SP+1); regs.SP+=1;}
 

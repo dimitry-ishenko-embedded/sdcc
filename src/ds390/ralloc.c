@@ -236,15 +236,12 @@ isOperandInReg (operand * op)
 static bool
 isOperandInFarSpace2 (operand * op)
 {
-  symbol * opsym;
-  
   if (isOperandInFarSpace (op))
     return TRUE;
 
   if (!IS_ITEMP (op))
     return FALSE;
-    
-  opsym = OP_SYMBOL (op);
+
   if (isOperandInReg (op))
     return FALSE;
 
@@ -2991,6 +2988,9 @@ packForPush (iCode * ic, eBBlock ** ebpp, int blockno)
 
   if (IS_OP_VOLATILE (IC_RIGHT (dic)))
     return;
+    
+  if (!IS_SYMOP (IC_RIGHT (dic)))
+    return;
 
   if ((IS_SYMOP (IC_RIGHT (dic)) && OP_SYMBOL (IC_RIGHT (dic))->addrtaken) || isOperandGlobal (IC_RIGHT (dic)))
     disallowHiddenAssignment = 1;
@@ -3347,7 +3347,7 @@ packRegisters (eBBlock ** ebpp, int blockno)
       /* pack registers for accumulator use, when the
          result of an arithmetic or bit wise operation
          has only one use, that use is immediately following
-         the defintion and the using iCode has only one
+         the definition and the using iCode has only one
          operand or has two operands but one is literal &
          the result of that operation is not on stack then
          we can leave the result of this operation in acc:b

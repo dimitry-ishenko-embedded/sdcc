@@ -42,8 +42,6 @@ static OPTION _ds390_options[] =
     { 0, OPTION_FLAT24_MODEL,   NULL, "use the flat24 model for the ds390 (default)" },
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds390 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
-    { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds390 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds390 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -99,6 +97,7 @@ static builtins __ds390_builtins[] = {
 void ds390_assignRegisters (ebbIndex * ebbi);
 
 static int regParmFlg = 0;      /* determine if we can register a parameter */
+static struct sym_link *regParmFuncType;
 
 static void
 _ds390_init (void)
@@ -110,11 +109,15 @@ static void
 _ds390_reset_regparm (struct sym_link *funcType)
 {
   regParmFlg = 0;
+  regParmFuncType = funcType;
 }
 
 static int
 _ds390_regparm (sym_link * l, bool reentrant)
 {
+  if (IFFUNC_HASVARARGS (regParmFuncType))
+    return 0;
+
     if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
         return 0;
     if (options.parms_in_bank1 == 0) {
@@ -481,7 +484,7 @@ hasExtBitOp (int op, int size)
 {
   if (op == RRC
       || op == RLC
-      || op == GETHBIT
+      || op == GETABIT
       || (op == SWAP && size <= 2)
      )
     return TRUE;
@@ -1026,6 +1029,8 @@ PORT ds390_port =
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, bit, float */
   { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4 },
@@ -1061,6 +1066,7 @@ PORT ds390_port =
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
+  0,                            // ABI revision
   { +1, 1, 4, 1, 1, 0, 0 },
   /* ds390 has an 16 bit mul & div */
   { -1, FALSE },
@@ -1126,8 +1132,6 @@ static OPTION _tininative_options[] =
     { 0, OPTION_FLAT24_MODEL,   NULL, "use the flat24 model for the ds390 (default)" },
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds390 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
-    { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds390 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds390 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -1366,6 +1370,7 @@ PORT tininative_port =
     NULL,
     NULL,
     NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
   { 1, 2, 2, 4, 8, 1, 3, 3, 3, 3, 1, 4 },
@@ -1400,6 +1405,7 @@ PORT tininative_port =
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
+  0,                            // ABI revision
   { +1, 1, 4, 1, 1, 0, 0 },
   /* ds390 has an 16 bit mul & div */
   { -1, FALSE },
@@ -1481,8 +1487,6 @@ static OPTION _ds400_options[] =
     { 0, OPTION_FLAT24_MODEL,   NULL, "use the flat24 model for the ds400 (default)" },
     { 0, OPTION_STACK_8BIT,     NULL, "use the 8bit stack for the ds400 (not supported yet)" },
     { 0, OPTION_STACK_SIZE,     &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
-    { 0, "--pack-iram",         NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",      &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--stack-10bit",       &options.stack10bit, "use the 10bit stack for ds400 (default)" },
     { 0, "--use-accelerator",   &options.useAccelerator, "generate code for ds400 arithmetic accelerator"},
     { 0, "--protect-sp-update", &options.protect_sp_update, "will disable interrupts during ESP:SP updates"},
@@ -1622,6 +1626,7 @@ PORT ds400_port =
     NULL,
     NULL,
     NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
   { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4 },
@@ -1656,6 +1661,7 @@ PORT ds400_port =
     1
   },
   { _ds400_generateRomDataArea, _ds400_linkRomDataArea },
+  0,                            // ABI revision
   { +1, 1, 4, 1, 1, 0, 0 },
   { -1, FALSE },
   { ds390_emitDebuggerSymbol },

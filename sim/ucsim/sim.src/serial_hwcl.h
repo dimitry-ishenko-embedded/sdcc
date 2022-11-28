@@ -63,6 +63,7 @@ class cl_serial_hw: public cl_hw
   class cl_optref *serial_port_option;
   class cl_optref *serial_iport_option;
   class cl_optref *serial_oport_option;
+  class cl_optref *serial_ifirst_option;
   class cl_serial_listener *listener;
   //class cl_hw_io *io;
   char input;
@@ -72,8 +73,8 @@ class cl_serial_hw: public cl_hw
   cl_serial_hw(class cl_uc *auc, int aid, chars aid_string);
   virtual ~cl_serial_hw(void);
   virtual int init(void);
-  virtual int cfg_size(void) { return serconf_nr; }
-  virtual char *cfg_help(t_addr addr);
+  virtual unsigned int cfg_size(void) { return serconf_nr; }
+  virtual const char *cfg_help(t_addr addr);
   
   virtual t_mem conf_op(cl_memory_cell *cell, t_addr addr, t_mem *val);
 
@@ -81,6 +82,7 @@ class cl_serial_hw: public cl_hw
   virtual void new_io(class cl_f *f_in, class cl_f *f_out);
   virtual bool proc_input(void);
   virtual void refresh_display(bool force) {}
+  virtual void draw_state_time(bool force) {}
   virtual void draw_display(void) {}
 
   virtual void reset(void);

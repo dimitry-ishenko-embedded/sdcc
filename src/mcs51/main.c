@@ -51,8 +51,6 @@ static OPTION _mcs51_options[] =
     { 0, OPTION_HUGE_MODEL, NULL, "functions are banked, data in external space"},
     { 0, OPTION_STACK_SIZE,  &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
     { 0, "--parms-in-bank1", &options.parms_in_bank1, "use Bank1 for parameter passing"},
-    { 0, "--pack-iram",      NULL, "Tells the linker to pack variables in internal ram (default)"},
-    { 0, "--no-pack-iram",   &options.no_pack_iram, "Deprecated: Tells the linker not to pack variables in internal ram"},
     { 0, "--acall-ajmp",     &options.acall_ajmp, "Use acall/ajmp instead of lcall/ljmp" },
     { 0, "--no-ret-without-call", &options.no_ret_without_call, "Do not use ret independent of acall/lcall" },
     { 0, NULL }
@@ -92,6 +90,7 @@ void mcs51_assignRegisters (ebbIndex *);
 
 static int regParmFlg = 0;      /* determine if we can register a parameter     */
 static int regBitParmFlg = 0;   /* determine if we can register a bit parameter */
+static struct sym_link *regParmFuncType;
 
 static void
 _mcs51_init (void)
@@ -104,11 +103,15 @@ _mcs51_reset_regparm (struct sym_link *funcType)
 {
   regParmFlg = 0;
   regBitParmFlg = 0;
+  regParmFuncType = funcType;
 }
 
 static int
 _mcs51_regparm (sym_link * l, bool reentrant)
 {
+  if (IFFUNC_HASVARARGS (regParmFuncType))
+    return 0;
+
   if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
     {
       /* bit parameters go to b0 thru b7 */
@@ -839,6 +842,8 @@ PORT mcs51_port =
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
   { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4 },
@@ -872,6 +877,7 @@ PORT mcs51_port =
     1                           // No fancy alignments supported.
   },
   { _mcs51_genExtraAreas, NULL },
+  0,                            // ABI revision
   {
     +1,         /* direction (+1 = stack grows up) */
     0,          /* bank_overhead (switch between register banks) */

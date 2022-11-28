@@ -25,12 +25,16 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 02111-1307, USA. */
 /*@1@*/
 
+#include <stdio.h>
+#include <string.h>
+
 #include "globals.h"
 
 // local
 #include "simz80cl.h"
-#include "z80cl.h"
+//#include "z80cl.h"
 #include "r2kcl.h"
+#include "gb80cl.h"
 #include "lr35902cl.h"
 #include "ez80cl.h"
 
@@ -42,13 +46,13 @@ class cl_uc *
 cl_simz80::mk_controller(void)
 {
   int i;
-  const char *typ= NIL;
+  const char *typ= NULL;
   class cl_optref type_option(this);
 
   type_option.init();
   type_option.use("cpu_type");
   i= 0;
-  if ((typ= type_option.get_value(typ)) == NIL)
+  if ((typ= type_option.get_value(typ)) == NULL)
     typ= "Z80";
 
   while ((cpus_z80[i].type_str != NULL) &&
@@ -65,6 +69,7 @@ cl_simz80::mk_controller(void)
     {
     case CPU_Z80:
     case CPU_Z180:
+    case CPU_Z80N:
       return(new cl_z80(&cpus_z80[i], this));
     // Add Rabbits, etc here.
 
@@ -76,6 +81,8 @@ cl_simz80::mk_controller(void)
       
     case CPU_LR35902:
       return(new cl_lr35902(&cpus_z80[i], this));
+    case CPU_GB80:
+      return(new cl_gb80(&cpus_z80[i], this));
 
     case CPU_EZ80:
       return(new cl_ez80(&cpus_z80[i], this));

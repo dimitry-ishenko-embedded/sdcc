@@ -126,7 +126,7 @@ class cl_console_base: public cl_base
   
   virtual class cl_console_base *clone_for_exec(char *fin) = 0;
 
-  virtual void redirect(char *fname, char *mode) = 0;
+  virtual void redirect(const char *fname, const char *mode) = 0;
   virtual void un_redirect(void) = 0;
   virtual bool is_tty(void) const = 0;
   virtual bool is_eof(void) const = 0;
@@ -148,6 +148,7 @@ class cl_console_base: public cl_base
   virtual bool need_check(void) { return false; }
   
   virtual void print_prompt(void);
+  virtual void print_expr_result(t_mem val, const char *fmt);
   virtual int dd_printf(const char *format, ...);
   virtual int dd_cprintf(const char *color_name, const char *format, ...);
   virtual chars get_color_ansiseq(const char *color_name, bool add_reset= false);
@@ -178,7 +179,7 @@ class cl_console_base: public cl_base
   virtual void set_prompt(char *p);
   
   virtual bool input_active(void) const;
-  //virtual bool accept_last(void) { return /*is_tty() ? DD_TRUE : DD_FALSE;*/flags&CONS_INTERACTIVE; }
+  //virtual bool accept_last(void) { return /*is_tty() ? true : false;*/flags&CONS_INTERACTIVE; }
   virtual bool prevent_quit(void) { return (prev_quit>=0)?prev_quit:true; }
   
  private:
@@ -205,7 +206,7 @@ class cl_console_dummy: public cl_console_base
 
   virtual class cl_console_base *clone_for_exec(char *fin) { return NULL; }
 
-  virtual void redirect(char *fname, char *mode) {}
+  virtual void redirect(const char *fname, const char *mode) {}
   virtual void un_redirect(void) {}
   virtual bool is_tty(void) const { return false; }
   virtual bool is_eof(void) const { return false; }
