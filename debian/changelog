@@ -2,6 +2,7 @@ sdcc (4.2.0+dfsg-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #1006922)
     * Update spelling correction patch
+    * Add lintian override for no-code-sections in target libs
 
  -- Jonathan McDowell <noodles@earth.li>  Mon, 28 Nov 2022 09:33:39 +0000
 
