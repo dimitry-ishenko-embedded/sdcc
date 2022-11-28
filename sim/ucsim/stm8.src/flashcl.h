@@ -37,7 +37,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 class cl_flash_cell: public cl_cell8
 {
  public:
- cl_flash_cell(uchar awidth): cl_cell8(awidth) {}
+  cl_flash_cell(uchar awidth): cl_cell8(awidth) {}
   virtual t_mem write(t_mem val);
 };
 
@@ -106,7 +106,7 @@ class cl_flash: public cl_hw
   virtual t_mem read(class cl_memory_cell *cell);
   virtual void write(class cl_memory_cell *cell, t_mem *val);
   virtual t_mem conf_op(cl_memory_cell *cell, t_addr addr, t_mem *val);
-  virtual char *cfg_help(t_addr addr);
+  virtual const char *cfg_help(t_addr addr);
 
   virtual void flash_write(t_addr a, t_mem val);
   virtual void set_flash_mode(t_mem cr2val);

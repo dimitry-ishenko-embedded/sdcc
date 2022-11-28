@@ -30,12 +30,12 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
  *	get register in "mov @ri,address"
  */
  
-#include "ddconfig.h"
+//#include "ddconfig.h"
 
-#include <stdio.h>
+//#include <stdio.h>
 
 // sim
-#include "memcl.h"
+//#include "memcl.h"
 
 // local
 #include "uc51cl.h"
@@ -287,7 +287,7 @@ cl_51core::instruction_c0/*inst_push*/(t_mem/*uchar*/ code)
 
   cell= get_direct(fetch());
   sp_before= sfr->get(SP);
-  sp= /*sp_after= */sfr->wadd(SP, 1);
+  sp= /*sp_after= */sfr->write(SP, sfr->read(SP) + 1);
   stck= iram->get_cell(sp);
   stck->write(data= cell->read());
   class cl_stack_op *so=
@@ -385,7 +385,7 @@ cl_51core::instruction_d0/*inst_pop*/(t_mem/*uchar*/ code)
   stck= iram->get_cell(/*sfr->get(SP)*/sp_before);
   /* Order of decrement and write changed to fix POP SP, reported by
      Alexis Pavlov <alexis.pavlov@certess.com> */
-  sp= sfr->wadd(SP, -1);
+  sp= sfr->write(SP, sfr->read(SP) - 1);
   cell->write(data= stck->read());
   tick(1);
   class cl_stack_op *so=
@@ -449,9 +449,10 @@ int
 cl_51core::instruction_e2/*inst_movx_a_Sri*/(t_mem/*uchar*/ code)
 {
   t_mem d;
-
+  int ah= high_movxri();
+  
   d= R[code & 0x01]->read();
-  acc->write(xram->read(sfr->read(P2)*256 + d));
+  acc->write(xram->read(ah*256 + d));
   tick(1);
   vc.rd++;//= 2;
   //vc.wr++;
@@ -476,7 +477,7 @@ cl_51core::instruction_e5/*inst_mov_a_addr*/(t_mem/*uchar*/ code)
     {
       //sim->app->get_commander()->
       //debug("Invalid Instruction : E5 E0  MOV A,ACC  at  %06x\n", PC);
-      inst_unknown();
+      inst_unknown(code);
     }
   else
     {
@@ -555,9 +556,11 @@ cl_51core::instruction_f2/*inst_movx_Sri_a*/(t_mem/*uchar*/ code)
 {
   t_mem d, v;
   t_addr a;
+  int ah;
   
   d= R[code & 0x01]->read();
-  a= sfr->read(P2)*256 + d;
+  ah= high_movxri();
+  a= ah*256 + d;
   v= acc->read();
   xram->write(a, v);
   tick(1);

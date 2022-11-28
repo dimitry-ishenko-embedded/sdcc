@@ -26,7 +26,9 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 /*@1@*/
 
 #include <stdlib.h>
-#include "i_string.h"
+#include <string.h>
+
+//#include "i_string.h"
 
 // sim.src
 #include "simcl.h"
@@ -55,18 +57,16 @@ COMMAND_DO_WORK_UC(cl_info_bp_cmd)
   for (i= 0; i < uc->fbrk->count; i++)
     {
       class cl_brk *fb= (class cl_brk *)(uc->fbrk->at(i));
-      const char *s= uc->disass(fb->addr, NULL);
-      con->dd_printf("%-3d %-10s %s %-5d %-5d 0x%06x %-5s %s\n", fb->nr,
+      con->dd_printf("%-3d %-10s %s %-5d %-5d 0x%06x %-5s ", fb->nr,
                      "fetch", (fb->perm==brkFIX)?"keep":"del ",
                      fb->hit, fb->cnt, AU(fb->addr),
-		     fb->condition()?"true":"false",
-		     s);
+		     fb->condition()?"true":"false");
+      uc->print_disass(fb->addr, con);
       extra= false;
       if (!(fb->cond.empty()))
-	con->dd_printf("     cond=\"%s\"", (char*)(fb->cond)), extra= true;
+	con->dd_printf("     cond=\"%s\"", fb->cond.c_str()), extra= true;
       if (!(fb->commands.empty()))
-	con->dd_printf("     cmd=\"%s\"", (char*)(fb->commands)), extra= true;
-      free((char *)s);
+	con->dd_printf("     cmd=\"%s\"", fb->commands.c_str()), extra= true;
       if (extra) con->dd_printf("\n");
     }
   for (i= 0; i < uc->ebrk->count; i++)
@@ -78,9 +78,9 @@ COMMAND_DO_WORK_UC(cl_info_bp_cmd)
 		     AU(eb->addr), eb->id);
       extra= false;
       if (!(eb->cond.empty()))
-	con->dd_printf("     cond=\"%s\"", (char*)(eb->cond)), extra= true;
+	con->dd_printf("     cond=\"%s\"", eb->cond.c_str()), extra= true;
       if (!(eb->commands.empty()))
-	con->dd_printf("     cmd=\"%s\"", (char*)(eb->commands)), extra= true;
+	con->dd_printf("     cmd=\"%s\"", eb->commands.c_str()), extra= true;
       if (extra) con->dd_printf("\n");
     }
   return(0);
@@ -123,9 +123,11 @@ COMMAND_DO_WORK_UC(cl_info_hw_cmd)
 
   if (cmdline->syntax_match(uc, HW)) {
     hw= params[0]->value.hw;
+    con->dd_color("answer");
     hw->print_info(con);
+    hw->print_cfg_info(con);
   }
-  else if (cmdline->syntax_match(uc, STRING))
+  /*else if (cmdline->syntax_match(uc, STRING))
     {
       char *s= params[0]->get_svalue();
       if (s && *s && (strcmp("cpu", s)==0))
@@ -133,7 +135,7 @@ COMMAND_DO_WORK_UC(cl_info_hw_cmd)
 	  if (uc->cpu)
 	    uc->cpu->print_info(con);
 	}
-    }
+	}*/
   else
     syntax_error(con);
 
@@ -141,7 +143,7 @@ COMMAND_DO_WORK_UC(cl_info_hw_cmd)
 }
 
 CMDHELP(cl_info_hw_cmd,
-	"info hardware cathegory",
+	"info hardware category",
 	"Status of hardware elements of the CPU",
 	"long help of info hardware")
 
@@ -232,7 +234,7 @@ CMDHELP(cl_info_memory_cmd,
 
 COMMAND_DO_WORK_UC(cl_info_var_cmd)
 {
-  class cl_var *v;
+  class cl_cvar *v;
   int i;
   class cl_cmd_arg *params[1]= { cmdline->param(0) };
   char *s= NULL;
@@ -244,15 +246,11 @@ COMMAND_DO_WORK_UC(cl_info_var_cmd)
 	  !*s)
 	s= NULL;
     }
-  for (i= 0; i < uc->vars->count; i++)
+  for (i= 0; i < uc->vars->by_name.count; i++)
     {
-      v= (class cl_var *)(uc->vars->at(i));
-      if ((s == NULL) ||
-	  (
-	   (strstr(v->as->get_name(), s) != NULL) ||
-	   (strstr(v->get_name(), s) != NULL)
-	   )
-	  )
+      v= uc->vars->by_name.at(i);
+      if ((s == NULL && *(v->get_name()) != '.') ||
+          (s != NULL && strstr(v->get_name(), s) != NULL))
       v->print_info(con);
     }
   return 0;
@@ -262,5 +260,6 @@ CMDHELP(cl_info_var_cmd,
 	"info variables [filter]",
 	"Information about variables",
 	"long help of info variables")
+
 
 /* End of cmd.src/cmd_info.cc */

@@ -363,8 +363,8 @@ class cl_simulator_interface: public cl_hw
   cl_simulator_interface(class cl_uc *auc);
   virtual ~cl_simulator_interface(void);
   virtual int init(void);
-  virtual int cfg_size(void) { return simif_nuof; }
-  virtual char *cfg_help(t_addr addr);
+  virtual unsigned int cfg_size(void) { return simif_nuof; }
+  virtual const char *cfg_help(t_addr addr);
     
   virtual void set_cmd(class cl_cmdline *cmdline, class cl_console_base *con);
   virtual t_mem read(class cl_memory_cell *cel);

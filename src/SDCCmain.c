@@ -76,6 +76,15 @@ set *userIncDirsSet = NULL;     /* list of user include directories */
 set *libDirsSet = NULL;         /* list of lib search directories */
 bool regalloc_dry_run = FALSE;
 
+/* language override constants and variable for handling -x during command line parsing */
+enum
+{
+  LANG_OVERRIDE_NONE,
+  LANG_OVERRIDE_C,
+  LANG_OVERRIDE_C_HEADER
+};
+int langOverride = LANG_OVERRIDE_NONE;
+
 static const char *dstPath = "";          /* path for the output files; */
                                           /* "" is equivalent with cwd */
 static const char *moduleNameBase = NULL; /* module name base is source file without path and extension */
@@ -152,6 +161,7 @@ char buffer[PATH_MAX * 2];
 #define OPTION_DUMP_AST             "--dump-ast"
 #define OPTION_DUMP_I_CODE          "--dump-i-code"
 #define OPTION_DUMP_GRAPHS          "--dump-graphs"
+#define OPTION_INCLUDE              "--include"
 
 #define OPTION_SMALL_MODEL          "--model-small"
 #define OPTION_MEDIUM_MODEL         "--model-medium"
@@ -164,18 +174,20 @@ static const OPTION optionsTable[] = {
   {'v', OPTION_VERSION, NULL, "Display sdcc's version"},
   {0,   "--verbose", &options.verbose, "Trace calls to the preprocessor, assembler, and linker"},
   {'V', NULL, &options.verboseExec, "Execute verbosely. Show sub commands as they are run"},
-  {'d', NULL, NULL, "Output list of mcaro definitions in effect. Use with -E"},
+  {'d', NULL, NULL, "Output list of macro definitions in effect. Use with -E"},
   {'D', NULL, NULL, "Define macro as in -Dmacro"},
   {'I', NULL, NULL, "Add to the include (*.h) path, as in -Ipath"},
   {'A', NULL, NULL, NULL},
   {'U', NULL, NULL, "Undefine macro as in -Umacro"},
   {'M', NULL, NULL, "Preprocessor option"},
   {'W', NULL, NULL, "Pass through options to the pre-processor (p), assembler (a) or linker (l)"},
+  {0,   OPTION_INCLUDE, NULL, "Pre-include a file during pre-processing"},
   {'S', NULL, &noAssemble, "Compile only; do not assemble or link"},
   {'c', "--compile-only", &options.cc_only, "Compile and assemble, but do not link"},
   {'E', "--preprocessonly", &preProcOnly, "Preprocess only, do not compile"},
   {0,   "--c1mode", &options.c1mode, "Act in c1 mode.  The standard input is preprocessed code, the output is assembly code."},
   {'o', NULL, NULL, "Place the output into the given path resp. file"},
+  {'x', NULL, NULL, "Optional file type override (c, c-header or none), valid until the next -x"},
   {0,   OPTION_PRINT_SEARCH_DIRS, &options.printSearchDirs, "display the directories in the compiler's search path"},
   {0,   OPTION_MSVC_ERROR_STYLE, &options.vc_err_style, "messages are compatible with Micro$oft visual studio"},
   {0,   OPTION_USE_STDOUT, NULL, "send errors to stdout instead of stderr"},
@@ -208,7 +220,6 @@ static const OPTION optionsTable[] = {
   {0,   "--float-reent", &options.float_rent, "Use reentrant calls on the float support functions"},
   {0,   "--xram-movc", &options.xram_movc, "Use movc instead of movx to read xram (xdata)"},
   {0,   OPTION_CALLEE_SAVES, &options.calleeSavesSet, "<func[,func,...]> Cause the called function to save registers instead of the caller", CLAT_SET},
-  {0,   "--profile", &options.profile, "On supported ports, generate extra profiling information"},
   {0,   "--fomit-frame-pointer", &options.omitFramePtr, "Leave out the frame pointer."},
   {0,   "--all-callee-saves", &options.all_callee_saves, "callee will always save registers used"},
   {0,   "--stack-probe", &options.stack_probe, "insert call to function __stack_probe at each function prologue"},
@@ -283,7 +294,6 @@ typedef struct
 
 static const UNSUPPORTEDOPT unsupportedOptTable[] = {
   {'X', NULL, "use --xstack-loc instead"},
-  {'x', NULL, "use --xstack instead"},
   {'i', NULL, "use --idata-loc instead"},
   {'r', NULL, "use --xdata-loc instead"},
   {'s', NULL, "use --code-loc instead"},
@@ -318,17 +328,23 @@ static PORT *_ports[] = {
 #if !OPT_DISABLE_R2K
   &r2k_port,
 #endif
+#if !OPT_DISABLE_R2KA
+  &r2ka_port,
+#endif
 #if !OPT_DISABLE_R3KA
   &r3ka_port,
 #endif
-#if !OPT_DISABLE_GBZ80
-  &gbz80_port,
+#if !OPT_DISABLE_SM83
+  &sm83_port,
 #endif
 #if !OPT_DISABLE_TLCS90
   &tlcs90_port,
 #endif
 #if !OPT_DISABLE_EZ80_Z80
   &ez80_z80_port,
+#endif
+#if !OPT_DISABLE_Z80N
+  &z80n_port,
 #endif
 #if !OPT_DISABLE_AVR
   &avr_port,
@@ -365,6 +381,12 @@ static PORT *_ports[] = {
 #endif
 #if !OPT_DISABLE_PDK15
   &pdk15_port,
+#endif
+#if !OPT_DISABLE_MOS6502
+  &mos6502_port,
+#endif
+#if !OPT_DISABLE_MOS65C02
+  &mos65c02_port,
 #endif
 };
 
@@ -633,6 +655,7 @@ setDefaultOptions (void)
   options.out_fmt = 0;
   options.dump_graphs = 0;
   options.dependencyFileOpt = 0;
+  options.sdcccall = port->sdcccall;
 
   /* now for the optimizations */
   /* turn on the everything */
@@ -667,7 +690,7 @@ processFile (char *s)
   /* get the file extension.
      If no '.' then we don't know what the file type is
      so give an error and return */
-  if (!dbuf_splitFile (s, &path, &ext))
+  if (!dbuf_splitFile (s, &path, &ext) && langOverride == LANG_OVERRIDE_NONE)
     {
       werror (E_UNKNOWN_FEXT, s);
 
@@ -679,7 +702,8 @@ processFile (char *s)
 
   /* otherwise depending on the file type */
   extp = dbuf_c_str (&ext);
-  if (STRCASECMP (extp, ".c") == 0 || STRCASECMP (extp, ".h") == 0)
+  if (STRCASECMP (extp, ".c") == 0 || langOverride == LANG_OVERRIDE_C
+      || STRCASECMP (extp, ".h") == 0 || langOverride == LANG_OVERRIDE_C_HEADER)
     {
       char *p, *m;
 
@@ -700,7 +724,7 @@ processFile (char *s)
       fullSrcFileName = s;
       if (!(srcFile = fopen (fullSrcFileName, "r")))
         {
-          werror (E_FILE_OPEN_ERR, s);
+          werror (E_INPUT_FILE_OPEN_ERR, fullSrcFileName, strerror (errno));
 
           dbuf_destroy (&path);
 
@@ -1295,6 +1319,13 @@ parseCmdLine (int argc, char **argv)
               continue;
             }
 
+          if (strcmp (argv[i], OPTION_INCLUDE) == 0)
+            {
+              addSet (&preArgvSet, Safe_strdup ("-include"));
+              addSet (&preArgvSet, getStringArg (OPTION_INCLUDE, argv, &i, argc));
+              continue;
+            }
+
           werror (W_UNKNOWN_OPTION, argv[i]);
           continue;
         }
@@ -1365,6 +1396,21 @@ parseCmdLine (int argc, char **argv)
                     else
                       dbuf_destroy (&path);
                   }
+                break;
+              }
+
+            case 'x':
+              {
+                char *langName = getStringArg ("-x", argv, &i, argc);
+
+                if (strcmp (langName, "none") == 0)
+                  langOverride = LANG_OVERRIDE_NONE;
+                else if (strcmp (langName, "c") == 0)
+                  langOverride = LANG_OVERRIDE_C;
+                else if (strcmp (langName, "c-header") == 0)
+                  langOverride = LANG_OVERRIDE_C_HEADER;
+                else
+                  werror (E_INVALID_LANG_OVERRIDE);
                 break;
               }
 
@@ -1600,7 +1646,7 @@ parseCmdLine (int argc, char **argv)
       if (debugFile->openFile (dbuf_c_str (&adbFile)))
         debugFile->writeModule (moduleName);
       else
-        werror (E_FILE_OPEN_ERR, dbuf_c_str (&adbFile));
+        werror (E_OUTPUT_FILE_OPEN_ERR, dbuf_c_str (&adbFile), strerror (errno));
 
       dbuf_destroy (&adbFile);
     }
@@ -1671,11 +1717,11 @@ linkEdit (char **envp)
       dbuf_printf (&linkerScriptFileName, "%s.lk", dstFileName);
       if (!(lnkfile = fopen (dbuf_c_str (&linkerScriptFileName), "w")))
         {
-          werror (E_FILE_OPEN_ERR, dbuf_c_str (&linkerScriptFileName));
+          werror (E_OUTPUT_FILE_OPEN_ERR, dbuf_c_str (&linkerScriptFileName), strerror (errno));
           exit (EXIT_FAILURE);
         }
 
-      if (TARGET_Z80_LIKE)
+      if (TARGET_Z80_LIKE||TARGET_MOS6502_LIKE)
         {
           fprintf (lnkfile, "-mjwx\n-%c %s\n", out_fmt, dbuf_c_str (&binFileName));
         }
@@ -1684,13 +1730,9 @@ linkEdit (char **envp)
           fprintf (lnkfile, "-muwx\n-%c %s\n", out_fmt, dbuf_c_str (&binFileName));
           if (TARGET_MCS51_LIKE)
             fprintf (lnkfile, "-M\n");
-          if (!options.no_pack_iram)
-            fprintf (lnkfile, "-Y\n");
-          else
-            werror (W_DEPRECATED_OPTION, "--no-pack-iram");
         }
 
-      if (!TARGET_Z80_LIKE)   /* Not for the z80, gbz80 */
+      if (!TARGET_Z80_LIKE)   /* Not for the z80 and related */
         {
           /* if iram size specified */
           if (options.iram_size)
@@ -1722,7 +1764,7 @@ linkEdit (char **envp)
     if (segName) { Safe_free (segName); } \
   }
 
-      if (!TARGET_Z80_LIKE)   /* Not for the z80, z180, gbz80 */
+      if (!TARGET_Z80_LIKE)   /* Not for the z80 and related */
         {
 
           /* code segment start */
@@ -1739,7 +1781,11 @@ linkEdit (char **envp)
              the best place for xdata */
           if (options.xdata_loc)
             {
-              WRITE_SEG_LOC (XDATA_NAME, options.xdata_loc);
+	      if(!TARGET_MOS6502_LIKE) {
+		WRITE_SEG_LOC (XDATA_NAME, options.xdata_loc);
+	      } else {
+		WRITE_SEG_LOC ("_DATA", options.xdata_loc);
+	      }
             }
 
           /* pdata/xstack segment start. If zero, the linker
@@ -1759,12 +1805,14 @@ linkEdit (char **envp)
           WRITE_SEG_LOC (BIT_NAME, 0);
 
           /* stack start */
-          if ((options.stack_loc) && (options.stack_loc < 0x100) && !TARGET_HC08_LIKE)
+          if ((options.stack_loc) && (options.stack_loc < 0x100) && TARGET_MCS51_LIKE && !TARGET_MOS6502_LIKE)
             {
               WRITE_SEG_LOC ("SSEG", options.stack_loc);
+              /* with the disappearance of --no-pack-iram I don't think this is ever valid anymore */
+              werror (W_DEPRECATED_OPTION, "--stack-loc");
             }
         }
-      else                      /* For the z80, z180, gbz80 */
+      else                      /* For the z80 and related */
         {
           WRITE_SEG_LOC ("_CODE", options.code_loc);
           WRITE_SEG_LOC ("_DATA", options.data_loc);
@@ -2123,6 +2171,12 @@ preProcess (char **envp)
           break;
         }
 
+      /* set macro for optimization level */
+      if (optimize.codeSpeed)
+        addSet (&preArgvSet, Safe_strdup ("-D__SDCC_OPTIMIZE_SPEED"));
+      if (optimize.codeSize)
+        addSet (&preArgvSet, Safe_strdup ("-D__SDCC_OPTIMIZE_SIZE"));
+
       /* set macro corresponding to compiler option */
       if (options.intlong_rent)
         addSet (&preArgvSet, Safe_strdup ("-D__SDCC_INT_LONG_REENT"));
@@ -2133,6 +2187,16 @@ preProcess (char **envp)
 
       if (options.all_callee_saves)
         addSet(&preArgvSet, Safe_strdup("-D__SDCC_ALL_CALLEE_SAVES"));
+
+
+      /* set macro for ABI (calling convention) version */
+      {
+        struct dbuf_s dbuf;
+
+        dbuf_init (&dbuf, 32);
+        dbuf_printf (&dbuf, "-D__SDCCCALL=%d", options.sdcccall);
+        addSet (&preArgvSet, dbuf_detach_c_str (&dbuf));
+      }
 
       /* add SDCC version number */
       {
@@ -2182,7 +2246,7 @@ preProcess (char **envp)
       {
         struct dbuf_s dbuf;
 
-        dbuf_init (&dbuf, 20);        
+        dbuf_init (&dbuf, 20);
         dbuf_printf (&dbuf, "-D__SDCC_REVISION=%s", getBuildNumber ());
         addSet (&preArgvSet, dbuf_detach_c_str (&dbuf));
       }
@@ -2316,7 +2380,10 @@ setIncludePath (void)
 
       tempSet = processStrSet (dataDirsSet, NULL, INCLUDE_DIR_SUFFIX, NULL);
       includeDirsSet = processStrSet (tempSet, NULL, DIR_SEPARATOR_STRING, NULL);
-      includeDirsSet = processStrSet (includeDirsSet, NULL, port->target, NULL);
+      if (TARGET_IS_RABBIT) // Rabbits have a shared include directory.
+        includeDirsSet = processStrSet (includeDirsSet, NULL, "rab", NULL);
+      else
+        includeDirsSet = processStrSet (includeDirsSet, NULL, port->target, NULL);
       mergeSets (&includeDirsSet, tempSet);
 
       if (options.use_non_free)

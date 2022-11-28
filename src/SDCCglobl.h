@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <stdio.h>
+#include <errno.h>
 
 # ifndef __cplusplus
 #  include <stdbool.h>
@@ -275,7 +276,6 @@ struct options
     int noRegParams;            /* Disable passing some parameters in registers */
     int verbose;                /* Show what the compiler is doing */
     int lessPedantic;           /* disable some warnings */
-    int profile;                /* Turn on extra profiling information */
     int omitFramePtr;           /* Turn off the frame pointer. */
     int useAccelerator;         /* use ds390 Arithmetic Accelerator */
     int noiv;                   /* do not generate irq vector table entries */
@@ -285,7 +285,6 @@ struct options
     int protect_sp_update;      /* DS390 - will disable interrupts during ESP:SP updates */
     int parms_in_bank1;         /* DS390 - use reg bank1 to pass parameters */
     int stack_size;             /* MCS51/DS390 - Tells the linker to allocate this space for stack */
-    int no_pack_iram;           /* MCS51/DS390 - Deprecated: Tells the linker not to pack variables in internal ram */
     int acall_ajmp;             /* MCS51 - Use acall/ajmp instead of lcall/ljmp */
     int no_ret_without_call;    /* MCS51 - Do not use ret independent of acall/lcall */
     int use_non_free;           /* Search / include non-free licensed libraries and header files */
@@ -309,7 +308,7 @@ struct options
     int printSearchDirs;        /* display the directories in the compiler's search path */
     int vc_err_style;           /* errors and warnings are compatible with Micro$oft visual studio */
     int use_stdout;             /* send errors to stdout instead of stderr */
-    int no_std_crt0;            /* for the z80/gbz80 do not link default crt0.o*/
+    int no_std_crt0;            /* for the z80/sm83 do not link default crt0.o*/
     int std_c95;                /* enable C95 keywords/constructs */
     int std_c99;                /* enable C99 keywords/constructs */
     int std_c11;                /* enable C11 keywords/constructs */
@@ -328,6 +327,7 @@ struct options
     int max_allocs_per_node;    /* Maximum number of allocations / combinations considered at each node in the tree-decomposition based algorithms */
     bool noOptsdccInAsm;        /* Do not emit .optsdcc in asm */
     bool oldralloc;             /* Use old register allocator */
+    int sdcccall;               /* ABI version */
   };
 
 /* forward definition for variables accessed globally */

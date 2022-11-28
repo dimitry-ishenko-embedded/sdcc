@@ -2,7 +2,7 @@
    stdlib.h - General utilities (ISO C 11 7.22)
 
    Copyright (C) 1998, Sandeep Dutta . sandeep.dutta@usa.net
-   Copyright (c) 2016, Philipp Klaus Krause, pkk@spth.de
+   Copyright (c) 2016-2021, Philipp Klaus Krause, pkk@spth.de
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -30,7 +30,7 @@
 #ifndef __SDCC_STDLIB_H
 #define __SDCC_STDLIB_H 1
 
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_ds400) && !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16) && !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15)
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_ds400) && !defined(__SDCC_hc08) && !defined(__SDCC_s08) && !defined(__SDCC_mos6502) && !defined(__SDCC_mos65c02) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16) && !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15)
 #define __reentrant
 #endif
 
@@ -63,10 +63,10 @@ extern long int strtol(const char *nptr, char **endptr, int base);
 extern unsigned long int strtoul(const char *nptr, char **endptr, int base);
 
 /* SDCC extensions */
-extern void _uitoa(unsigned int, char*, unsigned char);
-extern void _itoa(int, char*, unsigned char);
-extern void _ultoa(unsigned long, char*, unsigned char);
-extern void _ltoa(long, char*, unsigned char);
+extern void __uitoa(unsigned int, char *, unsigned char);
+extern void __itoa(int, char *, unsigned char);
+extern void __ultoa(unsigned long, char *, unsigned char);
+extern void __ltoa(long, char *, unsigned char);
 
 /* Pseudo-random sequence generation functions (ISO C11 7.22.2) */
 int rand(void);
@@ -91,12 +91,27 @@ inline void *aligned_alloc(size_t alignment, size_t size)
 #endif
 extern void free (void * ptr);
 
+#if __STDC_VERSION__ >= 202300L
+inline void free_sized(void *ptr, size_t size)
+{
+  (void)size;
+  free (ptr);
+}
+
+inline void free_aligned_sized(void *ptr, size_t alignment, size_t size)
+{
+  (void)alignment;
+  (void)size;
+  free (ptr);
+}
+#endif
+
 /* Searching and sorting utilities (ISO C11 7.22.5) */
 extern void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *) __reentrant);
 extern void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *) __reentrant);
 
 /* Integer arithmetic functions (ISO C11 7.22.6) */
-#if defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r3ka) || defined(__SDCC_tlcs90) || defined (__SDCC_ez80_z80)
+#if defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_r2k) || defined(__SDCC_r2ka) || defined(__SDCC_r3ka) || defined(__SDCC_tlcs90) || defined (__SDCC_ez80_z80) || defined (__SDCC_z80n)
 int abs(int j) __preserves_regs(b, c, iyl, iyh);
 #else
 int abs(int j);

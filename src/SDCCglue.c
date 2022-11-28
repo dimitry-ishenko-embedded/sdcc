@@ -150,12 +150,18 @@ emitRegularMap (memmap *map, bool addPublics, bool arFlag)
     {
       /* PENDING: special case here - should remove */
       if (!strcmp (map->sname, CODE_NAME))
-        dbuf_tprintf (&map->oBuf, "\t!areacode\n", map->sname);
+        {
+          if (options.code_seg && strcmp (CODE_NAME, options.code_seg))
+            dbuf_tprintf (&map->oBuf, "\t!areacode\n", options.code_seg);
+          else
+            dbuf_tprintf (&map->oBuf, "\t!areacode\n", map->sname);
+        }
       else if (!strcmp (map->sname, DATA_NAME))
         {
-          dbuf_tprintf (&map->oBuf, "\t!areadata\n", map->sname);
           if (options.data_seg && strcmp (DATA_NAME, options.data_seg))
-            dbuf_tprintf (&map->oBuf, "\t!area\n", options.data_seg);
+            dbuf_tprintf (&map->oBuf, "\t!areadata\n", options.data_seg);
+          else
+            dbuf_tprintf (&map->oBuf, "\t!areadata\n", map->sname);
         }
       else if (!strcmp (map->sname, HOME_NAME))
         dbuf_tprintf (&map->oBuf, "\t!areahome\n", map->sname);
@@ -229,7 +235,7 @@ emitRegularMap (memmap *map, bool addPublics, bool arFlag)
                       werrorfl (tsym->fileDef, tsym->lineDef, W_EXCESS_INITIALIZERS, "scalar", tsym->name);
                     }
                   ival = newNode ('=', newAst_VALUE (symbolVal (tsym)),
-                                  decorateType (resolveSymbols (list2expr (tsym->ival)), RESULT_TYPE_NONE));
+                                  decorateType (resolveSymbols (list2expr (tsym->ival)), RESULT_TYPE_NONE, true));
                 }
               if (ival)
                 {
@@ -311,7 +317,7 @@ emitRegularMap (memmap *map, bool addPublics, bool arFlag)
                       werrorfl (sym->fileDef, sym->lineDef, W_EXCESS_INITIALIZERS, "scalar", sym->name);
                     }
                   ival = newNode ('=', newAst_VALUE (symbolVal (sym)),
-                                  decorateType (resolveSymbols (list2expr (sym->ival)), RESULT_TYPE_NONE));
+                                  decorateType (resolveSymbols (list2expr (sym->ival)), RESULT_TYPE_NONE, true));
                 }
               codeOutBuf = &statsg->oBuf;
 
@@ -518,7 +524,7 @@ initValPointer (ast *expr)
       while (t->left != NULL && t->opval.op != '[')
         t = t->left;
 
-      return valForStructElem (t, expr->right); 
+      return valForStructElem (t, expr->right);
     }
 
   /* case 7. function name */
@@ -860,7 +866,7 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
     {
       if (!!(val = initPointer (ilist, type, 0)))
         {
-          int i, size = getSize (type), le = port->little_endian, top = (options.model == MODEL_FLAT24) ? 3 : 2;;         
+          int i, size = getSize (type), le = port->little_endian, top = (options.model == MODEL_FLAT24) ? 3 : 2;;
           dbuf_printf (oBuf, "\t.byte ");
           for (i = (le ? 0 : size - 1); le ? (i < size) : (i > -1); i += (le ? 1 : -1))
             {
@@ -873,7 +879,7 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
 			    if (val->name && strlen (val->name) > 0)
                   dbuf_printf (oBuf, "(%s >> %d)", val->name, i * 8);
 				else
-                  dbuf_printf (oBuf, "#0x00");				
+                  dbuf_printf (oBuf, "#0x00");
               else
                 dbuf_printf (oBuf, "#0x00");
               if (i == (le ? (size - 1) : 0))
@@ -1797,7 +1803,7 @@ printIval (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *oBuf,
       else
         {
           ast *ast = newAst_VALUE (constVal("0"));
-          ast = decorateType (ast, RESULT_TYPE_NONE);
+          ast = decorateType (ast, RESULT_TYPE_NONE, true);
           ilist = newiList(INIT_NODE, ast);
         }
     }
@@ -2148,7 +2154,15 @@ printPublics (FILE * afile)
   fprintf (afile, "%s", iComments2);
 
   for (sym = setFirstItem (publics); sym; sym = setNextItem (publics))
-    tfprintf (afile, "\t!global\n", sym->rname);
+    {
+      if (TARGET_Z80_LIKE && IFFUNC_BANKED(sym->type))
+        {
+          /* TODO: use template for bank symbol generation */
+          sprintf (buffer, "b%s", sym->rname);
+          tfprintf (afile, "\t!global\n", buffer);
+        }
+      tfprintf (afile, "\t!global\n", sym->rname);
+    }
 }
 
 /*-----------------------------------------------------------------*/
@@ -2299,7 +2313,7 @@ glue (void)
 
   if (!(asmFile = fopen (dbuf_c_str (&asmFileName), "w")))
     {
-      werror (E_FILE_OPEN_ERR, dbuf_c_str (&asmFileName));
+      werror (E_OUTPUT_FILE_OPEN_ERR, dbuf_c_str (&asmFileName), strerror (errno));
       dbuf_destroy (&asmFileName);
       exit (EXIT_FAILURE);
     }
@@ -2316,6 +2330,8 @@ glue (void)
     fprintf (asmFile, "\t.r3k\n");
   else if (TARGET_IS_EZ80_Z80)
     fprintf (asmFile, "\t.ez80\n");
+  else if (TARGET_IS_Z80N)
+    fprintf (asmFile, "\t.zxn\n");
 
   /* print module name */
   tfprintf (asmFile, "\t!module\n", moduleName);
@@ -2378,7 +2394,7 @@ glue (void)
   if (port->assembler.externGlobal)
     printExterns (asmFile);
 
-  if ((mcs51_like) || (TARGET_IS_Z80 || TARGET_IS_GBZ80 || TARGET_IS_Z180 || TARGET_IS_RABBIT || TARGET_IS_EZ80_Z80) || TARGET_PDK_LIKE)  /*.p.t.20030924 need to output SFR table for Z80 as well */
+  if ((mcs51_like) || (TARGET_Z80_LIKE && !TARGET_IS_TLCS90) || TARGET_PDK_LIKE)  /*.p.t.20030924 need to output SFR table for Z80 as well */
     {
       /* copy the sfr segment */
       fprintf (asmFile, "%s", iComments2);
@@ -2456,7 +2472,7 @@ glue (void)
   if (overlay)
     {
       fprintf (asmFile, "%s", iComments2);
-      fprintf (asmFile, "; overlayable items in%s ram \n", mcs51_like ? " internal" : "");
+      fprintf (asmFile, "; overlayable items in%s ram\n", mcs51_like ? " internal" : "");
       fprintf (asmFile, "%s", iComments2);
       dbuf_write_and_destroy (&ovrBuf, asmFile);
     }
@@ -2465,7 +2481,7 @@ glue (void)
   if (mainf && IFFUNC_HASBODY (mainf->type))
     {
       fprintf (asmFile, "%s", iComments2);
-      fprintf (asmFile, "; Stack segment in internal ram \n");
+      fprintf (asmFile, "; Stack segment in internal ram\n");
       fprintf (asmFile, "%s", iComments2);
       fprintf (asmFile, "\t.area\tSSEG\n" "__start__stack:\n\t.ds\t1\n\n");
     }
@@ -2513,7 +2529,7 @@ glue (void)
   if (mainf && IFFUNC_HASBODY (mainf->type) && options.useXstack)
     {
       fprintf (asmFile, "%s", iComments2);
-      fprintf (asmFile, "; external stack \n");
+      fprintf (asmFile, "; external stack\n");
       fprintf (asmFile, "%s", iComments2);
       fprintf (asmFile, "\t.area XSTK (PAG,XDATA)\n" "__start__xstack:\n\t.ds\t1\n\n");
     }
@@ -2555,7 +2571,7 @@ glue (void)
   if (mainf && IFFUNC_HASBODY (mainf->type))
     {
       fprintf (asmFile, "%s", iComments2);
-      fprintf (asmFile, "; interrupt vector \n");
+      fprintf (asmFile, "; interrupt vector\n");
       fprintf (asmFile, "%s", iComments2);
       dbuf_write_and_destroy (&vBuf, asmFile);
     }
@@ -2613,7 +2629,7 @@ glue (void)
   if (mainf && IFFUNC_HASBODY (mainf->type))
     {
       /* STM8 note: there is no need to call main().
-         Instead of that, it's address is specified in the 
+         Instead of that, it's address is specified in the
          interrupts table and always equals to 0x8080.
        */
 

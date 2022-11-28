@@ -57,6 +57,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "cmdlexcl.h"
 
 bool jaj= false;
+int juj= 0;
 
 
 /*
@@ -69,6 +70,7 @@ cl_app::cl_app(void)
   sim= 0;
   in_files= new cl_ustrings(2, 2, "input files");
   options= new cl_options();
+  quiet= false;
 }
 
 cl_app::~cl_app(void)
@@ -84,7 +86,8 @@ cl_app::init(int argc, char *argv[])
 {
   sigpipe_off();
   cl_base::init();
-  set_name(cchars("application"));
+  if (!have_real_name())
+    set_name("application");
   mk_options();
   proc_arguments(argc, argv);
   class cl_cmdset *cmdset= new cl_cmdset();
@@ -111,9 +114,10 @@ cl_app::run(void)
   double input_last_checked= 0;
   class cl_option *o= options->get_option("go");
   bool g_opt= false;
-  unsigned int cyc= 0;
+  //unsigned int cyc= 0, period= 10000;
   enum run_states rs= rs_config;
-    
+
+  cperiod.set(1000000);
   while (!done)
     {
       if ((rs == rs_config) &&
@@ -128,11 +132,12 @@ cl_app::run(void)
 	      int i;
 	      for (i= 0; i < in_files->count; i++)
 		{
-		  char *fname= (char *)(in_files->at(i));
+		  const char *fname= (const char *)(in_files->at(i));
 		  long l;
 		  if ((l= sim->uc->read_file(fname, NULL)) >= 0)
 		    {
 		      ///*commander->all_printf*/printf("%ld words read from %s\n", l, fname);
+		      sim->uc->reset();
 		    }
 		}
 	    }
@@ -148,7 +153,7 @@ cl_app::run(void)
 	    sim->start(0, 0);
 	  rs= rs_run;
 	}
-      ++cyc;
+      ccyc.set(ccyc.get()+1);
       if (!sim)
 	{
 	  commander->wait_input();
@@ -158,9 +163,9 @@ cl_app::run(void)
         {
           if (sim->state & SIM_GO)
             {
-	      if (cyc - input_last_checked > 10000)
+	      if (ccyc.get() - input_last_checked > cperiod.get())
 		{
-		  input_last_checked= cyc;
+		  input_last_checked= ccyc.get();
 		  if (sim->uc)
 		    sim->uc->touch();
 		  if (commander->input_avail())
@@ -202,10 +207,10 @@ cl_app::done(void)
  */
 
 static void
-print_help(char *name)
+print_help(const char *name)
 {
   printf("%s: %s\n", name, VERSIONSTR);
-  printf("Usage: %s [-hHVvPgGwb] [-p prompt] [-t CPU] [-X freq[k|M]]\n"
+  printf("Usage: %s [-hHVvPgGwlbBq] [-p prompt] [-t CPU] [-X freq[k|M]] [-R seed]\n"
 	 "       [-C cfg_file] [-c file] [-e command] [-s file] [-S optionlist]\n"
 	 "       [-I if_optionlist] [-o colorlist] [-a nr]\n"
 #ifdef SOCKET_AVAIL
@@ -218,6 +223,7 @@ print_help(char *name)
      "Options:\n"
      "  -t CPU       Type of CPU: 51, C52, 251, etc.\n"
      "  -X freq[k|M] XTAL frequency\n"
+     "  -R seed      Set the random number generator seed value\n"
      "  -C cfg_file  Read initial commands from `cfg_file' and execute them\n"
      "  -e command   Execute command on startup\n"
      "  -c file      Open command console on `file' (use `-' for std in/out)\n"
@@ -239,15 +245,18 @@ print_help(char *name)
      "                 out=file            specify output file for IO\n"
      "  -p prompt    Specify string for prompt\n"
      "  -P           Prompt is a null ('\\0') character\n"
-     "  -o colors    List of color specification: what=colspec,...\n"
+     "  -o colors    `colors' is a list of color specification: what=colspec,...\n"
      "               where colspec is : separated list of color options\n"
      "               e.g.: prompt=b:white:black (bold white on black)\n"
-     "  -b           Black & white (non-color) console\n"
+     "  -l           Use light theme (default is dark)\n"
+     "  -b           Black & white (non-color) theme\n"
+     "  -B           Beep on breakpoints\n"
      "  -g           Go, start simulation\n"
      "  -G           Go, start simulation, quit on stop\n"
      "  -a nr        Specify size of variable space (default=256)\n"
      "  -w           Writable flash\n"
      "  -V           Verbose mode\n"
+     "  -q           Quiet mode\n"
      "  -v           Print out version number and quit\n"
      "  -H           Print out types of known CPUs and quit\n"
      "  -h           Print out this help and quit\n"
@@ -294,10 +303,10 @@ cl_app::proc_arguments(int argc, char *argv[])
   int i, c;
   char opts[100], *cp, *subopts, *value;
   char *cpu_type= NULL;
-  bool /*s_done= DD_FALSE,*/ k_done= false;
+  bool /*s_done= false,*/ k_done= false;
   //bool S_i_done= false, S_o_done= false;
 
-  strcpy(opts, "c:C:e:p:PX:vVt:s:S:I:a:whHgGJo:b_");
+  strcpy(opts, "qc:C:e:p:PX:vVt:s:S:I:a:whHgGJo:blBR:_");
 #ifdef SOCKET_AVAIL
   strcat(opts, "Z:r:k:");
 #endif
@@ -309,12 +318,19 @@ cl_app::proc_arguments(int argc, char *argv[])
 	  (strcmp(argv[i], "-args") == 0) ||
 	  (strcmp(argv[i], "-nx") == 0))
 	strcpy(argv[i], "-_");
+      if ((strcmp(argv[i], "-help")==0) ||
+	  (strcmp(argv[i], "--help")==0))
+	{
+	  print_help(get_name());
+	  exit(0);
+	}
     }
   
   while((c= getopt(argc, argv, opts)) != -1)
     switch (c)
       {
       case '_': break;
+      case 'q': quiet= true; break;
       case 'J': jaj= true; break;
       case 'g':
 	if (!options->set_value("go", this, true))
@@ -343,13 +359,16 @@ cl_app::proc_arguments(int argc, char *argv[])
 	startup_command+= optarg;
 	startup_command+= chars("\n");
 	break;
+      case 'R':
+        srand(atoi(optarg));
+        break;
 #ifdef SOCKET_AVAIL
       case 'Z': case 'r':
 	{
 	  // By Sandeep
 	  // Modified by DD
 	  class cl_option *o;
-	  options->new_option(o= new cl_number_option(this, cchars("port_number"),
+	  options->new_option(o= new cl_number_option(this, "port_number",
 						      "Listen on port (-Z)"));
 	  o->init();
 	  o->hide();
@@ -387,7 +406,7 @@ cl_app::proc_arguments(int argc, char *argv[])
 	    XTAL*= 1e6;
 	  if (XTAL == 0)
 	    {
-	      fprintf(stderr, "Xtal frequency must be greather than 0\n");
+	      fprintf(stderr, "Xtal frequency must be greater than 0\n");
 	      exit(1);
 	    }
 	  if (!options->set_value("xtal", this, XTAL))
@@ -461,10 +480,12 @@ cl_app::proc_arguments(int argc, char *argv[])
 	  if (!options->set_value("serial0_in_file", this, /*(void*)Ser_in*/s))
 	    fprintf(stderr, "Warning: No \"serial0_in_file\" option found to "
 		    "set parameter of -s as serial input file\n");
+	  free(s);
 	  s= format_string("\0010x%llx", (unsigned long long int)(fout));
 	  if (!options->set_value("serial0_out_file", this, /*Ser_out*/s))
 	    fprintf(stderr, "Warning: No \"serial0_out_file\" option found "
 		    "to set parameter of -s as serial output file\n");
+	  free(s);
 	  break;
 	}
 #endif
@@ -472,6 +493,7 @@ cl_app::proc_arguments(int argc, char *argv[])
 	{
 	  char *iname= NULL, *oname= NULL;
 	  int uart=0, port=0, iport= 0, oport= 0;
+	  bool ifirst= false;
 	  subopts= optarg;
 	  while (*subopts != '\0')
 	    {
@@ -483,6 +505,8 @@ cl_app::proc_arguments(int argc, char *argv[])
 		    exit(1);
 		  }
 		  iname= value;
+		  if (oname == NULL)
+		    ifirst= true;
 		  break;
 		case SOPT_OUT:
 		  if (value == NULL) {
@@ -493,6 +517,9 @@ cl_app::proc_arguments(int argc, char *argv[])
 		  break;
 		case SOPT_UART: case SOPT_USART:
 		  uart= strtol(value, 0, 0);
+		  ifirst= false;
+		  iname= oname= NULL;
+		  port= iport= oport= 0;
 		  break;
 		case SOPT_PORT:
 		  port= strtol(value, 0, 0);
@@ -518,6 +545,18 @@ cl_app::proc_arguments(int argc, char *argv[])
 	    {
 	      char *s, *h;
 	      class cl_option *o;
+	      s= format_string("serial%d_ifirst", uart);
+	      if ((o= options->get_option(s)) == NULL)
+		{
+		  h= format_string("Open input file for uart%d first", uart);
+		  o= new cl_bool_option(this, s, h);
+		  o->init();
+		  o->hide();
+		  options->add(o);
+		  free(h);
+		}
+	      options->set_value(s, this, ifirst);
+	      free(s);
 	      if (iname)
 		{
 		  s= format_string("serial%d_in_file", uart);
@@ -653,24 +692,50 @@ cl_app::proc_arguments(int argc, char *argv[])
 	}
       case 'o':
 	{
-	  chars s= optarg;
+	  const chars s= optarg;
 	  chars opt= s.token(",");
 	  while (opt.nempty())
 	    {
-	      printf("colspecopt=\"%s\"\n", (char*)opt);
-	      chars col_name, col_value;
+	      chars col_name, col_value, opt_name;
 	      col_name= opt.token("=");
 	      col_value=opt.token("=");
-	      printf("name=\"%s\" value=\"%s\"\n", (char*)col_name,(char*)col_value);
-	      class cl_option *o= options->get_option((char*)chars("","color_%s",(char*)col_name));
+	      opt_name.format("color_%s", col_name.c_str());
+	      class cl_option *o= options->get_option(opt_name);
 	      if (o)
 		o->set_value(col_value);
 	      opt= s.token(",");
 	    }
 	  break;
 	}
+      case 'l':
+	set_option_s("color_prompt", "green:bwhite");
+	set_option_s("color_prompt_console", "blue:bwhite");
+	set_option_s("color_command", "blue:bwhite");
+	set_option_s("color_answer", "black:bwhite");
+	set_option_s("color_result", "bblue:bwhite");
+	set_option_s("color_dump_address", "blue:bwhite");
+	set_option_s("color_dump_number", "bblack:bwhite");
+	set_option_s("color_dump_char", "black:bwhite");
+	set_option_s("color_comment", "magenta:bwhite");
+	set_option_s("color_error", "red:bwhite");
+	set_option_s("color_ui_mkey", "green:bwhite");
+	set_option_s("color_ui_mitem", "bblack:bwhite");
+	set_option_s("color_ui_label", "black:bwhite");
+	set_option_s("color_ui_time", "blue:bwhite");
+	set_option_s("color_ui_title", "magenta:bwhite");
+	set_option_s("color_ui_run", "black:green");
+	set_option_s("color_ui_stop", "white:red");
+	set_option_s("color_ui_bit0", "white:black");
+	set_option_s("color_ui_bit1", "bred:black");
+	set_option_s("color_debug", "magenta:bwhite");
+	break;
+      case 'B':
+	if (!options->set_value("beep_break", this, (bool)true))
+	  fprintf(stderr, "Warning: No \"debug\" option found to set "
+		  "by -B parameter\n");	
+	break;
       case 'h':
-	print_help(cchars("s51"));
+	print_help(get_name());
 	exit(0);
 	break;
       case 'H':
@@ -728,11 +793,11 @@ cl_app::get_cmd(class cl_cmdline *cmdline)
   return(0);
 }
 */
-long
+t_mem
 cl_app::eval(chars expr)
 {
   expr_result= 0;
-  uc_yy_set_string_to_parse((char*)expr);
+  uc_yy_set_string_to_parse(expr);
   yyparse();
   uc_yy_free_string_to_parse();
   return expr_result;
@@ -749,7 +814,8 @@ cl_app::exec(chars line)
     }
   do
     {
-      class cl_cmdline *cmdline= new cl_cmdline(this, (char*)line, c);
+      c->un_redirect();
+      class cl_cmdline *cmdline= new cl_cmdline(this, line, c);
       cmdline->init();
       class cl_cmd *cm= commander->cmdset->get_cmd(cmdline, false/*c->is_interactive()*/);
       if (cm)
@@ -761,8 +827,9 @@ cl_app::exec(chars line)
 	  char *e= cmdline->cmd;
 	  if (strlen(e) > 0)
 	    {
-	      long l= eval(e);
-	      c->dd_printf("%ld\n", l);
+	      t_mem l= eval(e);
+	      c->dd_color("result");
+	      c->print_expr_result(l, NULL);
 	    }
 	}
       line= cmdline->rest;
@@ -815,6 +882,10 @@ cl_app::build_cmdset(class cl_cmdset *cmdset)
   cmdset->add(cmd= new cl_super_cmd("conf", 0, cset));
   cmd->init();
   set_conf_help(cmd);
+
+  cmd= new cl_ver_cmd("version", 0);
+  cmdset->add(cmd);
+  cmd->init();
   
   cmd= new cl_help_cmd("help", 0);
   cmdset->add(cmd);
@@ -1000,91 +1071,125 @@ cl_app::mk_options(void)
 					    "Print breakpoint script before execute"));
   o->init();
 
+  options->new_option(o= new cl_bool_option(this, "beep_break",
+					    "Beep at breakpoint hit (-B)"));
+  o->init();
+  o->set_value((bool)false);
+
+  options->new_option(o= new cl_string_option(this, "expression_format",
+					      "Format specifier to print expression result"));
+  o->init();
+  o->set_value("d");
+  
   options->new_option(o= new cl_string_option(this, "color_prompt",
 					      "Prompt color"));
   o->init();
-  o->set_value((char*)"bwhite:black");
+  o->set_value("bwhite:black");
   
   options->new_option(o= new cl_string_option(this, "color_prompt_console",
 					      "Color of console number in prompt"));
   o->init();
-  o->set_value((char*)"yellow:black");
+  o->set_value("yellow:black");
   
   options->new_option(o= new cl_string_option(this, "color_command",
 					      "Color of entered command"));
   o->init();
-  o->set_value((char*)"green:black");
+  o->set_value("green:black");
   
   options->new_option(o= new cl_string_option(this, "color_answer",
 					      "Answer color"));
   o->init();
-  o->set_value((char*)"bwhite:black");
+  o->set_value("bwhite:black");
   
   options->new_option(o= new cl_string_option(this, "color_result",
 					      "Result of expression"));
   o->init();
-  o->set_value((char*)"byellow:black");
+  o->set_value("byellow:black");
   
   options->new_option(o= new cl_string_option(this, "color_dump_address",
 					      "Address color in dump"));
   o->init();
-  o->set_value((char*)"byellow:black");
+  o->set_value("byellow:black");
   
+  options->new_option(o= new cl_string_option(this, "color_dump_label",
+					      "Label color in dump"));
+  o->init();
+  o->set_value((char*)"bgreen:black");
+
   options->new_option(o= new cl_string_option(this, "color_dump_number",
 					      "Value color in dump"));
   o->init();
-  o->set_value((char*)"white:black");
+  o->set_value("white:black");
   
   options->new_option(o= new cl_string_option(this, "color_dump_char",
 					      "Text color in dump"));
   o->init();
-  o->set_value((char*)"green:black");
+  o->set_value("green:black");
+
+  options->new_option(o= new cl_string_option(this, "color_comment",
+					      "Comment color in disassembly"));
+  o->init();
+  o->set_value("magenta:black");
   
   options->new_option(o= new cl_string_option(this, "color_error",
 					      "Text color in error messages"));
   o->init();
-  o->set_value((char*)"red:black");
+  o->set_value("red:black");
   
   options->new_option(o= new cl_string_option(this, "color_debug",
 					      "Color of debug messages"));
   o->init();
-  o->set_value((char*)"magenta:black");
+  o->set_value("magenta:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_mkey",
 					      "Menu-key color on UI display"));
   o->init();
-  o->set_value((char*)"b:yellow:black");
+  o->set_value("b:yellow:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_mitem",
 					      "Menu-item color on UI display"));
   o->init();
-  o->set_value((char*)"bwhite:black");
+  o->set_value("bwhite:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_label",
 					      "Label color on UI display"));
   o->init();
-  o->set_value((char*)"white:black");
+  o->set_value("white:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_time",
 					      "Color of time-value on UI display"));
   o->init();
-  o->set_value((char*)"bblue:black");
+  o->set_value("bblue:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_title",
 					      "Title color on UI display"));
   o->init();
-  o->set_value((char*)"bmagenta:black");
+  o->set_value("bmagenta:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_run",
 					      "Run state color on UI display"));
   o->init();
-  o->set_value((char*)"black:green");
+  o->set_value("black:green");
+  
+  options->new_option(o= new cl_string_option(this, "color_ui_bit0",
+					      "Bit 0 color on UI display"));
+  o->init();
+  o->set_value("white:black");
+  
+  options->new_option(o= new cl_string_option(this, "color_ui_bit1",
+					      "Bit 1 color on UI display"));
+  o->init();
+  o->set_value("bred:black");
   
   options->new_option(o= new cl_string_option(this, "color_ui_stop",
 					      "Stop state color on UI display"));
   o->init();
-  o->set_value((char*)"white:red");
+  o->set_value("white:red");
   
+  options->new_option(o= new cl_number_option(this, "label_width",
+					      "Space to allow for labels in dumps and disassembly (-1 for auto)"));
+  o->init();
+  o->set_value((long)-1);
 }
 
 
@@ -1130,5 +1235,15 @@ cl_app::debug(const char *format, ...)
   return(i);
 }
 
+
+void
+cl_app::set_option_s(const char *opt_name, const char *new_value)
+{
+  class cl_option *o= options->get_option(opt_name);
+  if (o)
+    {
+      o->set_value(new_value);
+    }
+}
 
 /* End of app.cc */

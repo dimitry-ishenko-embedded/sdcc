@@ -134,7 +134,7 @@ debugLog (const char *fmt,...)
 
       if (!(debugF = fopen (buffer, (append ? "a+" : "w"))))
         {
-          werror (E_FILE_OPEN_ERR, buffer);
+          werror (E_OUTPUT_FILE_OPEN_ERR, buffer, strerror (errno));
           exit (1);
         }
       append = 1;               // Next time debubLog is called, we'll append the debug info
@@ -288,7 +288,6 @@ pic16_decodeOp (unsigned int op)
                 case GET_VALUE_AT_ADDRESS:      return "GET_VALUE_AT_ADDRESS";
                 case SPIL:              return "SPIL";
                 case UNSPIL:            return "UNSPIL";
-                case GETHBIT:           return "GETHBIT";
                 case BITWISEAND:        return "BITWISEAND";
                 case UNARYMINUS:        return "UNARYMINUS";
                 case IPUSH:             return "IPUSH";

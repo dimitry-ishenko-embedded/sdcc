@@ -27,22 +27,24 @@
 */
 /*@1@*/
 
-#include "ddconfig.h"
+//#include "ddconfig.h"
 
-#include <ctype.h>
-#include "i_string.h"
+//#include <ctype.h>
+#include <string.h>
+
+//#include "i_string.h"
 
 // prj
-#include "errorcl.h"
+//#include "errorcl.h"
 #include "appcl.h"
 
 // sim
-#include "simcl.h"
-#include "optioncl.h"
+//#include "simcl.h"
+//#include "optioncl.h"
 
 // local
 #include "cmd_setcl.h"
-#include "cmdutil.h"
+//#include "cmdutil.h"
 
 
 void
@@ -64,82 +66,74 @@ set_set_help(class cl_cmd *cmd)
 COMMAND_DO_WORK_UC(cl_set_mem_cmd)
 {
   class cl_memory *mem= 0;
+  t_addr start= 0;
+  t_mem *array= NULL;
+  int len= 0;
+  int bitnr_low= -1, bitnr_high= -1;
   class cl_cmd_arg *params[4]= { cmdline->param(0),
 				 cmdline->param(1),
-				 cmdline->param(2),
-				 cmdline->param(3) };
+				 cmdline->param(2) };
 
-  if (cmdline->syntax_match(uc, MEMORY ADDRESS DATALIST)) {
-    mem= params[0]->value.memory.memory;
-    t_addr start= params[1]->value.address;
-    t_mem *array= params[2]->value.data_list.array;
-    int len= params[2]->value.data_list.len;
-    
-    if (len == 0)
-      con->dd_printf("Error: no data\n");
-    else if (start < mem->get_start_address())
-      con->dd_printf("Start address less then 0x%x\n",
-		     AU(mem->get_start_address()));
-    else
-      {
-	int i;
-	t_addr addr;
-	for (i= 0, addr= start;
-	     i < len && mem->valid_address(addr);
-	     i++, addr++)
-	  mem->write(addr, array[i]);
-	uc->check_errors();
-	mem->dump(start, start+len-1, 8, con/*->get_fout()*/);
-      }
-  }
+  if (cmdline->syntax_match(uc, BIT DATALIST))
+    {
+      mem= params[0]->value.bit.mem;
+      start= params[0]->value.bit.mem_address;
+      bitnr_low= params[0]->value.bit.bitnr_low;
+      bitnr_high= params[0]->value.bit.bitnr_high;
+      array= params[1]->value.data_list.array;
+      len= params[1]->value.data_list.len;
+    }
+  else if (cmdline->syntax_match(uc, MEMORY ADDRESS DATALIST))
+    {
+      mem= params[0]->value.memory.memory;
+      start= params[1]->value.address;
+      array= params[2]->value.data_list.array;
+      len= params[2]->value.data_list.len;
+    }
+
+  if (mem)
+    {
+      if (len == 0)
+        con->dd_printf("Error: no data\n");
+      else if (start < mem->get_start_address())
+        {
+          con->dd_printf("Start address less than ");
+          con->dd_printf(mem->addr_format, mem->get_start_address());
+          con->dd_printf("\n");
+        }
+      else if (bitnr_low >= 0)
+        {
+          if (len > 1)
+            con->dd_printf("Error: excess data for bit(s)\n");
+          else
+            {
+              t_mem mask= ((1U << (bitnr_high - bitnr_low + 1)) - 1) << bitnr_low;
+              mem->write(start, (mem->get(start) & (~mask)) | ((array[0] << bitnr_low) & mask));
+              uc->check_errors();
+              mem->dump(start, bitnr_high, bitnr_low, con);
+            }
+        }
+      else
+        {
+          int i;
+          t_addr addr;
+          for (i= 0, addr= start;
+               i < len && mem->valid_address(addr);
+               i++, addr++)
+            mem->write(addr, array[i]);
+          uc->check_errors();
+          mem->dump(start, start+len-1, 8, con);
+        }
+    }
   else
     syntax_error(con);
-  
-  return(false);;
+
+  return(false);
 }
 
 CMDHELP(cl_set_mem_cmd,
-	"set memory memory_type address data...",
-	"Place list of data into memory",
-	"long help of set memory")
-
-/*
- * Command: set bit
- *----------------------------------------------------------------------------
- */
-
-//int
-//cl_set_bit_cmd::do_work(class cl_sim *sim,
-//			class cl_cmdline *cmdline, class cl_console *con)
-COMMAND_DO_WORK_UC(cl_set_bit_cmd)
-{
-  class cl_memory *mem;
-  t_addr mem_addr= 0;
-  t_mem bit_mask= 0;
-  class cl_cmd_arg *params[4]= { cmdline->param(0),
-				 cmdline->param(1),
-				 cmdline->param(2),
-				 cmdline->param(3) };
-  
-  if (cmdline->syntax_match(uc, BIT NUMBER)) {
-    mem= params[0]->value.bit.mem;
-    mem_addr= params[0]->value.bit.mem_address;
-    bit_mask= params[0]->value.bit.mask;
-    if (params[1]->value.number)
-      mem->set_bit1(mem_addr, bit_mask);
-    else
-      mem->set_bit0(mem_addr, bit_mask);
-    mem->dump(mem_addr, mem_addr, 1, con/*->get_fout()*/);
-  }
-  else
-    syntax_error(con);
-
-  return(false);;
-}
-
-CMDHELP(cl_set_bit_cmd,
-	"set bit addr 0|1",
-	"Set specified bit to 0 or 1",
+	"set memory memory_type address data... | bit data",
+	"Place list of data into memory OR set specified bit(s) to data",
 	"long help of set bit")
 
 /*
@@ -150,41 +144,27 @@ CMDHELP(cl_set_bit_cmd,
 COMMAND_DO_WORK_UC(cl_set_hw_cmd)
 {
   class cl_hw *hw= 0;
-  class cl_cmd_arg *params[1]= { cmdline->param(0)/*,
-				 cmdline->param(1),
-				 cmdline->param(2),
-				 cmdline->param(3)*/ };
+  class cl_cmd_arg *params[1]= { cmdline->param(0) };
   
-  if (params[0] && /*cmdline->syntax_match(uc, HW)*/params[0]->as_hw(uc)) {
+  if (params[0] && params[0]->as_hw(uc)) {
     hw= params[0]->value.hw;
-    //pn= hw->id;
-    //l= params[1]->value.number;
   }
-  /*else if (cmdline->syntax_match(uc, NUMBER NUMBER)) {
-    pn= params[0]->value.number;
-    l= params[1]->value.number;
-    hw= uc->get_hw(HW_PORT, pn, 0);
-    }*/
   else
     syntax_error(con);
-  /*if (pn < 0 ||
-      pn > 3)
-    con->dd_printf("Error: wrong port\n");
-    else*/
+
+  if (hw)
     {
-      if (hw)
-	{
-	  cmdline->shift();
-	  hw->set_cmd(cmdline, con);
-	}
-      else
-	con->dd_printf("Error: no hw\n");
+      cmdline->shift();
+      hw->set_cmd(cmdline, con);
     }
+  else
+    con->dd_printf("Error: no hw\n");
+
   return(false);;
 }
 
 CMDHELP(cl_set_hw_cmd,
-	"set hardware cathegory params...",
+	"set hardware category params...",
 	"Set parameters of specified hardware element",
 	"long help of set hardware")
 
@@ -235,7 +215,7 @@ COMMAND_DO_WORK_APP(cl_set_option_cmd)
     int n= app->options->nuof_options(id);
     if (n > 1)
       {
-	char *cr= (char*)con->get_name();
+	const char *cr= con->get_name();
 	n= app->options->nuof_options(id, cr);
 	if (n > 1)
 	  con->dd_printf("Ambiguous option name, use number instead\n");
@@ -384,7 +364,7 @@ COMMAND_DO_WORK_APP(cl_set_console_cmd)
   else if ((strstr(s1, "c") == s1) ||
 	   (strstr(s1, "e") == s1))
     {
-      // coocked, edited
+      // cooked, edited
       con->set_cooked(true);
     }
   else

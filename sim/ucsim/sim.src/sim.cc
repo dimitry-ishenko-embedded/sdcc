@@ -25,12 +25,13 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 02111-1307, USA. */
 /*@1@*/
 
-#include "ddconfig.h"
+//#include "ddconfig.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include "i_string.h"
+//#include <unistd.h>
+#include <string.h>
+//#include "i_string.h"
 
 // prj
 #include "globals.h"
@@ -38,11 +39,10 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
 // cmd
 #include "cmd_execcl.h"
-#include "cmd_guicl.h"
 
 // local, sim.src
-#include "simcl.h"
-#include "appcl.h"
+//#include "simcl.h"
+//#include "appcl.h"
 #include "simifcl.h"
 
 
@@ -69,7 +69,7 @@ cl_sim::init(void)
   if (!(uc= mk_controller()))
     return(1);
   uc->init();
-  simif= uc->get_hw(cchars("simif"), 0);
+  simif= uc->get_hw("simif", 0);
   return(0);
 }
 
@@ -95,6 +95,7 @@ cl_sim::step(void)
 	{
 	  start_at= dnow();
 	}
+      uc->save_hist();
       if (uc->do_inst(1) == resGO)
 	steps_done++;
       if ((steps_todo > 0) &&
@@ -133,7 +134,7 @@ cl_sim::start(class cl_console_base *con, unsigned long steps_to_do)
       app->get_commander()->update_active();
     }
   if (uc)
-    start_tick= uc->ticks->ticks;
+    start_tick= uc->ticks->get_ticks();
   steps_done= 0;
   steps_todo= steps_to_do;
 }
@@ -144,6 +145,7 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
   class cl_commander_base *cmd= app->get_commander();
   class cl_option *o= app->options->get_option("quit");
   bool q_opt= false;
+  unsigned long dt= uc?(uc->ticks->get_ticks() - start_tick):0;
 
   if (o)
     o->get_value(&q_opt);
@@ -164,27 +166,37 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
     }
   if (b)
     {
+      class cl_option *o;
+      o= app->options->get_option("beep_break");
+      bool e= false;
+      if (o) o->get_value(&e);
+      if (e)
+	cmd->frozen_console->dd_printf("\007");
+    
       if (!(b->commands.empty()))
 	{
-	  class cl_option *o= app->options->get_option("echo_script");
-	  bool e= false;
+	  o= app->options->get_option("echo_script");
+	  e= false;
 	  if (o) o->get_value(&e);
 	  if (e)
-	    cmd->dd_printf("%s\n", (char*)(b->commands));
-		  application->exec(b->commands);
-		  steps_done= 0;
+	    cmd->dd_cprintf("answer", "%s\n", b->commands.c_str());
+	  application->exec(b->commands);
+	  steps_done= 0;
 	}
     }
   
   if (!(state & SIM_GO) &&
       cmd->frozen_console)
     {
+      fflush(stdout); // Needed to make sure we get the right simulator output order
+      
       if (reason == resUSER &&
 	  cmd->frozen_console->input_avail())
 	cmd->frozen_console->read_line();
       cmd->frozen_console->un_redirect();
       cmd->frozen_console->dd_color("debug");
-      cmd->frozen_console->dd_printf("Stop at 0x%06x: (%d) ", AU(uc->PC), reason);
+      // Stop message should start with a newline, to avoid mixing this line with previous output from simulated program
+      cmd->frozen_console->dd_printf("\nStop at 0x%06x: (%d) ", AU(uc->PC), reason);
       switch (reason)
 	{
 	case resHALT:
@@ -208,11 +220,11 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
 	    {
 	      class cl_ev_brk *eb= (cl_ev_brk*)b;
 	      class cl_address_space *m= eb->get_mem();
-	      cmd->frozen_console->dd_printf("Event `%s' at %s[0x%x]: 0x%x %s\n",
+	      cmd->frozen_console->dd_printf("Event `%s' at %s[0x%x]: 0x%x ",
 					     eb->id, m?(m->get_name()):"mem?",
 					     AU(eb->addr),
-					     AU(uc->instPC),
-					     uc->disass(uc->instPC, " "));
+					     AU(uc->instPC));
+	      uc->print_disass(uc->instPC, cmd->frozen_console);
     	    }
 	  break;
 	case resINTERRUPT:
@@ -233,7 +245,7 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
 	  }
          break;
 	case resSTEP:
-	  cmd->frozen_console->dd_printf("\n");
+	  cmd->frozen_console->dd_printf("stepped %ld ticks\n", dt);
 	  uc->print_regs(cmd->frozen_console);
 	  break;
 	case resERROR:
@@ -242,18 +254,27 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
 	case resSIMIF:
 	  cmd->frozen_console->dd_printf("Program stopped itself\n");
 	  break;
+	case resSELFJUMP:
+	  cmd->frozen_console->dd_printf("Jump to itself\n");
+	  break;
+        case resNOT_DONE:
+          cmd->frozen_console->dd_printf("Instruction is still executing\n");
+          break;
 	default:
 	  cmd->frozen_console->dd_printf("Unknown reason\n");
 	  break;
 	}
-      cmd->frozen_console->dd_printf("F 0x%06x\n", AU(uc->PC)); // for sdcdb
-      unsigned long dt= uc?(uc->ticks->ticks - start_tick):0;
+      cmd->frozen_console->dd_cprintf("answer", "F 0x%06x\n", AU(uc->PC)); // for sdcdb
       if ((reason != resSTEP) ||
 	  (steps_done > 1))
-	cmd->frozen_console->dd_printf("Simulated %lu ticks in %f sec, rate=%f\n",
-				       dt,
-				       stop_at - start_at,
-				       (dt*(1/uc->xtal)) / (stop_at - start_at));
+	{
+	  cmd->frozen_console->dd_printf("Simulated %lu ticks (%.3e sec)\n",
+					 dt,
+					 dt*(1/uc->get_xtal()));
+	  cmd->frozen_console->dd_printf("Host usage: %f sec, rate=%f\n",
+					 stop_at - start_at,
+					 (dt*(1/uc->get_xtal())) / (stop_at - start_at));
+	}
       //if (cmd->actual_console != cmd->frozen_console)
       cmd->frozen_console->set_flag(CONS_FROZEN, false);
       //cmd->frozen_console->dd_printf("_s_");
@@ -265,45 +286,6 @@ cl_sim::stop(int reason, class cl_ev_brk *ebrk)
     state|= SIM_QUIT;
   cmd->update_active();
 }
-/*
-void
-cl_sim::stop(class cl_ev_brk *brk)
-{
-  class cl_commander_base *cmd= app->get_commander();
-  class cl_option *o= app->options->get_option("quit");
-  bool q_opt= false;
-
-  if (o)
-    o->get_value(&q_opt);
-
-  //state&= ~SIM_GO;
-  if (simif)
-    simif->cfg_set(simif_reason, resEVENTBREAK);
-
-  if (brk)
-    {
-      if (!(brk->commands.empty()))
-	{
-	  application->exec(brk->commands);
-	  steps_done= 0;
-	  printf("event brk PC=%ld, simgo=%d\n",uc->PC,state&SIM_GO);
-	}
-    }
-
-  if (!(state & SIM_GO) &&
-      cmd->frozen_console)
-    {
-      class cl_console_base *con= cmd->frozen_console;
-      con->dd_printf("Event `%s' at %s[0x%x]: 0x%x %s\n",
-		     brk->id, brk->get_mem()->get_name(), (int)brk->addr,
-		     (int)uc->instPC,
-		     uc->disass(uc->instPC, " "));
-    }
-  if (!(state & SIM_GO) &&
-      q_opt)
-    state|= SIM_QUIT;
-}
-*/
 
 void
 cl_sim::change_run(int reason)
@@ -321,7 +303,6 @@ void
 cl_sim::build_cmdset(class cl_cmdset *cmdset)
 {
   class cl_cmd *cmd;
-  //class cl_cmdset *cset;
 
   cmdset->add(cmd= new cl_run_cmd("run", 0));
   cmd->init();
@@ -340,17 +321,24 @@ cl_sim::build_cmdset(class cl_cmdset *cmdset)
   cmd->init();
   cmd->add_name("n");
 
-  /*{
-    cset= new cl_cmdset();
-    cset->init();
-    cset->add(cmd= new cl_gui_start_cmd("start", 0));
+  //class cl_super_cmd *super_cmd;
+  //class cl_cmdset *cset;
+  /*
+    {
+    // info
+    super_cmd= (class cl_super_cmd *)(cmdset->get_cmd("info"));
+    if (super_cmd)
+      cset= super_cmd->get_subcommands();
+    else {
+      cset= new cl_cmdset();
+      cset->init();
+    }
+    if (!super_cmd) {
+    cmdset->add(cmd= new cl_super_cmd("info", 0, cset));
     cmd->init();
-    cset->add(cmd= new cl_gui_stop_cmd("stop", 0));
-    cmd->init();
-  }
-  cmdset->add(cmd= new cl_super_cmd("gui", 0, cset));
-  cmd->init();
-  set_gui_help();
+    set_info_help(cmd);
+    }
+    }
   */
 }
 

@@ -25,13 +25,15 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 02111-1307, USA. */
 /*@1@*/
 
-#include "ddconfig.h"
+//#include "ddconfig.h"
 
+#include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include "i_string.h"
+#include <string.h>
+//#include "i_string.h"
 
-#include "stypes.h"
+//#include "stypes.h"
 #include "globals.h"
 
 #include "hwcl.h"
@@ -46,7 +48,7 @@ cl_hw::cl_hw(class cl_uc *auc, enum hw_cath cath, int aid, const char *aid_strin
 {
   flags= HWF_INSIDE;
   uc= auc;
-  cathegory= cath;
+  category= cath;
   id= aid;
   if (aid_string &&
       *aid_string)
@@ -61,11 +63,12 @@ cl_hw::cl_hw(class cl_uc *auc, enum hw_cath cath, int aid, const char *aid_strin
   free(s);
   cfg= 0;
   io= 0;
+  active= false;
 }
 
 cl_hw::~cl_hw(void)
 {
-  free((void*)id_string);
+  free(const_cast<char *>(id_string));
   delete partners;
 }
 
@@ -74,23 +77,28 @@ cl_hw::init(void)
 {
   chars n(id_string);
   char s[100];
-  int i;
+  t_addr a;
 
   on= true;
   
   snprintf(s, 99, "%d", id);
   n+= '_';
   n+= s;
-  n+= cchars("_cfg");
+  n+= "_cfg";
 
-  cfg= new cl_address_space(n, 0, cfg_size(), sizeof(t_mem)*8);
-  cfg->init();
-  cfg->hidden= true;
-  uc->address_spaces->add(cfg);
-
-  for (i= 0; i < cfg_size(); i++)
+  if (cfg_size())
     {
-      cfg->register_hw(i, this, false);
+      cfg= new cl_address_space(n, 0, cfg_size(), sizeof(t_mem)*8);
+      cfg->init();
+      cfg->hidden= true;
+      uc->address_spaces->add(cfg);
+
+      for (a= 0; a < cfg_size(); a++)
+        {
+	  class cl_memory_cell *c= cfg->get_cell(a);
+	  c->decode(&(c->def_data));
+          cfg->register_hw(a, this, false);
+        }
     }
 
   cache_run= -1;
@@ -144,7 +152,7 @@ bool
 cl_hw::conf(class cl_memory_cell *cell, t_mem *val)
 {
   t_addr a;
-  if (cfg->is_owned(cell, &a))
+  if (cfg && cfg->is_owned(cell, &a))
     {
       conf_op(cell, a, val);
       if (val)
@@ -158,6 +166,14 @@ t_mem
 cl_hw::conf_op(cl_memory_cell *cell, t_addr addr, t_mem *val)
 {
   return cell->get();
+}
+
+class cl_memory_cell *
+cl_hw::cfg_cell(t_addr addr)
+{
+  if (addr >= cfg_size())
+    return 0;
+  return cfg->get_cell(addr);
 }
 
 void
@@ -184,10 +200,10 @@ cl_hw::cfg_read(t_addr addr)
   return cfg->read(addr);
 }
 
-char *
+const char *
 cl_hw::cfg_help(t_addr addr)
 {
-  return (char*)"N/A";
+  return "N/A";
 }
 
 void
@@ -204,6 +220,27 @@ cl_hw::register_cell(class cl_address_space *mem, t_addr addr)
   else
     printf("regcell JAJ no mem\n");
   return mem->get_cell(addr);
+}
+
+class cl_memory_cell *
+cl_hw::register_cell(class cl_address_space *mem, t_addr addr,
+		     chars vname, chars vdesc)
+{
+  if (mem)
+    mem->register_hw(addr, this, false);
+  else
+    printf("regcell JAJ no mem\n");
+  class cl_memory_cell *c= mem->get_cell(addr);
+  if (c)
+    {
+      if (vname.nempty())
+	{
+	  class cl_cvar *v;
+	  uc->vars->add(v= new cl_var(vname, mem, addr, vdesc, c->get_width() - 1, 0));
+	  v->init();
+	}
+    }
+  return c;
 }
 
 class cl_memory_cell *
@@ -403,10 +440,8 @@ cl_hw::handle_input(int c)
 }
 
 void
-cl_hw::refresh_display(bool force)
+cl_hw::draw_state_time(bool force)
 {
-  if (!io)
-    return ;
   int n= uc->sim->state & SIM_GO;
   if ((n != cache_run) ||
       force)
@@ -418,7 +453,7 @@ cl_hw::refresh_display(bool force)
 	io->dd_cprintf("ui_stop", "%s", "Stop");
       cache_run= n;
     }
-  unsigned int t= (unsigned int)(uc->get_rtime()) * 500;
+  unsigned int t= (unsigned int)(uc->ticks->get_rtime()) * 1000;
   if ((t != cache_time) ||
       force)
     {
@@ -428,6 +463,20 @@ cl_hw::refresh_display(bool force)
 	io->dd_printf("                ");
       cache_time= t;
     }
+}
+
+void
+cl_hw::refresh_display(bool force)
+{
+  if (!io)
+    return ;
+
+  io->tu_hide();
+  io->tu_go(1,4);
+  io->dd_color("answer");
+  print_info(io);
+  draw_state_time(force);
+  io->tu_show();
 }
 
 void
@@ -451,7 +500,12 @@ cl_hw::draw_display(void)
   io->dd_cprintf("ui_label", "Time: ");
   io->tu_go(66,2);
   chars s("", "%s[%d]", id_string, id);
-  io->dd_cprintf("ui_title", "%-13s", (char*)s);
+  io->dd_cprintf("ui_title", "%-13s", s.c_str());
+
+  io->tu_go(1,3);
+  io->dd_printf("\033[2K"); // entire line
+  io->dd_printf("\033[0J"); // from cursor to end of screen
+  io->dd_printf("\n");
 }
 
 class cl_hw *
@@ -467,7 +521,7 @@ void
 cl_hw::print_info(class cl_console_base *con)
 {
   con->dd_printf("%s[%d]\n", id_string, id);
-  print_cfg_info(con);
+  //print_cfg_info(con);
 }
 
 void
@@ -475,11 +529,11 @@ cl_hw::print_cfg_info(class cl_console_base *con)
 {
   t_mem v;
   t_addr a, s, e;
-  con->dd_printf("Configuration memory of %s\n", get_name());
   if (cfg)
-    {      
+    {
+      con->dd_printf("Configuration memory of %s\n", get_name());
       s= cfg->get_start_address();
-      e= s + cfg->get_size();
+      e= s + cfg->get_size()-1;
       for (a= s; a <= e; a++)
 	{
 	  v= cfg->read(a);
@@ -571,9 +625,9 @@ cl_partner_hw::cl_partner_hw(class cl_uc *auc, enum hw_cath cath, int aid):
   cl_base()
 {
   uc= auc;
-  cathegory= cath;
+  category= cath;
   id= aid;
-  partner= uc->get_hw(cathegory, id, 0);
+  partner= uc->get_hw(category, id, 0);
 }
 
 class cl_hw *
@@ -585,7 +639,7 @@ cl_partner_hw::get_partner(void)
 void
 cl_partner_hw::refresh(void)
 {
-  class cl_hw *hw= uc->get_hw(cathegory, id, 0);
+  class cl_hw *hw= uc->get_hw(category, id, 0);
 
   if (!hw)
     return;
@@ -608,7 +662,7 @@ cl_partner_hw::refresh(class cl_hw *new_hw)
 {
   if (!new_hw)
     return;
-  if (cathegory == new_hw->cathegory &&
+  if (category == new_hw->category &&
       id == new_hw->id)
     {
       if (partner)
