@@ -1,10 +1,10 @@
-sdcc (4.2.0+dfsg-1) UNRELEASED; urgency=medium
+sdcc (4.2.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release (Closes: #1006922)
     * Update spelling correction patch
     * Add lintian override for no-code-sections in target libs
 
- -- Jonathan McDowell <noodles@earth.li>  Mon, 28 Nov 2022 09:33:39 +0000
+ -- Jonathan McDowell <noodles@earth.li>  Wed, 30 Nov 2022 22:06:14 +0000
 
 sdcc (4.0.0+dfsg-2) unstable; urgency=medium
 
