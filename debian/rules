@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND = -Wall -pedantic
+export DEB_CXXFLAGS_MAINT_APPEND = -Wall -pedantic
+
+%:
+	dh $@ --without autoreconf
+
+override_dh_auto_configure:
+	# doesn't support --runstatedir option (added in compat v11)
+	DH_COMPAT=10 dh_auto_configure -- --disable-non-free
+
+override_dh_auto_build:
+	dh_auto_build
+	echo "Builing documentation"
+	LYX_USERDIR_23x=`pwd` dh_auto_build --sourcedir=doc
+
+override_dh_auto_install:
+	dh_auto_install
+	dh_auto_install --sourcedir=doc
+	find debian/tmp/usr/bin -name "sdld?*" -print0 | xargs -0 -n1 ln -sf sdld
+
+override_dh_strip:
+	dh_strip --exclude=usr/share/sdcc/lib

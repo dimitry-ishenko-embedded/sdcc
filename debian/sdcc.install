@@ -1,0 +1,17 @@
+usr/bin/as2gbmap
+usr/bin/makebin
+usr/bin/packihx
+usr/bin/sdar
+usr/bin/sdas*
+usr/bin/sdcc
+usr/bin/sdcpp
+usr/bin/sdld*
+usr/bin/sdnm
+usr/bin/sdobjcopy
+usr/bin/sdranlib
+
+usr/share/sdcc/include
+usr/share/sdcc/lib
+
+support/scripts/*.pl usr/share/sdcc/scripts
+support/scripts/*.py usr/share/sdcc/scripts

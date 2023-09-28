@@ -1,0 +1,4 @@
+usr/bin/sdcdb
+usr/bin/ucsim_*
+
+usr/bin/*.el usr/share/emacs/site-lisp/sdcc-ucsim

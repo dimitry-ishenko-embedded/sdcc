@@ -1,0 +1,46 @@
+Source: sdcc
+Section: electronics
+Priority: optional
+Maintainer: Dimitry Ishenko <dimitry.ishenko@gmail.com>
+Rules-Requires-Root: no
+Build-Depends:
+ bison,
+ debhelper-compat (= 13),
+ flex,
+ ghostscript,
+ gputils,
+ libboost-graph-dev,
+ librsvg2-bin,
+ lyx,
+ python3,
+ texlive-font-utils,
+ texlive-fonts-recommended,
+ texlive-latex-recommended,
+ texlive-plain-generic,
+ zlib1g-dev,
+Standards-Version: 4.6.2
+Homepage: https://sourceforge.net/projects/sdcc/
+Vcs-Browser: https://sourceforge.net/p/sdcc/code/HEAD/tree/
+
+Package: sdcc
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Description: Small Device C Compiler
+ SDCC is a retargettable, optimizing standard C (ANSI C89 / ISO C90, ISO C99,
+ ISO C11 / C17, ISO C2X) compiler that targets a growing list of architectures
+ STM8, MCS-51, DS390, HC08, S08, Z80, Z180, Rabbit, SM83, eZ80 in Z80 mode,
+ Z80N, TLCS-90, Padauk PDK14 and PDK15 microprocessors. There also is an
+ incomplete support for the Microchip PIC16 and PIC18 and the Padauk PDK13 and
+ MOS 6502.
+
+Package: sdcc-ucsim
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Suggests: sdcc
+Description: Software simulator for microcontrollers
+ µCsim can be used to simulate microcontrollers. It supports MCS51 family, AVR
+ core, Z80, HC08, ST7, STM8, TLCS90, XA51 and Padauk.
