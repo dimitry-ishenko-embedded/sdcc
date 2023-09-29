@@ -1,0 +1,125 @@
+From dcff84719fbe5858f624bf472a7fdc757feadcc9 Mon Sep 17 00:00:00 2001
+From: Dimitry Ishenko <dimitry.ishenko@gmail.com>
+Date: Fri, 25 Aug 2023 23:00:54 -0400
+Subject: Back-port implementation of LDP from asrab 5.40
+
+---
+ sdas/asrab/rab.h    |  2 +-
+ sdas/asrab/rabmch.c | 75 +++++++++++++++++++++++++++++++++++++++++++++
+ sdas/asrab/rabpst.c |  1 +
+ 3 files changed, 77 insertions(+), 1 deletion(-)
+
+diff --git a/sdas/asrab/rab.h b/sdas/asrab/rab.h
+index 9d6d1e96..d4b2c902 100644
+--- a/sdas/asrab/rab.h
++++ b/sdas/asrab/rab.h
+@@ -202,7 +202,7 @@
+ #define X_LJP                97
+ #define X_LCALL              98
+ #define X_BOOL               99
+-
++#define X_LDP               100
+ #define X_R3K_MODE          101
+ #define R3K_INH1            102
+ #define R3K_INH2            103
+diff --git a/sdas/asrab/rabmch.c b/sdas/asrab/rabmch.c
+index 81791c6c..53450f0e 100644
+--- a/sdas/asrab/rabmch.c
++++ b/sdas/asrab/rabmch.c
+@@ -1084,6 +1084,81 @@ VOID  machine(struct mne * mp)
+                 xerr('a', "Invalid Addressing Mode.");
+                 break;
+ 
++        case X_LDP:
++                t1 = addr(&e1);
++                v1 = (int) e1.e_addr;
++                comma(1);
++                t2 = addr(&e2);
++                v2 = (int) e2.e_addr;
++                /* LDP (mn), HL|IX|IY */
++                if ((t1 == S_INDM) && (t2 == S_R16)) {
++                        if ((v2 != HL) && (v2 != IX) && (v2 != IY)) {
++                                xerr('a', "Second argument: must be HL, IX, or IY.");
++                                break;
++                        }
++                        if (v2 == HL) {
++                                outab(0xED);
++                        } else {
++                                gixiy(v2);
++                        }
++                        outab(op | 0x01);
++                        outrw(&e1, 0);
++                        break;
++                }
++                /* LDP HL|IX|IY, (mn) */
++                if ((t1 == S_R16) && (t2 == S_INDM)) {
++                        if ((v1 != HL) && (v1 != IX) && (v1 != IY)) {
++                                xerr('a', "First argument: must be HL, IX, or IY.");
++                                break;
++                        }
++                        if (v1 == HL) {
++                                outab(0xED);
++                        } else {
++                                gixiy(v1);
++                        }
++                        outab(op | 0x09);
++                        outrw(&e2, 0);
++                        break;
++                }
++                /* LDP (HL|IX|IY), HL */
++                if ((t2 == S_R16) && (v2 == HL)) {
++                        if ((t1 != S_IDHL) && (t1 != S_IDIX) && (t1 != S_IDIY)) {
++                                xerr('a', "First argument: must be (HL), (IX), or (IY).");
++                                break;
++                        }
++                        if ((e1.e_base.e_ap != NULL) || (v1 != 0)) {
++                                xerr('a', "First argument: (HL+D, (IX+D), and (IY+D) are invalid.");
++                                break;
++                        }
++                        if (t1 == S_IDHL) {
++                                outab(0xED);
++                        } else {
++                                gixiy(t1);
++                        }
++                        outab(op);
++                        break;
++                }
++                /* LDP HL, (HL|IX|IY) */
++                if ((t1 == S_R16) && (v1 == HL)) {
++                        if ((t2 != S_IDHL) && (t2 != S_IDIX) && (t2 != S_IDIY)) {
++                                xerr('a', "Second argument: must be (HL), (IX), or (IY).");
++                                break;
++                        }
++                        if ((e2.e_base.e_ap != NULL) || (v2 != 0)) {
++                                xerr('a', "Second argument: (HL+D, (IX+D), and (IY+D) are invalid.");
++                                break;
++                        }
++                        if (t2 == S_IDHL) {
++                                outab(0xED);
++                        } else {
++                                gixiy(t2);
++                        }
++                        outab(op | 0x08);
++                        break;
++                }
++                xerr('a', "Invalid Addressing Mode.");
++                break;
++
+         case R3K_INH1:
+                 if (!(r3k_mode || r4k_mode))
+                         xerr('o', "A Rabbit 3000/4000 Instruction.");
+diff --git a/sdas/asrab/rabpst.c b/sdas/asrab/rabpst.c
+index ddab0d57..1d7da49f 100644
+--- a/sdas/asrab/rabpst.c
++++ b/sdas/asrab/rabpst.c
+@@ -286,6 +286,7 @@ struct  mne     mne[] = {
+     {   NULL,   "lcall",        X_LCALL,        0,      0xCF    },
+     {   NULL,   "lret",         S_INH2,         0,      0x45    },
+     {   NULL,   "bool",         X_BOOL,         0,      0xCC    },
++    {   NULL,   "ldp",          X_LDP,          0,      0x64    },
+     {   NULL,   "syscall",      R4K_INH2,       0,      0x75    },
+     {   NULL,   "sysret",       R4K_INH2,       0,      0x83    },
+     {   NULL,   "mulu",         X_R4K_MULU,     S_EOL,  0xA7    }
+-- 
+2.39.2
+
