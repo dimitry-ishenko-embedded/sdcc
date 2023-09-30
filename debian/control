@@ -27,6 +27,8 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
+Replaces: sdcc-libraries (<< ${source:Version})
+Breaks: sdcc-libraries (<< ${source:Version})
 Description: Small Device C Compiler
  SDCC is a retargettable, optimizing standard C (ANSI C89 / ISO C90, ISO C99,
  ISO C11 / C17, ISO C2X) compiler that targets a growing list of architectures
