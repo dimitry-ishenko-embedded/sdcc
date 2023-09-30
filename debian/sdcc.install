@@ -10,8 +10,9 @@ usr/bin/sdnm
 usr/bin/sdobjcopy
 usr/bin/sdranlib
 
+usr/lib/${DEB_HOST_MULTIARCH}/sdcc/*/*/cc1 usr/bin
+
 usr/share/sdcc/include
 usr/share/sdcc/lib
 
-support/scripts/*.pl usr/share/sdcc/scripts
-support/scripts/*.py usr/share/sdcc/scripts
+support/scripts/*.pl support/scripts/*.py usr/share/sdcc/scripts
