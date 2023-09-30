@@ -1,3 +1,10 @@
+sdcc (4.3.0-2) unstable; urgency=medium
+
+  * Prevent sdcc-libraries from being installed
+  * Install cc1 needed for sdcpp
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Sat, 30 Sep 2023 14:02:07 -0400
+
 sdcc (4.3.0-1) unstable; urgency=medium
 
   * New upstream version 4.3.0
