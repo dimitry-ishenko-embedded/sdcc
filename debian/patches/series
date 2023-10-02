@@ -2,3 +2,4 @@
 0002-Add-support-for-alternate-registers.patch
 0003-Back-port-implementation-of-LDP-from-asrab-5.4.patch
 0004-Fix-compilation-Werror-format-security.patch
+0005-sdas-Increase-address-length-to-24-bits.patch
