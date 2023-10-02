@@ -1,3 +1,10 @@
+sdcc (4.3.0-3) unstable; urgency=medium
+
+  * Add watch file
+  * Patch sdasrab to use 24 bit math
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Mon, 02 Oct 2023 15:34:00 -0400
+
 sdcc (4.3.0-2) unstable; urgency=medium
 
   * Prevent sdcc-libraries from being installed
