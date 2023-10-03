@@ -1,3 +1,9 @@
+sdcc (4.3.0-4) unstable; urgency=medium
+
+  * Patch sddc to generate correct ISR return instruction
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Tue, 03 Oct 2023 17:09:01 -0400
+
 sdcc (4.3.0-3) unstable; urgency=medium
 
   * Add watch file
