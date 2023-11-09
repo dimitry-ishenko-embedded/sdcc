@@ -1,1 +1,2 @@
 0001-Back-port-error-messages-from-asrab-5.40.patch
+0002-Replace-crt0.s-for-the-Rabbit-targets.patch
