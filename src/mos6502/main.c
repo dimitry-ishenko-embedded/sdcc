@@ -187,10 +187,10 @@ m6502_setDefaultOptions (void)
 //  options.intlong_rent = 1;
 //  options.float_rent = 1;
 //  options.noRegParams = 0;
-  options.code_loc = 0x200;
-  options.data_loc = 0x20;	/* zero page */
-  options.xdata_loc = 0x0;      /* 0 means immediately following data */
-  options.stack_loc = 0x1ff;
+  options.code_loc = 0x8000;
+  options.data_loc = 0x0001;    /* Zero page, We can't use the byte at address zero in C, since NULL pointers have special meaning */
+  options.xdata_loc = 0x0200;   /* immediately following stack */
+  options.stack_loc = 0x01ff;
 
   options.omitFramePtr = 1;     /* no frame pointer (we use SP */
                                 /* offsets instead)            */
@@ -208,19 +208,29 @@ m6502_getRegName (const struct reg_info *reg)
 static void
 m6502_genAssemblerPreamble (FILE * of)
 {
-  symbol *mainExists=newSymbol("main", 0);
-  mainExists->block=0;
+  fprintf(of, ";; Ordering of segments for the linker.\n");
+  tfprintf (of, "\t!area\n", DATA_NAME);
+  tfprintf (of, "\t!area\n", OVERLAY_NAME);
+
+  tfprintf (of, "\t!area\n", "_DATA");
+  tfprintf (of, "\t!area\n", XIDATA_NAME);
+  tfprintf (of, "\t!area\n", XDATA_NAME);
+
+  tfprintf (of, "\t!area\n", HOME_NAME);
+  tfprintf (of, "\t!area\n", STATIC_NAME);
+  tfprintf (of, "\t!area\n", "GSFINAL");
+  tfprintf (of, "\t!area\n", CODE_NAME);
+  tfprintf (of, "\t!area\n", CONST_NAME);
+  tfprintf (of, "\t!area\n", XINIT_NAME);
+
+#if 0
+  symbol *mainExists = newSymbol("main", 0);
+  mainExists->block = 0;
 
   if ((mainExists=findSymWithLevel(SymbolTab, mainExists)))
     {
-      // global variables in zero page
-      fprintf (of, "\t.globl __TEMP\n");
-      fprintf (of, "\t.globl __DPTR\n");
-      
-      fprintf (of, "\t.area %s\n",port->mem.data_name);
-      fprintf (of, "__TEMP:\t.ds %d\n", NUM_TEMP_REGS);
-      fprintf (of, "__DPTR:\t.ds 2\n");
     }
+#endif
 }
 
 static void
@@ -236,27 +246,19 @@ m6502_genAssemblerEnd (FILE * of)
 static int
 m6502_genIVT (struct dbuf_s * oBuf, symbol ** interrupts, int maxInterrupts)
 {
-  int i;
-
   dbuf_printf (oBuf, "\t.area\tCODEIVT (ABS)\n");
-  dbuf_printf (oBuf, "\t.org\t0x%04x\n",
-    (0xfffe - 2 - (maxInterrupts * 2)));
+  dbuf_printf (oBuf, "\t.org\t0xFFFA\n");
 
-  for (i=maxInterrupts;i>1;i--)
-    {
-      if (interrupts[i])
-        dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[i]->rname);
-      else
-        dbuf_printf (oBuf, "\t.dw\t0xffff\n");
-    }
+  wassertl(maxInterrupts <= 2, "Too many interrupt vectors");
+  if (maxInterrupts > 1 && interrupts[1])
+    dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[1]->rname);
+  else
+    dbuf_printf (oBuf, "\t.dw\t0xffff\n");
   dbuf_printf (oBuf, "\t.dw\t%s", "__sdcc_gs_init_startup\n");
-  if (maxInterrupts > 0)
-    {
-      if (interrupts[0])
-        dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[0]->rname);
-      else
-        dbuf_printf (oBuf, "\t.dw\t0xffff\n");
-    }
+  if (maxInterrupts > 0 && interrupts[0])
+    dbuf_printf (oBuf, "\t.dw\t%s\n", interrupts[0]->rname);
+  else
+    dbuf_printf (oBuf, "\t.dw\t0xffff\n");
 
   return true;
 }
@@ -296,19 +298,22 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
 
 /* Indicate which extended bit operations this port supports */
 static bool
-hasExtBitOp (int op, int size)
+hasExtBitOp (int op, sym_link *left, int right)
 {
-  if (op == RRC
-      || op == RLC
-      //|| (op == SWAP && size <= 2)
-      // TODO?
-      //|| op == GETABIT
-      || op == GETBYTE
-      || op == GETWORD
-     )
-    return true;
-  else
-    return false;
+  switch (op)
+    {
+    case GETBYTE:
+    case GETWORD:
+      return true;
+    case ROT:
+      {
+        unsigned int lbits = bitsForType (left);
+        if (right % lbits  == 1 || right % lbits == lbits - 1)
+          return (true);
+      }
+      return false;
+    }
+  return false;
 }
 
 /* Indicate the expense of an access to an output storage class */
@@ -620,11 +625,12 @@ get_model (void)
     $2 is always the output file.
     $3 varies
     $l is the list of extra options that should be there somewhere...
+    $L is the list of extra options that should be passed on the command line...
     MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] =
 {
-  "sdld6808", "-nf", "$1", NULL
+  "sdld6808", "-nf", "$1", "$L", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
@@ -642,7 +648,7 @@ PORT mos6502_port =
 {
   TARGET_ID_MOS6502,
   "mos6502",
-  "MOS 6502",                       /* Target name */
+  "MOS 6502",                   /* Target name */
   NULL,                         /* Processor name */
   {
     glue,
@@ -667,7 +673,7 @@ PORT mos6502_port =
     ".rel",                     /* object file extension */
     1,                          /* need linker script */
     _crt,                       /* crt */
-    _libs_m6502,                 /* libs */
+    _libs_m6502,                /* libs */
   },
   {                             /* Peephole optimizer */
     _m6502_defaultRules,
@@ -691,7 +697,7 @@ PORT mos6502_port =
     64,                         /* bit-precise integer types up to _BitInt (64) */
   },
   /* tags for generic pointers */
-  { 0x00, 0x00, 0x00, 0x00 },           /* far, near, xstack, code */
+  { 0x00, 0x00, 0x00, 0x00 },   /* far, near, xstack, code */
   {
     "XSEG",               /* xstack_name */
     "STACK",              /* istack_name */
@@ -732,8 +738,9 @@ PORT mos6502_port =
     1,                    /* sp points to next free stack location */
   },
   {
-    5,          /* shifts up tp 5 use support routines */
-    false       /* do not use support routine for int x int -> long multiplication */
+    5,                    /* shifts up to 5 use support routines */
+    false,                /* do not use support routine for int x int -> long multiplication */
+    false,                /* do not use support routine for unsigned long x unsigned char -> unsigned long long multiplication */
   },
   {
     m6502_emitDebuggerSymbol,
@@ -769,9 +776,9 @@ PORT mos6502_port =
   NULL,
   m6502_keywords,
   m6502_genAssemblerPreamble,
-  m6502_genAssemblerEnd,        /* no genAssemblerEnd */
+  m6502_genAssemblerEnd,        /* genAssemblerEnd */
   m6502_genIVT,
-  m6502_genXINIT,               /* no genXINIT code */
+  m6502_genXINIT,               /* genXINIT code */
   0,                            /* genInitStartup */
   m6502_reset_regparm,
   m6502_regparm,
@@ -802,14 +809,14 @@ PORT mos65c02_port =
 {
   TARGET_ID_MOS65C02,
   "mos65c02",
-  "WDC 65C02",                        /* Target name */
+  "WDC 65C02",                  /* Target name */
   NULL,                         /* Processor name */
   {
     glue,
     false,                      /* Emit glue around main */
     MODEL_SMALL | MODEL_LARGE,
     MODEL_LARGE,
-    0,                       /* model == target */
+    0,                          /* model == target */
   },
   {
     _asmCmd,
@@ -827,7 +834,7 @@ PORT mos65c02_port =
     ".rel",
     1,
     NULL,                       /* crt */
-    _libs_m65c02,                  /* libs */
+    _libs_m65c02,               /* libs */
   },
   {                             /* Peephole optimizer */
     _m65c02_defaultRules,
@@ -891,7 +898,9 @@ PORT mos65c02_port =
     1           /* sp is offset by 1 from last item pushed */
   },
   {
-    5, false
+    5,                    // Shifts up to 5 use support routines.
+    false,                // Do not use support routine for int x int -> long multiplication.
+    false,                // Do not use support routine for unsigned long x unsigned char -> unsigned long long multiplication.
   },
   {
     m6502_emitDebuggerSymbol,
@@ -927,7 +936,7 @@ PORT mos65c02_port =
   NULL,
   m6502_keywords,
   m6502_genAssemblerPreamble,
-  m6502_genAssemblerEnd,       /* genAssemblerEnd */
+  m6502_genAssemblerEnd,        /* genAssemblerEnd */
   m6502_genIVT,
   m6502_genXINIT,
   0,                            /* genInitStartup */
