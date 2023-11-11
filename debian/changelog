@@ -1,3 +1,10 @@
+sdcc (4.3.6-1) unstable; urgency=medium
+
+  * Automate update process from SVN
+  * Update source from upstream/4.3.6
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Fri, 10 Nov 2023 21:21:27 -0500
+
 sdcc (4.3.5-1) unstable; urgency=medium
 
   * Update source from upstream/4.3.5
