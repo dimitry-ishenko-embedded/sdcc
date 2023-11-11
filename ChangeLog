@@ -1,3 +1,33 @@
+2023-11-10 Philipp Klaus Krause <philipp@colecovision.eu>
+
+	* .version,
+	  doc/sdccman.lyx,
+	  src/mcs51/gen.c,
+	  src/mcs51/main.c:
+	  Remove --parms-in-bank1 support in mcs51 port.
+
+2023-11-00 Felix Salfelder <felix AT salfelder.org>
+
+	* support/cpp/gcc/cc1_dummies.cc:
+	  Rectify dummy prototype. Fixes bug #3654.
+
+2023-11-09 Philipp Klaus Krause <philipp@colecovision.eu>
+
+	* src/SDCCmain.c:
+	  Fix --std-c2x.
+	* src/SDCCralloc.hpp:
+	  Fix an UB issue in register allocation affecting z80 (and related).
+	* src/mcs51/ralloc.h,
+	  src/mcs51/ralloc.c:
+	  Destroy the xreg relics.
+
+2023-11-08 Felix Salfelder <felix AT salfelder.org>
+
+	* support/cpp/gcc/diagnostic-color.cc,
+	  support/cpp/gcc/prefix.cc:
+	  attempt to fix bug #3669, cf
+	  https://gcc.gnu.org/pipermail/gcc-patches/2023-January/609526.html
+
 2023-11-07 Philipp Klaus Krause <philipp@colecovision.eu>
 
 	* .version,
