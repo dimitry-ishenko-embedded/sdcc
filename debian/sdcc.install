@@ -1,3 +1,5 @@
+#!/usr/bin/dh-exec
+
 usr/bin/as2gbmap
 usr/bin/makebin
 usr/bin/packihx
