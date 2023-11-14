@@ -1,3 +1,10 @@
+sdcc (4.3.6-2) unstable; urgency=medium
+
+  * Change source format to native
+  * Support Ubuntu 20.04
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Mon, 13 Nov 2023 19:04:04 -0500
+
 sdcc (4.3.6-1) unstable; urgency=medium
 
   * Automate update process from SVN
