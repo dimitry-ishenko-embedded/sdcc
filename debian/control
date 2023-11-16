@@ -16,6 +16,7 @@ Build-Depends:
  python3,
  texlive-font-utils,
  texlive-fonts-recommended,
+ texlive-latex-extra,
  texlive-latex-recommended,
  texlive-plain-generic,
  zlib1g-dev,
