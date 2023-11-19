@@ -1,3 +1,10 @@
+sdcc (4.3.6-4) unstable; urgency=medium
+
+  * Update workflows
+  * Revert "Change source format to native"
+
+ -- Dimitry Ishenko <dimitry.ishenko@gmail.com>  Sun, 19 Nov 2023 16:45:56 -0500
+
 sdcc (4.3.6-3) unstable; urgency=medium
 
   * Fix compilation on focal
