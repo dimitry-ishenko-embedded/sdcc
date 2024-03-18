@@ -3,6 +3,7 @@ usr/bin/makebin
 usr/bin/packihx
 usr/bin/sdar
 usr/bin/sdas390
+usr/bin/sdas6500
 usr/bin/sdas6808
 usr/bin/sdas8051
 usr/bin/sdasgb

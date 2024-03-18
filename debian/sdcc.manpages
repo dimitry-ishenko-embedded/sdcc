@@ -4,6 +4,7 @@ debian/manpages/makebin.1
 debian/manpages/packihx.1
 debian/manpages/sdar.1
 debian/manpages/sdas390.1
+debian/manpages/sdas6500.1
 debian/manpages/sdas6808.1
 debian/manpages/sdas8051.1
 debian/manpages/sdasgb.1
