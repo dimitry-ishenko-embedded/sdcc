@@ -6,6 +6,8 @@ sdcc (4.4.0+dfsg-1) UNRELEASED; urgency=medium
   * Add missing sdas6500 (Closes: #1057130)
   * Move to debhelper compat level 13
   * Switch from libncurses5-dev to libncurses-dev build-dep
+  * Add lintian override for missing-source false positive
+    (sim/ucsim/doc/cmd_general.html)
 
  -- Jonathan McDowell <noodles@earth.li>  Mon, 18 Mar 2024 10:54:34 +0000
 
