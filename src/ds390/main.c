@@ -118,6 +118,9 @@ _ds390_regparm (sym_link * l, bool reentrant)
   if (IFFUNC_HASVARARGS (regParmFuncType))
     return 0;
 
+  if (IS_STRUCT (l))
+    return 0;
+
     if (IS_SPEC(l) && (SPEC_NOUN(l) == V_BIT))
         return 0;
     if (options.parms_in_bank1 == 0) {
@@ -377,7 +380,7 @@ _ds390_genInitStartup (FILE *of)
       fprintf (of, "\tmov\tsp,#__start__stack - 1\n");     /* MOF */
     }
 
-  fprintf (of, "\tlcall\t__sdcc_external_startup\n");
+  fprintf (of, "\tlcall\t___sdcc_external_startup\n");
   fprintf (of, "\tmov\ta,dpl\n");
   fprintf (of, "\tjz\t__sdcc_init_data\n");
   fprintf (of, "\tljmp\t__sdcc_program_startup\n");
@@ -473,23 +476,33 @@ static bool cseCostEstimation (iCode *ic, iCode *pdic)
 
 bool _ds390_nativeMulCheck(iCode *ic, sym_link *left, sym_link *right)
 {
-    return
-      getSize (left) == 1 && getSize (right) == 1 ||
-      options.useAccelerator && getSize (left) == 2 && getSize (right) == 2;
+  if (IS_BITINT (OP_SYM_TYPE (IC_RESULT(ic))) && SPEC_BITINTWIDTH (OP_SYM_TYPE (IC_RESULT(ic))) % 8)
+    return false;
+
+  return
+    getSize (left) == 1 && getSize (right) == 1 ||
+    options.useAccelerator && getSize (left) == 2 && getSize (right) == 2;
 }
 
 /* Indicate which extended bit operations this port supports */
 static bool
-hasExtBitOp (int op, int size)
+hasExtBitOp (int op, sym_link *left, int right)
 {
-  if (op == RRC
-      || op == RLC
-      || op == GETABIT
-      || (op == SWAP && size <= 2)
-     )
-    return TRUE;
-  else
-    return FALSE;
+  switch (op)
+    {
+    case GETABIT:
+      return true;
+    case ROT:
+      {
+        unsigned int lbits = bitsForType (left);
+        if (getSize (left) <= 2 && (right % lbits  == 1 || right % lbits == lbits - 1))
+          return true;
+        if (getSize (left) <= 2 && lbits == right * 2)
+          return true;
+      }
+      return false;
+    }
+  return false;
 }
 
 /* Indicate the expense of an access to an output storage class */
@@ -972,11 +985,12 @@ get_model (void)
     $2 is always the output file.
     $3 varies
     $l is the list of extra options that should be there somewhere...
+    $L is the list of extra options that should be passed on the command line...
     MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] =
 {
-  "sdld", "-nf", "$1", NULL
+  "sdld", "-nf", "$1", "$L", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
@@ -1032,8 +1046,8 @@ PORT ds390_port =
     NULL,
     NULL,
   },
-  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, bit, float */
-  { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4 },
+  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, _BitInt (in bits) */
+  { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4, 64 },
 
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },           /* far, near, xstack, code */
@@ -1063,6 +1077,7 @@ PORT ds390_port =
     NULL,
     NULL,
     1,
+    true,                       // unqualified pointer can point to __sfr: TODO: CHECK IF THIS IS ACTUALLY SUPPORTED. Set to true to emulate behaviour of rpevious version of sdcc for now.
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
@@ -1236,13 +1251,13 @@ static void _tininative_do_assemble (set *asmOptions)
         "a390","$1.mpp",NULL
     };
 
-    buf = buildCmdLine(macroCmd, dstFileName, NULL, NULL, NULL);
+    buf = buildCmdLine(macroCmd, dstFileName, NULL, NULL, NULL, NULL);
     if (sdcc_system(buf)) {
         Safe_free (buf);
         exit(1);
     }
     Safe_free (buf);
-    buf = buildCmdLine(a390Cmd, dstFileName, NULL, NULL, asmOptions);
+    buf = buildCmdLine(a390Cmd, dstFileName, NULL, NULL, asmOptions, NULL);
     if (sdcc_system(buf)) {
         Safe_free (buf);
         exit(1);
@@ -1372,8 +1387,8 @@ PORT tininative_port =
     NULL,
     NULL,
   },
-  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
-  { 1, 2, 2, 4, 8, 1, 3, 3, 3, 3, 1, 4 },
+  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, _BitInt (in bits) */
+  { 1, 2, 2, 4, 8, 1, 3, 3, 3, 3, 1, 4, 64 },
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },           /* far, near, xstack, code */
 
@@ -1402,13 +1417,14 @@ PORT tininative_port =
     NULL,
     NULL,
     1,
+    true,                       // unqualified pointer can point to __sfr: TODO: CHECK IF THIS IS ACTUALLY SUPPORTED. Set to true to emulate behaviour of rpevious version of sdcc for now.
     1                           // No fancy alignments supported.
   },
   { NULL, NULL },
   0,                            // ABI revision
   { +1, 1, 4, 1, 1, 0, 0 },
   /* ds390 has an 16 bit mul & div */
-  { -1, FALSE },
+  { -1, false, false },         /* Neither int x int -> long nor unsigned long x unsigned char -> unsigned long long multiplication support routine. */
   { ds390_emitDebuggerSymbol },
   {
     255/4,      /* maxCount */
@@ -1628,8 +1644,8 @@ PORT ds400_port =
     NULL,
     NULL,
   },
-  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float */
-  { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4 },
+  /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, _BitInt (in bits) */
+  { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4, 64 },
 
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },           /* far, near, xstack, code */
@@ -1658,12 +1674,14 @@ PORT ds400_port =
     NULL,                       // name of segment for copies of initialized variables in code space
     NULL,
     NULL,
+    1,
+    true,                       // unqualified pointer can point to __sfr: TODO: CHECK IF THIS IS ACTUALLY SUPPORTED. Set to true to emulate behaviour of rpevious version of sdcc for now.
     1
   },
   { _ds400_generateRomDataArea, _ds400_linkRomDataArea },
   0,                            // ABI revision
   { +1, 1, 4, 1, 1, 0, 0 },
-  { -1, FALSE },
+  { -1, false, false },         /* Neither int x int -> long nor unsigned long x unsigned char -> unsigned long long multiplication support routine. */
   { ds390_emitDebuggerSymbol },
   {
     255/4,      /* maxCount */

@@ -3568,7 +3568,7 @@ genEndFunction (iCode * ic)
           emitSKPNC;
           pic16_emitpcode (POC_INCF, pic16_popCopyReg (pic16_stackpnt_hi));
           pic16_emitpcode (POC_COMF, pic16_popCopyReg (&pic16_pc_wreg));        // WREG = - (WREG+1)!
-          pic16_emitpcode (POC_MOVFW, pic16_popCopyReg (pic16_stack_plusw));    // this holds a retrun value!
+          pic16_emitpcode (POC_MOVFW, pic16_popCopyReg (pic16_stack_plusw));    // this holds a return value!
         }
     }
 
@@ -4841,7 +4841,7 @@ mov2w_regOrLit (asmop * aop, unsigned long lit, int offset)
  *
  * This version leaves in sequences like
  * "B[CS]F STATUS,0; BTFS[CS] STATUS,0"
- * which should be optmized by the peephole
+ * which should be optimized by the peephole
  * optimizer - RN 2005-01-01 */
 static void
 genCmp (operand * left, operand * right, operand * result, iCode * ifx, int sign)
@@ -5109,7 +5109,7 @@ result_in_carry:
 
 correct_result_in_carry:
 
-  // assign result to variable (if neccessary)
+  // assign result to variable (if necessary)
   if (result && AOP_TYPE (result) != AOP_CRY)
     {
       //DEBUGpc ("assign result");
@@ -8859,6 +8859,23 @@ release:
   pic16_freeAsmop (result, NULL, ic, TRUE);
 }
 
+/*-----------------------------------------------------------------*/
+/* genRot - generates code for rotation                            */
+/*-----------------------------------------------------------------*/
+static void
+genRot (iCode *ic)
+{
+  operand *left = IC_LEFT (ic);
+  operand *right = IC_RIGHT (ic);
+  unsigned int lbits = bitsForType (operandType (left));
+  if (IS_OP_LITERAL (right) && operandLitValueUll (right) % lbits == 1)
+    genRLC (ic);
+  else if (IS_OP_LITERAL (right) && operandLitValueUll (right) % lbits ==  lbits - 1)
+    genRRC (ic);
+  else
+    wassertl (0, "Unsupported rotation.");
+}
+
 static void
 genLeftShift (iCode * ic)
 {
@@ -11130,7 +11147,7 @@ release:
 }
 
 /*-----------------------------------------------------------------*/
-/* genDjnz - generate decrement & jump if not zero instrucion      */
+/* genDjnz - generate decrement & jump if not zero instruction      */
 /*-----------------------------------------------------------------*/
 static int
 genDjnz (iCode * ic, iCode * ifx)
@@ -11450,16 +11467,12 @@ genpic16Code (iCode * lic)
           pic16_genInline (ic);
           break;
 
-        case RRC:
-          genRRC (ic);
-          break;
-
-        case RLC:
-          genRLC (ic);
-          break;
-
         case GETABIT:
           genGetABit (ic);
+          break;
+
+        case ROT:
+          genRot (ic);
           break;
 
         case LEFT_OP:

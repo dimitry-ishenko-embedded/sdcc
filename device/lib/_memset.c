@@ -3,6 +3,7 @@
 
    Copyright (C) 1999, Sandeep Dutta . sandeep.dutta@usa.net
    Copyright (C) 2020, Sergey Belyashov sergey.belyashov@gmail.com
+   Copyright (C) 2022, Sebastian 'basxto' Riedel
    mcs51 assembler by Frieder Ferlemann (2007)
 
    This library is free software; you can redistribute it and/or modify it
@@ -28,6 +29,7 @@
    might be covered by the GNU General Public License.
 -------------------------------------------------------------------------*/
 
+#include <stdlib.h>
 #include <string.h>
 
 #undef memset /* Avoid conflict with builtin memset() in Z80 and some related ports */
@@ -45,7 +47,8 @@ void *memset (void *s, int c, size_t n)
 #if !defined (_SDCC_NO_ASM_LIB_FUNCS) && (\
               defined (__SDCC_z80) ||\
               defined (__SDCC_z180) ||\
-              defined (__SDCC_z80n))
+              defined (__SDCC_z80n) ||\
+              defined (__SDCC_r800))
 #ifdef __SDCC_BROKEN_STRING_FUNCTIONS      
 #error Unimplemented broken string function
 #endif    
@@ -75,79 +78,60 @@ end:
     jp	(iy)
   __endasm;
 }
-#elif !defined (_SDCC_NO_ASM_LIB_FUNCS) && (\
-              defined (__SDCC_ez80_z80) ||\
-              defined (__SDCC_r2k) ||\
-              defined (__SDCC_z3ka))
-
-__naked
-{
-  (void)s;
-  (void)c;
-  (void)n;
-  __asm
-    pop   af
-    pop   hl
-#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
-    dec   sp
-#endif
-    pop   de
-    pop   bc
-    push  bc
-    push  de
-#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
-    inc   sp
-#endif
-    push  hl
-    push  af
-    ld    a, c
-    or    a, b
-    ret   Z
-#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
-    ld    (hl), d
-#else
-    ld    (hl), e
-#endif
-    dec   bc
-    ld    a, c
-    or    a, b
-    ret   Z
-    push  hl
-    ld    e, l
-    ld    d, h
-    inc   de
-    ldir
-    pop   hl
-    ret
-  __endasm;
-}
 #elif !defined (_SDCC_NO_ASM_LIB_FUNCS) && defined(__SDCC_sm83)
-#ifdef __SDCC_BROKEN_STRING_FUNCTIONS      
-#error Unimplemented broken string function
-#endif  
 __naked
 {
-	(void)s;
-	(void)c;
-	(void)n;
+	(void)s;//de
+	(void)c;//bc or for broken string function in a
+	(void)n;//stack+2, stack+3
 __asm
-	ld	a, c
-	ldhl	sp,	#2
-	ld	c, (hl)
-	inc	hl
+        ; Algorithm is Duff`s device
+	ldhl	sp,	#3
+__endasm;
+#ifdef __SDCC_BROKEN_STRING_FUNCTIONS
+__asm
 	ld	b, (hl)
+	dec	hl
+__endasm;
+#else
+__asm
+
+	ld	a, (hl-)
+	ld	b, a
+	ld	a, c
+__endasm;
+#endif  
+__asm
+	ld	c, (hl)
 	ld	l, e
 	ld	h, d
-	inc	c
+	;shift LSB to carry
+	srl	b
+	rr	c
+	jr nc, skip_one
+        ld	(hl+), a
+skip_one:
+	;n/2 in bc
+	;shift second LSB to carry
+	srl	b
+	rr	c
+        ;n/4 in bc
 	inc	b
-	jr	test
-loop:
+	inc	c
+	jr nc, test
+	jr	copy_two
+copy_four:
+        ld	(hl+), a
+	ld	(hl+), a
+copy_two:
+        ld	(hl+), a
 	ld	(hl+), a
 test:
 	dec	c
-	jr	NZ, loop
+	jr	NZ, copy_four
 	dec	b
-	jr	NZ, loop
+	jr	NZ, copy_four
+        ;restore dest
 	ld	c, e
 	ld	b, d
 	pop	hl

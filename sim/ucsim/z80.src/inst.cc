@@ -516,7 +516,7 @@ cl_z80::inst_dec(t_mem code)
       break;
     case 0x0B: // DEC BC
       --regs.BC;
-      tick(6);
+      tick(5);
       break;
     case 0x0D: // DEC C
       dec(regs.bc.l);
@@ -528,7 +528,7 @@ cl_z80::inst_dec(t_mem code)
       break;
     case 0x1B: // DEC DE
       --regs.DE;
-      tick(6);
+      tick(5);
       break;
     case 0x1D: // DEC E
       dec(regs.de.l);
@@ -540,7 +540,7 @@ cl_z80::inst_dec(t_mem code)
       break;
     case 0x2B: // DEC HL
       --regs.HL;
-      tick(6);
+      tick(5);
       break;
     case 0x2D: // DEC L
       dec(regs.hl.l);
@@ -690,12 +690,12 @@ cl_z80::inst_add(t_mem code)
       
     case 0x86: // ADD A,(HL)
       {
-	unsigned char utmp;
+        unsigned char utmp;
         utmp = get1(regs.HL);
         add_A_bytereg(utmp);
-	vc.rd++;
-	tick(6);
-	break;
+        vc.rd++;
+        tick(6);
+        break;
       }
       
     case 0x87: // ADD A,A
@@ -708,8 +708,8 @@ cl_z80::inst_add(t_mem code)
         unsigned char utmp1;
         utmp1 = fetch();
         add_A_bytereg(utmp1);
-	tick(6);
-	break;
+        tick(6);
+        break;
       }
       
     default:
@@ -740,7 +740,11 @@ cl_z80::inst_djnz(t_mem code)
 int
 cl_z80::inst_rra(t_mem code)
 {
-  rr_byte(regs.raf.A);
+  u8_t newc= (regs.raf.A & 1)?BIT_C:0;
+  u8_t orgc= (regs.raf.F & BIT_C)?0x80:0;
+  regs.raf.A= (regs.raf.A>>1)|orgc;  
+  regs.raf.F&= ~(BIT_N|BIT_H|BIT_C);
+  regs.raf.F|= newc;
   tick(3);
   return(resGO);
 }
@@ -748,7 +752,11 @@ cl_z80::inst_rra(t_mem code)
 int
 cl_z80::inst_rla(t_mem code)
 {
-  rl_byte(regs.raf.A);
+  u8_t orgc= (regs.raf.F&BIT_C)?1:0;
+  u8_t newc= (regs.raf.A&0x80)?BIT_C:0;
+  regs.raf.A= (regs.raf.A<<1)|orgc;
+  regs.raf.F&= ~(BIT_H|BIT_C|BIT_N);
+  regs.raf.F|= newc;
   tick(3);
   return(resGO);
 }
@@ -759,37 +767,34 @@ cl_z80::inst_jr(t_mem code)
   signed char j;
 
   j = fetch1();
+  tick(6);
   switch(code) {
     case 0x18: // JR dd
       PC += j;
-      tick(11);
+      tick(5);
     break;
     case 0x20: // JR NZ,dd
-      tick(6);
       if (!(regs.raf.F & BIT_Z)) {
         PC += j;
-	tick(5);
+        tick(5);
       }
     break;
     case 0x28: // JR Z,dd
-      tick(6);
       if ((regs.raf.F & BIT_Z)) {
         PC += j;
-	tick(5);
+        tick(5);
       }
     break;
     case 0x30: // JR NC,dd
-      tick(6);
       if (!(regs.raf.F & BIT_C)) {
         PC += j;
-	tick(5);
+        tick(5);
       }
     break;
     case 0x38: // JR C,dd
-      tick(6);
       if ((regs.raf.F & BIT_C)) {
         PC += j;
-	tick(5);
+        tick(5);
       }
     break;
     default:
@@ -1297,16 +1302,16 @@ cl_z80::inst_ret(t_mem code)
       tick(4);
       if (!(regs.raf.F & BIT_Z)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xC8: // RET Z
       tick(4);
       if ((regs.raf.F & BIT_Z)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xC9: // RET
@@ -1318,48 +1323,48 @@ cl_z80::inst_ret(t_mem code)
       tick(4);
       if (!(regs.raf.F & BIT_C)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xD8: // RET C
       tick(4);
       if ((regs.raf.F & BIT_C)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xE0: // RET PO
       tick(4);
       if (!(regs.raf.F & BIT_P)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xE8: // RET PE
       tick(4);
       if ((regs.raf.F & BIT_P)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xF0: // RET P
       tick(4);
       if (!(regs.raf.F & BIT_S)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     case 0xF8: // RET M
       tick(4);
       if ((regs.raf.F & BIT_S)) {
         pop2(PC);
-	vc.rd+= 2;
-	tick(6);
+        vc.rd+= 2;
+        tick(6);
       }
       break;
     default:
@@ -1379,8 +1384,8 @@ cl_z80::inst_call(t_mem code)
       if (!(regs.raf.F & BIT_Z)) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1390,8 +1395,8 @@ cl_z80::inst_call(t_mem code)
       if (regs.raf.F & BIT_Z) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1407,8 +1412,8 @@ cl_z80::inst_call(t_mem code)
       if (!(regs.raf.F & BIT_C)) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1418,8 +1423,8 @@ cl_z80::inst_call(t_mem code)
       if (regs.raf.F & BIT_C) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1429,8 +1434,8 @@ cl_z80::inst_call(t_mem code)
       if (!(regs.raf.F & BIT_P)) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1440,8 +1445,8 @@ cl_z80::inst_call(t_mem code)
       if (regs.raf.F & BIT_P) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1451,8 +1456,8 @@ cl_z80::inst_call(t_mem code)
       if (!(regs.raf.F & BIT_S)) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1462,8 +1467,8 @@ cl_z80::inst_call(t_mem code)
       if (regs.raf.F & BIT_S) {
         push2(PC+2);
         PC = fetch2();
-	vc.wr+= 2;
-	tick(7);
+        vc.wr+= 2;
+        tick(7);
       } else {
         fetch2();
       }
@@ -1739,6 +1744,8 @@ int
 cl_z80::inst_di(t_mem code)
 {
   /* disable interrupts */
+  IFF1= IFF2= false;
+  iblock= true;
   tick(3);
   return(resGO);
 }
@@ -1747,6 +1754,8 @@ int
 cl_z80::inst_ei(t_mem code)
 {
   /* enable interrupts */
+  IFF1= IFF2= true;
+  iblock= true;
   tick(3);
   return(resGO);
 }

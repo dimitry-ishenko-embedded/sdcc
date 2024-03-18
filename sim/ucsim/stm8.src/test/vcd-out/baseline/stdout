@@ -20,26 +20,23 @@ vcd[0] value change dump
   Simul time: 0.000000000000000 s
   Variables:
     Address           Symbol
+Configuration memory of vcd
+0x00 00000000 . Turn ticking of this peripheral on/off (bool, RW)
 
 # Run the initialization code and stop when we reach the
 # first test loop.
 break 0x800c
-Breakpoint 1 at 0x00800c: 
-0x0800c    <.loop$0>:
-0x0800c F  72 10 00 00    bset   0x0000 <loc1>,#0 (cond="")
+Breakpoint 1 at 0x00800c (cond="")
+0x0800c F? 72 10 00 00    bset   0x0000 <loc1>,#0                    
 run
 Simulation started, PC=0x008000
 
 Stop at 0x00800c: (104) Breakpoint
 V-IHINZC  Flags= 0x2a  42 *  A= 0x00   0 .
 0-101010  X= 0x0000   0 .    Y= 0x0000   0 .
-SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x1500
-
-0x0800c    <.loop$0>:
-0x0800c F  72 10 00 00    bset   0x0000 <loc1>,#0[0K
+SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x14ff
+0x0800c F? 72 10 00 00    bset   0x0000 <loc1>,#0                    
 F 0x00800c
-Simulated 8 ticks [ELIDED]
-Host usage: [ELIDED]
 
 # Set up a vcd to monitor the bit changes in loc1 and the value of loc2.
 set hw vcd output "out/test.vcd"
@@ -62,10 +59,10 @@ vcd[0] value change dump
   Paused:     no
   Mode:       output
   Time scale: 1 ns
-  Start time: 0.000004000000000 s
-  Last event: 0.000004000000000 s
+  Start time: 0.000000625000000 s
+  Last event: 0.000000625000000 s
   Pause time: 
-  Simul time: 0.000004000000000 s
+  Simul time: 0.000000625000000 s
   Variables:
     Address           Symbol
     rom[0x00000].0    loc1.0
@@ -77,6 +74,8 @@ vcd[0] value change dump
     rom[0x00000].6    loc1.6
     rom[0x00000].7    loc1.7
     rom[0x00001]      loc2
+Configuration memory of vcd
+0x00 00000000 . Turn ticking of this peripheral on/off (bool, RW)
 
 # Run the first loop and stop when we hit the breakpoint again.
 cont
@@ -85,13 +84,9 @@ Simulation started, PC=0x00800c
 Stop at 0x00800c: (104) Breakpoint
 V-IHINZC  Flags= 0x28  40 (  A= 0x00   0 .
 0-101000  X= 0x0000   0 .    Y= 0x0000   0 .
-SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x1500
-
-0x0800c    <.loop$0>:
-0x0800c F  72 10 00 00    bset   0x0000 <loc1>,#0[0K
+SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x14ff
+0x0800c F? 72 10 00 00    bset   0x0000 <loc1>,#0                    
 F 0x00800c
-Simulated 49 ticks [ELIDED]
-Host usage: [ELIDED]
 
 # Remove the probe from every second bit.
 # Removing probes while started is ok - we just stop logging changes.
@@ -112,13 +107,9 @@ Simulation started, PC=0x00800c
 Stop at 0x00800c: (104) Breakpoint
 V-IHINZC  Flags= 0x28  40 (  A= 0x00   0 .
 0-101000  X= 0x0000   0 .    Y= 0x0000   0 .
-SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x1500
-
-0x0800c    <.loop$0>:
-0x0800c F  72 10 00 00    bset   0x0000 <loc1>,#0[0K
+SP= 0x17ff [SP+1]= 00   0 .  Limit= 0x14ff
+0x0800c F? 72 10 00 00    bset   0x0000 <loc1>,#0                    
 F 0x00800c
-Simulated 49 ticks [ELIDED]
-Host usage: [ELIDED]
 
 # Don't forget to close the vcd properly!
 set hw vcd stop

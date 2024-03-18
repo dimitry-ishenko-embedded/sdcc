@@ -1,7 +1,7 @@
 ;--------------------------------------------------------------------------
 ;  strlen.s
 ;
-;  Copyright (C) 2008-2009, Philipp Klaus Krause
+;  Copyright (C) 2008-2021, Philipp Klaus Krause
 ;
 ;  This library is free software; you can redistribute it and/or modify it
 ;  under the terms of the GNU General Public License as published by the
@@ -33,12 +33,10 @@
 ; The Z80 has the cpir instruction, which is perfect for implementing strlen().
 
 _strlen:
-	ld	hl, 2 (sp)
-	xor	a, a
-	ld	b, a
-	ld	c, a
+	ld	bc, #0
+	ld	a, c
 	cpir
 	ld	hl, #-1
-	sbc	hl, bc	; C flag still cleared from xor above.
+	sub	hl, bc
 	ret
 

@@ -13,15 +13,17 @@
 # Added libc and DEBUG/NOOPTS/EXPERIMENTAL conditionals by
 #       Gonzalo Pérez de Olaguer Córdoba <salo@gpoc.es>
 #
-# $Id: configure.ac 11276 2019-06-12 20:56:32Z spth $
+# $Id: configure.ac 14090 2023-05-29 13:06:08Z spth $
 #
 
 # Process this file with autoconf to produce a configure script.
-AC_PREREQ(2.60)
-AC_INIT([pic14lib], [0.1], [tecodev AT users sourceforge net])
+AC_PREREQ([2.71])
+AC_INIT([pic14lib],[0.1],[tecodev AT users sourceforge net])
 AM_INIT_AUTOMAKE([foreign subdir-objects no-dependencies])
 AC_CONFIG_SRCDIR([libsdcc/idata.c])
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
+
+AM_MAINTAINER_MODE
 
 # SDCC setup
 case $srcdir in

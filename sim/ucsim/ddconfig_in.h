@@ -25,10 +25,17 @@
 #undef FD_NEED_WINSOCK2_H
 
 /* XXX */
+#undef FD_NEED_GNUTYPES_H
+
+/* XXX */
 //#undef GNU_GETCWD
 
 /* XXX */
 #undef HAVE_CURSES_H
+#undef HAVE_NCURSESW_H
+#undef HAVE_NCURSES_H
+#undef HAVE_NCURSESW_CURSES_H
+#undef HAVE_NCURSES_CURSES_H
 
 /* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
    */
@@ -117,6 +124,9 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* Define to 1 if you have the <wincon.h> header file. */
+#undef HAVE_WINCON_H
+
 /* Define to 1 if you have a working `fork' function. */
 #undef HAVE_WORKING_FORK
 
@@ -140,6 +150,9 @@
 
 /* Define to 1 if you have the `vasprintf' function. */
 #undef HAVE_VASPRINTF
+
+/* Define to 1 if you have the `vsnprintf' function. */
+#undef HAVE_VSNPRINTF
 
 /* XXX */
 #undef HAVE_WINSOCK2_H

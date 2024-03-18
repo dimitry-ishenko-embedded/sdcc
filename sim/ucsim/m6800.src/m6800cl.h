@@ -113,7 +113,7 @@ enum {
 #define ifVC	(!(rF&mV))
 #define ifEQ	(rF&mZ)
 #define ifNE	(!(rF&mZ))
-#define ifLT	( ((rF&mV)?1:0) ^ ((rF&mV)?1:0) )
+#define ifLT	( (rF&mN) ^ ((rF&mV)?mN:0) )
 #define ifLE	( (rF&mZ) | (((rF&mN)?mZ:0) ^ ((rF&mV)?mZ:0)) )
 #define ifGE	(!ifLT)
 #define ifGT	(!ifLE)
@@ -122,7 +122,7 @@ enum {
 #define ifA	(true)
 #define ifN	(false)
 
-extern int8_t p0ticks[256];
+extern i8_t p0ticks[256];
 
 class cl_idx16: public cl_cell16
 {
@@ -182,7 +182,8 @@ public:
   virtual void make_memories(void);
   virtual void setup_ccr(void);
   
-  virtual int8_t *tick_tab(t_mem code) { return p0ticks; }
+  virtual i8_t *tick_tab(t_mem code) { return p0ticks; }
+  virtual double def_xtal(void) { return 1000000; }
   virtual int clock_per_cycle(void) { return 1; }
   virtual struct dis_entry *dis_tbl(void);
   virtual struct dis_entry *get_dis_entry(t_addr addr);

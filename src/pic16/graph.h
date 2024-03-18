@@ -19,7 +19,7 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-/* $Id: graph.h 4781 2007-04-29 20:33:44Z borutr $ */
+/* $Id: graph.h 13889 2023-02-09 21:09:01Z spth $ */
 
 #ifndef __GRAPH_H__
 #define __GRAPH_H__
@@ -107,7 +107,7 @@ void remGNode (Graph *graph, void *data, hash_t hash);
 /* Returns the specified node or NULL if no such node exists. */
 GraphNode *getGNode (Graph *graph, void *data, hash_t hash);
 
-/* Returns the specified node (after creating it if neccessary). */
+/* Returns the specified node (after creating it if necessary). */
 GraphNode *getOrAddGNode (Graph *graph, void *data, hash_t hash);
 
 #endif

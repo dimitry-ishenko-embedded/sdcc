@@ -417,7 +417,7 @@ pic14createInterruptVect (struct dbuf_s *vBuf)
   if (!(mainf = findSymWithLevel (SymbolTab, mainf)))
     {
       struct options *op = &options;
-      if (!(op->cc_only || noAssemble))
+      if (!(op->cc_only || options.no_assemble))
         //      werror (E_NO_MAIN);
         fprintf (stderr, "WARNING: function 'main' undefined\n");
       return;
@@ -427,7 +427,7 @@ pic14createInterruptVect (struct dbuf_s *vBuf)
   if (!IFFUNC_HASBODY (mainf->type))
     {
       /* if ! compile only then main function should be present */
-      if (!(options.cc_only || noAssemble))
+      if (!(options.cc_only || options.no_assemble))
         //      werror (E_NO_MAIN);
         fprintf (stderr, "WARNING: function 'main' undefined\n");
       return;
@@ -587,7 +587,7 @@ pic14emitOverlay (struct dbuf_s *aBuf)
           /* I don't think this applies to us. We are using gpasm.  CRF */
 
           dbuf_printf (aBuf, ";\t.area _DUMMY\n");
-          /* output the area informtion */
+          /* output the area information */
           dbuf_printf (aBuf, ";\t.area\t%s\n", port->mem.overlay_name); /* MOF */
         }
 
@@ -732,7 +732,7 @@ picglue (void)
   /* now put it all together into the assembler file */
   /* create the assembler file name */
 
-  if ((noAssemble || options.c1mode) && fullDstFileName)
+  if ((options.no_assemble || options.c1mode) && fullDstFileName)
     {
       SNPRINTF (buffer, sizeof (buffer), "%s", fullDstFileName);
     }
@@ -783,7 +783,7 @@ picglue (void)
   else
     dbuf_destroy (&vBuf);
 
-  /* create interupt vector handler */
+  /* create interrupt vector handler */
   pic14_emitInterruptHandler (asmFile);
 
   /* copy over code */
@@ -820,7 +820,7 @@ picglue (void)
 
 /*
  * Emit the section preamble, absolute location (if any) and
- * symbol name(s) for intialized data.
+ * symbol name(s) for initialized data.
  * Set in_code to the address space of the symbol.
  */
 static void
@@ -1894,7 +1894,7 @@ pic14_printIvalFuncPtr (sym_link *type, initList *ilist, struct dbuf_s *oBuf)
 
   if (IS_LITERAL (val->etype))
     {
-      if (compareType (type, val->type) == 0)
+      if (compareType (type, val->type, false) == 0)
         {
           DBG_MSG ("ERROR:incompatible types");
           if (ilist)
@@ -1943,7 +1943,7 @@ pic14_printIvalPtr (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s 
       return;
 
   /* check the type      */
-  if (compareType (type, val->type) == 0)
+  if (compareType (type, val->type, false) == 0)
     {
       DBG_MSG ("WARNING: wrong initialization");
       wassert (ilist != NULL);
@@ -2029,7 +2029,7 @@ pic14_printIval (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oB
       // and the type must match
       sym_link *itype = ilist->init.node->ftype;
 
-      if (compareType (type, itype) == 0)
+      if (compareType (type, itype, false) == 0)
         {
           // special case for literal strings
           if (IS_ARRAY (itype) && IS_CHAR (getSpec (itype)) &&
@@ -2187,7 +2187,7 @@ pic14_emitRegularMap (memmap *map, bool addPublics, bool arFlag)
           if (!reg)
             {
               DBG_MSG ("allocating register %s", name);
-              allocDirReg (operandFromSymbol (sym));
+              allocDirReg (operandFromSymbol (sym, false));
               reg = dirregWithName (name);
             }
           if (reg && !reg->wasUsed)

@@ -26,6 +26,8 @@
 #define ISCHARSPACE(c) isspace((unsigned char)c)
 #define ISCHARALNUM(c) isalnum((unsigned char)c)
 
+#define ISINST(l, i) (!STRNCASECMP((l), (i), sizeof(i) - 1) && (!(l)[sizeof(i) - 1] || isspace((unsigned char)((l)[sizeof(i) - 1]))))
+
 static peepRule *rootRules = NULL;
 static peepRule *currRule = NULL;
 
@@ -88,6 +90,266 @@ error:
 }
 
 /*-----------------------------------------------------------------*/
+/* interpreteLine - interpret general ASxxxx syntax                */
+/* Returns distance                                                */
+/* Can recurse to interpret some simple macros                     */
+/*-----------------------------------------------------------------*/
+
+static int
+interpretLine (lineNode **pl, char *buff, bool back)
+{
+  int dist = 0;
+  if ((*pl)->line &&
+      !(*pl)->isComment &&
+      !(*pl)->isLabel &&
+      !(*pl)->isDebug)
+    {
+      // handle general ASxxxx syntax
+      // this can be a lot bigger than 4B due to macros
+      if(ISINST((*pl)->line, ".db") || ISINST((*pl)->line, ".byte") || ISINST((*pl)->line, ".fcb"))
+        {
+          int i, j;
+          for(i = 1, j = 0; (*pl)->line[j]; i += (*pl)->line[j] == ',', j++);
+          dist += i;
+        }
+      else if(ISINST((*pl)->line, ".dw") || ISINST((*pl)->line, ".word") || ISINST((*pl)->line, ".fdb"))
+        {
+          int i, j;
+          for(i = 1, j = 0; (*pl)->line[j]; i += (*pl)->line[j] == ',', j++);
+          dist += i * 2;
+        }
+      else if(ISINST((*pl)->line, ".3byte") || ISINST((*pl)->line, ".triple"))
+        {
+          int i, j;
+          for(i = 1, j = 0; (*pl)->line[j]; i += (*pl)->line[j] == ',', j++);
+          dist += i * 3;
+        }
+      else if(ISINST((*pl)->line, ".4byte") || ISINST((*pl)->line, ".quad"))
+        {
+          int i, j;
+          for(i = 1, j = 0; (*pl)->line[j]; i += (*pl)->line[j] == ',', j++);
+          dist += i * 4;
+        }
+      else if(ISINST((*pl)->line, ".str") || ISINST((*pl)->line, ".ascii") || ISINST((*pl)->line, ".fcc")
+          || ISINST((*pl)->line, ".strz") || ISINST((*pl)->line, ".asciz")
+          || ISINST((*pl)->line, ".strs") || ISINST((*pl)->line, ".ascis"))
+        {
+          const char *value;
+          // skip directive
+          for (value = (*pl)->line; *value && !isspace (*value); ++value);
+          // skip space
+          for (; *value && isspace (*value); ++value);
+          // just part of the syntax
+          if(*value == '^')
+            ++value;
+          // delimiter can be freely chosen
+          char delimiter = *(value++);
+          for (;*value && *value != delimiter; ++value, ++dist);
+          // \0 terminated string
+          if (ISINST((*pl)->line, ".strz") || ISINST((*pl)->line, ".asciz"))
+            ++dist;
+          // it doesn't end with delimiter
+          if (*value != delimiter)
+            {
+              werrorfl("delimitererror", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return 999;
+            }
+        }
+      else if(!back && ISINST((*pl)->line, ".rept"))
+        {
+          // we can ignore the label for now
+          // rept doesn't allow duplicate labels
+          const char *op1start;
+          int times;
+
+          // skip directive
+          for (op1start = (*pl)->line; *op1start && !isspace (*op1start); ++op1start);
+          // skip space
+          for (; *op1start && isspace (*op1start); ++op1start);
+          times = atoi(op1start);
+          // 0 times is probably an error with atoi
+          if(times == 0)
+            {
+              werrorfl("atoierror", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return 999;
+            }
+          (*pl) = (*pl)->next;
+          while((*pl) && !ISINST((*pl)->line, ".endm"))
+            {
+              dist += interpretLine(pl, buff, back);
+              if(!pl)
+                break;
+              (*pl) = (*pl)->next;
+            }
+          // we reached the end, not .endm
+          if(!(*pl))
+            return 999;
+          dist *= times;
+        }
+      else if(back && ISINST((*pl)->line, ".endm"))
+        {
+          // parse rept backwards
+          const char *op1start;
+          int times;
+
+          (*pl) = (*pl)->prev;
+          while((*pl) && !ISINST((*pl)->line, ".rept"))
+            {
+              dist += interpretLine(pl, buff, back);
+              if(!(*pl))
+                break;
+              (*pl) = (*pl)->prev;
+            }
+          // we reached the end, not .rept
+          if(!(*pl))
+            return 999;
+          // skip directive
+          for (op1start = (*pl)->line; *op1start && !isspace (*op1start); ++op1start);
+          // skip space
+          for (; *op1start && isspace (*op1start); ++op1start);
+          times = atoi(op1start);
+          // 0 times is probably an error with atoi
+          if(times == 0)
+            {
+              werrorfl("atoierror", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return 999;
+            }
+          dist *= times;
+        }
+      else if (ISINST((*pl)->line, ".incbin"))
+        {
+          // .incbin /string/ [,offset [,count]]
+          // if count is given, we can work with it
+          const char *op1start = (*pl)->line;
+          int count;
+          // skip first comma
+          while (*op1start && *(op1start++) != ',');
+          if (!*op1start)
+            {
+              werrorfl("unsupported", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return(999);
+            }
+          // skip first comma
+          while (*op1start && *(op1start++) != ',');
+          if (!*op1start)
+            {
+              werrorfl("unsupported", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return(999);
+            }
+          // skip space
+          for (; *op1start && isspace (*op1start); ++op1start);
+          if (!*op1start)
+            {
+              werrorfl("unsupported", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return(999);
+            }
+          count = atoi(op1start);
+          // probably an error with atoi
+          if (count == 0)
+            {
+              werrorfl("atoierror", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return 999;
+            }
+          dist += count;
+        }
+      else if (ISINST((*pl)->line, ".odd") || ISINST((*pl)->line, ".even"))
+        {
+          // 0 or 1, assume worst
+          dist += 1;
+        }
+      else if(ISINST((*pl)->line, ".bndry") || ISINST((*pl)->line, ".ds") || ISINST((*pl)->line, ".rmb")
+          || ISINST((*pl)->line, ".rs") || ISINST((*pl)->line, ".blkb") || ISINST((*pl)->line, ".blkw")
+          || ISINST((*pl)->line, ".blk3") || ISINST((*pl)->line, ".blk4"))
+        {
+          const char *op1start;
+          int offset;
+
+          // skip directive
+          for (op1start = (*pl)->line; *op1start && !isspace (*op1start); ++op1start);
+          // skip space
+          for (; *op1start && isspace (*op1start); ++op1start);
+          offset = atoi(op1start);
+          // 0 times is probably an error with atoi
+          if (offset == 0)
+            {
+              werrorfl("atoierror", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+              return 999;
+            }
+          if (ISINST((*pl)->line, ".blkw"))
+            offset *= 2;
+          if (ISINST((*pl)->line, ".blk3"))
+            offset *= 2;
+          if (ISINST((*pl)->line, ".blk4"))
+            offset *= 2;
+          // bndry: assume the worst
+          dist += offset;
+        }
+      else if ( ISINST((*pl)->line, ".iift") || ISINST((*pl)->line, ".iiff") || ISINST((*pl)->line, ".iiftf")
+          || ISINST((*pl)->line, ".iifne") || ISINST((*pl)->line, ".iifeq") || ISINST((*pl)->line, ".iifgt")
+          || ISINST((*pl)->line, ".iiflt") || ISINST((*pl)->line, ".iifge") || ISINST((*pl)->line, ".iifle")
+          || ISINST((*pl)->line, ".iifdef") || ISINST((*pl)->line, ".iifndef") || ISINST((*pl)->line, ".iifb")
+          || ISINST((*pl)->line, ".iifnb") || ISINST((*pl)->line, ".iifidn") || ISINST((*pl)->line, ".iifdif")
+          || ISINST((*pl)->line, ".iif"))
+        {
+          // the line ends with real operations and directives
+          werrorfl("unsupported", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+          dist += 999;
+        }
+      else if (ISINST((*pl)->line, ".msg") || ISINST((*pl)->line, ".error") || ISINST((*pl)->line, ".assume")
+          || ISINST((*pl)->line, ".radix") || ISINST((*pl)->line, ".local") || ISINST((*pl)->line, ".globl")
+          || ISINST((*pl)->line, ".equ") || ISINST((*pl)->line, ".gblequ") || ISINST((*pl)->line, ".lclequ")
+          || ISINST((*pl)->line, ".if") || ISINST((*pl)->line, ".else") || ISINST((*pl)->line, ".endif")
+          || ISINST((*pl)->line, ".ift") || ISINST((*pl)->line, ".iff") || ISINST((*pl)->line, ".iftf")
+          || ISINST((*pl)->line, ".ifne") || ISINST((*pl)->line, ".ifeq") || ISINST((*pl)->line, ".ifgt")
+          || ISINST((*pl)->line, ".iflt") || ISINST((*pl)->line, ".ifge") || ISINST((*pl)->line, ".ifle")
+          || ISINST((*pl)->line, ".ifdef") || ISINST((*pl)->line, ".ifndef") || ISINST((*pl)->line, ".ifb")
+          || ISINST((*pl)->line, ".ifnb") || ISINST((*pl)->line, ".ifidn") || ISINST((*pl)->line, ".ifdif")
+          || ISINST((*pl)->line, ".define") || ISINST((*pl)->line, ".undefine"))
+        {
+          // ignore these, makes it longer at worst
+          dist += 0;
+        }
+      else if (ISINST((*pl)->line, ".macro") || ISINST((*pl)->line, ".irp") || ISINST((*pl)->line, ".irpc")
+          || ISINST((*pl)->line, ".include") || ISINST((*pl)->line, ".rept") || ISINST((*pl)->line, ".endm"))
+        {
+          // catch some unsupported long or complex directives
+          werrorfl("unsupported", 0, W_UNRECOGNIZED_ASM, __func__, 999, (*pl)->line);
+          dist += 999;
+        }
+      // get port specific size
+      else
+        {
+          const char *op1start;
+          // skip directive
+          for (op1start = (*pl)->line; *op1start && !isspace (*op1start); ++op1start);
+          // skip space
+          for (; *op1start && isspace (*op1start); ++op1start);
+          // catch "sym1 .equ expr" "sym1 = expr" "sym1 =: expr" etc
+          // ".equ sym1 expr" got already handled
+          if (ISINST(op1start, ".equ") || ISINST(op1start, ".gblequ") || ISINST(op1start, ".lclequ")
+            || *op1start == '=')
+            {
+              // ignored
+              dist += 0;
+            }
+          else if (port->peep.getSize)
+            {
+              dist += port->peep.getSize((*pl));
+#if 0
+              fprintf(stderr, "Line: %s, dist: %i, total: %i\n", pl->line, port->peep.getSize(pl), dist);
+#endif
+            }
+          else
+            {
+              // could be a macro call
+              dist += 999;
+            }
+        }
+    }
+  return dist;
+}
+
+/*-----------------------------------------------------------------*/
 /* pcDistance - finds a label backward or forward                  */
 /*-----------------------------------------------------------------*/
 
@@ -101,32 +363,17 @@ pcDistance (lineNode *cpos, char *lbl, bool back)
   SNPRINTF (buff, sizeof(buff) - 1, "%s:", lbl);
   while (pl)
     {
-      if (pl->line &&
-          !pl->isComment &&
-          !pl->isLabel &&
-          !pl->isDebug)
-        {
-          if (port->peep.getSize)
-            {
-              dist += port->peep.getSize(pl);
-#if 0
-              fprintf(stderr, "Line: %s, dist: %i, total: %i\n", pl->line, port->peep.getSize(pl), dist);
-#endif
-            }
-          else
-            {
-              dist += 4;    // maximum instruction size
-            }
-        }
+      dist += interpretLine(&pl, buff, back);
+      // interpretLine changes pl
+      if (!pl)
+        break;
 
       if (strncmp (pl->line, buff, strlen (buff)) == 0)
         return dist;
-
       if (back)
         pl = pl->prev;
       else
         pl = pl->next;
-
     }
   return 0;
 }
@@ -477,16 +724,16 @@ FBYNAME (okToRemoveSLOC)
   if (p == NULL) return FALSE;
   p += 4;
   if (sscanf(p, "%d_%d_%d", &dummy1, &dummy2, &dummy3) != 3) return FALSE;
-  /*TODO: ultra-paranoid: get funtion name from "head" and check that */
+  /*TODO: ultra-paranoid: get function name from "head" and check that */
   /* the sloc name begins with that.  Probably not really necessary */
 
-  /* Look for any occurance of this SLOC before the peephole match */
+  /* Look for any occurrence of this SLOC before the peephole match */
   for (pl = currPl->prev; pl; pl = pl->prev) {
         if (pl->line && !pl->isDebug && !pl->isComment
           && *pl->line != ';' && strstr(pl->line, sloc))
                 return FALSE;
   }
-  /* Look for any occurance of this SLOC after the peephole match */
+  /* Look for any occurrence of this SLOC after the peephole match */
   for (pl = endPl->next; pl; pl = pl->next) {
         if (pl->line && !pl->isDebug && !pl->isComment
           && *pl->line != ';' && strstr(pl->line, sloc))
@@ -809,6 +1056,14 @@ notVolatileVariable(const char *var, lineNode *currPl, lineNode *endPl)
         return true;
     }
 
+  if (TARGET_HC08_LIKE || TARGET_IS_MOS6502)
+    {
+      if (var[0] == '#')
+        return true;
+      if (strstr(var, "0x") || strstr(var, "0X") || isdigit(var[0]))
+        return global_not_volatile;
+    }
+
   /* Extract a symbol name from the variable */
   while (*vp && (*vp!='_'))
     vp++;
@@ -1054,10 +1309,12 @@ operandBaseName (const char *op)
 {
   if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
     {
-      if (!strcmp (op, "acc") || !strncmp (op, "acc.", 4))
-        return "a";
       if (!strncmp (op, "ar", 2) && ISCHARDIGIT(*(op+2)) && !*(op+3))
         return op+1;
+      if (!strcmp (op, "ab"))
+        return "ab";
+      if (!strcmp (op, "acc") || !strncmp (op, "acc.", 4) || *op == 'a')
+        return "a";
       // bug 1739475, temp fix
       if (op[0] == '@')
         return operandBaseName(op+1);
@@ -1550,6 +1807,7 @@ FBYNAME (operandsNotRelated)
       return FALSE;
     }
 
+  bool ret = true;
   while ((op1 = setFirstItem (operands)))
     {
       deleteSetItem (&operands, (void*)op1);
@@ -1560,14 +1818,28 @@ FBYNAME (operandsNotRelated)
           op2 = operandBaseName (op2);
           if (strcmp (op1, op2) == 0)
             {
-              deleteSet (&operands);
-              return FALSE;
+              ret = false;
+              goto done;
+            }
+
+          if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
+            {
+              /* handle overlapping 'dptr' vs. { 'dpl', 'dph' }  */
+              if (!strcmp (op1, "dptr") && (!strcmp (op2, "dpl") || !strcmp (op2, "dph")) ||
+                !strcmp (op2, "dptr") && (!strcmp (op1, "dpl") || !strcmp (op1, "dph")) || 
+                !strcmp (op1, "ab") && (!strcmp (op2, "a") || !strcmp (op2, "b")) ||
+                !strcmp (op2, "ab") && (!strcmp (op1, "a") || !strcmp (op1, "b")))
+                  {
+                    ret = false;
+                    goto done;
+                  }
             }
         }
     }
 
+done:
   deleteSet (&operands);
-  return TRUE;
+  return ret;
 }
 
 /*-----------------------------------------------------------------*/
@@ -2314,6 +2586,14 @@ FBYNAME (isPort)
   return ret;
 }
 
+/*-----------------------------------------------------------------*/
+/* notInJumpTable - check that we are not in a jump table          */
+/*-----------------------------------------------------------------*/
+FBYNAME (notInJumpTable)
+{
+  return (currPl->ic && currPl->ic->op != JUMPTABLE);
+}
+
 static const struct ftab
 {
   char *fname;
@@ -2416,6 +2696,9 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "newLabel", newLabel
+  },
+  {
+    "notInJumpTable", notInJumpTable
   },
 };
 
@@ -3108,7 +3391,7 @@ reassociate_ic (lineNode *shead, lineNode *stail,
   **    2) Start at the bottom and scan up. As long as the source line
   **       matches the replacement line, they have the same iCode.
   **    3) For any label in the source, look for a matching label in
-  **       the replacment. If found, they have the same iCode. From
+  **       the replacement. If found, they have the same iCode. From
   **       these matching labels, scan down for additional matching
   **       lines; if found, they also have the same iCode.
   */
@@ -3134,7 +3417,7 @@ reassociate_ic (lineNode *shead, lineNode *stail,
 
       if (csl->isLabel)
         {
-          /* found a source line label; look for it in the replacment lines */
+          /* found a source line label; look for it in the replacement lines */
           crl = rhead;
           while (1)
             {
@@ -3251,7 +3534,7 @@ replaceRule (lineNode ** shead, lineNode * stail, peepRule * pr)
 
   if (lhead && cl)
     {
-      /* determine which iCodes the replacment lines relate to */
+      /* determine which iCodes the replacement lines relate to */
       reassociate_ic(*shead,stail,lhead,cl);
 
       /* now we need to connect / replace the original chain */
@@ -3364,7 +3647,7 @@ hashSymbolName (const char *name)
 
   while (*name)
     {
-      hash = (hash << 6) ^ *name;
+      hash = ((unsigned)hash << 6) ^ *name;
       name++;
     }
 
@@ -3435,25 +3718,38 @@ buildLabelRefCountHash (lineNode *head)
         continue;
 
       /* Padauk skip instructions */
-      if (TARGET_PDK_LIKE &&
+      if (TARGET_PDK_LIKE && !line->isInline &&
         (!strncmp(line->line, "ceqsn", 5) || !strncmp(line->line, "cneqsn", 6) ||
         !strncmp(line->line, "t0sn", 4) || !strncmp(line->line, "t1sn", 4) ||
         !strncmp(line->line, "izsn", 4) || !strncmp(line->line, "dzsn", 4)))
         {
-          const lineNode *const l = line->next->next;
-          wassert (l);
-          if (l->isLabel && isLabelDefinition (l->line, &label, &labelLen, false))
+          const lineNode *l = line;
+          // Skip over following inst.
+          do
+          	l = l->next;
+          while(l && (l->isComment || l->isDebug || l->isLabel));
+          if (l)
+            do
+          	  l = l->next;
+            while(l && (l->isComment || l->isDebug));
+
+          if (l && l->isLabel && isLabelDefinition (l->line, &label, &labelLen, false))
             {
               char name[SDCC_NAME_MAX];
               strcpy(name, label);
               name[labelLen] = 0;
 
-              labelHashEntry *e = hTabFirstItemWK (labelHash, hashSymbolName (name));
+              labelHashEntry *e;
+              for (e = hTabFirstItemWK (labelHash, hashSymbolName (name)); e; e = hTabNextItemWK (labelHash))
+                if (!strcmp (name, e->name))
+                 break;
+
               if (e)
                 e->refCount++;
             }
+          else
+            werror (E_NO_SKIP_TARGET, line->line);
         }
-
 
       for (i = 0; i < HTAB_SIZE; i++)
         {
@@ -3482,8 +3778,8 @@ buildLabelRefCountHash (lineNode *head)
 
       while (thisEntry)
         {
-          fprintf (stderr, "label: %s ref %d\n",
-                   thisEntry->name, thisEntry->refCount);
+          fprintf (stderr, "label: %s (%p) ref %d\n",
+                   thisEntry->name, thisEntry, thisEntry->refCount);
           thisEntry = hTabNextItemWK (labelHash);
         }
     }

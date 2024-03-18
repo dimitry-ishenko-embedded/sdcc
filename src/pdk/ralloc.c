@@ -471,7 +471,7 @@ packRegisters (eBBlock * ebp)
          cast is remat, then we can remat this cast as well */
       if (ic->op == CAST &&
         IS_SYMOP (IC_RIGHT (ic)) && OP_SYMBOL (IC_RIGHT (ic))->remat &&
-        !isOperandGlobal (IC_RESULT (ic)) && bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 && !IS_PARM (IC_RESULT (ic)) && /* The receiving of the paramter is not accounted for in DEFS */
+        !isOperandGlobal (IC_RESULT (ic)) && bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 && !IS_PARM (IC_RESULT (ic)) && /* The receiving of the parameter is not accounted for in DEFS */
         !OP_SYMBOL (IC_RESULT (ic))->addrtaken)
         {
           sym_link *to_type = operandType (IC_LEFT (ic));
@@ -523,24 +523,30 @@ packRegisters (eBBlock * ebp)
           operand *op = IC_RESULT (ic);
           if ((use->op == LEFT_OP || use->op == '+' || use->op == '-' || use->op == UNARYMINUS ||
             use->op == '&' || use->op == '|' || use->op == '^') &&
-            IC_LEFT (use)->key == op->key && (!IC_RIGHT(use) || IC_RIGHT (use)->key != op->key))
+            IC_LEFT (use)->key == op->key && (!IC_RIGHT (use) || IC_RIGHT (use)->key != op->key))
             {
-              bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
-              bitVectSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, use->key);
+              if (IS_SYMOP (ic->right))
+                {
+                  bitVectUnSetBit (OP_SYMBOL (ic->right)->uses, ic->key);
+                  bitVectSetBit (OP_SYMBOL (ic->right)->uses, use->key);
+                }
               IC_LEFT (use) = operandFromOperand (IC_RIGHT(ic));
               remiCodeFromeBBlock (ebp, ic);
               hTabDeleteItem (&iCodehTab, ic->key, ic, DELETE_ITEM, NULL);
               if(ic->prev)
                 ic = ic->prev;
             }
-          else if ((/*(use->op == SET_VALUE_AT_ADDRESS && !IS_BITVAR (getSpec (operandType (IC_LEFT (use)))) && !IS_BITVAR (getSpec (operandType (IC_RIGHT (use))))) || - resulted in pointer writes toring too few bytes*/
+          else if ((/*(use->op == SET_VALUE_AT_ADDRESS && !IS_BITVAR (getSpec (operandType (IC_LEFT (use)))) && !IS_BITVAR (getSpec (operandType (IC_RIGHT (use))))) || - resulted in pointer write storing too few bytes*/
             use->op == CAST && (SPEC_USIGN (getSpec (operandType (IC_RIGHT (use)))) || operandSize (IC_RESULT (use)) <= operandSize (IC_RIGHT (use))) ||
             use->op == LEFT_OP || use->op == RIGHT_OP || use->op == '+' || use->op == '-' ||
             use->op == '&' || use->op == '|' || use->op == '^') &&
             IC_RIGHT (use)->key == op->key && (!IC_LEFT(use) || IC_LEFT (use)->key != op->key))
             {
-              bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
-              bitVectSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, use->key);
+              if (IS_SYMOP (ic->right))
+                {
+                  bitVectUnSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, ic->key);
+                  bitVectSetBit (OP_SYMBOL (IC_RIGHT (ic))->uses, use->key);
+                }
               IC_RIGHT (use) = operandFromOperand (IC_RIGHT(ic));
               remiCodeFromeBBlock (ebp, ic);
               hTabDeleteItem (&iCodehTab, ic->key, ic, DELETE_ITEM, NULL);
@@ -573,16 +579,13 @@ serialRegMark (eBBlock **ebbs, int count)
       /* for all instructions do */
       for (ic = ebbs[i]->sch; ic; ic = ic->next)
         {
-          if (ic->op == IPOP)
-            wassert (0);
-
           /* if result is present && is a true symbol */
           if (IC_RESULT (ic) && ic->op != IFX && IS_TRUE_SYMOP (IC_RESULT (ic)))
             OP_SYMBOL (IC_RESULT (ic))->allocreq++;
 
           /* some don't need registers, since there is no result. */
           if (SKIP_IC2 (ic) ||
-              ic->op == JUMPTABLE || ic->op == IFX || ic->op == IPUSH || ic->op == IPOP || ic->op == SET_VALUE_AT_ADDRESS)
+              ic->op == JUMPTABLE || ic->op == IFX || ic->op == IPUSH || ic->op == SET_VALUE_AT_ADDRESS)
             continue;
 
           /* now we need to allocate registers only for the result */
@@ -598,7 +601,7 @@ serialRegMark (eBBlock **ebbs, int count)
                   sym->isspilt = FALSE;
                 }
 
-              /* Make sure any spill location is definately allocated */
+              /* Make sure any spill location is definitely allocated */
               if (sym->isspilt && !sym->remat && sym->usl.spillLoc && !sym->usl.spillLoc->allocreq)
                 sym->usl.spillLoc->allocreq++;
 
@@ -618,7 +621,7 @@ serialRegMark (eBBlock **ebbs, int count)
                   sym->isspilt = false;
                 }
 
-              if (sym->nRegs > 2 && ic->op == CALL) // To be allocated to stack due to the way (long) long return values are handled via a hidden pointer.
+              if (sym->nRegs > 2 && (ic->op == CALL || ic->op == PCALL)) // To be allocated to stack due to the way (long) long return values are handled via a hidden pointer.
                 {
                   sym->for_newralloc = 0;
                   pdkSpillThis (sym);
@@ -693,18 +696,6 @@ pdkRegFix (eBBlock ** ebbs, int count)
         {
           if (SKIP_IC2 (ic))
             continue;
-
-          if (ic->op == IFX)
-            {
-              verifyRegsAssigned (IC_COND (ic), ic);
-              continue;
-            }
-
-          if (ic->op == JUMPTABLE)
-            {
-              verifyRegsAssigned (IC_JTCOND (ic), ic);
-              continue;
-            }
 
           verifyRegsAssigned (IC_RESULT (ic), ic);
           verifyRegsAssigned (IC_LEFT (ic), ic);

@@ -88,19 +88,27 @@ cl_hw::init(void)
 
   if (cfg_size())
     {
-      cfg= new cl_address_space(n, 0, cfg_size(), sizeof(t_mem)*8);
+      cfg= new cl_address_space(n, 0, cfg_size(), 32);
       cfg->init();
       cfg->hidden= true;
       uc->address_spaces->add(cfg);
 
+      n+= "_chip";
+      cfg_chip= new cl_chip32(n.c_str(), cfg_size(), 32, 0);
+      cfg_chip->init();
+      
       for (a= 0; a < cfg_size(); a++)
         {
 	  class cl_memory_cell *c= cfg->get_cell(a);
-	  c->decode(&(c->def_data));
+	  c->decode(cfg_chip->get_slot(a));
           cfg->register_hw(a, this, false);
         }
     }
-
+  if (cfg_size() > 0)
+    {
+      chars pn("", "%s%d_on", id_string, id);
+      uc->vars->add(pn, cfg, 0, cfg_help(0));
+    }
   cache_run= -1;
   cache_time= 0;
   return 0;
@@ -165,6 +173,15 @@ cl_hw::conf(class cl_memory_cell *cell, t_mem *val)
 t_mem
 cl_hw::conf_op(cl_memory_cell *cell, t_addr addr, t_mem *val)
 {
+  if (addr == 0)
+    {
+      if (val)
+	{
+	  on= *val;
+	}
+      else
+	cell->set(on?1:0);
+    }
   return cell->get();
 }
 
@@ -203,6 +220,8 @@ cl_hw::cfg_read(t_addr addr)
 const char *
 cl_hw::cfg_help(t_addr addr)
 {
+  if (addr == 0)
+    return "Turn ticking of this peripheral on/off (bool, RW)";
   return "N/A";
 }
 
@@ -432,6 +451,9 @@ cl_hw::handle_input(int c)
 	  }
 	break;
       }
+    case 'p'-'a'+1:
+      uc->sim->step();
+      break;
     default:
       return false;
       break;
@@ -520,7 +542,7 @@ cl_hw::next_displayer(void)
 void
 cl_hw::print_info(class cl_console_base *con)
 {
-  con->dd_printf("%s[%d]\n", id_string, id);
+  con->dd_printf("%s[%d] %s\n", id_string, id, on?"ON":"OFF");
   //print_cfg_info(con);
 }
 

@@ -33,8 +33,10 @@ enum
     A_IDX,
     X_IDX,
     Y_IDX,
-    YX_IDX,
+//    Z_IDX,
     XA_IDX,
+//    YA_IDX,   
+    YX_IDX,
     CND_IDX,
     SP_IDX
   };
@@ -52,14 +54,16 @@ enum
 #define M6502MASK_A 0x01
 #define M6502MASK_X 0x02
 #define M6502MASK_Y 0x04
+//#define M6502MASK_Z 0x10
 #define M6502MASK_REV 0x80
 #define M6502MASK_XA (M6502MASK_X | M6502MASK_A)
+//#define M6502MASK_YA (M6502MASK_Y | M6502MASK_A)
 #define M6502MASK_YX (M6502MASK_Y | M6502MASK_X)
 #define M6502MASK_AX (M6502MASK_REV | M6502MASK_X | M6502MASK_A)
     
 /* definition for the registers */
 typedef struct reg_info
-  {
+{
     short type;			/* can have value 
 				   REG_GPR, REG_PTR or REG_CND */
     short rIdx;			/* index into register table */
@@ -71,8 +75,7 @@ typedef struct reg_info
     unsigned isDead:1;      /* does not need to survive current instruction */
     unsigned isLitConst:1;      /* has an literal constant loaded */
     int litConst;		/* last literal constant */
-  }
-reg_info;
+} reg_info;
 
 #define M6502OP_REG 1
 #define M6502OP_LD  2
@@ -86,6 +89,7 @@ reg_info;
 #define M6502OP_BBR 10
 #define M6502OP_IDD 11
 #define M6502OP_IDI 12
+#define M6502OP_CMP 13
 
 /* opcode table */
 typedef struct m6502opcodedata
@@ -115,6 +119,7 @@ bitVect *m6502_rUmaskForOp (operand * op);
 const m6502opcodedata *m6502_getOpcodeData(const char *inst);
 int m6502_opcodeSize(const m6502opcodedata *opcode, const char *arg);
 
+void m6502SpillThis (symbol *);
 iCode *m6502_ralloc2_cc(ebbIndex *ebbi);
 
 void m6502RegFix (eBBlock **ebbs, int count);

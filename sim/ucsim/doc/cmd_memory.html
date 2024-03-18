@@ -1,10 +1,10 @@
 <html>
   <head>
     <meta http-equiv="content-type" content="text/html; charset=ISO-8859-2">
-    <title>Memory manipulation commands of &#956;Csim</title>
+    <title>Memory manipulation commands of &micro;Csim</title>
   </head>
   <body style="           background-color: white;">
-    <h2>Memory manipulation commands of &#956;Csim</h2>
+    <h2>Memory manipulation commands of &micro;Csim</h2>
     Every command which changes content of ROM area such as <b><a href="#dl">dl</a></b>
     or <b><a href="cmd_general#set_memory">set memory</a></b> deletes result of
     <a href="analyzer.html">code analyser</a> and causes to re-analyse the code.
@@ -75,7 +75,7 @@ under certain conditions; type `show c' for details.
     Name of the memory must be used, it can be checked using <a href="cmd_general.html#info_memory">info
       memory</a> command which lists size and name of all available memories.
     <p>Other parameters can be mixed list of strings (characters between " and
-      ") and numbers. Strings can contain escape sequences. &#956;Csim merges all
+      ") and numbers. Strings can contain escape sequences. &micro;Csim merges all
       parameters together and will search for merged list of values in specified
       memory. </p>
     <p><b>where</b> command do case unsensitive search while <b>Where</b>
@@ -137,7 +137,7 @@ under certain conditions; type `show c' for details.
       spaces</a> and <a href="memory.html#address_decoder">address decoders</a>.
     <p>Subcommands are: </p>
     <p><a href="#memory_create">memory create</a><br>
-      memory remove<br>
+      <a href="#memory_remove">memory remove</a><br>
       <a href="#memory_info">memory info</a><br>
       memory cell</p>
     <a name="memory_create">
@@ -280,15 +280,29 @@ Address decoders:
         <h4>memory create bander <i>addressspace begin end chip begin
             bits_per_chip [distance]</i></h4>
       </a> Bander. </blockquote>
-    <hr> <a name="memory_remove">
+
+    <hr>
+
+    <a name="memory_remove">
       <h3>memory remove|rm|del</h3>
-    </a> This set of commands can be used to remove some memory object. It
+    </a>
+
+    This set of commands can be used to remove some memory object. It
     requires a subcommand, which can be:
+
     <p><a href="#memory_remove_chip">memory remove chip</a> </p>
-    <blockquote> <a name="memory_remove_chip">
+    <blockquote>
+      <a name="memory_remove_chip">
         <h4>memory remove chip <i>id</i></h4>
-      </a> </blockquote>
-    <hr> <a name="memory_info">
+      </a>
+      This command deletes the specified memory chip from the
+      simulator. All address decoders that points to this chip will be
+      deleted too. 
+    </blockquote>
+
+    <hr>
+
+    <a name="memory_info">
       <h3>memory info</h3>
     </a> This command is same as <a href="cmd_general.html#info_memory">info
       memory</a>.

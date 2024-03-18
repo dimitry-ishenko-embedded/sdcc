@@ -54,7 +54,61 @@ enum cell_flag {
 
 #define CELL_GENERAL	(CELL_NORMAL|CELL_INST|CELL_FETCH_BRK)
 
+extern t_mem def_data;
 
+class cl_dump_ads: public cl_base
+{
+public:
+  t_addr start, stop;
+  bool use_start, use_stop;
+public:
+  cl_dump_ads(void): cl_base()
+  {
+    start= 0; stop= 0;
+    use_start= false; use_stop= false;
+  }
+  cl_dump_ads(t_addr the_start): cl_base()
+  {
+    start= the_start; stop= 0;
+    use_start= true; use_stop= false;
+  }
+  cl_dump_ads(t_addr the_start,
+	      t_addr the_stop): cl_base()
+  {
+    start= the_start; stop= the_stop;
+    use_start= true; use_stop= true;
+  }
+  cl_dump_ads(t_addr the_start, bool the_use_start,
+	      t_addr the_stop, bool the_use_stop): cl_base()
+  {
+    start= the_start; stop= the_stop;
+    use_start= the_use_start; use_stop= the_use_stop;
+  }
+  cl_dump_ads(const cl_dump_ads &da)
+  {
+    start= da.start; stop= da.stop;
+    use_start= da.use_start; use_stop= da.use_stop;
+  }
+public:
+  virtual void _start(t_addr the_start) {
+    start= the_start;
+    use_start= true;
+  }
+  virtual void _stop(t_addr the_stop) {
+    stop= the_stop;
+    use_stop= true;
+  }
+  virtual void _ss(t_addr the_start, t_addr the_stop) {
+    start= the_start; stop= the_stop;
+    use_start= true; use_stop= true;
+  }
+  virtual void _ss7(t_addr the_start) {
+    start= the_start; stop= the_start+7;
+    use_start= true; use_stop= true;
+  }
+};
+
+  
 /*
  * 3rd version of memory system
  */
@@ -73,11 +127,14 @@ public:
   int width; // in bits
   t_mem data_mask;
   bool hidden;
+  chars altname;
 protected:
   t_addr dump_finished;
 public:
   cl_memory(const char *id, t_addr asize, int awidth);
   virtual ~cl_memory(void);
+  virtual bool is_named(const char *the_name) const;
+  virtual bool is_inamed(const char *the_name) const;
   virtual int init(void);
 
   t_addr get_start_address(void) { return(start_address); }
@@ -91,21 +148,52 @@ public:
 
   virtual bool is_chip(void) { return(false); }
   virtual bool is_address_space(void) { return(false); }
-
+  
   virtual void err_inv_addr(t_addr addr);
   virtual void err_non_decoded(t_addr addr);
 
-  virtual t_addr dump(int smart, t_addr start, t_addr stop, int bitnr_high, int bitnr_low, int bpl, class cl_console_base *con);
-  virtual t_addr dump(int smart, t_addr start, t_addr stop, int bpl, class cl_console_base *con) {
-    return dump(smart, start, stop, -1, -1, bpl, con);
+  virtual t_addr dump(int smart,
+		      //t_addr start, t_addr stop,
+		      class cl_dump_ads *ads,
+		      int bitnr_high, int bitnr_low,
+		      int bpl,
+		      class cl_console_base *con);
+  virtual t_addr dump(int smart,
+		      //t_addr start, t_addr stop,
+		      class cl_dump_ads *ads,
+		      int bpl,
+		      class cl_console_base *con) {
+    return dump(smart, /*start, stop*/ads, -1, -1, bpl, con);
   }
-  virtual t_addr dump(t_addr addr, int bitnr_high, int bitnr_low, class cl_console_base *con) {
-    return dump(2, addr, addr, bitnr_high, bitnr_low, -1, con);
+  virtual t_addr dump(t_addr addr,
+		      int bitnr_high, int bitnr_low,
+		      class cl_console_base *con) {
+    cl_dump_ads ads(addr, true, addr, true);
+    return dump(2,
+		//addr, addr,
+		&ads,
+		bitnr_high, bitnr_low,
+		-1,
+		con);
   }
-  virtual t_addr dump_s(t_addr start, t_addr stop, int bpl, class cl_console_base *con);
-  virtual t_addr dump_b(t_addr start, t_addr stop, int bpl, class cl_console_base *con);
-  virtual t_addr dump_i(t_addr start, t_addr stop, int bpl, class cl_console_base *con);
-  virtual t_addr dump(t_addr start, t_addr stop, int bpl, class cl_console_base *con) { return dump(1, start, stop, bpl, con); }
+  virtual t_addr dump_s(//t_addr start, t_addr stop,
+			class cl_dump_ads *ads,
+			int bpl,
+			class cl_console_base *con);
+  virtual t_addr dump_b(//t_addr start, t_addr stop,
+			class cl_dump_ads *ads,
+			int bpl,
+			class cl_console_base *con);
+  virtual t_addr dump_i(//t_addr start, t_addr stop,
+			class cl_dump_ads *ads,
+			int bpl,
+			class cl_console_base *con);
+  virtual t_addr dump(//t_addr start, t_addr stop,
+		      class cl_dump_ads *ads,
+		      int bpl,
+		      class cl_console_base *con) {
+    return dump(1, /*start, stop*/ads, bpl, con);
+  }
   //virtual t_addr dump(class cl_console_base *con) { return(dump(df_smart, -1, -1, -1, con)); }
   virtual bool search_next(bool case_sensitive,
 			   t_mem *array, int len, t_addr *addr);
@@ -136,13 +224,9 @@ class cl_memory_operator: public cl_base
 {
 public:
   t_mem mask;
-  class cl_memory_operator *next_operator;
   class cl_memory_cell *cell;
 public:
-  cl_memory_operator(class cl_memory_cell *acell/*, t_addr addr*/);
-
-  virtual class cl_memory_operator *get_next(void) { return(next_operator); }
-  virtual void set_next(class cl_memory_operator *next) { next_operator= next;}
+  cl_memory_operator(class cl_memory_cell *acell);
 
   virtual bool match(class cl_hw *the_hw) { return(false); }
   virtual bool match(class cl_brk *brk) { return(false); }
@@ -235,14 +319,16 @@ class cl_memory_cell: public cl_cell_data
 #ifdef STATISTIC
  public:
   unsigned long nuof_writes, nuof_reads;
+  class cl_memory *as;
 #endif
  public:
   t_mem mask;
-  t_mem def_data;
+  //t_mem def_data;
  protected:
   uchar width;
   uchar flags;
-  class cl_memory_operator *operators;
+  //class cl_memory_operator *operators;
+  class cl_memory_operator **ops;
  public:
   cl_memory_cell();
   cl_memory_cell(uchar awidth);
@@ -272,13 +358,16 @@ class cl_memory_cell: public cl_cell_data
   virtual t_mem W(t_mem val) { return write(val); }
   virtual t_mem set(t_mem val);
   virtual t_mem download(t_mem val);
-  
+
+  virtual int nuof_ops(void);
   virtual void append_operator(class cl_memory_operator *op);
   virtual void prepend_operator(class cl_memory_operator *op);
   virtual void remove_operator(class cl_memory_operator *op);
   virtual void del_operator(class cl_brk *brk);
   virtual void del_operator(class cl_hw *hw);
   virtual class cl_banker *get_banker(void);
+  virtual void set_brk(class cl_uc *uc, class cl_brk *brk);
+  virtual void del_brk(class cl_brk *brk);
   
   virtual class cl_memory_cell *add_hw(class cl_hw *hw/*, t_addr addr*/);
   virtual void remove_hw(class cl_hw *hw);
@@ -495,7 +584,7 @@ public:
   virtual bool is_chip(void) { return(true); }
 
   virtual void *get_slot(t_addr addr);
-  virtual t_addr is_slot(/*t_mem*/void *data_ptr);
+  virtual bool is_slot(void *data_ptr, t_addr *addr_of);
   
   virtual t_mem read(t_addr addr) { return d(addr); }
   virtual t_mem read(t_addr addr, enum hw_cath skip) { return d(addr); }
@@ -561,6 +650,7 @@ public:
   virtual int init(void);
   virtual bool is_banker() { return false; }
   virtual bool is_bander() { return false; }
+  virtual bool uses_chip(class cl_memory *chip) { return chip==memchip; }
 
   virtual bool activate(class cl_console_base *con);
 
@@ -594,6 +684,7 @@ class cl_banker: public cl_address_decoder
   int bank;
   class cl_address_decoder **banks;
   int shift_by, shift2_by;
+  class cl_memory_operator *op1, *op2;
  public:
   cl_banker(class cl_address_space *the_banker_as,
 	    t_addr the_banker_addr,
@@ -622,6 +713,7 @@ class cl_banker: public cl_address_decoder
   virtual t_mem actual_bank();
   virtual bool activate(class cl_console_base *con);
   virtual bool switch_to(int bank_nr, class cl_console_base *con);
+  virtual bool uses_chip(class cl_memory *chip);
   
   virtual void print_info(const char *pre, class cl_console_base *con);
 };

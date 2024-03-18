@@ -118,8 +118,7 @@ cl_timer2::write(class cl_memory_cell *cell, t_mem *val)
 	mode= T2MODE_BAUDRATE;
       else
 	mode= T2MODE_OFF;
-      if (mode != oldmode)
-	inform_partners(EV_T2_MODE_CHANGED, &n);
+      inform_partners(EV_T2_MODE_CHANGED, &n);
     }
   else if (cell == cell_t2mod)
     {
@@ -382,7 +381,7 @@ void
 cl_timer2::print_info(class cl_console_base *con)
 {
   int t2con= cell_tcon->get();
-  class cl_memory_cell *iec= sfr?(sfr->get_cell(IE)):NULL;
+  class cl_memory_cell *iec= sfr?(sfr->get_cell(IE)):0;
   u8_t ier= iec?(iec->get()):0;
   
   con->dd_printf("%s[%d] 0x%04x", id_string, id,

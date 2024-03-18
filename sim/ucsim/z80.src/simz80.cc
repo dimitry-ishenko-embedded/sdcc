@@ -26,17 +26,19 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 /*@1@*/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "globals.h"
 
 // local
+#include "glob.h"
 #include "simz80cl.h"
-//#include "z80cl.h"
-#include "r2kcl.h"
 #include "gb80cl.h"
 #include "lr35902cl.h"
 #include "ez80cl.h"
+#include "r800cl.h"
+
 
 cl_simz80::cl_simz80(class cl_app *the_app):
   cl_sim(the_app)
@@ -74,10 +76,11 @@ cl_simz80::mk_controller(void)
     // Add Rabbits, etc here.
 
     case CPU_R2K:
-      return(new cl_r2k (&cpus_z80[i], this));
-      
     case CPU_R3KA:
-      return(new cl_r3ka(&cpus_z80[i], this));
+      {
+	printf("\nTo simulate Rabbit use ucsim_rxk\n");
+	return NULL;
+      }
       
     case CPU_LR35902:
       return(new cl_lr35902(&cpus_z80[i], this));
@@ -86,6 +89,9 @@ cl_simz80::mk_controller(void)
 
     case CPU_EZ80:
       return(new cl_ez80(&cpus_z80[i], this));
+
+    case CPU_R800:
+      return(new cl_r800(&cpus_z80[i], this));
       
     default:
       return NULL;

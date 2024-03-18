@@ -48,8 +48,8 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 //#include "regsst7.h"
 #include "st7mac.h"
 
-#define uint32 t_addr
-#define uint8 unsigned char
+//#define uint32 t_addr
+//#define uint8 unsigned char
 
 /*******************************************************************/
 
@@ -69,8 +69,9 @@ int
 cl_st7::init(void)
 {
   cl_uc::init(); /* Memories now exist */
+  sp_limit= 0;
 
-  set_xtal(8000000);
+  ///set_xtal(8000000);
 
   //rom = address_space(MEM_ROM_ID);
 //  ram = mem(MEM_XRAM);
@@ -1164,13 +1165,7 @@ cl_st7::exec_inst(void)
 		return(resINV_INST);
 	}
 	  
-  /*if (PC)
-    PC--;
-  else
-  PC= get_mem_size(MEM_ROM_ID)-1;*/
-  PC= rom->inc_address(PC, -1);
-
-  sim->stop(resINV_INST);
+  //PC= instPC;//rom->inc_address(PC, -1);
   return(resINV_INST);
 }
 

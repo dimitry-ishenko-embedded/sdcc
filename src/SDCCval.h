@@ -63,6 +63,7 @@ typedef struct initList
   int type;
   int lineno;
   char *filename;
+  bool isempty;                         // C23 empty initializer
   struct designation *designation;
   union
   {
@@ -117,6 +118,7 @@ value *constIntVal (const char *);
 value *constCharacterVal (unsigned long v, char type);
 value *constCharVal (unsigned char v);
 value *constBoolVal (bool v, bool reduceType);
+value *constNullptrVal (void);
 value *reverseVal (value *);
 value *reverseValWithType (value *);
 value *copyValue (value *);
@@ -128,7 +130,7 @@ value *symbolVal (symbol *);
 void printVal (value *);
 double floatFromVal (value *);
 unsigned long ulFromVal (const value *);
-unsigned long long ullFromVal (value *);
+unsigned long long ullFromVal (const value *);
 
 /* convert a fixed16x16 type to double */
 double doubleFromFixed16x16 (TYPE_TARGET_ULONG value);
