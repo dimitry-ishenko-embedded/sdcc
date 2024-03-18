@@ -35,7 +35,7 @@ Depends: sdcc-libraries (= ${source:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: sdcc-doc
-Suggests: python, sdcc-ucsim
+Suggests: python3, sdcc-ucsim
 Breaks: sdcc-ucsim (<< 3.5.0)
 Replaces: sdcc-ucsim (<< 3.5.0)
 Description: Small Device C Compiler

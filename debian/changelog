@@ -8,6 +8,7 @@ sdcc (4.4.0+dfsg-1) UNRELEASED; urgency=medium
   * Switch from libncurses5-dev to libncurses-dev build-dep
   * Add lintian override for missing-source false positive
     (sim/ucsim/doc/cmd_general.html)
+  * Switch as2gbmap over to Python 3
 
  -- Jonathan McDowell <noodles@earth.li>  Mon, 18 Mar 2024 10:54:34 +0000
 
