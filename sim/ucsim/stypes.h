@@ -57,7 +57,7 @@ typedef unsigned TYPE_DWORD u32_t;
 typedef   signed TYPE_QWORD i64_t;
 typedef unsigned TYPE_QWORD u64_t;
 
-typedef i64_t		t_addr;		/* 32 bit max */
+typedef /*i64_t*/u32_t		t_addr;		/* 32 bit max */
 typedef u32_t		t_mem;		/* 32 bit max */
 typedef i32_t		t_smem;		/* signed 32 bit memory */
 
@@ -105,6 +105,7 @@ struct dis_entry
   const char *mnemonic;
   bool is_call;
   uchar ticks;
+  void *info;
 };
 
 // table entry of SFR and BIT names
@@ -155,9 +156,12 @@ enum cpu_type {
   CPU_R4K	= 0x0200,
   CPU_R5K	= 0x0400,
   CPU_R6K	= 0x0800,
-  CPU_ALL_Z80   = (CPU_Z80|CPU_Z180|CPU_R2K|CPU_LR35902|CPU_R3KA|CPU_EZ80|
-		   CPU_Z80N|CPU_GB80),
-
+  CPU_R800	= 0x1000,
+  CPU_ALL_Z80   = (CPU_Z80|CPU_Z180|CPU_LR35902|CPU_EZ80|
+		   CPU_Z80N|CPU_GB80|
+		   CPU_R800),
+  CPU_ALL_RXK   =  (CPU_R3K|CPU_R4K|CPU_R5K|CPU_R6K|CPU_R3KA|CPU_R2K),
+  
   CPU_XA	= 0x0001,
   CPU_ALL_XA	= (CPU_XA),
 
@@ -251,16 +255,41 @@ enum cpu_type {
 
   // 6502 based, but not 100% compatible
   CPU_65C02	= 0x0100,	// extended inst.set
-  CPU_65SC02	= 0x0200,      	// 65C02 variant, different inst.set
+  CPU_65C02S	= 0x0200,      	// 65C02 variant, different inst.set
   CPU_65CE02	= 0x0400,	// extension of 65C02
+
+  // Intel 8080, 8085
+  CPU_I8080	= 0x0001,
+  CPU_I8085	= 0x0002,
+
+  CPU_PDK13	= 0x0001,
+  CPU_PDK14	= 0x0002,
+  CPU_PDK15	= 0x0003,
+
+  CPU_F8	= 0x0001,
+
+  CPU_P1516	= 0x0001,
+  CPU_P2223	= 0x0002,
+
+  // MCS48 Intel 8048 family
+  CPU_I8021	= 0x0001, // 1k-? "1"
+  CPU_I8022	= 0x0002, // 2k-? "2"
+  CPU_MCS21	= (CPU_I8021|CPU_I8022),
+  CPU_I8035	= 0x0010, // 0k-64 "8"
+  CPU_I8039	= 0x0020, // 0k-128 "8"
+  CPU_I8040	= 0x0040, // 0k-256 "8"
+  CPU_MCS30	= (CPU_I8035|CPU_I8039|CPU_I8040),
+  CPU_I8041	= 0x0100, // "4"
+  CPU_I8041A	= 0x0200, // "A"
+  CPU_MCS41	= (CPU_I8041|CPU_I8041A),
+  CPU_I8048	= 0x1000, // 1k-64 "8"
+  CPU_I8049	= 0x2000, // 2k-128 "8"
+  CPU_I8050	= 0x4000, // 4k-256 "8"
+  CPU_MCS48	= (CPU_I8048|CPU_I8049|CPU_I8050),
   
   // technology
   CPU_CMOS	= 0x0001,
   CPU_HMOS	= 0x0002,
-
-  CPU_PDK13 = 0x0001,
-  CPU_PDK14 = 0x0002,
-  CPU_PDK15 = 0x0003,
 };
 
 
@@ -297,7 +326,9 @@ enum mem_class
 enum sim_state {
   SIM_NONE	= 0,
   SIM_GO	= 0x01,	// Processor is running
-  SIM_QUIT	= 0x02	// Program must exit
+  SIM_QUIT	= 0x02,	// Program must exit
+  SIM_STARTEMU	= 0x04,	// Start emulation mode
+  SIM_EMU	= 0x08	// Run in emulation mode
 };
 
 /* States of CPU */
@@ -310,9 +341,9 @@ enum cpu_state {
 /* Result of instruction simulation */
 enum inst_result {
   resGO		= 0,	/* OK, go on */
-  resWDTRESET	= 1,	/* Reseted by WDT */
+  resWDTRESET	= 1,	/* Reset by WDT */
   resINTERRUPT	= 2,	/* Interrupt accepted */
-  resSTOP	= 100,	/* Stop if result greater then this */
+  resSTOP	= 100,	/* Stop if result greater than this */
   resHALT	= 101,	/* Serious error, halt CPU */
   resINV_ADDR	= 102,	/* Invalid indirect address */
   resSTACK_OV	= 103,	/* Stack overflow */
@@ -368,12 +399,13 @@ enum intr_levels {
   IT_HIGH	= 2 /* service of high priority interrupt */
 };
 
-/* cathegories of hw elements (peripherials) */
+/* cathegories of hw elements (peripherals) */
 enum hw_cath {
   HW_DUMMY	= 0x0000,
   HW_TIMER	= 0x0002,
   HW_UART	= 0x0004,
   HW_PORT	= 0x0008,
+  HW_GPIO	= 0x0008,
   HW_PCA	= 0x0010,
   HW_INTERRUPT	= 0x0020,
   HW_WDT	= 0x0040,

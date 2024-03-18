@@ -49,9 +49,9 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 //#include "regshc08.h"
 #include "hc08mac.h"
 
-#define uint32 t_addr
-#define uint8 unsigned char
-#define int8 char
+//#define uint32 t_addr
+//#define uint8 unsigned char
+//#define int8 char
 
 //const bool TRUE = 1;
 //const bool FALSE = 0;
@@ -74,7 +74,7 @@ cl_hc08::init(void)
 {
   cl_uc::init(); /* Memories now exist */
 
-  set_xtal(8000000);
+  //set_xtal(8000000);
 
   //rom= address_space(MEM_ROM_ID);
 //  ram= mem(MEM_XRAM);
@@ -138,9 +138,15 @@ cl_hc08::mk_hw_elements(void)
 
   add_hw(h= new cl_dreg(this, 0, "dreg"));
   h->init();
-  
-  add_hw(h= new cl_hc08_cpu(this));
-  h->init();
+}
+
+
+void
+cl_hc08::make_cpu_hw(void)
+{
+  cpu= new cl_hc08_cpu(this);
+  add_hw(cpu);
+  cpu->init();
 }
 
 void
@@ -675,13 +681,7 @@ cl_hc08::exec_inst(void)
     default: return(resHALT);
   }
 
-  /*if (PC)
-    PC--;
-  else
-  PC= get_mem_size(MEM_ROM_ID)-1;*/
-  PC= rom->inc_address(PC, -1);
-
-  sim->stop(resINV_INST);
+  //PC= instPC;
   return(resINV_INST);
 }
 
@@ -769,4 +769,4 @@ cl_hc08_cpu::conf_op(cl_memory_cell *cell, t_addr addr, t_mem *val)
 }
 
 
-/* End of hc08.src/m68hc08.cc */
+/* End of m68hc08.src/m68hc08.cc */

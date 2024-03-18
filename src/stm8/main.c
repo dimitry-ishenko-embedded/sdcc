@@ -187,7 +187,7 @@ stm8_reset_regparm (struct sym_link *ftype)
 static int
 stm8_reg_parm (sym_link *l, bool reentrant)
 {
-  bool is_regarg = stm8IsRegArg(_G.regparam.ftype, ++_G.regparam.n, 0);
+  bool is_regarg = stm8IsRegArg (_G.regparam.ftype, ++_G.regparam.n, 0);
 
   return (is_regarg ? _G.regparam.n : 0);
 }
@@ -264,6 +264,14 @@ stm8_genInitStartup (FILE *of)
       fprintf (of, "\tldw\tsp, x\n");
     }
 
+  /* Call external startup code */
+  fprintf (of, options.model == MODEL_LARGE ? "\tcallf\t___sdcc_external_startup\n" : "\tcall\t___sdcc_external_startup\n");
+
+  /* If external startup returned non-zero, skip init */
+  fprintf (of, "\ttnz\ta\n");
+  fprintf (of, "\tjreq\t__sdcc_init_data\n");
+  fprintf (of, options.model == MODEL_LARGE ? "\tjpf\t__sdcc_program_startup\n" : "\tjp\t__sdcc_program_startup\n");
+
   /* Init static & global variables */
   fprintf (of, "__sdcc_init_data:\n");
   fprintf (of, "; stm8_genXINIT() start\n");
@@ -327,6 +335,9 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
   int result_size = IS_SYMOP (IC_RESULT (ic)) ? getSize (OP_SYM_TYPE (IC_RESULT(ic))) : 4;
   sym_link *test = NULL;
 
+  if (IS_BITINT (OP_SYM_TYPE (IC_RESULT(ic))) && SPEC_BITINTWIDTH (OP_SYM_TYPE (IC_RESULT(ic))) % 8)
+    return false;
+
   if (IS_LITERAL (left))
     test = left;
   else if (IS_LITERAL (right))
@@ -349,7 +360,6 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 
         unsigned long long add, sub;
         int topbit, nonzero;
-        
 
         if (floatFromVal (valFromType (test)) < 0 || csdOfVal (&topbit, &nonzero, &add, &sub, valFromType (test), 0xffff))
           return false;
@@ -375,12 +385,32 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
 
 /* Indicate which extended bit operations this port supports */
 static bool
-hasExtBitOp (int op, int size)
+hasExtBitOp (int op, sym_link *left, int right)
 {
-  return (op == GETABIT || op == GETBYTE || op == GETWORD ||
-    op == SWAP && (size <= 2 || size == 4) ||
-    op == RLC && size <= 2 ||
-    op == RRC && size <= 2);
+  int size = getSize (left);
+
+  switch (op)
+    {
+    case GETABIT:
+    case GETBYTE:
+    case GETWORD:
+      return (true);
+    case ROT:
+      {
+        unsigned int lbits = bitsForType (left);
+        if (lbits % 8)
+          return (false);
+        if (size <= 1)
+          return (true);
+        if (size <= 2 && (right % lbits  == 1 || right % lbits == lbits - 1))
+          return (true);
+        if ((size <= 2 || size == 4) && lbits == right * 2)
+          return (true);
+      }
+      return (false);
+    }
+
+  return (false);
 }
 
 static const char *
@@ -404,11 +434,12 @@ get_model (void)
     $2 is always the output file.
     $3 varies
     $l is the list of extra options that should be there somewhere...
+    $L is the list of extra options that should be passed on the command line...
     MUST be terminated with a NULL.
 */
 static const char *_linkCmd[] =
 {
-  "sdldstm8", "-nf", "\"$1\"", NULL
+  "sdldstm8", "-nf", "\"$1\"", "$L", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
@@ -462,7 +493,7 @@ PORT stm8_port =
     NULL,
     NULL,
   },
-  /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
+  /* Sizes */
   {
     1,                          /* char */
     2,                          /* short */
@@ -476,6 +507,7 @@ PORT stm8_port =
     3,                          /* banked func ptr */
     1,                          /* bit */
     4,                          /* float */
+    64,                         /* bit-precise integer types up to _BitInt (64) */
   },
   /* tags for generic pointers */
   { 0x00, 0x40, 0x60, 0x80 },   /* far, near, xstack, code */
@@ -504,6 +536,7 @@ PORT stm8_port =
     NULL,
     NULL,
     1,                          /* CODE  is read-only */
+    false,                      // doesn't matter, as port has no __sfr anyway
     1                           /* No fancy alignments supported. */
   },
   { stm8_genExtraArea, NULL },
@@ -520,6 +553,7 @@ PORT stm8_port =
   { 
     -1,                         /* shifts never use support routines */
     true,                       /* use support routine for int x int -> long multiplication */
+    true,                       /* use support routine for unsigned long x unsigned char -> unsigned long long multiplication */
   },
   { stm8_emitDebuggerSymbol,
     {

@@ -165,10 +165,10 @@ cl_cmd_arg::as_memory(class cl_uc *uc)
     {
       if (value.memory.memory->is_chip())
 	value.memory.memchip=
-	  dynamic_cast<class cl_memory_chip *>(value.memory.memory);
+	  (class cl_memory_chip *)(value.memory.memory);
       if (value.memory.memory->is_address_space())
 	value.memory.address_space=
-	  dynamic_cast<class cl_address_space *>(value.memory.memory);
+	  (class cl_address_space *)(value.memory.memory);
     }
   return(value.memory.memory != 0);
 }
@@ -360,13 +360,22 @@ bool
 cl_cmd_sym_arg::as_cell(class cl_uc *uc)
 {
   class cl_memory *mem;
+  class cl_memory_cell *cell;
   t_addr addr;
   
-  if (uc->symbol2address(get_svalue(), &mem, &addr) &&
-      mem->is_address_space())
+  if (uc->symbol2address(get_svalue(), &mem, &addr))
     {
-      value.cell= ((cl_address_space *)mem)->get_cell(addr);
-      return value.cell != NULL;
+      if (mem->is_address_space())
+	{
+	  value.cell= ((cl_address_space *)mem)->get_cell(addr);
+	  return value.cell != NULL;
+	}
+      return false;
+    }
+  else if (uc->symbol2cell(get_svalue(), &cell))
+    {
+      value.cell= cell;
+      return true;
     }
   return false;
 }
@@ -476,7 +485,7 @@ cl_cmd_array_arg::get_bit_address(class cl_uc *uc, // input
                                 int *bitnr_low)
 {
   // address_space[address]
-  char *n;
+  char *n= 0;
   t_addr a;
   if (name_arg == 0 ||
       index == 0 ||
@@ -501,7 +510,7 @@ cl_cmd_array_arg::get_bit_address(class cl_uc *uc, // input
 bool
 cl_cmd_array_arg::as_hw(class cl_uc *uc)
 {
-  char *n;
+  char *n= 0;
   t_addr a;
 
   if (name_arg == 0 ||
@@ -509,7 +518,7 @@ cl_cmd_array_arg::as_hw(class cl_uc *uc)
       (n= name_arg->get_svalue()) == NULL ||
       !index->get_address(uc, &a))
     return(false);
-  
+
   value.hw= uc->get_hw(n, a, NULL);
   return(value.hw != NULL);
 }

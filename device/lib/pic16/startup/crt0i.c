@@ -27,7 +27,7 @@
    might be covered by the GNU General Public License.
 -------------------------------------------------------------------------
 
-  $Id: crt0i.c 9317 2015-09-13 08:19:01Z spth $
+  $Id: crt0i.c 13656 2022-08-14 10:27:34Z epetrich $
 */
 
 /*
@@ -52,7 +52,7 @@ char __uflags = 0;
 /* External reference to the user's main routine. */
 extern void main (void);
 
-void _entry (void) __naked __interrupt 0;
+void _entry (void) __naked __interrupt (0);
 void _startup (void) __naked;
 
 /* Access bank selector. */
@@ -63,7 +63,7 @@ void _startup (void) __naked;
  * Entry function, placed at interrupt vector 0 (RESET).
  */
 void
-_entry (void) __naked __interrupt 0
+_entry (void) __naked __interrupt (0)
 {
   __asm
     goto    __startup

@@ -48,7 +48,7 @@ SDCC_LD        += sdcc-ld8051
 SDCC_MISC      += debugger/mcs51
 endif
 
-ifneq ($(OPT_DISABLE_Z80)$(OPT_DISABLE_Z180)$(OPT_DISABLE_Z80N), 111)
+ifneq ($(OPT_DISABLE_Z80)$(OPT_DISABLE_Z180)$(OPT_DISABLE_Z80N)$(OPT_DISABLE_R800), 1111)
 SDCC_AS        += sdas/asz80
 SDCC_LD        += sdcc-ldz80
 endif
@@ -98,7 +98,6 @@ SDCC_BINUTILS   =
 ifeq ($(OPT_DISABLE_SDBINUTILS), 0)
 TARGETS        += sdcc-sdbinutils
 PKGS           += $(SDCC_SDBINUTILS)
-SDBINUTILS_BINS = sdar$(EXEEXT) sdranlib$(EXEEXT) sdnm$(EXEEXT) sdobjcopy$(EXEEXT)
 SDCC_BINUTILS   = sdcc-sdbinutils
 endif
 
@@ -142,7 +141,7 @@ all: checkconf sdcc
 
 tini: checkconf sdcc-tini
 
-sdcc-libs: sdcc-sdbinutils
+sdcc-libs: ${SDCC_BINUTILS}
 	for lib in $(SDCC_LIBS); do $(MAKE) -C $$lib; done
 
 sdcc-cc: sdcc-libs
@@ -165,14 +164,6 @@ sdcc-packihx:
 
 sdcc-sdbinutils:
 	$(MAKE) -C $(SDCC_SDBINUTILS)
-	# in some cases (cygwin) the real binaries are in .libs
-	for bin in $(SDBINUTILS_BINS); do \
-	  if [ -f $(SDCC_SDBINUTILS)/binutils/.libs/$$bin ]; then \
-	    cp $(SDCC_SDBINUTILS)/binutils/.libs/$$bin bin; \
-	  else \
-	    cp $(SDCC_SDBINUTILS)/binutils/$$bin bin; \
-	  fi \
-	done
 
 sdcc-device-inc:
 	$(MAKE) -C device/include
@@ -320,3 +311,9 @@ checkconf:
 	fi
 
 # End of Makefile
+#
+Makefile: $(srcdir)/Makefile.in
+	 cd $(top_builddir); ./config.status Makefile
+
+Makefile.common: $(srcdir)/Makefile.common.in
+	 cd $(top_builddir); ./config.status Makefile.common

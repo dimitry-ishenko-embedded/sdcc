@@ -76,7 +76,7 @@ cl_stack_op::info(class cl_console_base *con, class cl_uc *uc)
 {
   con->dd_printf("%-4s 0x%06x-0x%06x %ld ",
 		 get_op_name(),
-		 AU(SP_before), AU(SP_after), labs(SP_before-SP_after));
+		 AU(SP_before), AU(SP_after), labs((i64_t)SP_before-(i64_t)SP_after));
   print_info(con);
   con->dd_printf(" ");
   uc->print_disass(PC, con);
@@ -446,6 +446,16 @@ cl_error_stack_overflow::cl_error_stack_overflow(class cl_stack_op *op):
   PC= op->get_pc();
   SP_before= op->get_before();
   SP_after= op->get_after();
+}
+
+cl_error_stack_overflow::cl_error_stack_overflow(t_addr iPC,
+						 t_addr SPbef,
+						 t_addr SPaft):
+  cl_error_stack()
+{
+  PC= iPC;
+  SP_before= SPbef;
+  SP_after= SPaft;
 }
 
 void

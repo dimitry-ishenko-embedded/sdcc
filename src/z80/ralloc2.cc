@@ -75,7 +75,7 @@ float default_operand_cost(const operand *o, const assignment &a, unsigned short
                 }
 
               // Penalty for not placing 2- and 4-byte variables in register pairs
-              // Todo: Extend this once the register allcoator can use registers other than bc, de:
+              // Todo: Extend this once the register allocator can use registers other than bc, de:
               if ((size == 2 || size == 4) &&
                   (byteregs[1] != byteregs[0] + 1 || (byteregs[0] != REG_C && byteregs[0] != REG_E && byteregs[0] != REG_L)))
                 c += 2.0f;
@@ -371,22 +371,6 @@ call_cost(const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
   return(c);
 }
 
-template <class G_t, class I_t> static float
-ifx_cost(const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
-{
-  const iCode *ic = G[i].ic;
-
-  return(default_operand_cost(IC_COND(ic), a, i, G, I));
-}
-
-template <class G_t, class I_t> static float
-jumptab_cost(const assignment &a, unsigned short int i, const G_t &G, const I_t &I)
-{
-  const iCode *ic = G[i].ic;
-
-  return(default_operand_cost(IC_JTCOND(ic), a, i, G, I));
-}
-
 template <class I_t>
 static void add_operand_conflicts_in_node(const cfg_node &n, I_t &I)
 {
@@ -561,19 +545,7 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
   bool result_in_A = operand_in_reg(IC_RESULT(ic), REG_A, ia, i, G);
   
   // Check if an input of this instruction is placed in A.
-  bool input_in_A;
-  switch(ic->op)
-    {
-    case IFX:
-      input_in_A = operand_in_reg(IC_COND(ic), REG_A, ia, i, G);
-      break;
-    case JUMPTABLE:
-      input_in_A = operand_in_reg(IC_JTCOND(ic), REG_A, ia, i, G);
-      break;
-    default:
-      input_in_A = operand_in_reg(left, REG_A, ia, i, G) || operand_in_reg(right, REG_A, ia, i, G);
-      break;
-    }
+  bool input_in_A = operand_in_reg(left, REG_A, ia, i, G) || operand_in_reg(right, REG_A, ia, i, G);
 
   // sfr access needs to go through a.
   if(input_in_A &&
@@ -584,13 +556,13 @@ static bool Ainst_ok(const assignment &a, unsigned short int i, const G_t &G, co
   // For some iCodes, we can handle anything.
   if(ic->op == '~' || ic->op == IPUSH || ic->op == LABEL || ic->op == GOTO ||
     ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND ||
-    ic->op == GETBYTE || ic->op == GETWORD || ic->op == SWAP && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G)) ||
+    ic->op == GETBYTE || ic->op == GETWORD ||
+    ic->op == ROT && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G) && IS_OP_LITERAL (IC_RIGHT (ic)) && operandLitValueUll (IC_RIGHT (ic)) * 2 == bitsForType (operandType (IC_LEFT (ic)))) ||
     ic->op == LEFT_OP ||
-    ic->op == '=' && !POINTER_SET (ic) || ic->op == CAST)
+    ic->op == RECEIVE || ic->op == '=' && !POINTER_SET (ic) || ic->op == CAST)
     return(true);
 
-  if (ic->op == RIGHT_OP && getSize(operandType(result)) == 1 && IS_OP_LITERAL(right) ||
-    (ic->op == RRC || ic->op == RLC) && getSize(operandType(result)) == 1)
+  if (ic->op == RIGHT_OP && getSize(operandType(result)) == 1 && IS_OP_LITERAL(right))
     return(true);
 
   // Can use non-destructive cp on == and < (> might swap operands).
@@ -746,22 +718,8 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   bool result_in_H = operand_in_reg(result, REG_H, ia, i, G);
   bool result_in_HL = result_in_L || result_in_H;
 
-  bool input_in_L, input_in_H;
-  switch(ic->op)
-    {
-    case IFX:
-      input_in_L = operand_in_reg(IC_COND(ic), REG_L, ia, i, G);
-      input_in_H = operand_in_reg(IC_COND(ic), REG_L, ia, i, G);
-      break;
-    case JUMPTABLE:
-      input_in_L = operand_in_reg(IC_JTCOND(ic), REG_L, ia, i, G);
-      input_in_H = operand_in_reg(IC_JTCOND(ic), REG_L, ia, i, G);
-      break;
-    default:
-      input_in_L = operand_in_reg(left, REG_L, ia, i, G) || operand_in_reg(right, REG_L, ia, i, G);
-      input_in_H = operand_in_reg(left, REG_H, ia, i, G) || operand_in_reg(right, REG_H, ia, i, G);
-      break;
-    }
+  bool input_in_L = operand_in_reg(left, REG_L, ia, i, G) || operand_in_reg(right, REG_L, ia, i, G);
+  bool input_in_H = operand_in_reg(left, REG_H, ia, i, G) || operand_in_reg(right, REG_H, ia, i, G);
   bool input_in_HL = input_in_L || input_in_H;
 
   const cfg_dying_t &dying = G[i].dying;
@@ -784,7 +742,8 @@ static bool HLinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   // For some iCodes, code generation can handle anything.
   if(ic->op == '~' || ic->op == CALL || ic->op == RETURN || ic->op == LABEL || ic->op == GOTO ||
     ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND ||
-    ic->op == GETBYTE || ic->op == GETWORD || ic->op == SWAP && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G)) ||
+    ic->op == GETBYTE || ic->op == GETWORD ||
+    ic->op == ROT && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G) && IS_OP_LITERAL (IC_RIGHT (ic)) && operandLitValueUll (IC_RIGHT (ic)) * 2 == bitsForType (operandType (IC_LEFT (ic)))) ||
     !((IS_SM83 || IY_RESERVED) && (operand_on_stack(result, a, i, G) || operand_on_stack(right, a, i, G))) && (ic->op == '=' && !POINTER_SET (ic) || ic->op == CAST) ||
     ic->op == RECEIVE || ic->op == SEND)
     return(true);
@@ -1001,22 +960,15 @@ static bool IYinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   bool result_in_IYH = operand_in_reg(result, REG_IYH, ia, i, G);
   bool result_in_IY = result_in_IYL || result_in_IYH;
 
-  bool input_in_IYL, input_in_IYH;
-  switch(ic->op)
-    {
-    case IFX:
-      input_in_IYL = operand_in_reg(IC_COND(ic), REG_IYL, ia, i, G);
-      input_in_IYH = operand_in_reg(IC_COND(ic), REG_IYL, ia, i, G);
-      break;
-    case JUMPTABLE:
-      input_in_IYL = operand_in_reg(IC_JTCOND(ic), REG_IYL, ia, i, G);
-      input_in_IYH = operand_in_reg(IC_JTCOND(ic), REG_IYL, ia, i, G);
-      break;
-    default:
-      input_in_IYL = operand_in_reg(left, REG_IYL, ia, i, G) || operand_in_reg(right, REG_IYL, ia, i, G);
-      input_in_IYH = operand_in_reg(left, REG_IYH, ia, i, G) || operand_in_reg(right, REG_IYH, ia, i, G);
-      break;
-    }
+  const cfg_dying_t &dying = G[i].dying;
+  
+  bool dead_IYL = result_in_IYL || unused_IYL || dying.find(ia.registers[REG_IYL][1]) != dying.end() || dying.find(ia.registers[REG_IYL][0]) != dying.end();
+  bool dead_IYH = result_in_IYH || unused_IYH || dying.find(ia.registers[REG_IYH][1]) != dying.end() || dying.find(ia.registers[REG_IYH][0]) != dying.end();
+
+  bool dead_IY = dead_IYL && dead_IYH;
+
+  bool input_in_IYL = operand_in_reg(left, REG_IYL, ia, i, G) || operand_in_reg(right, REG_IYL, ia, i, G);
+  bool input_in_IYH = operand_in_reg(left, REG_IYH, ia, i, G) || operand_in_reg(right, REG_IYH, ia, i, G);
   bool input_in_IY = input_in_IYL || input_in_IYH;
 
   //const std::set<var_t> &dying = G[i].dying;
@@ -1038,17 +990,28 @@ static bool IYinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
   // Some instructions can handle anything.
   if(ic->op == IPUSH || ic->op == CALL ||
     ic->op == '+' ||
-    ic->op == '|' ||
-    ic->op == GETBYTE || ic->op == GETWORD || ic->op == SWAP && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G)) ||
+    ic->op == GETBYTE || ic->op == GETWORD ||
+    ic->op == ROT && (getSize(operandType(IC_RESULT (ic))) == 1 || operand_in_reg(result, ia, i, G) && IS_OP_LITERAL (IC_RIGHT (ic)) && operandLitValueUll (IC_RIGHT (ic)) * 2 == bitsForType (operandType (IC_LEFT (ic)))) ||
     ic->op == '=' && !POINTER_SET(ic) ||
     ic->op == CAST ||
     ic->op == SEND)
     return(true);
 
+  // Avoid overwriting operand in iy by use of iy as pointer reg to global operand.
   if(!result_in_IY && !input_in_IY &&
     !(IC_RESULT(ic) && isOperandInDirSpace(IC_RESULT(ic))) &&
     !(IC_RIGHT(ic) && IS_TRUE_SYMOP(IC_RIGHT(ic))) &&
     !(IC_LEFT(ic) && IS_TRUE_SYMOP(IC_LEFT(ic))))
+    return(true);
+
+  // Some instructions can handle anything if no operand is pointed to by iy.
+  if((!(IC_RESULT(ic) && isOperandInDirSpace(IC_RESULT(ic))) || dead_IY && getSize(operandType(IC_RESULT (ic))) == 1) &&
+    !(IC_RIGHT(ic) && IS_TRUE_SYMOP(IC_RIGHT(ic))) &&
+    !(IC_LEFT(ic) && IS_TRUE_SYMOP(IC_LEFT(ic))) &&
+    (ic->op == '|' ||
+    ic->op == '^' ||
+    ic->op == '~' ||
+    ic->op == BITWISEAND))
     return(true);
 
   // Code generator mostly cannot handle variables that are only partially in IY.
@@ -1069,16 +1032,6 @@ static bool IYinst_ok(const assignment &a, unsigned short int i, const G_t &G, c
     return(false);
   if(ia.registers[REG_IYL][0] >= 0 && I[ia.registers[REG_IYL][0]].byte != 0 || ia.registers[REG_IYH][0] >= 0 && I[ia.registers[REG_IYH][0]].byte != 1)
     return(false);
-
-#if 0
-  if(ic->key == 32)
-    {
-      std::cout << "A IYinst_ok: Assignment: ";
-      //print_assignment(a);
-      std::cout << "\n";
-      std::cout << "2IYinst_ok: at (" << i << ", " << ic->key << ")\nIYL = (" << ia.registers[REG_IYL][0] << ", " << ia.registers[REG_IYL][1] << "), IYH = (" << ia.registers[REG_IYH][0] << ", " << ia.registers[REG_IYH][1] << ")inst " << i << ", " << ic->key << "\n";
-    }
-#endif
 
   if(result_in_IY &&
     (ic->op == '-' || ic->op == UNARYMINUS)) // todo: More instructions that can write iy.
@@ -1223,16 +1176,9 @@ static void assign_operands_for_cost(const assignment &a, unsigned short int i, 
 {
   const iCode *ic = G[i].ic;
   
-  if(ic->op == IFX)
-    assign_operand_for_cost(IC_COND(ic), a, i, G, I);
-  else if(ic->op == JUMPTABLE)
-    assign_operand_for_cost(IC_JTCOND(ic), a, i, G, I);
-  else
-    {
-      assign_operand_for_cost(IC_LEFT(ic), a, i, G, I);
-      assign_operand_for_cost(IC_RIGHT(ic), a, i, G, I);
-      assign_operand_for_cost(IC_RESULT(ic), a, i, G, I);
-    }
+  assign_operand_for_cost(IC_LEFT(ic), a, i, G, I);
+  assign_operand_for_cost(IC_RIGHT(ic), a, i, G, I);
+  assign_operand_for_cost(IC_RESULT(ic), a, i, G, I);
     
   if(ic->op == SEND && ic->builtinSEND)
     assign_operands_for_cost(a, (unsigned short)*(adjacent_vertices(i, G).first), G, I);
@@ -1285,7 +1231,7 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
     case '|':
     case BITWISEAND:
     case IPUSH:
-    //case IPOP:
+    case IPUSH_VALUE_AT_ADDRESS:
     case CALL:
     case PCALL:
     case RETURN:
@@ -1298,6 +1244,7 @@ static float instruction_cost(const assignment &a, unsigned short int i, const G
     case GETABIT:
     case GETBYTE:
     case GETWORD:
+    case ROT:
     case LEFT_OP:
     case RIGHT_OP:
     case GET_VALUE_AT_ADDRESS:
@@ -1449,11 +1396,11 @@ static float rough_cost_estimate(const assignment &a, unsigned short int i, cons
           c += 2.0f;
     }
 
-  // An artifical ordering of assignments.
+  // An artificial ordering of assignments.
   if(ia.registers[REG_E][1] < 0)
-    c += 0.0001f;
+    c += 0.001f;
   if(ia.registers[REG_D][1] < 0)
-    c += 0.00001f;
+    c += 0.0001f;
 
   if(a.marked)
     c -= 0.5f;
@@ -1496,6 +1443,24 @@ static float rough_cost_estimate(const assignment &a, unsigned short int i, cons
 // Code for another ic is generated when generating this one. Mark the other as generated.
 static void extra_ic_generated(iCode *ic)
 {
+  // djnz
+  if(ic->op == '-' && ic->next && ic->next->op == IFX && ic->next->left->key == ic->result->key && getSize (operandType (ic->result)) == 1)
+    {
+      iCode *ifx = ic->next;
+
+      if (!IS_ITEMP (ic->result) /*&& !isOperandGlobal (ic->left)*/)
+        return;
+
+      if (!IS_OP_LITERAL (ic->right))
+        return;
+
+      if (ullFromVal (OP_VALUE (ic->right)) != 1)
+        return;
+
+      ifx->generated = true;
+      return;
+    }
+
   if(ic->op == '>' || ic->op == '<' || ic->op == LE_OP || ic->op == GE_OP || ic->op == EQ_OP || ic->op == NE_OP ||
     (ic->op == '^' || ic->op == '|' || ic->op == BITWISEAND) && (IS_OP_LITERAL (IC_LEFT (ic)) || IS_OP_LITERAL (IC_RIGHT (ic))))
     {
@@ -1536,6 +1501,7 @@ static bool tree_dec_ralloc(T_t &T, G_t &G, const I_t &I, SI_t &SI)
     add_edge(boost::source(*e, I), boost::target(*e, I), I2);
 
   assignment ac;
+  ac.s = 0.0f;
   assignment_optimal = true;
   tree_dec_ralloc_nodes(T, find_root(T), G, I2, ac, &assignment_optimal);
 
@@ -1659,11 +1625,16 @@ iCode *z80_ralloc2_cc(ebbIndex *ebbi)
 
   iCode *ic = create_cfg(control_flow_graph, conflict_graph, ebbi);
 
+  if (optimize.genconstprop)
+    recomputeValinfos (ic, ebbi, "_2");
+
   should_omit_frame_ptr = omit_frame_ptr(control_flow_graph);
   move_parms();
 
   if(options.dump_graphs)
     dump_cfg(control_flow_graph);
+
+  guessCounts (ic, ebbi);
 
   if(options.dump_graphs)
     dump_con(conflict_graph);

@@ -50,36 +50,50 @@ struct  mne     mne[] = {
     {   NULL,   ".title",       S_HEADER,       0,      O_TITLE },
     {   NULL,   ".sbttl",       S_HEADER,       0,      O_SBTTL },
     {   NULL,   ".module",      S_MODUL,        0,      0       },
-    {   NULL,   ".include",     S_INCL,         0,      0       },
-    {   NULL,   ".incbin",      S_INCL,         0,      I_BNRY  },
+    {	NULL,	".include",	S_INCL,		0,	I_CODE	},
+    {	NULL,	".incbin",	S_INCL,		0,	I_BNRY	},
     {   NULL,   ".area",        S_AREA,         0,      0       },
-
+//    {	NULL,	".psharea",	S_AREA,		0,	O_PSH	},
+//    {	NULL,	".poparea",	S_AREA,		0,	O_POP	},
+//    {	NULL,	".bank",	S_BANK,		0,	0	},
     {   NULL,   ".org",         S_ORG,          0,      0       },
     {   NULL,   ".radix",       S_RADIX,        0,      0       },
     {   NULL,   ".globl",       S_GLOBL,        0,      0       },
     {   NULL,   ".local",       S_LOCAL,        0,      0       },
-    {   NULL,   ".if",          S_CONDITIONAL,  0,      O_IF    },
-    {   NULL,   ".iff",         S_CONDITIONAL,  0,      O_IFF   },
-    {   NULL,   ".ift",         S_CONDITIONAL,  0,      O_IFT   },
-    {   NULL,   ".iftf",        S_CONDITIONAL,  0,      O_IFTF  },
-    {   NULL,   ".ifgt",        S_CONDITIONAL,  0,      O_IFGT  },
-    {   NULL,   ".iflt",        S_CONDITIONAL,  0,      O_IFLT  },
-    {   NULL,   ".ifge",        S_CONDITIONAL,  0,      O_IFGE  },
-    {   NULL,   ".ifle",        S_CONDITIONAL,  0,      O_IFLE  },
-    {   NULL,   ".ifeq",        S_CONDITIONAL,  0,      O_IFEQ  },
-    {   NULL,   ".ifne",        S_CONDITIONAL,  0,      O_IFNE  },
-    {   NULL,   ".iif",         S_CONDITIONAL,  0,      O_IIF   },
-    {   NULL,   ".iiff",        S_CONDITIONAL,  0,      O_IIFF  },
-    {   NULL,   ".iift",        S_CONDITIONAL,  0,      O_IIFT  },
-    {   NULL,   ".iiftf",       S_CONDITIONAL,  0,      O_IIFTF },
-    {   NULL,   ".iifgt",       S_CONDITIONAL,  0,      O_IIFGT },
-    {   NULL,   ".iiflt",       S_CONDITIONAL,  0,      O_IIFLT },
-    {   NULL,   ".iifge",       S_CONDITIONAL,  0,      O_IIFGE },
-    {   NULL,   ".iifle",       S_CONDITIONAL,  0,      O_IIFLE },
-    {   NULL,   ".iifeq",       S_CONDITIONAL,  0,      O_IIFEQ },
-    {   NULL,   ".iifne",       S_CONDITIONAL,  0,      O_IIFNE },
-    {   NULL,   ".else",        S_CONDITIONAL,  0,      O_ELSE  },
-    {   NULL,   ".endif",       S_CONDITIONAL,  0,      O_ENDIF },
+    {	NULL,	".if",		S_CONDITIONAL,	0,	O_IF	},
+    {	NULL,	".iff",		S_CONDITIONAL,	0,	O_IFF	},
+    {	NULL,	".ift",		S_CONDITIONAL,	0,	O_IFT	},
+    {	NULL,	".iftf",	S_CONDITIONAL,	0,	O_IFTF	},
+    {	NULL,	".ifdef",	S_CONDITIONAL,	0,	O_IFDEF	},
+    {	NULL,	".ifndef",	S_CONDITIONAL,	0,	O_IFNDEF},
+    {	NULL,	".ifgt",	S_CONDITIONAL,	0,	O_IFGT	},
+    {	NULL,	".iflt",	S_CONDITIONAL,	0,	O_IFLT	},
+    {	NULL,	".ifge",	S_CONDITIONAL,	0,	O_IFGE	},
+    {	NULL,	".ifle",	S_CONDITIONAL,	0,	O_IFLE	},
+    {	NULL,	".ifeq",	S_CONDITIONAL,	0,	O_IFEQ	},
+    {	NULL,	".ifne",	S_CONDITIONAL,	0,	O_IFNE	},
+    {	NULL,	".ifb",		S_CONDITIONAL,	0,	O_IFB	},
+    {	NULL,	".ifnb",	S_CONDITIONAL,	0,	O_IFNB	},
+    {	NULL,	".ifidn",	S_CONDITIONAL,	0,	O_IFIDN	},
+    {	NULL,	".ifdif",	S_CONDITIONAL,	0,	O_IFDIF	},
+    {	NULL,	".iif",		S_CONDITIONAL,	0,	O_IIF	},
+    {	NULL,	".iiff",	S_CONDITIONAL,	0,	O_IIFF	},
+    {	NULL,	".iift",	S_CONDITIONAL,	0,	O_IIFT	},
+    {	NULL,	".iiftf",	S_CONDITIONAL,	0,	O_IIFTF	},
+    {	NULL,	".iifdef",	S_CONDITIONAL,	0,	O_IIFDEF},
+    {	NULL,	".iifndef",	S_CONDITIONAL,	0,	O_IIFNDEF},
+    {	NULL,	".iifgt",	S_CONDITIONAL,	0,	O_IIFGT	},
+    {	NULL,	".iiflt",	S_CONDITIONAL,	0,	O_IIFLT	},
+    {	NULL,	".iifge",	S_CONDITIONAL,	0,	O_IIFGE	},
+    {	NULL,	".iifle",	S_CONDITIONAL,	0,	O_IIFLE	},
+    {	NULL,	".iifeq",	S_CONDITIONAL,	0,	O_IIFEQ	},
+    {	NULL,	".iifne",	S_CONDITIONAL,	0,	O_IIFNE	},
+    {	NULL,	".iifb",	S_CONDITIONAL,	0,	O_IIFB	},
+    {	NULL,	".iifnb",	S_CONDITIONAL,	0,	O_IIFNB	},
+    {	NULL,	".iifidn",	S_CONDITIONAL,	0,	O_IIFIDN},
+    {	NULL,	".iifdif",	S_CONDITIONAL,	0,	O_IIFDIF},
+    {	NULL,	".else",	S_CONDITIONAL,	0,	O_ELSE	},
+    {	NULL,	".endif",	S_CONDITIONAL,	0,	O_ENDIF	},
     {   NULL,   ".list",        S_LISTING,      0,      O_LIST  },
     {   NULL,   ".nlist",       S_LISTING,      0,      O_NLIST },
     {   NULL,   ".equ",         S_EQU,          0,      O_EQU   },
@@ -93,8 +107,10 @@ struct  mne     mne[] = {
     {   NULL,   ".fdb",         S_DATA,         0,      O_2BYTE },
     {   NULL,   ".3byte",       S_DATA,         0,      O_3BYTE },
     {   NULL,   ".triple",      S_DATA,         0,      O_3BYTE },
-/*    { NULL,   ".4byte",       S_DATA,         0,      O_4BYTE },      */
-/*    { NULL,   ".quad",        S_DATA,         0,      O_4BYTE },      */
+/*    {	NULL,	".dl",		S_DATA,		0,	O_4BYTE	},	*/
+/*    {	NULL,	".4byte",	S_DATA,		0,	O_4BYTE	},	*/
+/*    {	NULL,	".quad",	S_DATA,		0,	O_4BYTE	},	*/
+/*    {	NULL,	".long",	S_DATA,		0,	O_4BYTE	},	*/
     {   NULL,   ".df",          S_FLOAT,        0,      0       },
     {   NULL,   ".blkb",        S_BLK,          0,      O_1BYTE },
     {   NULL,   ".ds",          S_BLK,          0,      O_1BYTE },
@@ -103,16 +119,22 @@ struct  mne     mne[] = {
     {   NULL,   ".blkw",        S_BLK,          0,      O_2BYTE },
     {   NULL,   ".blk3",        S_BLK,          0,      O_3BYTE },
 /*    { NULL,   ".blk4",        S_BLK,          0,      O_4BYTE },      */
+/*    {	NULL,	".blkl",	S_BLK,		0,	O_4BYTE	},	*/
     {   NULL,   ".ascii",       S_ASCIX,        0,      O_ASCII },
     {   NULL,   ".ascis",       S_ASCIX,        0,      O_ASCIS },
     {   NULL,   ".asciz",       S_ASCIX,        0,      O_ASCIZ },
     {   NULL,   ".str",         S_ASCIX,        0,      O_ASCII },
     {   NULL,   ".strs",        S_ASCIX,        0,      O_ASCIS },
     {   NULL,   ".strz",        S_ASCIX,        0,      O_ASCIZ },
-    {   NULL,   ".fcc",         S_ASCIX,        0,      O_ASCII },
-    {   NULL,   ".even",        S_BOUNDARY,     0,      O_EVEN  },
-    {   NULL,   ".odd",         S_BOUNDARY,     0,      O_ODD   },
-    {   NULL,   ".bndry",       S_BOUNDARY,     0,      O_BNDRY },
+    {	NULL,	".fcc",		S_ASCIX,	0,	O_ASCII	},
+    {	NULL,	".define",	S_DEFINE,	0,	O_DEF	},
+    {	NULL,	".undefine",	S_DEFINE,	0,	O_UNDEF	},
+    {	NULL,	".even",	S_BOUNDARY,	0,	O_EVEN	},
+    {	NULL,	".odd",		S_BOUNDARY,	0,	O_ODD	},
+    {	NULL,	".bndry",	S_BOUNDARY,	0,	O_BNDRY	},
+    {	NULL,	".msg"	,	S_MSG,		0,	0	},
+    {	NULL,	".assume",	S_ERROR,	0,	O_ASSUME},
+    {	NULL,	".error",	S_ERROR,	0,	O_ERROR	},
 /* sdas specific */
     {   NULL,   ".optsdcc",     S_OPTSDCC,      0,      0       },
 /* end sdas specific */
@@ -142,6 +164,7 @@ struct  mne     mne[] = {
     {   NULL,   ".z180",        S_CPU,          0,      X_HD64  },
     {   NULL,   ".zxn",         S_CPU,          0,      X_ZXN   },
     {   NULL,   ".ez80",        S_CPU,          0,      X_EZ80  },
+    {   NULL,   ".r800",        S_CPU,          0,      X_R800  },
 
 	/* z80 / hd64180 */
 
@@ -462,7 +485,12 @@ struct  mne     mne[] = {
     {	NULL,	"pea.l",	X_EZ_PEA,	M_L,	0x65	},
     {	NULL,	"pea.s",	X_EZ_PEA,	M_S,	0x65	},
 
-    {	NULL,	"rsmix",	X_EZ_INH2,	0,	0x7E	},
-    {	NULL,	"stmix",	X_EZ_INH2,	S_EOL,	0x7D	}
+    {	NULL,	"rsmix",	X_EZ_INH2,	0,	0x7E                },
+    {	NULL,	"stmix",	X_EZ_INH2,	0,	0x7D                },
 
+	/* Z280 */
+	
+	{	NULL,	"multu",	X_Z280_MULTU,	0,	0xC1	        },
+    {	NULL,	"multuw",	X_Z280_MULTUW,	S_EOL,	0xC3        }
 };
+

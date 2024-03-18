@@ -27,6 +27,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
 // prj
 #include "globals.h"
+#include "utils.h"
 
 // sim.src
 //#include "appcl.h"
@@ -40,6 +41,7 @@ main(int argc, char *argv[])
 {
   class cl_sim *sim;
 
+  app_start_at= dnow();
   cpus= cpus_hc08;
   application= new cl_app();
   application->set_name("shc08");
@@ -55,4 +57,4 @@ main(int argc, char *argv[])
 }
 
 
-/* End of hc08.src/sm68hc08.cc */
+/* End of m68hc08.src/sm68hc08.cc */

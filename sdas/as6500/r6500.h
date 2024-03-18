@@ -1,7 +1,7 @@
 /* r6500.h */
 
 /*
- *  Copyright (C) 1995-2014  Alan R. Baldwin
+ *  Copyright (C) 1995-2022  Alan R. Baldwin
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -67,15 +67,6 @@ struct adsym
 #define	S_Y	3
 
 /*
- * Machine Extensions
- */
-#define	S_SDP		30
-#define	S_R6500		31
-#define	S_R65F11	32
-#define S_R65C00	33
-#define	S_R65C02	34
-
-/*
  * Addressing types
  */
 #define S_IMMED	40
@@ -126,6 +117,13 @@ struct adsym
 /*
  * machine dependent functions
  */
+#define	S_SDP		80
+#define	S_CPU		82
+
+#define	X_R6500		31
+#define	X_R65F11	32
+#define X_R65C00	33
+#define	X_R65C02	34
 
 #ifdef	OTHERSYSTEM
 
@@ -133,12 +131,14 @@ struct adsym
 extern	struct	adsym	axy[];
 extern	int		addr(struct expr *esp);
 extern	int		admode(struct adsym *sp);
-extern	int		any(int c, char *str);
 extern	int		srch(char *str);
 
 	/* r65mch.c */
+extern	struct  area	*zpg;
 extern	VOID		machine(struct mne *mp);
 extern	int		mchpcr(struct expr *esp);
+extern	VOID		mcherr(int c, char *str);
+extern	VOID		mchwrn(char *str);
 extern	VOID		minit(void);
 
 #else
@@ -147,12 +147,14 @@ extern	VOID		minit(void);
 extern	struct	adsym	axy[];
 extern	int		addr();
 extern	int		admode();
-extern	int		any();
 extern	int		srch();
 
 	/* r65mch.c */
+extern	struct  area	*zpg;
 extern	VOID		machine();
 extern	int		mchpcr();
+extern	VOID		mcherr();
+extern	VOID		mchwrn();
 extern	VOID		minit();
 
 #endif

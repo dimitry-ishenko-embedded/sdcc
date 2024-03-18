@@ -30,7 +30,7 @@
 #include "asxxxx.h"
 #include "z80.h"
 
-char    *cpu    = "Zilog Z80 / Hitachi HD64180 / ZX-Next / eZ80";
+char    *cpu    = "Zilog Z80 / Hitachi HD64180 / ZX-Next / eZ80 / R800";
 char    *dsft   = "asm";
 
 char    imtab[3] = { 0x46, 0x56, 0x5E };
@@ -91,7 +91,7 @@ static const char  z80pg2[256] = {  /* P2 == CB */
 /*00*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
 /*10*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
 /*20*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*30*/  UN,UN,UN,UN,UN,UN,UN,UN, 8, 8, 8, 8, 8, 8,15, 8,
+/*30*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
 /*40*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
 /*50*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
 /*60*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
@@ -106,21 +106,21 @@ static const char  z80pg2[256] = {  /* P2 == CB */
 /*F0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8
 };
 
-static const char  z80pg3[256] = {  /* P3 == DD */
+static const char  z80pg3[256] = {  /* P3 == DD && P5 == FD */
 /*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
 /*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
 /*00*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
 /*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*20*/  UN,14,20,10,UN,UN,UN,UN,UN,15,20,10,UN,UN,UN,UN,
+/*20*/  UN,14,20,10, 8, 8,11,UN,UN,15,20,10, 8,8 ,11,UN,
 /*30*/  UN,UN,UN,UN,23,23,19,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*70*/  19,19,19,19,19,19,UN,19,UN,UN,UN,UN,UN,UN,19,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
+/*40*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
+/*50*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
+/*60*/   8, 8, 8, 8, 8, 8,19, 8, 8, 8, 8, 8, 8, 8,19, 8,
+/*70*/  19,19,19,19,19,19,UN,19,UN,UN,UN,UN, 8, 8,19,UN,
+/*80*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
+/*90*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
+/*A0*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
+/*B0*/  UN,UN,UN,UN, 8, 8,19,UN,UN,UN,UN,UN, 8, 8,19,UN,
 /*C0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,P6,UN,UN,UN,UN,
 /*D0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*E0*/  UN,14,UN,23,UN,15,UN,UN,UN, 8,UN,UN,UN,UN,UN,UN,
@@ -134,10 +134,10 @@ static const char  z80pg4[256] = {  /* P4 == ED */
 /*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*20*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*30*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*40*/  12,12,15,20, 8,14, 8, 9,12,12,15,20,UN,14,UN, 9,
-/*50*/  12,12,15,20,UN,UN, 8, 9,12,12,15,20,UN,UN, 8, 9,
-/*60*/  12,12,15,20,UN,UN,UN,18,12,12,15,20,UN,UN,UN,18,
-/*70*/  UN,UN,15,20,UN,UN,UN,UN,12,12,15,20,UN,UN,UN,UN,
+/*40*/  12,12,15,20, 8,14, 8, 9,12,12,15,20, 8,14, 8, 9,
+/*50*/  12,12,15,20, 8,14, 8, 9,12,12,15,20, 8,14, 8, 9,
+/*60*/  12,12,15,20, 8,14, 8,18,12,12,15,20, 8,14, 8,18,
+/*70*/  12,12,15,20, 8,14, 8,UN,12,12,15,20, 8,14, 8,UN,
 /*80*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*90*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*A0*/  16,16,16,16,UN,UN,UN,UN,16,16,16,16,UN,UN,UN,UN,
@@ -148,49 +148,7 @@ static const char  z80pg4[256] = {  /* P4 == ED */
 /*F0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN
 };
 
-static const char  z80pg5[256] = {  /* P5 == FD */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*20*/  UN,14,20,10,UN,UN,UN,UN,UN,15,20,10,UN,UN,UN,UN,
-/*30*/  UN,UN,UN,UN,23,23,19,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*70*/  19,19,19,19,19,19,UN,19,UN,UN,UN,UN,UN,UN,19,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,P7,UN,UN,UN,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*E0*/  UN,14,UN,23,UN,15,UN,UN,UN, 8,UN,UN,UN,UN,UN,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,10,UN,UN,UN,UN,UN,UN
-};
-
-static const char  z80pg6[256] = {  /* P6 == DD CB */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*20*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*30*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*70*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*E0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN
-};
-
-static const char  z80pg7[256] = {  /* P7 == FD CB */
+static const char  z80pg6[256] = {  /* P6 == FD CB &&  P6 == DD CB */
 /*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
 /*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
 /*00*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
@@ -213,7 +171,7 @@ static const char  z80pg7[256] = {  /* P7 == FD CB */
 
 static const char *z80Page[7] = {
     z80pg1, z80pg2, z80pg3, z80pg4,
-    z80pg5, z80pg6, z80pg7
+    z80pg3, z80pg6, z80pg6
 };
 
 /*
@@ -376,156 +334,30 @@ static const char *hd64Page[7] = {
  * Z80-ZXN Opcode Cycle Pages
  */
 
-static const char  zxnpg1[256] = {
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/   4,10, 7, 6, 4, 4, 7, 4, 4,11, 7, 6, 4, 4, 7, 4,
-/*10*/  13,10, 7, 6, 4, 4, 7, 4,12,11, 7, 6, 4, 4, 7, 4,
-/*20*/  12,10,16, 6, 4, 4, 7, 4,12,11,16, 6, 4, 4, 7, 4,
-/*30*/  12,10,13, 6,11,11,10, 4,12,11,13, 6, 4, 4, 7, 4,
-/*40*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*50*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*60*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*70*/   7, 7, 7, 7, 7, 7, 4, 7, 4, 4, 4, 4, 4, 4, 7, 4,
-/*80*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*90*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*A0*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*B0*/   4, 4, 4, 4, 4, 4, 7, 4, 4, 4, 4, 4, 4, 4, 7, 4,
-/*C0*/  11,10,10,10,17,11, 7,11,11,10,10,P2,17,17, 7,11,
-/*D0*/  11,10,10,11,17,11, 7,11,11, 4,10,11,17,P3, 7,11,
-/*E0*/  11,10,10,19,17,11, 7,11,11, 4,10, 4,17,P4, 7,11,
-/*F0*/  11,10,10, 4,17,11, 7,11,11, 6,10, 4,17,P5, 7,11
-};
-
-static const char  zxnpg2[256] = {  /* P2 == CB */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*10*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*20*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*30*/  UN,UN,UN,UN,UN,UN,UN,UN, 8, 8, 8, 8, 8, 8,15, 8,
-/*40*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
-/*50*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
-/*60*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
-/*70*/   8, 8, 8, 8, 8, 8,12, 8, 8, 8, 8, 8, 8, 8,12, 8,
-/*80*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*90*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*A0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*B0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*C0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*D0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*E0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8,
-/*F0*/   8, 8, 8, 8, 8, 8,15, 8, 8, 8, 8, 8, 8, 8,15, 8
-};
-
-static const char  zxnpg3[256] = {  /* P3 == DD */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*20*/  UN,14,20,10,UN,UN,UN,UN,UN,15,20,10,UN,UN,UN,UN,
-/*30*/  UN,UN,UN,UN,23,23,19,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*70*/  19,19,19,19,19,19,UN,19,UN,UN,UN,UN,UN,UN,19,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,P6,UN,UN,UN,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*E0*/  UN,14,UN,23,UN,15,UN,UN,UN, 8,UN,UN,UN,UN,UN,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,10,UN,UN,UN,UN,UN,UN
-};
-
 static const char  zxnpg4[256] = {  /* P4 == ED */
 /*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
 /*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
 /*00*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*20*/  UN,UN,UN, 8, 8,UN, 8,11,UN,UN,UN,UN,UN,UN,UN,UN,
-/*30*/   8, 4, 4, 4,12,12,12,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*40*/  12,12,15,20, 8,14, 8, 9,12,12,15,20,UN,14,UN, 9,
-/*50*/  12,12,15,20,UN,UN, 8, 9,12,12,15,20,UN,UN, 8, 9,
-/*60*/  12,12,15,20,UN,UN,UN,18,12,12,15,20,UN,UN,UN,18,
-/*70*/  UN,UN,15,20,UN,UN,UN,UN,12,12,15,20,UN,UN,UN,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,22, 8,UN,UN,UN,UN,
-/*90*/  16,16,12, 8, 8, 8,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*A0*/  16,16,16,16,16,UN,UN,UN,16,16,16,16,16,UN,UN,UN,
-/*B0*/  21,21,21,21,21,UN,21,12,21,21,21,21,21,UN,UN,UN,
+/*20*/  UN,UN,UN, 8, 8,UN,UN,11, 8, 8, 8, 8, 8,UN,UN,UN,
+/*30*/   8, 8, 8, 8,16,16,16,UN,UN,UN,UN,UN,UN,UN,UN,UN,
+/*40*/  12,12,15,20, 8,14, 8, 9,12,12,15,20, 8,14, 8, 9,
+/*50*/  12,12,15,20, 8,14, 8, 9,12,12,15,20, 8,14, 8, 9,
+/*60*/  12,12,15,20, 8,14, 8,18,12,12,15,20, 8,14, 8,18,
+/*70*/  12,12,15,20, 8,14, 8,UN,12,12,15,20, 8,14, 8,UN,
+/*80*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,
+/*90*/  16,20,17, 8, 8, 8,UN,UN,13,UN,UN,UN,UN,UN,UN,UN,
+/*A0*/  16,16,16,16,16,14,UN,UN,16,16,16,16,16,UN,UN,UN,
+/*B0*/  21,21,21,21,21,UN,UN,21,21,21,21,21,21,UN,UN,UN,
 /*C0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*D0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*E0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
 /*F0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN
 };
 
-static const char  zxnpg5[256] = {  /* P5 == FD */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*20*/  UN,14,20,10,UN,UN,UN,UN,UN,15,20,10,UN,UN,UN,UN,
-/*30*/  UN,UN,UN,UN,23,23,19,UN,UN,15,UN,UN,UN,UN,UN,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*70*/  19,19,19,19,19,19,UN,19,UN,UN,UN,UN,UN,UN,19,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,19,UN,UN,UN,UN,UN,UN,UN,19,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,P7,UN,UN,UN,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,
-/*E0*/  UN,14,UN,23,UN,15,UN,UN,UN, 8,UN,UN,UN,UN,UN,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,10,UN,UN,UN,UN,UN,UN
-};
-
-static const char  zxnpg6[256] = {  /* P6 == DD CB */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*20*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*30*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*70*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*E0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN
-};
-
-static const char  zxnpg7[256] = {  /* P7 == FD CB */
-/*--*--* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-/*--*--* -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - */
-/*00*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*10*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*20*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*30*/  UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*40*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*50*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*60*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*70*/  UN,UN,UN,UN,UN,UN,20,UN,UN,UN,UN,UN,UN,UN,20,UN,
-/*80*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*90*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*A0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*B0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*C0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*D0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*E0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN,
-/*F0*/  UN,UN,UN,UN,UN,UN,23,UN,UN,UN,UN,UN,UN,UN,23,UN
-};
-
 static const char *zxnPage[7] = {
-    zxnpg1, zxnpg2, zxnpg3, zxnpg4,
-    zxnpg5, zxnpg6, zxnpg7
+    z80pg1, z80pg2, z80pg3, zxnpg4,
+    z80pg3, z80pg6, z80pg6
 };
 
 /*
@@ -771,6 +603,11 @@ struct mne *mp;
                 }
                 break;
 
+        case X_R800:
+                if (rf > S_CPU && rf < X_Z280_MULTU)
+                        rf = 0;
+                break;
+
         default:
                 rf = 0;
         }
@@ -794,7 +631,7 @@ struct mne *mp;
                         if ((v1 = admode(CND)) != 0) {
                                 outab(op | (v1<<3));
                         } else {
-                                qerr();
+                                xerr('a', "Require condition code NZ, Z, NC, or C.");
                         }
                 } else {
                         /*
@@ -842,13 +679,13 @@ struct mne *mp;
                         outab(0x8B);
                         break;
                 }
-                aerr();
+                xerr('a', "Only 16-Bit registers except SP.");
                 break;
 
         case S_RST:
                 v1 = (int) absexpr();
                 if (v1 & ~0x38) {
-                        aerr();
+                        xerr('a', "Allowed values: N * 0x08, N = 0 -> 7."); 
                         v1 = 0;
                 }
                 outab(op|v1);
@@ -858,7 +695,7 @@ struct mne *mp;
                 expr(&e1, 0);
                 abscheck(&e1);
                 if (e1.e_addr > 2) {
-                        aerr();
+                        xerr('a', "Values of 0, 1, and 2 are valid.");
                         e1.e_addr = 0;
                 }
                 outab(op);
@@ -884,12 +721,12 @@ struct mne *mp;
                  * bit  b,r
                  */
                 if (genop(0xCB, op, &e2, 0) || t1)
-                        aerr();
+                        xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_RL_UNDOCD:
           if (!allow_undoc)
-            aerr( );
+            xerr('a', "Undocumented instructions not enabled.");
 
         case S_RL:
                 t1 = 0;
@@ -908,7 +745,7 @@ struct mne *mp;
                         t2 = addr(&e2);
                 }
                 if (genop(0xCB, op, &e2, 0) || t1)
-                        aerr();
+                        xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_AND:
@@ -966,7 +803,7 @@ struct mne *mp;
                  * op  a,n      [a,#n]
                  */
                 if (genop(0, op, &e2, 1) || t1)
-                        aerr();
+                        xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_ADD:
@@ -987,7 +824,7 @@ struct mne *mp;
                         }
 
                         if (genop(0, op, &e1, 1))
-                                aerr();
+                                xerr('a', "Invalid Addressing Mode.");
                         break;
                 }
                 if ((t1 == S_R8) && (e1.e_addr == A)) {
@@ -1000,7 +837,7 @@ struct mne *mp;
                         }
 
                         if (genop(0, op, &e2, 1))
-                                aerr();
+                                xerr('a', "Second argument: Invalid Addressing Mode.");
                         break;
                 }
                 if ((t1 == S_R16) && (t2 == S_R16)) {
@@ -1025,7 +862,7 @@ struct mne *mp;
                                 break;
                         }
                         if (rf != S_ADD) {
-                                aerr();
+                                xerr('a', "Only valid with ADD.");
                                 break;
                         }
                         /*
@@ -1090,7 +927,7 @@ struct mne *mp;
                                 break;
                         }
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_LD:
@@ -1212,7 +1049,7 @@ struct mne *mp;
                  */
                 if (mchtyp == X_EZ80 && (t1 == S_R16) && ((t2 == S_IDIX) || (t2 == S_IDIY))) {
                         if (v1 == SP) {
-                                aerr();
+                                xerr('a', "Only BC, DE, HL, IX and IY are allowed.");
                                 break;
                         }
                         if (t2 == S_IDIX) {
@@ -1247,7 +1084,7 @@ struct mne *mp;
                  */
                 if (mchtyp == X_EZ80 && (t2 == S_R16) && ((t1 == S_IDIX) || (t1 == S_IDIY))) {
                         if (v2 == SP) {
-                                aerr();
+                                xerr('a', "Only BC, DE, HL, IX and IY are allowed.");
                                 break;
                         }
                         if (t1 == S_IDIX) {
@@ -1474,7 +1311,7 @@ struct mne *mp;
                  * ld  iyl,iyl
                  */
                 if ( allow_undoc &&
-                     ((t1 == S_R8U1) &&  (t2 == S_R8U1)) || ((t1 == S_R8U2) &&  (t2 == S_R8U2)) )
+                     ((t1 == S_R8U1) &&  (t2 == S_R8U1) || (t1 == S_R8U2) &&  (t2 == S_R8U2)) )
                   {
                     outab( ((t1 == S_R8U1) ? 0xDD : 0xFD ) );
                     outab( (e1.e_addr << 3) | (0x40 + e2.e_addr) );
@@ -1485,7 +1322,7 @@ struct mne *mp;
                   outab ((v1 == A) ? 0x6E : 0x6D);
                   break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_EX:
@@ -1523,7 +1360,7 @@ struct mne *mp;
                         outab(0x08);
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_IN:
@@ -1559,7 +1396,7 @@ struct mne *mp;
                                 break;
                         }
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_DEC:
@@ -1614,12 +1451,12 @@ struct mne *mp;
                  * op  IYL
                  * op  IYH
                  */
-                if ((t1 == S_R8U1)||(t1 == S_R8U2)) {
+                if (allow_undoc && ((t1 == S_R8U1)||(t1 == S_R8U2))) {
                         outab( ((t1 == S_R8U1) ? 0xDD : 0xFD ) );
                         outab(op|(v1<<3));
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case S_DJNZ:
@@ -1631,7 +1468,7 @@ struct mne *mp;
                         if ((v1 &= 0xFF) <= 0x03) {
                                 op += (v1+1)<<3;
                         } else {
-                                aerr();
+                                xerr('a', "Condition code required.");
                         }
                         comma(1);
                 }
@@ -1643,7 +1480,7 @@ struct mne *mp;
                 if (mchpcr(&e2)) {
                         v2 = (int) (e2.e_addr - dot.s_addr - 1);
                         if (pass == 2 && ((v2 < -128) || (v2 > 127)))
-                                aerr();
+                                xerr('a', "Branching Range Exceeded.");
                         outab(v2);
                 } else {
                         outrb(&e2, R_PCR);
@@ -1708,11 +1545,14 @@ struct mne *mp;
                         outab(0x98);
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case X_UNDOCD:
-                ++allow_undoc;
+                if (mchtyp != X_HD64)
+                        ++allow_undoc;
+                else
+                        xerr('a', "HD64180/Z180: Traps on illegal instruction");
                 break;
 
         case S_CPU:
@@ -1720,8 +1560,7 @@ struct mne *mp;
                 mchtyp = op;
                 sym[2].s_addr = op;
                 lmode = SLIST;
-		if (mchtyp == X_EZ80 || mchtyp == X_ZXN)
-		  allow_undoc = 1;
+                allow_undoc = (mchtyp == X_EZ80 || mchtyp == X_ZXN || mchtyp == X_R800);
                 break;
 
         case X_INH2:
@@ -1746,7 +1585,7 @@ struct mne *mp;
                         outrb(&e2, 0);
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case X_MLT:
@@ -1764,7 +1603,7 @@ struct mne *mp;
                         outab(op | (v1<<4));
                         break;
                 }
-                aerr();
+                xerr('a', "Only BC, DE, HL and SP are allowed.");
                 break;
 
         case X_TST:
@@ -1816,7 +1655,7 @@ struct mne *mp;
                         outrb(&e2, 0);
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case X_TSTIO:
@@ -1830,7 +1669,7 @@ struct mne *mp;
                         outrb(&e1, 0);
                         break;
                 }
-                aerr();
+                xerr('a', "Invalid Addressing Mode.");
                 break;
 
         case X_ZXN_INH2:
@@ -2049,17 +1888,42 @@ struct mne *mp;
                 aerr();
                 break;
 
+        case X_Z280_MULTU:
+                t1 = addr(&e1);
+                comma(1);
+                t2 = addr(&e2);
+                // For the R800, this instruction only works if the second operand is b, c, d, or e.
+                if (t1 == S_R8 && e1.e_addr == A && t2 == S_R8 && (e2.e_addr == B || e2.e_addr == C || e2.e_addr == D || e2.e_addr == E)) {
+                        outab(0xED);
+                        outab(op | (e2.e_addr<<3));
+                        break;
+                }       
+                aerr();
+                break;
+
+        case X_Z280_MULTUW:
+                t1 = addr(&e1);
+                comma(1);
+                t2 = addr(&e2);
+                // For the R800, this instruction only works if the second operand is bc or sp.
+                if (t1 == S_R16 && e1.e_addr == HL && t2 == S_R16 && (e2.e_addr == BC || e2.e_addr == SP)) {
+                        outab(0xED);
+                        outab(op | (e2.e_addr<<4));
+                        break;
+                }
+                aerr();
+                break;
 
         default:
                 opcycles = OPCY_ERR;
-                err('o');
+                xerr('o', "Internal Opcode Error.");
                 break;
         }
 
         if (opcycles == OPCY_NONE) {
                 switch (mchtyp) {
                 case X_HD64:
-                        opcycles = hd64pg1[cb[0] & 0xFF];
+                        opcycles = hd64Page[0][cb[0] & 0xFF];
                         while ((opcycles & OPCY_NONE) && (opcycles & OPCY_MASK)) {
                                 switch (opcycles) {
                                 case P2:        /* CB xx        */
@@ -2079,7 +1943,7 @@ struct mne *mp;
                         }
                         break;
                 case X_Z80:
-                        opcycles = z80pg1[cb[0] & 0xFF];
+                        opcycles = z80Page[0][cb[0] & 0xFF];
                         while ((opcycles & OPCY_NONE) && (opcycles & OPCY_MASK)) {
                                 switch (opcycles) {
                                 case P2:        /* CB xx        */
@@ -2099,7 +1963,7 @@ struct mne *mp;
                         }
                         break;
                 case X_ZXN:
-                        opcycles = zxnpg1[cb[0] & 0xFF];
+                        opcycles = zxnPage[0][cb[0] & 0xFF];
                         while ((opcycles & OPCY_NONE) && (opcycles & OPCY_MASK)) {
                                 switch (opcycles) {
                                 case P2:        /* CB xx        */
@@ -2121,12 +1985,12 @@ struct mne *mp;
                 case X_EZ80:
                         {
                                 int of = 0;
-                                opcycles = ez80pg1[cb[0] & 0xFF];
+                                opcycles = ez80Page[0][cb[0] & 0xFF];
                                 while ((opcycles & OPCY_NONE) && (opcycles & OPCY_MASK)) {
                                         switch (opcycles) {
                                         case PF:      /* 40 / 49 / 52 / 5B */
                                                 of = 1;
-                                                opcycles = ez80pg1[cb[1] & 0xFF];
+                                                opcycles = ez80Page[0][cb[1] & 0xFF];
                                                 break;
                                         case P2:        /* CB xx        */
                                         case P3:        /* DD xx        */

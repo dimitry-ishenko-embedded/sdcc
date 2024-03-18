@@ -28,19 +28,6 @@
 
 #include "dbuf_string.h"
 
-/* 6502 registers */
-reg_info regsm6502[] =
-{
-  {REG_GPR, A_IDX,   "a",  M6502MASK_A,  NULL, 0, 1},
-  {REG_GPR, X_IDX,   "x",  M6502MASK_X,  NULL, 0, 1},
-  {REG_GPR, Y_IDX,   "y",  M6502MASK_Y,  NULL, 0, 1},
-  {REG_GPR, YX_IDX,  "yx", M6502MASK_YX, NULL, 0, 1},
-  {REG_GPR, XA_IDX,  "xa", M6502MASK_XA, NULL, 0, 1},
-
-  {REG_CND, CND_IDX, "C",  0, NULL, 0, 1},
-  {0,       SP_IDX,  "sp", 0, NULL, 0, 1},
-};
-
 /* Flags to turn on debugging code.
  */
 enum
@@ -48,44 +35,54 @@ enum
   D_ALLOC = 0,
 };
 
-/** Local static variables */
-static struct
-  {
-    bitVect *spiltSet;
-    set *stackSpil;
-    bitVect *regAssigned;
-    bitVect *totRegAssigned;    /* final set of LRs that got into registers */
-    short blockSpil;
-    int slocNum;
-    bitVect *funcrUsed;         /* registers used in a function */
-    int stackExtend;
-    int dataExtend;
-  }
-_G;
-
 #if 1
 #define D(_a, _s)       if (_a)  { printf _s; fflush(stdout); }
 #else
 #define D(_a, _s)
 #endif
+
+/** Local static variables */
+static struct
+  {
+    bitVect *spiltSet;
+    set *stackSpil;
+    short blockSpil;
+    int slocNum;
+    int stackExtend;
+    int dataExtend;
+} _G;
+
+/* 6502 registers */
+reg_info regsm6502[] =
+{
+  {REG_GPR, A_IDX,   "a",  M6502MASK_A,  NULL, 0, 1},
+  {REG_GPR, X_IDX,   "x",  M6502MASK_X,  NULL, 0, 1},
+  {REG_GPR, Y_IDX,   "y",  M6502MASK_Y,  NULL, 0, 1},
+  {REG_GPR, XA_IDX,  "xa", M6502MASK_XA, NULL, 0, 1},
+//  {REG_GPR, YA_IDX,  "ya", M6502MASK_YA, NULL, 0, 1},
+  {REG_GPR, YX_IDX,  "yx", M6502MASK_YX, NULL, 0, 1},
+  {REG_CND, CND_IDX, "C",  0, NULL, 0, 1},
+  {0,       SP_IDX,  "sp", 0, NULL, 0, 1},
+};
+
 extern void genm6502Code (iCode *);
 
 /* Shared with gen.c */
 int m6502_ptrRegReq;             /* one byte pointer register required */
 
 
-
-int m6502_nRegs = 7;
+int m6502_nRegs = sizeof(regsm6502)/sizeof(reg_info);
 
 reg_info *m6502_reg_a;
 reg_info *m6502_reg_x;
 reg_info *m6502_reg_y;
-reg_info *m6502_reg_yx;
 reg_info *m6502_reg_xa;
+//reg_info *m6502_reg_ya;
+reg_info *m6502_reg_yx;
 reg_info *m6502_reg_sp;
 
-static void spillThis (symbol *);
-static void freeAllRegs ();
+void m6502SpillThis (symbol *);
+static void updateRegUsage (iCode * ic);
 
 /*-----------------------------------------------------------------*/
 /* m6502_regWithIdx - returns pointer to register with index number */
@@ -99,8 +96,7 @@ m6502_regWithIdx (int idx)
     if (regsm6502[i].rIdx == idx)
       return &regsm6502[i];
 
-  werror (E_INTERNAL_ERROR, __FILE__, __LINE__,
-          "regWithIdx not found");
+    printf("error: regWithIdx %d not found\n",idx);
   exit (1);
 }
 
@@ -135,116 +131,27 @@ m6502_freeReg (reg_info * reg)
         if (m6502_reg_x->isFree)
           m6502_reg_yx->isFree = 1;
         break;
-      case YX_IDX:
-        m6502_reg_y->isFree = 1;
-        m6502_reg_x->isFree = 1;
-        if (m6502_reg_a->isFree)
-          m6502_reg_xa->isFree = 1;
-        break;
       case XA_IDX:
         m6502_reg_x->isFree = 1;
         m6502_reg_a->isFree = 1;
         if (m6502_reg_y->isFree)
           m6502_reg_yx->isFree = 1;
         break;
-      default:
-        break;
-    }
-}
-
-
-/*-----------------------------------------------------------------*/
-/* m6502_useReg - marks a register  as used                        */
-/*-----------------------------------------------------------------*/
-void
-m6502_useReg (reg_info * reg)
-{
-  reg->isFree = 0;
-
-  switch (reg->rIdx)
-    {
-      case A_IDX:
-        m6502_reg_xa->aop = NULL;
-        m6502_reg_xa->isFree = 0;
-        break;
-      case X_IDX:
-        m6502_reg_xa->aop = NULL;
-        m6502_reg_xa->isFree = 0;
-        m6502_reg_yx->aop = NULL;
-        m6502_reg_yx->isFree = 0;
-        break;
-      case Y_IDX:
-        m6502_reg_yx->aop = NULL;
-        m6502_reg_yx->isFree = 0;
-        break;
+//      case YA_IDX:
+//        m6502_reg_y->isFree = 1;
+//        m6502_reg_a->isFree = 1;
+//        if (m6502_reg_x->isFree)
+//          m6502_reg_yx->isFree = 1;
+//        break;
       case YX_IDX:
-        m6502_reg_y->aop = NULL;
-        m6502_reg_y->isFree = 0;
-        m6502_reg_x->aop = NULL;
-        m6502_reg_x->isFree = 0;
-        break;
-      case XA_IDX:
-        m6502_reg_x->aop = NULL;
-        m6502_reg_x->isFree = 0;
-        m6502_reg_a->aop = NULL;
-        m6502_reg_a->isFree = 0;
+        m6502_reg_y->isFree = 1;
+        m6502_reg_x->isFree = 1;
+        if (m6502_reg_a->isFree)
+          m6502_reg_xa->isFree = 1;
         break;
       default:
         break;
     }
-}
-
-/*-----------------------------------------------------------------*/
-/* m6502_dirtyReg - marks a register as dirty                      */
-/*-----------------------------------------------------------------*/
-void
-m6502_dirtyReg (reg_info * reg)
-{
-  reg->aop = NULL;
-
-  switch (reg->rIdx)
-    {
-      case A_IDX:
-        m6502_reg_xa->aop = NULL;
-	m6502_reg_xa->isLitConst = 0;
-	m6502_reg_a->aop = NULL;
-	m6502_reg_a->isLitConst = 0;
-        break;
-      case X_IDX:
-        m6502_reg_xa->aop = NULL;
-	m6502_reg_xa->isLitConst = 0;
-        m6502_reg_yx->aop = NULL;
-	m6502_reg_yx->isLitConst = 0;
-	m6502_reg_x->aop = NULL;
-	m6502_reg_x->isLitConst = 0;
-        break;
-      case Y_IDX:
-        m6502_reg_yx->aop = NULL;
-	m6502_reg_yx->isLitConst = 0;
-	m6502_reg_y->aop = NULL;
-	m6502_reg_y->isLitConst = 0;
-        break;
-      case YX_IDX:
-        m6502_reg_yx->aop = NULL;
-	m6502_reg_yx->isLitConst = 0;
-        m6502_reg_y->aop = NULL;
-	m6502_reg_y->isLitConst = 0;
-        m6502_reg_x->aop = NULL;
-	m6502_reg_x->isLitConst = 0;
-        break;
-      case XA_IDX:
-        m6502_reg_xa->aop = NULL;
-	m6502_reg_xa->isLitConst = 0;
-        m6502_reg_x->aop = NULL;
-	m6502_reg_x->isLitConst = 0;
-        m6502_reg_a->aop = NULL;
-	m6502_reg_a->isLitConst = 0;
-        break;
-      default:
-        break;
-    }
-//  if (freereg)
-//    m6502_freeReg(reg);
 }
 
 /*-----------------------------------------------------------------*/
@@ -280,7 +187,7 @@ DEFSETFUNC (isFree)
   /* if it is free && and the itmp assigned to
      this does not have any overlapping live ranges
      with the one currently being assigned and
-     the size can be accomodated  */
+     the size can be accommodated  */
   if (sym->isFree
       && noOverLap (sym->usl.itmpStack, fsym)
       && getSize (sym->type) >= getSize (fsym->type))
@@ -300,7 +207,6 @@ createStackSpil (symbol * sym)
 {
   symbol *sloc = NULL;
   struct dbuf_s dbuf;
-  int useXstack, model;
 
   /* first go try and find a free one that is already
      existing on the stack */
@@ -328,7 +234,7 @@ createStackSpil (symbol * sym)
   /* set the type to the spilling symbol */
   sloc->type = copyLinkChain (sym->type);
   sloc->etype = getSpec (sloc->type);
-  SPEC_SCLS (sloc->etype) = S_DATA;
+  SPEC_SCLS (sloc->etype) = (options.xdata_spill)?S_XDATA:S_DATA;
   SPEC_EXTR (sloc->etype) = 0;
   SPEC_STAT (sloc->etype) = 0;
   SPEC_VOLATILE(sloc->etype) = 0;
@@ -341,16 +247,16 @@ createStackSpil (symbol * sym)
      the spil from going to the external storage
    */
 
-  useXstack = options.useXstack;
-  model = options.model;
+//  useXstack = options.useXstack;
+//  model = options.model;
 /*     noOverlay = options.noOverlay; */
 /*     options.noOverlay = 1; */
-  options.model = options.useXstack = 0;
+//  options.model = options.useXstack = 0;
 
   allocLocal (sloc);
 
-  options.useXstack = useXstack;
-  options.model = model;
+//  options.useXstack = useXstack;
+//  options.model = model;
 /*     options.noOverlay = noOverlay; */
   sloc->isref = 1;              /* to prevent compiler warning */
 
@@ -361,7 +267,9 @@ createStackSpil (symbol * sym)
       _G.stackExtend += getSize (sloc->type);
     }
   else
+    {
     _G.dataExtend += getSize (sloc->type);
+    }
 
   /* add it to the stackSpil set */
   addSetHead (&_G.stackSpil, sloc);
@@ -377,10 +285,10 @@ createStackSpil (symbol * sym)
 }
 
 /*-----------------------------------------------------------------*/
-/* spillThis - spils a specific operand                            */
+/* spillThis - spills a specific operand                           */
 /*-----------------------------------------------------------------*/
 void
-spillThis (symbol * sym)
+m6502SpillThis (symbol * sym)
 {
   int i;
   /* if this is rematerializable or has a spillLocation
@@ -392,9 +300,6 @@ spillThis (symbol * sym)
   /* mark it as spilt & put it in the spilt set */
   sym->isspilt = sym->spillA = 1;
   _G.spiltSet = bitVectSetBit (_G.spiltSet, sym->key);
-
-  bitVectUnSetBit (_G.regAssigned, sym->key);
-  bitVectUnSetBit (_G.totRegAssigned, sym->key);
 
   for (i = 0; i < sym->nRegs; i++)
     {
@@ -408,29 +313,6 @@ spillThis (symbol * sym)
   if (sym->usl.spillLoc && !sym->remat)
     sym->usl.spillLoc->allocreq++;
   return;
-}
-
-/*-----------------------------------------------------------------*/
-/* updateRegUsage -  update the registers in use at the start of   */
-/*                   this icode                                    */
-/*-----------------------------------------------------------------*/
-static void
-updateRegUsage (iCode * ic)
-{
-  int reg;
-
-  // update the registers in use at the start of this icode
-  for (reg=0; reg<m6502_nRegs; reg++)
-    {
-      if (regsm6502[reg].isFree)
-        {
-          ic->riu &= ~(regsm6502[reg].mask);
-        }
-      else
-        {
-          ic->riu |= (regsm6502[reg].mask);
-        }
-    }
 }
 
 /*-----------------------------------------------------------------*/
@@ -464,32 +346,9 @@ deassignLRs (iCode * ic, eBBlock * ebp)
     }
 }
 
-
-/*-----------------------------------------------------------------*/
-/* reassignLR - reassign this to registers                         */
-/*-----------------------------------------------------------------*/
-static void
-reassignLR (operand * op)
-{
-  symbol *sym = OP_SYMBOL (op);
-  int i;
-
-  /* not spilt any more */
-  sym->isspilt = sym->spillA = sym->blockSpil = sym->remainSpil = 0;
-  bitVectUnSetBit (_G.spiltSet, sym->key);
-
-  _G.regAssigned = bitVectSetBit (_G.regAssigned, sym->key);
-  _G.totRegAssigned = bitVectSetBit (_G.totRegAssigned, sym->key);
-
-  _G.blockSpil--;
-
-  for (i = 0; i < sym->nRegs; i++)
-    sym->regs[i]->isFree = 0;
-}
-
 /*------------------------------------------------------------------*/
 /* verifyRegsAssigned - make sure an iTemp is properly initialized; */
-/* it should either have registers or have beed spilled. Otherwise, */
+/* it should either have registers or have been spilled. Otherwise, */
 /* there was an uninitialized variable, so just spill this to get   */
 /* the operand in a valid state.                                    */
 /*------------------------------------------------------------------*/
@@ -506,7 +365,7 @@ verifyRegsAssigned (operand *op, iCode * ic)
   if (!sym->nRegs) return;
   if (sym->regs[0]) return;
 
-  spillThis (sym);
+  m6502SpillThis (sym);
 }
 
 /*-----------------------------------------------------------------*/
@@ -607,33 +466,6 @@ regTypeNum (void)
     }
 }
 
-/*-----------------------------------------------------------------*/
-/* freeAllRegs - mark all registers as free                        */
-/*-----------------------------------------------------------------*/
-static void
-freeAllRegs ()
-{
-  int i;
-
-  for (i = 0; i < m6502_nRegs; i++)
-    {
-      regsm6502[i].isFree = 1;
-      regsm6502[i].aop = NULL;
-    }
-}
-
-/*-----------------------------------------------------------------*/
-/* deallocStackSpil - this will set the stack pointer back         */
-/*-----------------------------------------------------------------*/
-static
-DEFSETFUNC (deallocStackSpil)
-{
-  symbol *sym = item;
-
-  deallocLocal (sym);
-  return 0;
-}
-
 #if 0
 /** Transform weird SDCC handling of writes via pointers
     into something more sensible. */
@@ -656,6 +488,18 @@ transformPointerSet (eBBlock **ebbs, int count)
     }
 }
 #endif
+
+/*-----------------------------------------------------------------*/
+/* deallocStackSpil - this will set the stack pointer back         */
+/*-----------------------------------------------------------------*/
+static
+DEFSETFUNC (deallocStackSpil)
+{
+  symbol *sym = item;
+
+  deallocLocal (sym);
+  return 0;
+}
 
 /*-----------------------------------------------------------------*/
 /* packRegsForAssign - register reduction for assignment           */
@@ -1004,7 +848,6 @@ isBitwiseOptimizable (iCode * ic)
     return false;
 }
 
-
 /*-----------------------------------------------------------------*/
 /* packForPush - heuristics to reduce iCode for pushing            */
 /*-----------------------------------------------------------------*/
@@ -1208,6 +1051,13 @@ packPointerOp (iCode * ic, eBBlock ** ebpp)
             }
           else if (POINTER_SET (uic))
             {
+// FIXME: this code will make bug-3385.c fail
+// it seems there are some corner cases where this 
+// optimization is unsafe.
+// Other cases might also be unsafe but no test triggers it.
+// HC08 is also affected by the same issue.
+            //  return;
+// remove the return above to trigger the failure.
               if (IC_LEFT (uic) && IS_OP_LITERAL (IC_LEFT (uic)) && operandLitValue (IC_LEFT (uic)) != 0)
                 return;
               if (IC_LEFT (uic) && IS_SYMOP (IC_LEFT (uic)))
@@ -1334,7 +1184,7 @@ packRegisters (eBBlock ** ebpp, int count)
         {
           sym_link *to_type = operandType(IC_LEFT(ic));
           sym_link *from_type = operandType(IC_RIGHT(ic));
-          if (IS_PTR(to_type) && IS_PTR(from_type))
+              if (IS_PTR(to_type) && IS_PTR(from_type))
             {
               OP_SYMBOL (IC_RESULT (ic))->remat = 1;
               OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
@@ -1400,6 +1250,107 @@ packRegisters (eBBlock ** ebpp, int count)
     }
 }
 
+/**
+  Mark variables for assignment by the register allocator.
+ */
+static void
+serialRegMark (eBBlock ** ebbs, int count)
+{
+  int i;
+  short int max_alloc_bytes = SHRT_MAX; // Byte limit. Set this to a low value to pass only few variables to the register allocator. This can be useful for debugging.
+
+  D (D_ALLOC, ("serialRegMark for %s, currFunc->stack %d\n", currFunc->name, currFunc->stack));
+
+  /* for all blocks */
+  for (i = 0; i < count; i++)
+    {
+      iCode *ic;
+
+      if (ebbs[i]->noPath
+          && (ebbs[i]->entryLabel != entryLabel
+              && ebbs[i]->entryLabel != returnLabel))
+        continue;
+
+      /* for all instructions do */
+      for (ic = ebbs[i]->sch; ic; ic = ic->next)
+        {
+          updateRegUsage(ic);
+
+          /* if result is present && is a true symbol */
+          if (IC_RESULT (ic) && ic->op != IFX &&
+              IS_TRUE_SYMOP (IC_RESULT (ic)))
+            {
+              OP_SYMBOL (IC_RESULT (ic))->allocreq++;
+            }
+
+          /* take away registers from live
+             ranges that end at this instruction */
+          deassignLRs (ic, ebbs[i]);
+
+          /* some don't need registers */
+          if (SKIP_IC2 (ic) ||
+              ic->op == JUMPTABLE ||
+              ic->op == IFX ||
+              ic->op == IPUSH ||
+              (IC_RESULT (ic) && POINTER_SET (ic)))
+              continue;
+
+          /* now we need to allocate registers only for the result */
+          if (IC_RESULT (ic))
+            {
+              symbol *sym = OP_SYMBOL (IC_RESULT (ic));
+
+              /* Make sure any spill location is definitely allocated */
+              if (sym->isspilt && !sym->remat && sym->usl.spillLoc &&
+                  !sym->usl.spillLoc->allocreq)
+                {
+                  sym->usl.spillLoc->allocreq++;
+                }
+
+              /* if it does not need or is spilt
+                 or is already assigned to registers
+                 or will not live beyond this instructions */
+              if (!sym->nRegs ||
+                  sym->isspilt ||
+                  sym->liveTo <= ic->seq)
+                {
+                  D (D_ALLOC, ("serialRegMark: won't live long enough.\n"));
+                  continue;
+                }
+
+              /* if some liverange has been spilt at the block level
+                 and this one live beyond this block then spill this
+                 to be safe */
+              if (_G.blockSpil && sym->liveTo > ebbs[i]->lSeq)
+                {
+                  m6502SpillThis (sym);
+                  continue;
+                }
+
+              if (sym->remat)
+                {
+                  m6502SpillThis (sym);
+                  continue;
+                }
+
+              if (max_alloc_bytes >= sym->nRegs)
+                {
+                  sym->for_newralloc = 1;
+                  max_alloc_bytes -= sym->nRegs;
+                }
+              else if (!sym->for_newralloc)
+                {
+                  m6502SpillThis (sym);
+                  printf ("Spilt %s due to byte limit.\n", sym->name);
+                }
+            }
+        }
+    }
+}
+
+/*-----------------------------------------------------------------*/
+/* RegFix                                                          */
+/*-----------------------------------------------------------------*/
 void
 m6502RegFix (eBBlock ** ebbs, int count)
 {
@@ -1439,111 +1390,6 @@ m6502RegFix (eBBlock ** ebbs, int count)
     }
 }
 
-/**
-  Mark variables for assignment by the register allocator.
- */
-static void
-serialRegMark (eBBlock ** ebbs, int count)
-{
-  int i;
-  short int max_alloc_bytes = SHRT_MAX; // Byte limit. Set this to a low value to pass only few variables to the register allocator. This can be useful for debugging.
-
-  D (D_ALLOC, ("serialRegMark for %s, currFunc->stack %d\n", currFunc->name, currFunc->stack));
-
-  /* for all blocks */
-  for (i = 0; i < count; i++)
-    {
-      iCode *ic;
-
-      if (ebbs[i]->noPath
-          && (ebbs[i]->entryLabel != entryLabel
-              && ebbs[i]->entryLabel != returnLabel))
-        continue;
-
-      /* for all instructions do */
-      for (ic = ebbs[i]->sch; ic; ic = ic->next)
-        {
-          updateRegUsage(ic);
-
-          /* if this is an ipop that means some live
-             range will have to be assigned again */
-          if (ic->op == IPOP)
-              reassignLR (IC_LEFT (ic));
-
-          /* if result is present && is a true symbol */
-          if (IC_RESULT (ic) && ic->op != IFX &&
-              IS_TRUE_SYMOP (IC_RESULT (ic)))
-            {
-              OP_SYMBOL (IC_RESULT (ic))->allocreq++;
-            }
-
-          /* take away registers from live
-             ranges that end at this instruction */
-          deassignLRs (ic, ebbs[i]);
-
-          /* some don't need registers */
-          if (SKIP_IC2 (ic) ||
-              ic->op == JUMPTABLE ||
-              ic->op == IFX ||
-              ic->op == IPUSH ||
-              ic->op == IPOP ||
-              (IC_RESULT (ic) && POINTER_SET (ic)))
-              continue;
-
-          /* now we need to allocate registers only for the result */
-          if (IC_RESULT (ic))
-            {
-              symbol *sym = OP_SYMBOL (IC_RESULT (ic));
-
-              /* Make sure any spill location is definitely allocated */
-              if (sym->isspilt && !sym->remat && sym->usl.spillLoc &&
-                  !sym->usl.spillLoc->allocreq)
-                {
-                  sym->usl.spillLoc->allocreq++;
-                }
-
-              /* if it does not need or is spilt
-                 or is already assigned to registers
-                 or will not live beyond this instructions */
-              if (!sym->nRegs ||
-                  sym->isspilt ||
-                  bitVectBitValue (_G.regAssigned, sym->key) ||
-                  sym->liveTo <= ic->seq)
-                {
-                  D (D_ALLOC, ("serialRegMark: won't live long enough.\n"));
-                  continue;
-                }
-
-              /* if some liverange has been spilt at the block level
-                 and this one live beyond this block then spil this
-                 to be safe */
-              if (_G.blockSpil && sym->liveTo > ebbs[i]->lSeq)
-                {
-                  spillThis (sym);
-                  continue;
-                }
-
-              if (sym->remat)
-                {
-                  spillThis (sym);
-                  continue;
-                }
-
-              if (max_alloc_bytes >= sym->nRegs)
-                {
-                  sym->for_newralloc = 1;
-                  max_alloc_bytes -= sym->nRegs;
-                }
-              else if (!sym->for_newralloc)
-                {
-                  spillThis (sym);
-                  printf ("Spilt %s due to byte limit.\n", sym->name);
-                }
-            }
-        }
-    }
-}
-
 /*-----------------------------------------------------------------*/
 /* assignRegisters - assigns registers to each live range as need  */
 /*-----------------------------------------------------------------*/
@@ -1553,19 +1399,16 @@ m6502_assignRegisters (ebbIndex *ebbi)
   eBBlock ** ebbs = ebbi->bbOrder;
   int count = ebbi->count;
   iCode *ic;
+  int i;
 
-  setToNull ((void *) &_G.funcrUsed);
-  setToNull ((void *) &_G.regAssigned);
-  setToNull ((void *) &_G.totRegAssigned);
   m6502_ptrRegReq = _G.stackExtend = _G.dataExtend = 0;
-  m6502_nRegs = 7;
   m6502_reg_a = m6502_regWithIdx(A_IDX);
   m6502_reg_x = m6502_regWithIdx(X_IDX);
   m6502_reg_y = m6502_regWithIdx(Y_IDX);
-  m6502_reg_yx = m6502_regWithIdx(YX_IDX);
   m6502_reg_xa = m6502_regWithIdx(XA_IDX);
+//  m6502_reg_ya = m6502_regWithIdx(YA_IDX);
+  m6502_reg_yx = m6502_regWithIdx(YX_IDX);
   m6502_reg_sp = m6502_regWithIdx(SP_IDX);
-  m6502_nRegs = 5;
 
 //  transformPointerSet (ebbs, count);
 
@@ -1594,15 +1437,13 @@ m6502_assignRegisters (ebbIndex *ebbi)
   /* if stack was extended then tell the user */
   if (_G.stackExtend)
     {
-/*      werror(W_TOOMANY_SPILS,"stack", */
-/*             _G.stackExtend,currFunc->name,""); */
+//      printf("Stack spills for %s: %d\n", currFunc->name, _G.stackExtend);
       _G.stackExtend = 0;
     }
 
   if (_G.dataExtend)
     {
-/*      werror(W_TOOMANY_SPILS,"data space", */
-/*             _G.dataExtend,currFunc->name,""); */
+//      printf("Data spills for %s: %d\n", currFunc->name, _G.dataExtend);
       _G.dataExtend = 0;
     }
 
@@ -1628,9 +1469,151 @@ m6502_assignRegisters (ebbIndex *ebbi)
   _G.slocNum = 0;
   setToNull ((void *) &_G.stackSpil);
   setToNull ((void *) &_G.spiltSet);
+
   /* mark all registers as free */
-  freeAllRegs ();
+  for (i = 0; i < m6502_nRegs; i++) {
+      reg_info *reg = m6502_regWithIdx (i);
+      m6502_freeReg (reg);
+      m6502_dirtyReg (reg);
+  }
 
   return;
+}
+
+/*-----------------------------------------------------------------*/
+/* m6502_useReg - marks a register  as used                        */
+/*-----------------------------------------------------------------*/
+void
+m6502_useReg (reg_info * reg)
+{
+  reg->isFree = 0;
+
+  switch (reg->rIdx)
+    {
+      case A_IDX:
+        m6502_reg_xa->aop = NULL;
+        m6502_reg_xa->isFree = 0;
+//        m6502_reg_ya->aop = NULL;
+//        m6502_reg_ya->isFree = 0;
+        break;
+      case X_IDX:
+        m6502_reg_xa->aop = NULL;
+        m6502_reg_xa->isFree = 0;
+        m6502_reg_yx->aop = NULL;
+        m6502_reg_yx->isFree = 0;
+        break;
+      case Y_IDX:
+//        m6502_reg_ya->aop = NULL;
+//        m6502_reg_ya->isFree = 0;
+        m6502_reg_yx->aop = NULL;
+        m6502_reg_yx->isFree = 0;
+        break;
+      case XA_IDX:
+        m6502_reg_x->aop = NULL;
+       m6502_reg_x->isFree = 0;
+        m6502_reg_a->aop = NULL;
+        m6502_reg_a->isFree = 0;
+        break;
+//      case YA_IDX:
+//        m6502_reg_y->aop = NULL;
+//        m6502_reg_y->isFree = 0;
+//        m6502_reg_a->aop = NULL;
+//        m6502_reg_a->isFree = 0;
+//        break;
+      case YX_IDX:
+        m6502_reg_y->aop = NULL;
+        m6502_reg_y->isFree = 0;
+        m6502_reg_x->aop = NULL;
+        m6502_reg_x->isFree = 0;
+        break;
+      default:
+        break;
+    }
+}
+
+/*-----------------------------------------------------------------*/
+/* m6502_dirtyReg - marks a register as dirty                      */
+/*-----------------------------------------------------------------*/
+void
+m6502_dirtyReg (reg_info * reg)
+{
+  reg->aop = NULL;
+
+  switch (reg->rIdx)
+    {
+      case A_IDX:
+        m6502_reg_xa->aop = NULL;
+	m6502_reg_xa->isLitConst = 0;
+//	m6502_reg_ya->aop = NULL;
+//	m6502_reg_ya->isLitConst = 0;
+	m6502_reg_a->aop = NULL;
+	m6502_reg_a->isLitConst = 0;
+        break;
+      case X_IDX:
+        m6502_reg_xa->aop = NULL;
+	m6502_reg_xa->isLitConst = 0;
+        m6502_reg_yx->aop = NULL;
+	m6502_reg_yx->isLitConst = 0;
+	m6502_reg_x->aop = NULL;
+	m6502_reg_x->isLitConst = 0;
+        break;
+      case Y_IDX:
+//        m6502_reg_ya->aop = NULL;
+//	m6502_reg_ya->isLitConst = 0;
+        m6502_reg_yx->aop = NULL;
+	m6502_reg_yx->isLitConst = 0;
+	m6502_reg_y->aop = NULL;
+	m6502_reg_y->isLitConst = 0;
+        break;
+      case XA_IDX:
+        m6502_reg_xa->aop = NULL;
+	m6502_reg_xa->isLitConst = 0;
+        m6502_reg_x->aop = NULL;
+	m6502_reg_x->isLitConst = 0;
+        m6502_reg_a->aop = NULL;
+	m6502_reg_a->isLitConst = 0;
+        break;
+//      case YA_IDX:
+//        m6502_reg_ya->aop = NULL;
+//	m6502_reg_ya->isLitConst = 0;
+//        m6502_reg_y->aop = NULL;
+//	m6502_reg_y->isLitConst = 0;
+//        m6502_reg_a->aop = NULL;
+//	m6502_reg_a->isLitConst = 0;
+        break;
+      case YX_IDX:
+        m6502_reg_yx->aop = NULL;
+	m6502_reg_yx->isLitConst = 0;
+        m6502_reg_y->aop = NULL;
+	m6502_reg_y->isLitConst = 0;
+        m6502_reg_x->aop = NULL;
+	m6502_reg_x->isLitConst = 0;
+        break;
+      default:
+        break;
+    }
+}
+
+/*-----------------------------------------------------------------*/
+/* updateRegUsage -  update the registers in use at the start of   */
+/*                   this icode                                    */
+/*-----------------------------------------------------------------*/
+static void
+updateRegUsage (iCode * ic)
+{
+  int reg;
+
+  // update the registers in use at the start of this icode
+  for (reg=0; reg<m6502_nRegs; reg++)
+    {
+      if (regsm6502[reg].isFree)
+        {
+          ic->riu &= ~(regsm6502[reg].mask);
+        }
+      else
+        {
+          ic->riu |= (regsm6502[reg].mask);
+        }
+    }
 }
 

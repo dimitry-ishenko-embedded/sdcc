@@ -37,10 +37,11 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include <stdlib.h>
 //#include <unistd.h>
 #include <sys/time.h>
+#include <time.h>
 #include <string.h>
 
   // prj
-//#include "stypes.h"
+#include "stypes.h"
 //#include "pobjcl.h"
 
 #include "utils.h"
@@ -125,8 +126,13 @@ vformat_string(const char *format, va_list ap)
     msg = NULL;
   return(msg);
 #else
+#ifdef HAVE_VSNPRINTF
   msg = (char*)malloc(80*25);
   vsnprintf(msg, 80*25, format, ap);
+#else
+  msg= (char*)malloc(80*25);
+  vsprintf(msg, format, ap);
+#endif
 #endif
   return(msg);
 }
@@ -225,14 +231,6 @@ cbin(long data, int bits)
   return c;
 }
 
-double
-dnow(void)
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return (double)tv.tv_sec + ((double)tv.tv_usec/1000000.0);
-}
-
 int
 strispn(char *s, char c)
 {
@@ -282,6 +280,23 @@ valid_sym_name(char *s)
 
 
 bool
+filename_has_ext(class cl_f *f, const char *ext)
+{
+  const char *n;
+  if (!f)
+    return false;
+  n= f->get_file_name();
+  if (!n ||
+      !*n)
+    return false;
+
+  if (strend(n, ext))
+    return true;
+
+  return false;
+}
+
+bool
 is_hex_file(class cl_f *f)
 {
   const char *n;
@@ -303,52 +318,37 @@ is_hex_file(class cl_f *f)
 bool
 is_asc_file(class cl_f *f)
 {
-  const char *n;
-  if (!f)
-    return false;
-  n= f->get_file_name();
-  if (!n ||
-      !*n)
-    return false;
+  return filename_has_ext(f, ".asc");
+}
 
-  if (strend(n, ".asc"))
-    return true;
-
-  return false;
+bool
+is_p2h_file(class cl_f *f)
+{
+  return filename_has_ext(f, ".p2h");
 }
 
 bool
 is_omf_file(class cl_f *f)
 {
-  const char *n;
-  if (!f)
-    return false;
-  n= f->get_file_name();
-  if (!n ||
-      !*n)
-    return false;
-
-  if (strend(n, ".omf"))
-    return true;
-
-  return false;
+  return filename_has_ext(f, ".omf");
 }
 
 bool
 is_cdb_file(class cl_f *f)
 {
-  const char *n;
-  if (!f)
-    return false;
-  n= f->get_file_name();
-  if (!n ||
-      !*n)
-    return false;
+  return filename_has_ext(f, ".cdb");
+}
 
-  if (strend(n, ".cdb"))
-    return true;
+bool
+is_s19_file(class cl_f *f)
+{
+  return filename_has_ext(f, ".s19");
+}
 
-  return false;
+bool
+is_map_file(class cl_f *f)
+{
+  return filename_has_ext(f, ".map");
 }
 
 /*
@@ -690,6 +690,61 @@ strtoscale(const char *scale, const char **units)
     }
 
   return d;
+}
+
+
+/* Custom random number generator */
+
+#define PHI 0x9e3779b9
+
+static u32_t Q[4096], c = 362436;
+
+void
+srnd(unsigned int seed)
+{
+  int i;
+
+  Q[0] = seed;
+  Q[1] = seed + PHI;
+  Q[2] = seed + PHI + PHI;
+  
+  for (i = 3; i < 4096; i++)
+    Q[i] = Q[i - 3] ^ Q[i - 2] ^ PHI ^ i;
+}
+
+unsigned int
+urnd(void)
+{
+  u64_t t, a = 18782LL;
+  static u32_t i = 4095;
+  u32_t x, r = 0xfffffffe;
+  i = (i + 1) & 4095;
+  t = a * Q[i] + c;
+  c = (t >> 32);
+  x = t + c;
+  if (x < c) {
+    x++;
+    c++;
+  }
+  return (Q[i] = r - x);
+}
+
+u8_t
+urnd8()
+{
+  return urnd();
+}
+
+u16_t
+urnd16()
+{
+  return urnd();
+}
+
+u32_t
+urnd32()
+{
+  return urnd();
 }
 
 

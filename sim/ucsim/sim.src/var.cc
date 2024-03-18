@@ -51,6 +51,7 @@ cl_cvar::cl_cvar(chars iname, class cl_memory_cell *icell, chars adesc, int ibit
   desc= adesc;
   
   set_name(iname);
+  defined_by= VBY_PRE;
   
   cell= icell;
 }
@@ -89,7 +90,7 @@ void
 cl_cvar::print_info(cl_console_base *con) const
 {
   con->dd_printf("%s ", get_name("?"));
-  t_mem m= cell->get();
+  t_mem m= cell->/*get*/read();
   if (bitnr_high >= 0)
     {
       if (bitnr_high != bitnr_low)
@@ -148,7 +149,7 @@ cl_var::print_info(cl_console_base *con) const
   con->dd_printf("[");
   con->dd_printf(mem->addr_format, addr);
   con->dd_printf("]");
-  t_mem m= mem->get(addr);
+  t_mem m= mem->read(addr);
   if (bitnr_high >= 0)
     {
       if (bitnr_high != bitnr_low)
@@ -263,6 +264,8 @@ cl_var_by_addr_list::search(class cl_memory *mem, t_addr addr, t_index &index)
   t_index h  = count - 1;
   bool    res= false;
 
+  if (!mem)
+    return false;
   while (l <= h)
     {
       t_index i= (l + h) >> 1;
@@ -291,6 +294,8 @@ cl_var_by_addr_list::search(class cl_memory *mem, t_addr addr, int bitnr_high, i
   t_index h  = count - 1;
   bool    res= false;
 
+  if (!mem)
+    return false;
   while (l <= h)
     {
       t_index i= (l + h) >> 1;
@@ -379,7 +384,7 @@ cl_var_list::add(class cl_cvar *item)
       t_index i;
       if (by_addr.search(var->get_mem(), var->get_addr(), var->bitnr_high, var->bitnr_low, i))
         {
-          class cl_var *v;
+          class cl_var *v= 0;
           while (i < by_addr.count && (v = by_addr.at(i)) &&
                  v->get_mem() == var->get_mem() && v->get_addr() == var->get_addr() &&
                  v->bitnr_high == var->bitnr_high && v->bitnr_low == var->bitnr_low)
@@ -436,7 +441,7 @@ void
 cl_var_list::add(chars prefix, class cl_memory *mem, t_addr base, const struct var_def *def, size_t n)
 {
   chars regname = chars("");
-  t_addr offset = 0;
+  /*t_addr*/i64_t offset = 0;
 
   for (; n; def++, n--)
     {
@@ -449,7 +454,6 @@ cl_var_list::add(chars prefix, class cl_memory *mem, t_addr base, const struct v
           if (def->bitnr_low < 0)
             {
               offset = -1;
-
               int i;
               if (by_name.search(regname, i))
                 {
@@ -476,6 +480,20 @@ cl_var_list::add(chars prefix, class cl_memory *mem, t_addr base, const struct v
           add(var);
         }
     }
+}
+
+class cl_var *
+cl_var_list::by_cell(class cl_memory_cell *c)
+{
+  t_index i;
+  for (i= 0; i<by_name.count; i++)
+    {
+      class cl_var *v= (class cl_var *)(by_name.at(i));
+      class cl_memory_cell *cell= v->get_cell();
+      if (cell == c)
+	return v;
+    }
+  return NULL;
 }
 
 t_mem
@@ -511,6 +529,7 @@ cl_vars_iterator::compare_bits(const class cl_var *var1, const class cl_var *var
 
   return ret;
 }
+
 const cl_var *
 cl_vars_iterator::first(cl_memory *mem, t_addr addr)
 {
@@ -525,7 +544,7 @@ cl_vars_iterator::first(cl_memory *mem, t_addr addr)
   const cl_var *chip_var = NULL;
   chip_mem = NULL;
 
-  cl_address_decoder *ad;
+  cl_address_decoder *ad= 0;
   if (space_mem->is_address_space() &&
       (ad = ((cl_address_space *)space_mem)->get_decoder_of(space_addr)))
     {

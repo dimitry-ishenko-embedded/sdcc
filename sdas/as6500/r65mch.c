@@ -1,7 +1,7 @@
 /* r65mch.c */
 
 /*
- *  Copyright (C) 1995-2015  Alan R. Baldwin
+ *  Copyright (C) 1995-2023  Alan R. Baldwin
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -148,7 +148,10 @@ static char c02pg1[256] = {
 /*E0*/   2, 7,UN,UN, 3, 4, 5, 5, 2, 3, 2,UN, 4, 5, 6, 7,
 /*F0*/   4, 7, 6,UN,UN, 5, 6, 5, 2, 6, 4,UN,UN, 6, 7, 7
 };
-				         
+
+int mchtyp;
+struct area *zpg;
+
 /*
  * Process a machine op.
  */
@@ -158,7 +161,6 @@ struct mne *mp;
 {
 	int op, t1;
 	struct expr e1,e2;
-	struct area *espa;
 	char id[NCPS];
 	int c, v1, v2;
 
@@ -169,69 +171,71 @@ struct mne *mp;
 
 	case S_SDP:
 		opcycles = OPCY_SDP;
-		espa = NULL;
+		zpg = dot.s_area;
 		if (more()) {
 			expr(&e1, 0);
 			if (e1.e_flag == 0 && e1.e_base.e_ap == NULL) {
 				if (e1.e_addr) {
-					err('b');
+					xerr('b', "Only Page 0 Allowed.");
 				}
 			}
 			if ((c = getnb()) == ',') {
 				getid(id, -1);
-				espa = alookup(id);
-				if (espa == NULL) {
-					err('u');
+				zpg = alookup(id);
+				if (zpg == NULL) {
+					xerr('u', "Undefined Area.");
 				}
 			} else {
 				unget(c);
 			}
 		}
-		if (espa) {
-			outdp(espa, &e1, 0);
-		} else {
-			outdp(dot.s_area, &e1, 0);
-		}
+		outdp(zpg, &e1, 0);
 		lmode = SLIST;
 		break;
+	case S_CPU:
+		mchtyp = op;
+		switch(mchtyp) {
+		case X_R6500:
+			opcycles = OPCY_6500;
+			r65f11 = 0;
+			r65c00 = 0;
+			r65c02 = 0;
+			break;
 
-	case S_R6500:
-		opcycles = OPCY_6500;
-		r65f11 = 0;
-		r65c00 = 0;
-		r65c02 = 0;
-		break;
+		case X_R65F11:
+			opcycles = OPCY_65F11;
+			r65f11 = 1;
+			r65c00 = 0;
+			r65c02 = 0;
+			break;
 
-	case S_R65F11:
-		opcycles = OPCY_65F11;
-		r65f11 = 1;
-		r65c00 = 0;
-		r65c02 = 0;
-		break;
+		case X_R65C00:
+			opcycles = OPCY_65C00;
+			r65f11 = 1;
+			r65c00 = 1;
+			r65c02 = 0;
+			break;
 
-	case S_R65C00:
-		opcycles = OPCY_65C00;
-		r65f11 = 1;
-		r65c00 = 1;
-		r65c02 = 0;
-		break;
-
-	case S_R65C02:
-		opcycles = OPCY_65C02;
-		r65f11 = 1;
-		r65c00 = 1;
-		r65c02 = 1;
+		case X_R65C02:
+			opcycles = OPCY_65C02;
+			r65f11 = 1;
+			r65c00 = 1;
+			r65c02 = 1;
+			break;
+		}
 		break;
 
 	case S_INH3:
 		if (r65c02) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Invalid 65C02 Instruction");
 			break;
 		}
 		
 	case S_INH2:
 		if (!r65c00) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Invalid 6500/65F11 Instruction");
 			break;
 		}
 		
@@ -241,7 +245,8 @@ struct mne *mp;
 
 	case S_BRA2:
 		if (!r65c00) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Invalid 6500/65F11 Instruction");
 			break;
 		}
 		
@@ -377,12 +382,12 @@ struct mne *mp;
 			if (op == 0xC0) {	/* 65C02 Extension */
 				outab(0x3A);
 				if (!r65c02)
-					aerr();
+					xerr('o', "Valid Only For The 65C02");
 			} else
 			if (op == 0xE0) {	/* 65C02 Extension */
 				outab(0x1A);
 				if (!r65c02)
-					aerr();
+					xerr('o', "Valid Only For The 65C02");
 			} else {
 				outab(op + 0x0A);
 			}
@@ -535,7 +540,8 @@ struct mne *mp;
 
 	case S_BB:
 		if (!r65f11) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Invalid For The 6500");
 			break;
 		}
 		if ((c = getnb()) != '*')
@@ -559,7 +565,8 @@ struct mne *mp;
 
 	case S_MB:
 		if (!r65f11) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Invalid For The 6500");
 			break;
 		}
 		t1 = addr(&e1);
@@ -571,7 +578,8 @@ struct mne *mp;
 
 	case S_STZ:
 		if (!r65c02) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Valid Only For The 65C02");
 			break;
 		}
 		switch (addr(&e1)) {
@@ -579,13 +587,13 @@ struct mne *mp;
 			outab(op + 0x04);
 			outrb(&e1, R_PAG0);
 			break;
-		case S_DINDX:
-			outab(op + 0x14);
-			outrb(&e1, R_PAG0);
-			break;
 		case S_EXT:
 			outab(op + 0x3C);
 			outrw(&e1, 0);
+			break;
+		case S_DINDX:
+			outab(op + 0x14);
+			outrb(&e1, R_PAG0);
 			break;
 		case S_INDX:
 			outab(op + 0x3E);
@@ -601,7 +609,8 @@ struct mne *mp;
 
 	case S_TB:
 		if (!r65c02) {
-			err('o');
+			while(more()) getnb();
+			xerr('o', "Valid Only For The 65C02");
 			break;
 		}
 		switch (addr(&e1)) {
@@ -680,7 +689,21 @@ minit()
 	 * Byte Order
 	 */
 	hilo = 0;
+	
+	/*
+	 * Address Space
+	 */
+	exprmasks(3);
+	
+	/*
+	 * Zero Page Area Pointer
+	 */
+	zpg = NULL;
 
+	/*
+	 * Default Machine
+	 */
+	mchtyp = X_R6500;
 	r6500  = 1;
 	r65f11 = 0;
 	r65c00 = 0;

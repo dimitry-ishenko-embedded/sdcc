@@ -79,7 +79,7 @@ public:
   virtual void hide(void) { hidden= true; }
   virtual void show(void) { hidden= false; }
 
-  virtual void print(class cl_console_base *con) {}
+  virtual void print(class cl_console_base */*con*/) {}
   virtual const char *get_type_name(void) { return("none"); }
 
   virtual union option_value *get_value(void) { return(&value); }
@@ -131,13 +131,14 @@ class cl_options: public cl_sorted_list
 
 class cl_optref: public cl_base
 {
- public:
+public:
   class cl_option *option;
 protected:
   class cl_base *owner;
 public:
   cl_optref(class cl_base *the_owner);
   cl_optref(class cl_base *the_owner, class cl_option *new_option);
+  cl_optref(class cl_base *the_owner, const char *to_use);
   virtual ~cl_optref(void);
 
   virtual class cl_option *create(class cl_base *creator,
@@ -151,9 +152,11 @@ public:
   virtual class cl_base *get_owner(void) { return(owner); }
 
   virtual bool get_value(bool);
+  virtual bool get_value(bool *val);
   virtual char *get_value(const char *);
   virtual void *get_value(void *);
   virtual long get_value(long);
+  virtual bool get_value(long *val);
   virtual double get_value(double);
 };
 

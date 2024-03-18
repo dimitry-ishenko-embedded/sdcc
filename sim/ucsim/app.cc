@@ -35,6 +35,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #endif
 #include <ctype.h>
 #include <errno.h>
+#include <unistd.h>
 #include "i_string.h"
 
 // prj
@@ -67,10 +68,18 @@ int juj= 0;
 
 cl_app::cl_app(void)
 {
+  save_std_attribs();
   sim= 0;
   in_files= new cl_ustrings(2, 2, "input files");
   options= new cl_options();
   quiet= false;
+  if (app_start_at == 0)
+    app_start_at= dnow();
+  srnd(0);
+  set_console_mode();
+  period= 0;
+  cyc= 0;
+  acyc= 0;
 }
 
 cl_app::~cl_app(void)
@@ -78,6 +87,7 @@ cl_app::~cl_app(void)
   remove_simulator();
   delete commander;
   delete in_files;
+  delete ocon;
   delete options;
 }
 
@@ -93,112 +103,176 @@ cl_app::init(int argc, char *argv[])
   class cl_cmdset *cmdset= new cl_cmdset();
   cmdset->init();
   build_cmdset(cmdset);
+  ocon= new cl_console_stdout(this);
+  ocon->init();
   commander= new cl_commander(this, cmdset/*, sim*/);
   commander->init();
+
   return(0);
 }
 
-/* Main cycle */
+void
+cl_app::read_conf_file(void)
+{
+  /* read config file (-C option) */
+  while (commander->config_console != NULL)
+    if (commander->input_avail())
+      commander->proc_input();
+}
 
-enum run_states {
-  rs_config,
-  rs_read_files,
-  rs_start,
-  rs_run
-};
+void
+cl_app::read_input_files(void)
+{
+  if (sim && (sim->uc != NULL))
+    {
+      int i;
+      for (i= 0; i < in_files->count; i++)
+	{
+	  const char *fname= (const char *)(in_files->at(i));
+	  long l;
+	  if ((l= sim->uc->read_file(fname, NULL)) >= 0)
+	    {
+	      sim->uc->reset();
+	    }
+	}
+    }
+}
+
+void
+cl_app::exec_startup_cmd(void)
+{
+  if (startup_command.nempty())
+    exec(startup_command);
+}
+
+int
+cl_app::check_start_options(void)
+{
+  class cl_option *o;
+
+  o= options->get_option("emulation");
+  bool emu_opt= false;
+  if (o)
+    o->get_value(&emu_opt);
+  if (sim && emu_opt)
+    {
+      sim->emulation(0);
+      return 0;
+    }
+  
+  o= options->get_option("go");
+  bool g_opt= false;
+  if (o)
+    o->get_value(&g_opt);
+  if (sim && g_opt)
+    sim->start(0, 0);
+
+  return 0;
+}
+
+/* Main cycle */
 
 int
 cl_app::run(void)
 {
   int done= 0;
-  double input_last_checked= 0;
-  class cl_option *o= options->get_option("go");
-  bool g_opt= false;
-  //unsigned int cyc= 0, period= 10000;
-  enum run_states rs= rs_config;
 
-  cperiod.set(1000000);
+  cperiod.set(cperiod_value());
+  read_conf_file();
+  read_input_files();
+  exec_startup_cmd();
+  check_start_options();
+  if (commander->consoles_prevent_quit() < 1)
+    done= 1;
   while (!done)
     {
-      if ((rs == rs_config) &&
-	  (commander->config_console == NULL))
-	{
-	  rs= rs_read_files;
-	}
-      if (rs == rs_read_files)
-	{
-	  if (sim && (sim->uc != NULL))
-	    {
-	      int i;
-	      for (i= 0; i < in_files->count; i++)
-		{
-		  const char *fname= (const char *)(in_files->at(i));
-		  long l;
-		  if ((l= sim->uc->read_file(fname, NULL)) >= 0)
-		    {
-		      ///*commander->all_printf*/printf("%ld words read from %s\n", l, fname);
-		      sim->uc->reset();
-		    }
-		}
-	    }
-	  rs= rs_start;
-	}
-      if (rs == rs_start)
-	{
-	  //if (startup_command.nempty())
-	  //exec(startup_command);
-	  if (o)
-	    o->get_value(&g_opt);
-	  if (sim && g_opt)
-	    sim->start(0, 0);
-	  rs= rs_run;
-	}
-      ccyc.set(ccyc.get()+1);
       if (!sim)
 	{
-	  commander->wait_input();
-	  done= commander->proc_input();
+	  if (commander->input_avail())
+	    done = commander->proc_input();
+	  loop_delay();
 	}
       else
-        {
-          if (sim->state & SIM_GO)
-            {
-	      if (ccyc.get() - input_last_checked > cperiod.get())
-		{
-		  input_last_checked= ccyc.get();
-		  if (sim->uc)
-		    sim->uc->touch();
-		  if (commander->input_avail())
-		    done= commander->proc_input();
-		}
-	      sim->step();
-	      if (jaj && commander->frozen_console)
-		{
-		  sim->uc->print_regs(commander->frozen_console),
-		    commander->frozen_console->dd_printf("\n");
-		}
-            }
-	  else
-	    {
-	      if (commander->input_avail())
-		done = commander->proc_input();
-              else
-                loop_delay();
-
-	      if (sim->uc)
-		sim->uc->touch();
-	    }
+	{
+	  acyc++;
 	  if (sim->state & SIM_QUIT)
 	    done= 1;
+	  else if (sim->state & SIM_GO)
+	    done= run_go();
+	  else if (sim->state & SIM_STARTEMU)
+	    {
+	      sim->state= SIM_EMU;
+	      sim->start_at= dnow();
+	      sim->uc->do_emu();
+	    }
+	  else if (sim->state & SIM_EMU)
+	    sim->uc->do_emu();
+	  else
+	    done= run_nogo();
 	}
-      commander->check();
+      //commander->check();
     }
+    
   return(0);
+}
+
+int
+cl_app::run_go(void)
+{
+  bool done= false;
+  if (++cyc > period)
+    {
+      cyc= 0;
+      if (sim->uc)
+	sim->uc->touch();
+      commander->check();
+      if (commander->input_avail())
+	done= commander->proc_input();
+    }
+  sim->step();
+  if (jaj)
+    {
+      class cl_console_base *c= commander->frozen_or_actual();
+      if (c)
+	sim->uc->print_regs(c),
+	  c->dd_printf("%d %lu\n", sim->uc->inst_ticks, sim->uc->ticks->get_ticks()),
+	  c->dd_printf("\n");
+    }
+  return done;
+}
+
+int
+cl_app::run_nogo(void)
+{
+  bool done= false;
+  commander->check();
+  if (commander->input_avail())
+    done = commander->proc_input();
+  else if (dnow() - app_start_at > 2.0)
+    loop_delay();
+  if (sim->uc)
+    sim->uc->touch();
+  return done;
 }
 
 void
 cl_app::done(void)
 {
+  restore_std_attribs();
+  bool bw= false;
+  class cl_option *o= application->options->get_option("black_and_white");
+  if (o)
+    {
+      o->get_value(&bw);
+      if (!bw)
+	{
+	  if (isatty(fileno(stdout)))
+	    {
+	      printf("\033[0m");
+	      fflush(0);
+	    }
+	}
+    }
 }
 
 
@@ -210,16 +284,20 @@ static void
 print_help(const char *name)
 {
   printf("%s: %s\n", name, VERSIONSTR);
-  printf("Usage: %s [-hHVvPgGwlbBq] [-p prompt] [-t CPU] [-X freq[k|M]] [-R seed]\n"
+  printf("Usage: %s [-hHVvPgGEwlbBq] [-p prompt] [-t CPU] [-X freq[k|M]] [-R seed]\n"
 	 "       [-C cfg_file] [-c file] [-e command] [-s file] [-S optionlist]\n"
 	 "       [-I if_optionlist] [-o colorlist] [-a nr]\n"
 #ifdef SOCKET_AVAIL
-	 "       [-Z portnum] [-k portnum]"
+	 "       [-z portnum] [-Z portnum] [-k portnum]"
 #endif
 	 "\n"
 	 "       [files...]\n", name);
   printf
     (
+     /*
+      12345678901234567890123456789012345678901234567890123456789012345678901234567890
+               1         2         3         4         5         6         7         8
+      */
      "Options:\n"
      "  -t CPU       Type of CPU: 51, C52, 251, etc.\n"
      "  -X freq[k|M] XTAL frequency\n"
@@ -227,17 +305,19 @@ print_help(const char *name)
      "  -C cfg_file  Read initial commands from `cfg_file' and execute them\n"
      "  -e command   Execute command on startup\n"
      "  -c file      Open command console on `file' (use `-' for std in/out)\n"
-     "  -Z portnum   Use localhost:portnum for command console\n"
-     "  -k portnum   Use localhost:portnum for serial I/O\n"
-     "  -s file      Connect serial interface uart0 to `file'\n"
+     "  -z portnum   Listen portnum for command console\n"
+     "  -Z portnum   Listen portnum for command console (no console on stdio)\n"
+     "  -k portnum   Listen portnum for serial I/O (obsolete, use -S)\n"
+     "  -s file      Connect serial interface uart0 to `file' (obsolete, use -S)\n"
      "  -S options   `options' is a comma separated list of options according to\n"
      "               serial interface. Know options are:\n"
      "                  uart=nr   number of uart (default=0)\n"
      "                  in=file   serial input will be read from file named `file'\n"
      "                  out=file  serial output will be written to `file'\n"
-     "                  port=nr   Use localhost:nr as server for serial line\n"
-     "                  iport=nr  Use localhost:nr as server for serial input\n"
-     "                  oport=nr  Use localhost:nr as server for serial output\n"
+     "                  port=nr   use localhost:nr as server for serial line\n"
+     "                  iport=nr  use localhost:nr as server for serial input\n"
+     "                  oport=nr  use localhost:nr as server for serial output\n"
+     "                  raw       perform non-interactive communication even on tty\n"
      "  -I options   `options' is a comma separated list of options according to\n"
      "               simulator interface. Known options are:\n"
      "                 if=memory[address]  turn on interface on given memory location\n"
@@ -253,10 +333,11 @@ print_help(const char *name)
      "  -B           Beep on breakpoints\n"
      "  -g           Go, start simulation\n"
      "  -G           Go, start simulation, quit on stop\n"
+     "  -E           Go, start simulation in emulation mode\n"
      "  -a nr        Specify size of variable space (default=256)\n"
      "  -w           Writable flash\n"
      "  -V           Verbose mode\n"
-     "  -q           Quiet mode\n"
+     "  -q           Quiet mode (implies -b)\n"
      "  -v           Print out version number and quit\n"
      "  -H           Print out types of known CPUs and quit\n"
      "  -h           Print out this help and quit\n"
@@ -270,7 +351,9 @@ enum {
   SOPT_USART,
   SOPT_PORT,
   SOPT_IPORT,
-  SOPT_OPORT
+  SOPT_OPORT,
+  SOPT_RAW,
+  SOPT_ERROR
 };
 
 static const char *S_opts[]= {
@@ -281,6 +364,7 @@ static const char *S_opts[]= {
   /*[SOPT_PORT]=*/	"port",
   /*[SOPT_IPORT]=*/	"iport",
   /*[SOPT_OPORT]=*/	"oport",
+  /*[SOPT_RAW]=*/	"raw",
   NULL
 };
 
@@ -306,9 +390,9 @@ cl_app::proc_arguments(int argc, char *argv[])
   bool /*s_done= false,*/ k_done= false;
   //bool S_i_done= false, S_o_done= false;
 
-  strcpy(opts, "qc:C:e:p:PX:vVt:s:S:I:a:whHgGJo:blBR:_");
+  strcpy(opts, "qc:C:e:p:PX:vVt:s:S:I:a:whHgGEJo:blBR:_");
 #ifdef SOCKET_AVAIL
-  strcat(opts, "Z:r:k:");
+  strcat(opts, "Z:r:k:z:");
 #endif
 
   for (i= 0; i < argc; i++)
@@ -330,7 +414,10 @@ cl_app::proc_arguments(int argc, char *argv[])
     switch (c)
       {
       case '_': break;
-      case 'q': quiet= true; break;
+      case 'q':
+	quiet= true;
+	options->set_value("black_and_white", this, bool(true));
+	break;
       case 'J': jaj= true; break;
       case 'g':
 	if (!options->set_value("go", this, true))
@@ -345,6 +432,11 @@ cl_app::proc_arguments(int argc, char *argv[])
 	  fprintf(stderr, "Warning: No \"quit\" option found "
 		  "to set by -G\n");
 	break;
+      case 'E':
+	if (!options->set_value("emulation", this, true))
+	  fprintf(stderr, "Warning: No \"emulation\" option found "
+		  "to set by -E\n");
+	break;
       case 'c':
 	if (!options->set_value("console_on", this, optarg))
 	  fprintf(stderr, "Warning: No \"console_on\" option found "
@@ -357,12 +449,24 @@ cl_app::proc_arguments(int argc, char *argv[])
 	break;
       case 'e':
 	startup_command+= optarg;
-	startup_command+= chars("\n");
+	startup_command+= chars(";"/*"\n"*/);
 	break;
       case 'R':
-        srand(atoi(optarg));
+        srnd(atoi(optarg));
         break;
 #ifdef SOCKET_AVAIL
+      case 'z':
+	{
+	  class cl_option *o;
+	  options->new_option(o= new cl_number_option(this, "default_port",
+						      "Default port to listen on (-z)"));
+	  o->init();
+	  o->hide();
+	  if (!options->set_value("default_port", this, strtol(optarg, NULL, 0)))
+	    fprintf(stderr, "Warning: No \"default_port\" option found"
+		    " to set parameter of -z as port number to listen on\n");
+	  break;
+	}	
       case 'Z': case 'r':
 	{
 	  // By Sandeep
@@ -374,7 +478,7 @@ cl_app::proc_arguments(int argc, char *argv[])
 	  o->hide();
 	  if (!options->set_value("port_number", this, strtol(optarg, NULL, 0)))
 	    fprintf(stderr, "Warning: No \"port_number\" option found"
-		    " to set parameter of -Z as pot number to listen on\n");
+		    " to set parameter of -Z as port number to listen on\n");
 	  break;
 	}
 #endif
@@ -492,27 +596,33 @@ cl_app::proc_arguments(int argc, char *argv[])
       case 'S':
 	{
 	  char *iname= NULL, *oname= NULL;
-	  int uart=0, port=0, iport= 0, oport= 0;
-	  bool ifirst= false;
+	  int uart=0, port=0, iport= 0, oport= 0, so;
+	  bool ifirst= false, raw= false;
 	  subopts= optarg;
 	  while (*subopts != '\0')
 	    {
-	      switch (get_sub_opt(&subopts, S_opts, &value))
+	      so= get_sub_opt(&subopts, S_opts, &value);
+	      if (so != SOPT_RAW)
 		{
+		  if ((value == NULL) ||
+		      (*value == 0))
+		    so= SOPT_ERROR;
+		}
+	      switch (so)
+		{
+		case SOPT_ERROR:
+		  fprintf(stderr, "No value for -S suboption\n");
+		  exit(1);
+		  break;
+		case SOPT_RAW:
+		  raw= 1;
+		  break;
 		case SOPT_IN:
-		  if (value == NULL) {
-		    fprintf(stderr, "No value for -S in\n");
-		    exit(1);
-		  }
 		  iname= value;
 		  if (oname == NULL)
 		    ifirst= true;
 		  break;
 		case SOPT_OUT:
-		  if (value == NULL) {
-		    fprintf(stderr, "No value for -S out\n");
-		    exit(1);
-		  }
 		  oname= value;
 		  break;
 		case SOPT_UART: case SOPT_USART:
@@ -545,6 +655,18 @@ cl_app::proc_arguments(int argc, char *argv[])
 	    {
 	      char *s, *h;
 	      class cl_option *o;
+	      s= format_string("serial%d_raw", uart);
+	      if ((o= options->get_option(s)) == NULL)
+		{
+		  h= format_string("Use raw communication on uart%d files", uart);
+		  o= new cl_bool_option(this, s, h);
+		  o->init();
+		  o->hide();
+		  options->add(o);
+		  free(h);
+		}
+	      options->set_value(s, this, raw);
+	      free(s);
 	      s= format_string("serial%d_ifirst", uart);
 	      if ((o= options->get_option(s)) == NULL)
 		{
@@ -806,12 +928,7 @@ cl_app::eval(chars expr)
 void
 cl_app::exec(chars line)
 {
-  class cl_console_base *c= commander->frozen_console;
-  if (c == NULL)
-    {
-      c= new cl_console_dummy();
-      c->init();
-    }
+  class cl_console_base *c= commander->frozen_or_actual();
   do
     {
       c->un_redirect();
@@ -836,8 +953,38 @@ cl_app::exec(chars line)
       delete cmdline;
     }
   while (!line.empty());
-  if (c != commander->frozen_console)
-    delete c;
+}
+
+void
+cl_app::exec(chars line, class cl_console_base *con)
+{
+  if (!con)
+    return;
+  do
+    {
+      con->un_redirect();
+      class cl_cmdline *cmdline= new cl_cmdline(this, line, con);
+      cmdline->init();
+      class cl_cmd *cm= commander->cmdset->get_cmd(cmdline, false/*c->is_interactive()*/);
+      if (cm)
+	{
+	  cm->work(this, cmdline, con);
+	}
+      else if (cmdline->get_name() != 0)
+	{
+	  char *e= cmdline->cmd;
+	  if (strlen(e) > 0)
+	    {
+	      t_mem l= eval(e);
+	      con->dd_color("result");
+	      con->print_expr_result(l, NULL);
+	      
+	    }
+	}
+      line= cmdline->rest;
+      delete cmdline;
+    }
+  while (!line.empty());
 }
 
 /*
@@ -894,11 +1041,19 @@ cl_app::build_cmdset(class cl_cmdset *cmdset)
 
   cmdset->add(cmd= new cl_quit_cmd("quit", 0));
   cmd->init();
-
+  cmd->add_name("exit");
+  
   cmdset->add(cmd= new cl_kill_cmd("kill", 0));
   cmd->init();
 
   cmdset->add(cmd= new cl_exec_cmd("exec", 0));
+  cmd->init();
+
+  cmdset->add(cmd= new cl_echo_cmd("echo", 0));
+  cmd->init();
+  cmd->add_name("print");
+
+  cmdset->add(cmd= new cl_dev_cmd("dev", 0));
   cmd->init();
 
   cmdset->add(cmd= new cl_expression_cmd("expression", 0));
@@ -1027,7 +1182,7 @@ cl_app::mk_options(void)
   options->new_option(o= new cl_float_option(this, "xtal",
 					     "Frequency of XTAL in Hz"));
   o->init();
-  o->set_value(11059200.0);
+  o->set_value(0.0);
 
   options->new_option(o= new cl_string_option(this, "cpu_type",
 					      "Type of controller (-t)"));
@@ -1041,6 +1196,11 @@ cl_app::mk_options(void)
 
   options->new_option(o= new cl_bool_option(this, "quit",
 					    "Quit on stop (-G)"));
+  o->init();
+  o->hide();
+  
+  options->new_option(o= new cl_bool_option(this, "emulation",
+					    "Emulate on start (-E)"));
   o->init();
   o->hide();
   

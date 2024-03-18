@@ -60,7 +60,7 @@ COMMAND_DO_WORK_UC(cl_state_cmd)
 		 get_id_string(cpu_states, uc->state),
 		 AU(uc->PC), 
 		 uc->get_xtal());
-  con->dd_printf("Operation since last reset= (%lu vclks)\n",
+  con->dd_printf("Operation since last reset= %lu vclks\n",
 		 (unsigned long)(uc->vc.fetch) +
 		 (unsigned long)(uc->vc.rd) +
 		 (unsigned long)(uc->vc.wr));
@@ -84,17 +84,20 @@ COMMAND_DO_WORK_UC(cl_state_cmd)
 		 (uc->ticks->get_ticks() == 0 ? 0.0 :
 		   (100.0 * uc->idle_ticks->get_rtime() / uc->ticks->get_rtime())));
 
-  con->dd_printf("Max value of stack pointer= 0x%06x, avg= 0x%06x\n",
-		 AU(uc->sp_max), AU(uc->sp_avg));
+  con->dd_printf("Most value of stack pointer= 0x%06x",
+		 AU(uc->sp_most));
+  //con->dd_printf(", avg= 0x%06x", AU(uc->sp_avg));
+  con->dd_printf("\n");
   con->dd_printf("Simulation: %s\n",
 		 (uc->sim->state & SIM_GO)?"running":"stopped");
+  con->dd_printf("Runtime: %f sec\n", dnow()-app_start_at);
   return(0);
 }
 
 CMDHELP(cl_state_cmd,
 	"state",
 	"State of microcontroller",
-	"long help of state")
+	"")
 
 /*
  * Command: file
@@ -127,7 +130,37 @@ COMMAND_DO_WORK_UC(cl_file_cmd)
 CMDHELP(cl_file_cmd,
 	"file \"FILE\"",
         "Load FILE into ROM",
-	"long help of file")
+	"")
+
+/*
+ * Command: check
+ *----------------------------------------------------------------------------
+ */
+
+COMMAND_DO_WORK_UC(cl_check_cmd)
+{
+  const char *fname= 0;
+  long l;
+
+  if ((cmdline->param(0) == 0) ||
+      ((fname= cmdline->param(0)->get_svalue()) == NULL))
+    {
+      con->dd_printf("File name is missing.\n");
+      return(0);
+    }
+
+  if ((l= uc->read_file(fname, con, true)) >= 0)
+    {
+      //con->dd_printf("%ld words read from %s\n", l, fname);
+    }
+
+  return(0);
+}
+
+CMDHELP(cl_check_cmd,
+	"check \"FILE\"",
+        "Compare FILE with ROM",
+	"")
 
 /*
  * Command: download
@@ -150,7 +183,8 @@ COMMAND_DO_WORK_UC(cl_dl_cmd)
 CMDHELP(cl_dl_cmd,
 	"download",
 	"Load (intel.hex) data",
-	"long help of download")
+	"")
+
 
 /*
  * Command: pc
@@ -189,7 +223,7 @@ COMMAND_DO_WORK_UC(cl_pc_cmd)
 CMDHELP(cl_pc_cmd,
 	"pc [addr]",
 	"Set/get PC",
-	"long help of pc")
+	"")
 
 /*
  * Command: reset
@@ -208,7 +242,7 @@ COMMAND_DO_WORK_UC(cl_reset_cmd)
 CMDHELP(cl_reset_cmd,
 	"reset",
 	"Reset processor to start state",
-	"long help of reset")
+	"")
 
 /*
  * Command: tick
@@ -247,7 +281,9 @@ CMDHELP(cl_tick_cmd,
 COMMAND_DO_WORK_UC(cl_dump_cmd)
 {
   class cl_memory *mem= uc->rom;
-  t_addr start = -1, end = -1;
+  t_addr addr;
+  ///*t_addr*/long long int start = -1, end = -1;
+  class cl_dump_ads ads;
   long bpl= -1;
 
   class cl_cmd_arg *params[4]= { cmdline->param(0),
@@ -319,9 +355,28 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
 
   if (params[0] == 0)
     ;
+  else if (cmdline->syntax_match(uc, CELL))
+    {
+      mem= uc->address_space(params[0]->value.cell, &addr);
+      ads._start(addr);
+      ads._stop(ads.start+64);
+    }
+  else if (cmdline->syntax_match(uc, CELL ADDRESS))
+    {
+      mem= uc->address_space(params[0]->value.cell, &addr);
+      ads._start(addr);
+      ads._stop(params[1]->value.address);
+    }
+  else if (cmdline->syntax_match(uc, CELL ADDRESS NUMBER))
+    {
+      mem= uc->address_space(params[0]->value.cell, &addr);
+      ads._start(addr);
+      ads._stop(params[1]->value.address);
+      bpl= params[2]->value.number;
+    }
   else if (cmdline->syntax_match(uc, BIT)) {
     mem= params[0]->value.bit.mem;
-    start= params[0]->value.bit.mem_address;
+    ads._start(params[0]->value.bit.mem_address);
   }
   else if (cmdline->syntax_match(uc, BIT BIT)) {
     mem= params[0]->value.bit.mem;
@@ -329,8 +384,8 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
       con->dd_printf("Start and end must be in the same address space\n");
       return false;
     }
-    start= params[0]->value.bit.mem_address;
-    end= params[1]->value.bit.mem_address;
+    ads._start(params[0]->value.bit.mem_address);
+    ads._stop(params[1]->value.bit.mem_address);
   }
   else if (cmdline->syntax_match(uc, BIT BIT NUMBER)) {
     mem= params[0]->value.bit.mem;
@@ -338,8 +393,8 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
       con->dd_printf("Start and end must be in the same address space\n");
       return false;
     }
-    start= params[0]->value.bit.mem_address;
-    end= params[1]->value.bit.mem_address;
+    ads._start(params[0]->value.bit.mem_address);
+    ads._stop(params[1]->value.bit.mem_address);
     bpl  = params[2]->value.number;
   }
   else if (cmdline->syntax_match(uc, MEMORY)) {
@@ -347,17 +402,18 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
   }
   else if (cmdline->syntax_match(uc, MEMORY ADDRESS)) {
     mem  = params[0]->value.memory.memory;
-    start= params[1]->value.address;
+    ads._start(params[1]->value.address);
+    ads._stop(ads.start+64);
   }
   else if (cmdline->syntax_match(uc, MEMORY ADDRESS ADDRESS)) {
     mem  = params[0]->value.memory.memory;
-    start= params[1]->value.address;
-    end  = params[2]->value.address;
+    ads._start(params[1]->value.address);
+    ads._stop(params[2]->value.address);
   }
   else if (cmdline->syntax_match(uc, MEMORY ADDRESS ADDRESS NUMBER)) {
     mem  = params[0]->value.memory.memory;
-    start= params[1]->value.address;
-    end  = params[2]->value.address;
+    ads._start(params[1]->value.address);
+    ads._stop(params[2]->value.address);
     bpl  = params[3]->value.number;
   }
   else {
@@ -365,22 +421,24 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
     return false;
   }
 
+  if (!mem)
+    return false;
   switch (fmt)
     {
     case 0: // default
-      mem->dump(1, start, end, bpl, con);
+      mem->dump(1, &ads, bpl, con);
       break;
     case 'b': // binary
-      mem->dump_b(start, end, bpl, con);
+      mem->dump_b(&ads, bpl, con);
       break;
     case 'h': case 'x':// hex
-      mem->dump(0, start, end, bpl, con);
+      mem->dump(0, &ads, bpl, con);
       break;
     case 'i': // ihex
-      mem->dump_i(start, end, 32, con);
+      mem->dump_i(&ads, 32, con);
       break;
     case 's': // string
-      mem->dump_s(start, end, bpl, con);
+      mem->dump_s(&ads, bpl, con);
       break;
     }
 
@@ -390,7 +448,7 @@ COMMAND_DO_WORK_UC(cl_dump_cmd)
 CMDHELP(cl_dump_cmd,
 	"dump [/format] memory_type [start [stop [bytes_per_line]]] | dump bit...",
 	"Dump memory of specified type or bit(s)",
-	"long help of dump")
+	"")
 
 /*
  * Command: di
@@ -411,7 +469,7 @@ COMMAND_DO_WORK_UC(cl_di_cmd)
 CMDHELP(cl_di_cmd,
 	"di [start [stop]]",
 	"Dump Internal RAM",
-	"long help of di")
+	"")
 
 /*
  * Command: dx
@@ -432,7 +490,7 @@ COMMAND_DO_WORK_UC(cl_dx_cmd)
 CMDHELP(cl_dx_cmd,
 	"dx [start [stop]]",
 	"Dump External RAM",
-	"long help of dx")
+	"")
 
 /*
  * Command: dch
@@ -453,7 +511,7 @@ COMMAND_DO_WORK_UC(cl_dch_cmd)
 CMDHELP(cl_dch_cmd,
 	"dch [start [stop]]",
 	"Dump code in hex form",
-	"long help of dch")
+	"")
 
 /*
  * Command: ds
@@ -474,7 +532,7 @@ COMMAND_DO_WORK_UC(cl_ds_cmd)
 CMDHELP(cl_ds_cmd,
 	"ds [start [stop]]",
 	"Dump SFR",
-	"long help of ds")
+	"")
 
 /*
  * Command: dc
@@ -525,7 +583,7 @@ COMMAND_DO_WORK_UC(cl_dc_cmd)
 CMDHELP(cl_dc_cmd,
 	"dc [start [stop]]",
 	"Dump code in disass form",
-	"long help of dc")
+	"")
 
 /*
  * Command: disassemble
@@ -603,16 +661,23 @@ COMMAND_DO_WORK_UC(cl_disassemble_cmd)
 	}
     }
   
-  
+  i64_t a, n;
+  a= realstart;
   while (lines)
     {
       int len;
-      uc->print_disass(realstart, con);
+      t_addr ta, tn;
+      ta= (t_addr)a;
+      uc->print_disass(ta, con);
       /* fix for #2383: start search next instruction after the actual one */
-      len= uc->inst_length(realstart);
-      realstart= rom->inc_address(realstart, /*+1*/len) + rom->start_address;
-      while (!uc->inst_at(realstart))
-        realstart= rom->inc_address(realstart, +1) + rom->start_address;
+      len= uc->inst_length(ta);
+      tn= rom->inc_address(ta, /*+1*/len) + rom->start_address;
+      while (!uc->inst_at(tn))
+        tn= rom->inc_address(tn, +1) + rom->start_address;
+      n= (i64_t)tn;
+      if (n <= a)
+	break;
+      a= n;
       lines--;
     }
 
@@ -624,7 +689,7 @@ COMMAND_DO_WORK_UC(cl_disassemble_cmd)
 CMDHELP(cl_disassemble_cmd,
 	"disassemble [start [offset [lines]]]",
 	"Disassemble code",
-	"long help of disassemble")
+	"")
 
 /*
  * Command: fill
@@ -666,7 +731,7 @@ COMMAND_DO_WORK_UC(cl_fill_cmd)
 CMDHELP(cl_fill_cmd,
 	"fill memory_type start end data",
 	"Fill memory region with data",
-	"long help of fill")
+	"")
 
 /*
  * Command: where
@@ -696,7 +761,11 @@ cl_where_cmd::do_real_work(class cl_uc *uc,
     while (found)
       {
 	if (con->get_fout())
-	  mem->dump(0, addr, addr+len-1, -1, con);
+	  {
+	    class cl_dump_ads ads;
+	    ads._start(addr); ads._stop(addr+len-1);
+	    mem->dump(0, &ads, -1, con);
+	  }
 	addr++;
 	found= mem->search_next(case_sensitive, array, len, &addr);
       }
@@ -718,7 +787,7 @@ COMMAND_DO_WORK_UC(cl_where_cmd)
 CMDHELP(cl_where_cmd,
 	"where memory_type data...",
 	"Case unsensitive search for data",
-	"long help of where")
+	"")
 
 //int
 //cl_Where_cmd::do_work(class cl_sim *sim,
@@ -731,7 +800,7 @@ COMMAND_DO_WORK_UC(cl_Where_cmd)
 CMDHELP(cl_Where_cmd,
 	"Where memory_type data...",
 	"Case sensitive search for data",
-	"long help of Where")
+	"")
 
 
 /*
@@ -829,7 +898,7 @@ COMMAND_DO_WORK_UC(cl_hole_cmd)
 CMDHELP(cl_hole_cmd,
 	"hole [memory [length [value]]]",
 	"search area in memory (min length), filled with value",
-	"long help of hole")
+	"")
 
 
 /*
@@ -845,7 +914,8 @@ COMMAND_DO_WORK_UC(cl_var_cmd)
 				 cmdline->param(3),
 				 cmdline->param(4) };
   class cl_memory *m= NULL;
-  t_addr addr= -1;
+  t_addr addr;
+  bool addr_set= false;
   int bitnr_low= -1;
   int bitnr_high= -1;
 
@@ -853,6 +923,7 @@ COMMAND_DO_WORK_UC(cl_var_cmd)
     {
       m= params[1]->value.memory.memory;
       addr= params[2]->value.address;
+      addr_set= true;
       bitnr_low= bitnr_high= params[3]->value.number;
       bitnr_high= params[4]->value.number;
     }
@@ -860,23 +931,27 @@ COMMAND_DO_WORK_UC(cl_var_cmd)
     {
       m= params[1]->value.memory.memory;
       addr= params[2]->value.address;
+      addr_set= true;
       bitnr_low= bitnr_high= params[3]->value.number;
     }
   else if (cmdline->syntax_match(uc, STRING MEMORY ADDRESS))
     {
       m= params[1]->value.memory.memory;
       addr= params[2]->value.address;
+      addr_set= true;
     }
   else if (cmdline->syntax_match(uc, STRING BIT))
     {
       m= params[1]->value.bit.mem;
       addr= params[1]->value.bit.mem_address;
+      addr_set= true;
       bitnr_low= params[1]->value.bit.bitnr_low;
       bitnr_high= params[1]->value.bit.bitnr_high;
     }
   else if (cmdline->syntax_match(uc, STRING CELL))
     {
       m= uc->address_space(params[1]->value.cell, &addr);
+      addr_set= true;
     }
   else if (cmdline->syntax_match(uc, STRING))
     {
@@ -889,39 +964,51 @@ COMMAND_DO_WORK_UC(cl_var_cmd)
       false;
   
   if (m)
-    if (!m->is_address_space())
-      return con->dd_printf("%s is not address space\n", m->get_name()),
-	false;
-  if (addr > 0)
-    if (!m->valid_address(addr))
-      return con->dd_printf("invalid address\n"),
-	false;
+    {
+      if (!m->is_address_space())
+	return con->dd_printf("%s is not address space\n", m->get_name()),
+	  false;
+      if (addr_set)
+	if (!m->valid_address(addr))
+	  return con->dd_printf("invalid address\n"),
+	    false;
+    }
   if (bitnr_low >= (int)sizeof(t_mem)*8 ||
       bitnr_high >= (int)sizeof(t_mem)*8)
     return con->dd_printf("max bit number is %d\n", (int)sizeof(t_mem)*8),
       false;
 
+  class cl_cvar *v;
   if (m)
-    uc->vars->add(params[0]->value.string.string, m, addr, bitnr_high, bitnr_low, "");
+    {
+      v= uc->vars->add(params[0]->value.string.string, m, addr, bitnr_high, bitnr_low, "");
+      v->set_by(VBY_USER);
+    }
   else
     {
       if (bitnr_low < 0)
 	{
-	  if (addr < 0)
+	  if (!addr_set)
 	    {
 	      t_index i;
 	      for (addr= 0; addr < uc->variables->get_size(); addr++)
-		if (!uc->vars->by_addr.search(uc->variables, addr, i))
-		  break;
+		{
+		  if (!uc->vars->by_addr.search(uc->variables, addr, i))
+		    {
+		      addr_set= true;
+		      break;
+		    }
+		}
 	      if (addr == uc->variables->get_size())
 		return con->dd_printf("no space\n"),
 		  false;
 	    }
 	  if (!uc->variables->valid_address(addr))
-	    return con->dd_printf("out of range\n"),
+	    return con->dd_printf("out of range 0x%x\n", AU(addr)),
 	      false;
-          uc->vars->add(params[0]->value.string.string,
-                        uc->variables, addr, bitnr_high, bitnr_low, "");
+          v= uc->vars->add(params[0]->value.string.string,
+			   uc->variables, addr, bitnr_high, bitnr_low, "");
+	  v->set_by(VBY_USER);
 	}
       else
 	{
@@ -934,7 +1021,7 @@ COMMAND_DO_WORK_UC(cl_var_cmd)
 CMDHELP(cl_var_cmd,
 	"var name [memory addr [bit_nr]]",
 	"Create new variable",
-	"long help of var")
+	"")
 
 /*
  * Command: rmvar
@@ -971,7 +1058,7 @@ COMMAND_DO_WORK_UC(cl_analyze_cmd)
         class cl_cmd_arg *param = cmdline->param(i);
         if (param)
           {
-            if (param->as_bit(uc))
+            /*if (param->as_bit(uc))
               {
                 if (param->value.bit.mem == uc->rom)
                   uc->analyze(param->value.bit.mem_address);
@@ -983,7 +1070,12 @@ COMMAND_DO_WORK_UC(cl_analyze_cmd)
                   }
               }
             else
-              con->dd_printf("%s cannot be interpreted as a rom address\n", cmdline->tokens->at(i));
+	    con->dd_printf("%s cannot be interpreted as a rom address\n", cmdline->tokens->at(i));*/
+	    t_addr addr;
+	    if (param->get_address(uc, &addr))
+	      {
+		uc->analyze(addr);
+	      }
           }
       }
 
@@ -993,6 +1085,6 @@ COMMAND_DO_WORK_UC(cl_analyze_cmd)
 CMDHELP(cl_analyze_cmd,
 	"analyze [addr...]",
 	"Analyze reachable code globally or from the address(es) given",
-	"long help of analyze")
+	"")
 
 /* End of cmd.src/cmd_uc.cc */
