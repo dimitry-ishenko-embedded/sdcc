@@ -1,4 +1,4 @@
-sdcc (4.4.0+dfsg-1) UNRELEASED; urgency=medium
+sdcc (4.4.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release
     * Update for ucsim_ renames on simulators
