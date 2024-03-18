@@ -10,7 +10,7 @@ Build-Depends: bison,
                flex,
                gputils,
                libboost-dev,
-               libncurses5-dev,
+               libncurses-dev,
                libtool,
                texinfo,
                zlib1g-dev
