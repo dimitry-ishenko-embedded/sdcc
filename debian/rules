@@ -150,7 +150,8 @@ install-arch: build-arch
 	install -o root -g root -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
 	# Remove an unnecessary script 
 	rm -f debian/tmp/usr/share/sdcc/scripts/gen_known_bugs.pl
-	dh_install -a --sourcedir=debian/tmp --list-missing
+	dh_install -a --sourcedir=debian/tmp
+	dh_missing --list-missing
 
 	touch $@
 
