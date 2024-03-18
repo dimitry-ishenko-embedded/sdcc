@@ -1,6 +1,12 @@
-debian/manpages/s51.1
 debian/manpages/sdcdb.1
-debian/manpages/shc08.1
-debian/manpages/sstm8.1
-debian/manpages/sz80.1
 debian/manpages/ucsim.1
+debian/manpages/ucsim_51.1
+debian/manpages/ucsim_f8.1
+debian/manpages/ucsim_m68hc08.1
+debian/manpages/ucsim_mos6502.1
+debian/manpages/ucsim_pdk.1
+debian/manpages/ucsim_rxk.1
+debian/manpages/ucsim_stm8.1
+debian/manpages/ucsim_tlcs.1
+debian/manpages/ucsim_xa.1
+debian/manpages/ucsim_z80.1

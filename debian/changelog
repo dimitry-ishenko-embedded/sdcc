@@ -1,6 +1,7 @@
 sdcc (4.4.0+dfsg-1) UNRELEASED; urgency=medium
 
   * New upstream release
+    * Update for ucsim_ renames on simulators
   * Pull in upstream fix for builds with LyX 2.4 (Closes: #1064731)
 
  -- Jonathan McDowell <noodles@earth.li>  Mon, 18 Mar 2024 10:54:34 +0000

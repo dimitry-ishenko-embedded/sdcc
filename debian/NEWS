@@ -1,0 +1,6 @@
+sdcc (4.4.0+dfsg-1) unstable; urgency=medium
+
+  Upstream has renamed the simulators to all have ucsim_ prefixes; you will
+  need to update any scripts you might have that were calling the old names.
+
+ -- Jonathan McDowell <noodles@earth.li>  Mon, 18 Mar 2024 10:54:34 +0000

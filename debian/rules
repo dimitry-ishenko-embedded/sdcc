@@ -136,6 +136,9 @@ install-arch: build-arch
 	rm -f $(CURDIR)/debian/tmp/usr/bin/sdldz80
 	cd $(CURDIR)/debian/tmp/usr/bin/ && ln -s sdld sdldz80
 
+	# s51 == ucsim_51
+	rm -f $(CURDIR)/debian/tmp/usr/bin/s51
+
 	# Remove empty dirs:
 	find $(CURDIR)/debian/tmp -type d -empty -delete
 

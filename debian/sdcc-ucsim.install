@@ -1,11 +1,17 @@
 #usr/bin/savr
 #usr/bin/sst7
 usr/bin/*.el usr/share/emacs/site-lisp/sdcc-ucsim/
-usr/bin/s51
 usr/bin/sdcdb
-usr/bin/shc08
-usr/bin/sstm8
-usr/bin/sz80
+usr/bin/ucsim_51
+usr/bin/ucsim_f8
+usr/bin/ucsim_m68hc08
+usr/bin/ucsim_mos6502
+usr/bin/ucsim_pdk
+usr/bin/ucsim_rxk
+usr/bin/ucsim_stm8
+usr/bin/ucsim_tlcs
+usr/bin/ucsim_xa
+usr/bin/ucsim_z80
 usr/share/doc/ucsim/*.html usr/share/doc/sdcc-ucsim/
 usr/share/doc/ucsim/*.jpg  usr/share/doc/sdcc-ucsim/
 usr/share/doc/ucsim/*.svg  usr/share/doc/sdcc-ucsim/
