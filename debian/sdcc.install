@@ -25,4 +25,5 @@ usr/bin/sdnm
 usr/bin/sdobjcopy
 usr/bin/sdranlib
 usr/bin/sdranlib
+usr/libexec/sdcc/*/*/cc1
 usr/share/sdcc/scripts

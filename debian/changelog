@@ -1,3 +1,9 @@
+sdcc (4.4.0+dfsg-2) unstable; urgency=medium
+
+  * Include libexec/…/cc1 (Closes: #1067263)
+
+ -- Jonathan McDowell <noodles@earth.li>  Wed, 20 Mar 2024 22:01:35 +0000
+
 sdcc (4.4.0+dfsg-1) unstable; urgency=medium
 
   * New upstream release
