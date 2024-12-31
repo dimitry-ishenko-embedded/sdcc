@@ -4,7 +4,7 @@ include /usr/share/dpkg/pkg-info.mk
 
 export DH_VERBOSE=1
 
-export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow optimize=-lto
+export DEB_BUILD_MAINT_OPTIONS := hardening=+pie,+bindnow
 export CPPFLAGS=$(shell dpkg-buildflags --get CPPFLAGS)
 export CFLAGS=$(shell dpkg-buildflags --get CFLAGS)
 export CXXFLAGS=$(shell dpkg-buildflags --get CXXFLAGS)

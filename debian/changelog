@@ -1,6 +1,10 @@
 sdcc (4.4.0+dfsg-3) UNRELEASED; urgency=medium
 
+  [ Neils Thykier ]
   * Remove need for root when building the package.
+
+  [ Jonathan McDowell ]
+  * Drop explicit disabling of LTO (Closes: #1015659)
 
  -- Niels Thykier <niels@thykier.net>  Tue, 31 Dec 2024 10:45:15 +0000
 
