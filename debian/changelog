@@ -1,4 +1,4 @@
-sdcc (4.4.0+dfsg-3) UNRELEASED; urgency=medium
+sdcc (4.4.0+dfsg-3) unstable; urgency=medium
 
   [ Neils Thykier ]
   * Remove need for root when building the package.
@@ -6,7 +6,7 @@ sdcc (4.4.0+dfsg-3) UNRELEASED; urgency=medium
   [ Jonathan McDowell ]
   * Drop explicit disabling of LTO (Closes: #1015659)
 
- -- Niels Thykier <niels@thykier.net>  Tue, 31 Dec 2024 10:45:15 +0000
+ -- Jonathan McDowell <noodles@earth.li>  Tue, 31 Dec 2024 12:29:25 +0000
 
 sdcc (4.4.0+dfsg-2) unstable; urgency=medium
 
