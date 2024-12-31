@@ -1,3 +1,9 @@
+sdcc (4.4.0+dfsg-3) UNRELEASED; urgency=medium
+
+  * Remove need for root when building the package.
+
+ -- Niels Thykier <niels@thykier.net>  Tue, 31 Dec 2024 10:45:15 +0000
+
 sdcc (4.4.0+dfsg-2) unstable; urgency=medium
 
   * Include libexec/…/cc1 (Closes: #1067263)

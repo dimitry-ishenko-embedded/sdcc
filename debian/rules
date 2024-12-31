@@ -96,7 +96,7 @@ install-indep: build
 	dh_prep
 	$(MAKE) install prefix=$(CURDIR)/debian/tmp/usr
 	mkdir -p debian/tmp/usr/share/doc/sdcc-doc
-	install -o root -g root -m 644 doc/sdccman.pdf debian/tmp/usr/share/doc/sdcc-doc
+	install -m 644 doc/sdccman.pdf debian/tmp/usr/share/doc/sdcc-doc
 	mv debian/tmp/usr/share/doc/sdcc/* debian/tmp/usr/share/doc/sdcc-doc/
 	rm -f debian/tmp/usr/share/doc/sdcc-doc/z80/combined_i186_z80_design.tex
 	rm -f debian/tmp/usr/share/doc/sdcc-doc/z80/Makefile
@@ -146,8 +146,8 @@ install-arch: build-arch
 	rm -rf `find $(CURDIR)/debian/tmp -type d -name .deps`
 	# Add some scripts
 	mkdir -p debian/tmp/usr/share/sdcc/scripts
-	install -o root -g root -m 755  support/scripts/*.pl debian/tmp/usr/share/sdcc/scripts
-	install -o root -g root -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
+	install -m 755  support/scripts/*.pl debian/tmp/usr/share/sdcc/scripts
+	install -m 755  support/scripts/*.py debian/tmp/usr/share/sdcc/scripts
 	# Remove an unnecessary script 
 	rm -f debian/tmp/usr/share/sdcc/scripts/gen_known_bugs.pl
 	dh_install -a --sourcedir=debian/tmp
