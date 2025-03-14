@@ -2229,7 +2229,7 @@ geniCodeMultiply (operand * left, operand * right, RESULT_TYPE resultType)
      efficient in most cases than 2 bytes result = 2 bytes << literal
      if port has 1 byte muldiv */
   if ((p2 > 0) && !IS_FLOAT (letype) && !IS_FIXED (letype) &&
-      !((resultType == RESULT_TYPE_INT) && (getSize (resType) != getSize (ltype)) && !(TARGET_Z80_LIKE || TARGET_MOS6502_LIKE || TARGET_IS_STM8 && p2 == 1) /* Mimic old behaviour that tested port->muldiv, which was zero for stm8 and z80-like only. Someone should look into what really makes sense here. */) &&
+      !((resultType == RESULT_TYPE_INT) && (getSize (resType) != getSize (ltype)) && !(TARGET_Z80_LIKE || TARGET_MOS6502_LIKE || TARGET_IS_F8 || TARGET_IS_STM8 && p2 == 1) /* Mimic old behaviour that tested port->muldiv, which was zero for stm8 and z80-like only. Someone should look into what really makes sense here. */) &&
       !TARGET_PIC_LIKE)      /* don't shift for pic */
     {
       if ((resultType == RESULT_TYPE_INT) && (getSize (resType) != getSize (ltype)))
@@ -2290,7 +2290,7 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType, bool pt
    
   if (IS_LITERAL (retype) &&
       (!IS_FLOAT (letype) && !IS_FIXED (letype) && IS_UNSIGNED (letype) || ptrdiffdiv) &&
-      ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0))
+      ((p2 = powof2 ((TYPE_TARGET_ULONGLONG) ullFromVal (OP_VALUE (right)))) > 0))
     {
       ic = newiCode (RIGHT_OP, left, operandFromLit (p2));      /* right shift */
     }
@@ -2300,7 +2300,8 @@ geniCodeDivision (operand *left, operand *right, RESULT_TYPE resultType, bool pt
   else if (IS_LITERAL (retype) &&
       !IS_FLOAT (letype) &&
       !IS_FIXED (letype) && !IS_UNSIGNED (letype) &&
-      ((p2 = powof2 ((TYPE_TARGET_ULONG) ulFromVal (OP_VALUE (right)))) > 0) &&
+      floatFromVal (OP_VALUE (right)) >= 0 &&
+      ((p2 = powof2 ((TYPE_TARGET_ULONGLONG) ullFromVal (OP_VALUE (right)))) > 0) &&
       (TARGET_Z80_LIKE || TARGET_HC08_LIKE || TARGET_MOS6502_LIKE))
     {
       operand *tmp;
@@ -3397,7 +3398,17 @@ checkTypes (operand * left, operand * right)
     }
 
   if (always_cast || compareType (ltype, rtype, false) == -1)
-    right = geniCodeCast (ltype, right, TRUE);
+    {
+      if (IS_VOLATILE (ltype)) // Don't propagate volatile to right side - we don't want volatile iTemps.
+        {
+          ltype = copyLinkChain (ltype);
+          if (IS_DECL(ltype))
+            DCL_PTR_VOLATILE (ltype) = 0;
+          else
+            SPEC_VOLATILE (ltype) = 0;
+        }
+      right = geniCodeCast (ltype, right, TRUE);
+    }
   checkPtrQualifiers (ltype, rtype, !right->isConstElimnated);
   return right;
 }
@@ -3515,11 +3526,9 @@ geniCodeSEParms (ast *parms, int lvl)
 /* geniCodeParms - generates parameters                            */
 /*-----------------------------------------------------------------*/
 value *
-geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * ftype, int lvl, iCode *iic_start)
+geniCodeParms (ast *parms, value *argVals, int *iArg, int *stack, sym_link *ftype, int lvl, iCode *iic_start)
 {
   iCode *ic;
-  iCode *castic_start = 0;
-  iCode *castic_end = 0;
   operand *pval;
 
   if (!parms)
@@ -3551,7 +3560,11 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
     }
   else
     {
+      iCode *castic_start = 0;
+      iCode *castic_end = 0;
       bool is_structparm = IS_STRUCT (parms->ftype); // struct parameter handling is hackish.
+      if (iic_start != iCodeChainEnd)
+        castic_start = iCodeChainEnd;
       if (is_structparm)
         {
           sym_link *ptr = newLink (DECLARATOR);
@@ -3568,10 +3581,8 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
         {
           if (is_structparm) // Passing the parameter requires a memcpy.
             {
-              iCode *dstic, *srcic, *nic, *cic, *iic_end;
+              iCode *dstic, *srcic, *nic, *callic, *iic_end;
               // Keep this one in mind in so we can move it later.
-              if (iic_start != iCodeChainEnd)
-                castic_start = iCodeChainEnd;
               operand *dstop = geniCodeCast (FUNC_ARGS(builtin_memcpy->type)->type, operandFromValue (argVals, true), false);
               castic_end = iCodeChainEnd;
               if (IS_REGPARM (FUNC_ARGS (builtin_memcpy->type)->etype))
@@ -3604,13 +3615,13 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
                   nic = newiCode ('=', 0, operandFromLit (getSize (parms->ftype)));
                   IC_RESULT (nic) = operandFromValue (FUNC_ARGS(builtin_memcpy->type)->next->next, false);
                 }
-              cic = newiCode (CALL, operandFromSymbol (builtin_memcpy, false), 0);
-              IC_RESULT (cic) = newiTempOperand (builtin_memcpy->type->next, 0);
-              // Insert before passing any other parameters - otherwise register parameters to the function will instead up as parameters to the memcpy call.
+              callic = newiCode (CALL, operandFromSymbol (builtin_memcpy, false), 0);
+              IC_RESULT (callic) = newiTempOperand (builtin_memcpy->type->next, 0);
+              // Insert before passing any other parameters - otherwise register parameters to the function will instead end up as parameters to the memcpy call.
               if (castic_start)
                 {
                   iCode *castic = castic_start->next;
-                  //Cut out cast from where it is.
+                  // Cut out cast from where it is.
                   castic_start->next = castic_end->next;
                   if (castic_end->next)
                     castic_end->next->prev = castic_start;
@@ -3632,13 +3643,13 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
               srcic->prev = dstic;
               srcic->next = nic;
               nic->prev = srcic;
-              nic->next = cic;
-              cic->prev = nic;
-              cic->next = iic_end;
+              nic->next = callic;
+              callic->prev = nic;
+              callic->next = iic_end;
               if (iic_end)
-                iic_end->prev = cic;
+                iic_end->prev = callic;
               else if (iic_start == iCodeChainEnd)
-                iCodeChainEnd = cic;
+                iCodeChainEnd = callic;
             }
           else
             {
@@ -3655,7 +3666,7 @@ geniCodeParms (ast * parms, value * argVals, int *iArg, int *stack, sym_link * f
             pval = checkTypes (operandFromValue (argVals, false), pval);
           // push
           if (is_structparm)
-            ic = newiCode (IPUSH_VALUE_AT_ADDRESS , pval, operandFromLit (0));
+            ic = newiCode (IPUSH_VALUE_AT_ADDRESS, pval, operandFromLit (0));
           else
             ic = newiCode (IPUSH, pval, NULL);
           ic->parmPush = 1;
