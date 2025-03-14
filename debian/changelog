@@ -2,6 +2,7 @@ sdcc (4.5.0+dfsg-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #1095426)
     * Drop patches now in upstream release
+    * Update paths post upstream re-org
 
  -- Jonathan McDowell <noodles@earth.li>  Fri, 14 Mar 2025 12:02:14 +0000
 
