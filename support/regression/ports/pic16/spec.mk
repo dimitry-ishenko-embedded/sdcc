@@ -1,8 +1,5 @@
 # Regression test specification for the pic16 target running with gpsim
 
-# simulation timeout in seconds
-SIM_TIMEOUT = 25
-
 # path to gpsim
 ifdef GPSIM_PATH
   GPSIM := $(WINE) $(GPSIM_PATH)/gpsim$(EXEEXT)
@@ -39,15 +36,15 @@ BINEXT = .cod
 
 EXTRAS = $(PORT_CASES_DIR)/testfwk$(OBJEXT) $(PORT_CASES_DIR)/support$(OBJEXT)
 
-# Rule to link into .ihx
+# Rule to link into .cod
 %$(BINEXT): %$(OBJEXT) $(EXTRAS)
-	-$(SDCC) $(SDCCFLAGS) $(LINKFLAGS) $(EXTRAS) $< -o $@
+	$(SDCC) $(SDCCFLAGS) $(LINKFLAGS) $(EXTRAS) $< -o $@
 
 %$(OBJEXT): %.c
-	-$(SDCC) $(SDCCFLAGS) -c $< -o $@
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
 
 $(PORT_CASES_DIR)/%$(OBJEXT): $(PORTS_DIR)/$(PORT)/%.c
-	-$(SDCC) $(SDCCFLAGS) -c $< -o $@
+	$(SDCC) $(SDCCFLAGS) -c $< -o $@
 
 .PRECIOUS: gen/pic16/testfwk.o gen/pic16/support.o
 
