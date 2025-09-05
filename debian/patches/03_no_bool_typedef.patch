@@ -1,0 +1,13 @@
+diff --git a/debugger/mcs51/sdcdb.h b/debugger/mcs51/sdcdb.h
+index 91a42ba6..1c5dd4c1 100644
+--- a/debugger/mcs51/sdcdb.h
++++ b/debugger/mcs51/sdcdb.h
+@@ -60,8 +60,6 @@ extern int sdcdbDebug;
+ #define TRUE 1
+ #define FALSE !TRUE
+ 
+-typedef short bool;
+-
+ #ifndef max
+ #define max(a,b) (a > b ? a : b)
+ #endif
