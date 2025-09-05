@@ -4,26 +4,25 @@ Priority: optional
 Maintainer: Debian Electronics Packaging Team <pkg-electronics-devel@alioth-lists.debian.net>
 Uploaders: Gudjon I. Gudjonsson <gudjon@gudjon.org>,
 	Jonathan McDowell <noodles@earth.li>
-Build-Depends: bison,
-               debhelper-compat (= 13),
-               dpkg-dev (>= 1.16.1~),
-               flex,
-               gputils,
-               libboost-dev,
-               libncurses-dev,
-               libtool,
-               texinfo,
-               zlib1g-dev
+Build-Depends: debhelper-compat (= 13),
+Build-Depends-Arch: bison,
+	flex,
+	gputils,
+	libboost-dev,
+	libncurses-dev,
+	libtool,
+	texinfo,
+	zlib1g-dev
 Build-Depends-Indep: ghostscript,
-                     graphicsmagick-imagemagick-compat,
-                     lyx,
-                     texlive-fonts-recommended,
-                     texlive-font-utils,
-                     texlive-plain-generic,
-                     texlive-latex-recommended,
-                     texlive-latex-extra,
-                     gsfonts,
-                     librsvg2-bin
+	graphicsmagick-imagemagick-compat,
+	gsfonts,
+	librsvg2-bin,
+	lyx,
+	texlive-fonts-recommended,
+	texlive-font-utils,
+	texlive-latex-recommended,
+	texlive-latex-extra,
+	texlive-plain-generic
 Rules-Requires-Root: no
 Standards-Version: 4.4.1
 Homepage: http://sdcc.sourceforge.net
