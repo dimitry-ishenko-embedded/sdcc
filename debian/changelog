@@ -1,10 +1,10 @@
-sdcc (4.5.0+dfsg-3) UNRELEASED; urgency=medium
+sdcc (4.5.0+dfsg-3) unstable; urgency=medium
 
   * Take #2 at fixing compilation with GCC 15
   * Take #2 at fixing Build-Depends / Build-Depends-Arch
   * Bump Standards-Version to 4.7.2
 
- -- Jonathan McDowell <noodles@earth.li>  Sun, 07 Sep 2025 09:59:53 +0100
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 07 Sep 2025 17:33:58 +0100
 
 sdcc (4.5.0+dfsg-2) unstable; urgency=medium
 
