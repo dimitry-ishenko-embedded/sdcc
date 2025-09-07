@@ -1,6 +1,7 @@
 sdcc (4.5.0+dfsg-3) UNRELEASED; urgency=medium
 
   * Take #2 at fixing compilation with GCC 15
+  * Take #2 at fixing Build-Depends / Build-Depends-Arch
 
  -- Jonathan McDowell <noodles@earth.li>  Sun, 07 Sep 2025 09:59:53 +0100
 

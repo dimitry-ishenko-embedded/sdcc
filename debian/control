@@ -13,16 +13,20 @@ Build-Depends-Arch: bison,
 	libtool,
 	texinfo,
 	zlib1g-dev
-Build-Depends-Indep: ghostscript,
+Build-Depends-Indep: bison,
+	flex,
+	ghostscript,
 	graphicsmagick-imagemagick-compat,
 	gsfonts,
+	libboost-dev,
 	librsvg2-bin,
 	lyx,
 	texlive-fonts-recommended,
 	texlive-font-utils,
 	texlive-latex-recommended,
 	texlive-latex-extra,
-	texlive-plain-generic
+	texlive-plain-generic,
+	zlib1g-dev
 Rules-Requires-Root: no
 Standards-Version: 4.4.1
 Homepage: http://sdcc.sourceforge.net
