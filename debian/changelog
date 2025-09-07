@@ -1,3 +1,9 @@
+sdcc (4.5.0+dfsg-3) UNRELEASED; urgency=medium
+
+  * Take #2 at fixing compilation with GCC 15
+
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 07 Sep 2025 09:59:53 +0100
+
 sdcc (4.5.0+dfsg-2) unstable; urgency=medium
 
   * Fix Build-Depends / Build-Depends-Arch up
