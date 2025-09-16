@@ -1,215 +1,181 @@
-;--------------------------------------------------------------------------
-;  crt0.s - Generic crt0.s for a Rabbit 3000A
-;	derived from "Generic crt0.s for a Z80"
+;-------------------------------------------------------------------------------
+; crt0.s for Rabbit 3000A
 ;
-;  Copyright (C) 2000, Michael Hope
-;  Modified for Rabbit by Leland Morrison 2011
-;  Copyright (C) 2020, Philipp Klaus Krause
+; Copyright (c) 2000 Michael Hope
+; Copyright (c) 2020 Philipp Klaus Krause
+; Copyright (c) 2023 Dimitry Ishenko <dimitry (dot) ishenko (at) (gee) mail (dot) com>
 ;
-;  This library is free software; you can redistribute it and/or modify it
-;  under the terms of the GNU General Public License as published by the
-;  Free Software Foundation; either version 2, or (at your option) any
-;  later version.
+; This library is free software: you can redistribute it and/or modify it under
+; the terms of the GNU General Public License as published by the Free Software
+; Foundation, either version 3 of the License, or (at your option) any later
+; version.
 ;
-;  This library is distributed in the hope that it will be useful,
-;  but WITHOUT ANY WARRANTY; without even the implied warranty of
-;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-;  GNU General Public License for more details.
+; This library is distributed in the hope that it will be useful, but WITHOUT
+; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+; FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+; details.
 ;
-;  You should have received a copy of the GNU General Public License 
-;  along with this library; see the file COPYING. If not, write to the
-;  Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-;   MA 02110-1301, USA.
+; You should have received a copy of the GNU General Public License along with
+; this program. If not, see <https://www.gnu.org/licenses/>.
 ;
-;  As a special exception, if you link this library with other files,
-;  some of which are compiled with SDCC, to produce an executable,
-;  this library does not by itself cause the resulting executable to
-;  be covered by the GNU General Public License. This exception does
-;  not however invalidate any other reasons why the executable file
-;   might be covered by the GNU General Public License.
-;--------------------------------------------------------------------------
+; Additional permission under GNU GPL version 3 section 7
+;
+; As a special exception, if you link this library with other files to produce
+; an executable, this library does not by itself cause the resulting executable
+; to be covered by the GNU General Public License. This exception does not
+; however invalidate any other reasons why the executable file might be covered
+; by the GNU Public License.
+;-------------------------------------------------------------------------------
+    .module crt0
+    .globl _main
+    .globl ___sdcc_external_startup
 
-	.module crt0
-	.globl	_main
-	.globl	___sdcc_external_startup
+GCSR     .equ 0x0000
+STACKSEG .equ 0x0011
+DATASEG  .equ 0x0012
+SEGSIZE  .equ 0x0013
+MB0CR    .equ 0x0014
+MB2CR    .equ 0x0016
 
-GCSR		.equ	0x00 ; Global control / status register
-MMIDR		.equ	0x10
-STACKSEG	.equ	0x11
-SEGSIZE		.equ	0x13
-MB0CR		.equ	0x14 ; Memory Bank 0 Control Register
-MB1CR		.equ	0x15 ; Memory Bank 1 Control Register
-MB2CR		.equ	0x16 ; Memory Bank 2 Control Register
-MB3CR		.equ	0x17 ; Memory Bank 3 Control Register
+DATA     .equ 0x8000
+STACK    .equ 0xa000
+INT_IVT  .equ 0xdc00
+EXT_IVT  .equ 0xde00
 
-	.area	_HEADER (ABS)
+; RABBIT 3000A                        physical         1MB
+; MEMORY MAP                          0xfffff +-------------+
+;                                             |             |
+;                                             |             |
+;                                             |             |
+;                                                    ...
+;                                             |             |
+;     logical                                 |             |
+;     0xffff +-------------+                  | quadrant #3 |
+;            |             |          0xc0000 +-------------+
+;            | XPC segment |                  |             |
+;            |             |                  |             |            RAM
+;     0xe000 +-------------+                  |             |          +-------------+
+;            | unused      |                         ...               |             |
+;     0xdf00 +-------------+                  |             |          | /CS1        |
+;            | extern IVT  |                  |             |          | /OE1        |
+;     0xde00 +-------------+                  | quadrant #2 |          | /WE1        |
+;            |             |      +-> 0x80000 +-------------+ (5) ---> +-------------+
+;            | intern IVT  |      |           |             |
+;     0xdc00 +-------------+      |           |             |
+;            | stack       |      |           |             |
+;            |             |      |                  ...
+;            |             |      |           |             |
+;            |             |      |           |             |
+;            | global data |      |           | quadrant #1 |
+; (1) 0xa000 +-------------+ (3) -+   0x40000 +-------------+
+;            |             |                  |             |
+;            |             |                  |             |            Flash
+;            |             |                  |             |          +-------------+
+; (1) 0x8000 |             | (2)                     ...               |             |
+;            |             |                  |             |          | /CS0        |
+;            | code and    |                  |             |          | /OE0        |
+;            | const data  |                  | quadrant #0 |          | /WE0        |
+;     0x0000 +-------------+ -------> 0x00000 +-------------+ (4) ---> +-------------+
+;
+; notes:
+; (1) SEGSIZE
+; (2) DATASEG
+; (3) STACKSEG
+; (4) MB0CR
+; (5) MB2CR
 
-	; Reset vector - assuming smode0 and smode1 input pins are grounded
-	.org 	0
+    .area _HEADER (ABS)
+    .org 0
 
-	; Setup internal interrupts. Upper byte of interrupt vector table address. Needs to be even.
-	ld	a, #2
-	ld	iir, a
+; map memory quadrants #0 and #2
+    ld a, #0x08             ; /CS0, /OE1, 4ws
+    ioi
+    ld (MB0CR), a           ; read-only Flash @ physical address 0x00000
 
-	; Configure physical address space.
-	; Leave MB0CR Flash at default slow at /OE0, /CS0
-	; Assume slow RAM at /CS1, /OE1, /WE1
-	ld	a, #0x05
-	ioi
-	ld	(MB2CR), a;
+    ld a, #0x05             ; /CS1, /OE1, /WE1, 4ws
+    ioi
+    ld (MB2CR), a           ; read/write RAM @ physical address 0x80000
 
-	; Configure logical address space. 32 KB root segment followed by 8 KB data segment, 16 KB stack segment, 8 KB xpc segment.
-	; By default, SDCC will use the root segment for code and constant data, stack segment for data (including stack). data segment and xpc segment are then unused.
-	ld	a, #0xa8	; 16 KB stack segment at 0xa000, 8 KB data segment at 0x8000
-	ioi
-	ld	(SEGSIZE), a
+; set stack and data boundaries
+    ld a, #((STACK >> 8) | (DATA >> 12))
+    ioi
+    ld (SEGSIZE), a
 
-	; Configure mapping to physical address space.
-	ld	a, #0x76
-	ioi
-	ld	(STACKSEG), a	; stack segment base at 0x76000 + 0xa000 = 0x80000
+; map stack segment to the physical address 0x80000 (start of RAM)
+; this segment is used for the interrupt vector tables (IVT), stack and global data
+    ld a, #((0x80000 - STACK) >> 12)
+    ioi
+    ld (STACKSEG), a
+    ld sp, #INT_IVT         ; set stack pointer below the internal IVT
 
-	; Set stack pointer directly above top of stack segment
-	ld	sp, #0xe000
+; leave data segment mapped to 0x00000 since it is not being used
+    ld a, #0x00
+    ioi
+    ld (DATASEG), a
 
-	call ___sdcc_external_startup
+; map internal and external IVT
+    ld a, #(INT_IVT >> 8)
+    ld iir, a
+    ld a, #(EXT_IVT >> 8)
+    ld eir, a
 
-	; Initialise global variables. Skip if __sdcc_external_startup returned
-	; non-zero value. Note: calling convention version 1 only.
-	or	a, a
-	jr	NZ, skip_gsinit
-	call	gsinit
-skip_gsinit:
+    call ___sdcc_external_startup
+    or a, a
+    jr nz, dont_gsinit
 
-	call	_main
-	jp	_exit
+    call gsinit
 
-	; Periodic Interrupt
-	.org	0x200
-	push	af
-	ioi
-	ld	a, (GCSR) ; clear interrupt
-	pop	af
-	ipres
-	ret
+dont_gsinit:
+    call _main
+    jp _exit
 
-	; Secondary Watchdog - Rabbit 3000A only
-	.org	0x210
-	ipres
-	ret
+    .org 0x100
 
-	; rst 0x10
-	.org	0x220
-	ret
+    .area _HOME
+    .area _CODE
+    .area _INITIALIZER
+    .area _GSINIT
+    .area _GSFINAL
 
-	; rst 0x18
-	.org	0x230
-	ret
+    .area _DATA
+    .area _INITIALIZED
+    .area _BSEG
+    .area _BSS
+    .area _HEAP
 
-	; rst 0x20
-	.org	0x240
-	ret
-
-	; rst 0x28
-	.org	0x250
-	ret
-
-	; Syscall instruction - Rabbit 3000A only
-	.org	0x260
-	ret
-
-	; rst 0x38
-	.org	0x270
-	ret
-
-	; Slave Port
-	.org	0x280
-	ipres
-	ret
-
-	; Timer A
-	.org	0x2a0
-	ipres
-	ret
-
-	; Timer B
-	.org	0x2b0
-	ipres
-	ret
-
-	; Serial Port A
-	.org	0x2c0
-	ipres
-	ret
-
-	; Serial Port B
-	.org	0x2d0
-	ipres
-	ret
-
-	; Serial Port C
-	.org	0x2e0
-	ipres
-	ret
-
-	; Serial Port D
-	.org	0x2f0
-	ipres
-	ret
-
-	.org	0x300
-
-	;; Ordering of segments for the linker.
-	.area	_HOME
-	.area	_CODE
-	.area	_INITIALIZER
-	.area   _GSINIT
-	.area   _GSFINAL
-
-	.area	_DATA
-	.area	_INITIALIZED
-	.area	_BSEG
-	.area   _BSS
-	.area   _HEAP
-
-	.area   _CODE
+    .area _CODE
 _exit::
-	;; Exit - special code to the emulator
-	ld	a,#0
-	rst     #0x28
-1$:
-	;halt		; opcode for halt used for 'altd' on rabbit processors
-	jr	1$
+    ld a, #0
+    rst #0x28
+1$: jr 1$
 
-	.area   _GSINIT
+    .area _GSINIT
 gsinit::
-	ld	bc, #l__DATA
-	ld	a, b
-	or	a, c
-	jr	Z, zeroed_data
-	ld	hl,	#s__DATA
-	ld	(hl), #0x00
-	dec	bc
-	ld	a, b
-	or	a, c
-	jr	Z, zeroed_data
-	ld	e, l
-	ld	d, h
-	inc	de
-	ldir
+fill_zero:
+    ld bc, #l__DATA
+    ld a, b
+    or a, c
+    jr z, fill_data
+    ld hl, #s__DATA
+    ld (hl), #0x00
+    dec bc
+    ld a, b
+    or a, c
+    jr z, fill_data
+    ld e, l
+    ld d, h
+    inc de
+    ldir
 
-zeroed_data:
+fill_data:
+    ld bc, #l__INITIALIZER
+    ld a, b
+    or a, c
+    jr z, fill_done
+    ld de, #s__INITIALIZED
+    ld hl, #s__INITIALIZER
+    ldir
 
-	ld	bc, #l__INITIALIZER
-	ld	a, b
-	or	a, c
-	jr	Z, gsinit_next
-	ld	de, #s__INITIALIZED
-	ld	hl, #s__INITIALIZER
-	ldir
-	
-gsinit_next:
-
-	.area   _GSFINAL
-	ret
-
+fill_done:
+    .area _GSFINAL
+    ret

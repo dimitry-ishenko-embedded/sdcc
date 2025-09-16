@@ -859,7 +859,10 @@ _setDefaultOptions (void)
   options.float_rent = 1;
   options.noRegParams = 0;
   /* Default code and data locations. */
-  options.code_loc = 0x200;
+  if (IS_RAB)
+    options.code_loc = 0x100; // match fixed crt0
+  else
+    options.code_loc = 0x200;
   options.allow_undoc_inst = false;
 
   if (IS_SM83)
